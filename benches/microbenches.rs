@@ -73,10 +73,10 @@ fn read_event(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmarks the `NsReader::read_namespaced_event` function with all XML well-formless
+/// Benchmarks the `NsReader::read_resolved_event_into` function with all XML well-formless
 /// checks disabled (with and without trimming content of #text nodes)
-fn read_namespaced_event(c: &mut Criterion) {
-    let mut group = c.benchmark_group("read_namespaced_event");
+fn read_resolved_event_into(c: &mut Criterion) {
+    let mut group = c.benchmark_group("NsReader::read_resolved_event_into");
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut r = NsReader::from_bytes(SAMPLE);
@@ -84,7 +84,7 @@ fn read_namespaced_event(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_namespaced_event(&mut buf) {
+                match r.read_resolved_event_into(&mut buf) {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),
@@ -107,7 +107,7 @@ fn read_namespaced_event(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_namespaced_event(&mut buf) {
+                match r.read_resolved_event_into(&mut buf) {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),
@@ -391,7 +391,7 @@ purus. Consequat id porta nibh venenatis cras sed felis.";
 criterion_group!(
     benches,
     read_event,
-    read_namespaced_event,
+    read_resolved_event_into,
     one_event,
     attributes,
     escaping,

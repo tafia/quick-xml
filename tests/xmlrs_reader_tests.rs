@@ -369,13 +369,10 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
         .expand_empty_elements(false);
 
     let mut spec_lines = SpecIter(output).enumerate();
-    let mut buf = Vec::new();
 
     let mut decoder = reader.decoder();
     loop {
-        buf.clear();
-        let event = reader.read_namespaced_event(&mut buf);
-        let line = match event {
+        let line = match reader.read_resolved_event() {
             Ok((_, Event::StartText(_))) => {
                 // BOM could change decoder
                 decoder = reader.decoder();

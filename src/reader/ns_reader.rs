@@ -130,55 +130,121 @@ impl<R> NsReader<R> {
 }
 
 impl<R: BufRead> NsReader<R> {
-    /// Reads the next event and resolves its namespace (if applicable).
+    /// Reads the next event into given buffer.
+    ///
+    /// This method manages namespaces but doesn't resolve them automatically.
+    /// You should call [`event_namespace()`] if you want to get a namespace.
+    ///
+    /// You also can use [`read_resolved_event_into()`] instead if you want to resolve
+    /// namespace as soon as you get an event.
     ///
     /// # Examples
     ///
     /// ```
-    /// use std::str::from_utf8;
+    /// # use pretty_assertions::assert_eq;
     /// use quick_xml::NsReader;
     /// use quick_xml::events::Event;
-    /// use quick_xml::name::ResolveResult::*;
+    /// use quick_xml::name::{Namespace, ResolveResult::*};
     ///
-    /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
-    ///                 <y:tag2><!--Test comment-->Test</y:tag2>
-    ///                 <y:tag2>Test 2</y:tag2>
-    ///             </x:tag1>"#;
-    /// let mut reader = NsReader::from_str(xml);
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
     /// reader.trim_text(true);
+    ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();
     /// let mut txt = Vec::new();
     /// loop {
-    ///     match reader.read_namespaced_event(&mut buf) {
-    ///         Ok((Bound(ns), Event::Start(e))) => {
+    ///     match reader.read_event_into(&mut buf).unwrap() {
+    ///         Event::Start(e) => {
     ///             count += 1;
-    ///             match (ns.as_ref(), e.local_name().as_ref()) {
-    ///                 (b"www.xxxx", b"tag1") => (),
-    ///                 (b"www.yyyy", b"tag2") => (),
-    ///                 (ns, n) => panic!("Namespace and local name mismatch"),
+    ///             let (ns, local) = reader.event_namespace(e.name());
+    ///             match local.as_ref() {
+    ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
+    ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
+    ///                 _ => unreachable!(),
     ///             }
-    ///             println!("Resolved namespace: {:?}", ns);
     ///         }
-    ///         Ok((Unbound, Event::Start(_))) => {
-    ///             panic!("Element not in any namespace")
-    ///         },
-    ///         Ok((Unknown(p), Event::Start(_))) => {
-    ///             panic!("Undeclared namespace prefix {:?}", String::from_utf8(p))
-    ///         }
-    ///         Ok((_, Event::Text(e))) => {
+    ///         Event::Text(e) => {
     ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
-    ///         },
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok((_, Event::Eof)) => break,
+    ///         }
+    ///         Event::Eof => break,
     ///         _ => (),
     ///     }
     ///     buf.clear();
     /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
     /// ```
-    pub fn read_namespaced_event<'b>(
+    ///
+    /// [`event_namespace()`]: Self::event_namespace
+    /// [`read_resolved_event_into()`]: Self::read_resolved_event_into
+    #[inline]
+    pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        self.read_event_impl(buf)
+    }
+
+    /// Reads the next event into given buffer and resolves its namespace (if applicable).
+    ///
+    /// Namespace is resolved only for [`Start`], [`Empty`] and [`End`] events.
+    /// For all other events the concept of namespace is not defined, so
+    /// a [`ResolveResult::Unbound`] is returned.
+    ///
+    /// If you are not interested in namespaces, you can use [`read_event_into()`]
+    /// which will not automatically resolve namespaces for you.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::NsReader;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut buf = Vec::new();
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_resolved_event_into(&mut buf).unwrap() {
+    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///         }
+    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///         }
+    ///         (_, Event::Start(_)) => unreachable!(),
+    ///
+    ///         (_, Event::Text(e)) => {
+    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///         }
+    ///         (_, Event::Eof) => break,
+    ///         _ => (),
+    ///     }
+    ///     buf.clear();
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`Empty`]: Event::Empty
+    /// [`End`]: Event::End
+    /// [`read_event_into()`]: Self::read_event_into
+    #[inline]
+    pub fn read_resolved_event_into<'b>(
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
@@ -197,6 +263,121 @@ impl<'i> NsReader<&'i [u8]> {
     #[inline]
     pub fn from_bytes(bytes: &'i [u8]) -> Self {
         Self::new(Reader::from_bytes(bytes))
+    }
+
+    /// Reads the next event, borrow its content from the input buffer.
+    ///
+    /// This method manages namespaces but doesn't resolve them automatically.
+    /// You should call [`event_namespace()`] if you want to get a namespace.
+    ///
+    /// You also can use [`read_resolved_event()`] instead if you want to resolve namespace
+    /// as soon as you get an event.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::NsReader;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, ResolveResult::*};
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_event().unwrap() {
+    ///         Event::Start(e) => {
+    ///             count += 1;
+    ///             let (ns, local) = reader.event_namespace(e.name());
+    ///             match local.as_ref() {
+    ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
+    ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
+    ///                 _ => unreachable!(),
+    ///             }
+    ///         }
+    ///         Event::Text(e) => {
+    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///         }
+    ///         Event::Eof => break,
+    ///         _ => (),
+    ///     }
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
+    ///
+    /// [`event_namespace()`]: Self::event_namespace
+    /// [`read_resolved_event()`]: Self::read_resolved_event
+    #[inline]
+    pub fn read_event(&mut self) -> Result<Event<'i>> {
+        self.read_event_impl(())
+    }
+
+    /// Reads the next event, borrow its content from the input buffer, and resolves
+    /// its namespace (if applicable).
+    ///
+    /// Namespace is resolved only for [`Start`], [`Empty`] and [`End`] events.
+    /// For all other events the concept of namespace is not defined, so
+    /// a [`ResolveResult::Unbound`] is returned.
+    ///
+    /// If you are not interested in namespaces, you can use [`read_event()`]
+    /// which will not automatically resolve namespaces for you.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::NsReader;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///        <y:tag2><!--Test comment-->Test</y:tag2>
+    ///        <y:tag2>Test 2</y:tag2>
+    ///     </x:tag1>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_resolved_event().unwrap() {
+    ///         (Bound(Namespace(b"www.xxxx")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag1").into());
+    ///         }
+    ///         (Bound(Namespace(b"www.yyyy")), Event::Start(e)) => {
+    ///             count += 1;
+    ///             assert_eq!(e.local_name(), QName(b"tag2").into());
+    ///         }
+    ///         (_, Event::Start(_)) => unreachable!(),
+    ///
+    ///         (_, Event::Text(e)) => {
+    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///         }
+    ///         (_, Event::Eof) => break,
+    ///         _ => (),
+    ///     }
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`Empty`]: Event::Empty
+    /// [`End`]: Event::End
+    /// [`read_event()`]: Self::read_event
+    #[inline]
+    pub fn read_resolved_event(&mut self) -> Result<(ResolveResult, Event<'i>)> {
+        self.read_resolved_event_impl(())
     }
 }
 

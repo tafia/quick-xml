@@ -11,10 +11,8 @@ fn namespace() {
     let mut r = NsReader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>");
     r.trim_text(true);
 
-    let mut buf = Vec::new();
-
     // <a>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
@@ -23,7 +21,7 @@ fn namespace() {
     }
 
     // <b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
@@ -31,13 +29,12 @@ fn namespace() {
         ),
     }
     // "in namespace!"
-    match r.read_namespaced_event(&mut buf) {
-        //TODO: Check in specification, it is true that namespace should be empty?
+    match r.read_resolved_event() {
         Ok((ns, Text(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting text content with no namespace, got {:?}", e),
     }
     // </b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
@@ -46,7 +43,7 @@ fn namespace() {
     }
 
     // </a>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
@@ -57,10 +54,8 @@ fn default_namespace() {
     let mut r = NsReader::from_str(r#"<a ><b xmlns="www1"></b></a>"#);
     r.trim_text(true);
 
-    let mut buf = Vec::new();
-
     // <a>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
@@ -69,7 +64,7 @@ fn default_namespace() {
     }
 
     // <b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
@@ -77,7 +72,7 @@ fn default_namespace() {
         ),
     }
     // </b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
@@ -87,7 +82,7 @@ fn default_namespace() {
 
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
@@ -98,10 +93,8 @@ fn default_namespace_reset() {
     let mut r = NsReader::from_str(r#"<a xmlns="www1"><b xmlns=""></b></a>"#);
     r.trim_text(true);
 
-    let mut buf = Vec::new();
-
     // <a>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer start element with to resolve to 'www1', got {:?}",
@@ -110,7 +103,7 @@ fn default_namespace_reset() {
     }
 
     // <b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting inner start element with no namespace, got {:?}",
@@ -118,13 +111,13 @@ fn default_namespace_reset() {
         ),
     }
     // </b>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting inner end element with no namespace, got {:?}", e),
     }
 
     // </a>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer end element with to resolve to 'www1', got {:?}",
@@ -142,9 +135,8 @@ fn attributes_empty_ns() {
 
     let mut r = NsReader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
 
-    let e = match r.read_namespaced_event(&mut buf) {
+    let e = match r.read_resolved_event() {
         Ok((Unbound, Empty(e))) => e,
         e => panic!("Expecting Empty event, got {:?}", e),
     };
@@ -182,9 +174,8 @@ fn attributes_empty_ns_expanded() {
 
     let mut r = NsReader::from_str(src);
     r.trim_text(true).expand_empty_elements(true);
-    let mut buf = Vec::new();
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_resolved_event() {
             Ok((Unbound, Start(e))) => e,
             e => panic!("Expecting Empty event, got {:?}", e),
         };
@@ -213,7 +204,7 @@ fn attributes_empty_ns_expanded() {
         assert_eq!(attrs.next(), None);
     }
 
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
         e => panic!("Expecting End event, got {:?}", e),
     }
@@ -225,11 +216,10 @@ fn default_ns_shadowing_empty() {
 
     let mut r = NsReader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
     {
-        match r.read_namespaced_event(&mut buf) {
+        match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
                 assert_eq!(e.name(), QName(b"e"));
@@ -240,7 +230,7 @@ fn default_ns_shadowing_empty() {
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_resolved_event() {
             Ok((ns, Empty(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
                 assert_eq!(e.name(), QName(b"e"));
@@ -268,7 +258,7 @@ fn default_ns_shadowing_empty() {
     }
 
     // </outer>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
             assert_eq!(e.name(), QName(b"e"));
@@ -283,11 +273,10 @@ fn default_ns_shadowing_expanded() {
 
     let mut r = NsReader::from_str(src);
     r.trim_text(true).expand_empty_elements(true);
-    let mut buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
     {
-        match r.read_namespaced_event(&mut buf) {
+        match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
                 assert_eq!(e.name(), QName(b"e"));
@@ -295,11 +284,10 @@ fn default_ns_shadowing_expanded() {
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
     }
-    buf.clear();
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
                 assert_eq!(e.name(), QName(b"e"));
@@ -326,7 +314,7 @@ fn default_ns_shadowing_expanded() {
     }
 
     // virtual </inner>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
             assert_eq!(e.name(), QName(b"e"));
@@ -334,7 +322,7 @@ fn default_ns_shadowing_expanded() {
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
     // </outer>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
             assert_eq!(e.name(), QName(b"e"));
@@ -357,10 +345,8 @@ fn reserved_name() {
         NsReader::from_str(r#"<a xmlns-something="reserved attribute name" xmlns="www1"/>"#);
     r.trim_text(true);
 
-    let mut buf = Vec::new();
-
     // <a />
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_resolved_event() {
         Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "Expected empty element bound to namespace 'www1', got {:?}",

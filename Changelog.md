@@ -30,7 +30,10 @@
 - [#437]: Split out namespace reading functionality to a dedicated `NsReader`, namely:
   |Old function in `Reader`|New function in `NsReader`
   |------------------------|--------------------------
-  |`read_namespaced_event` |`read_namespaced_event`
+  |                        |`read_event` -- borrow from input
+  |                        |`read_resolved_event` -- borrow from input
+  |                        |`read_event_into`
+  |`read_namespaced_event` |`read_resolved_event_into`
   |`event_namespace`       |`event_namespace`
   |`attribute_namespace`   |`attribute_namespace`
 
