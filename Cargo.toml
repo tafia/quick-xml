@@ -1,0 +1,7 @@
+[package]
+name = "quick-xml"
+version = "0.1.0"
+authors = ["Johann Tuffe"]
+
+[dependencies]
+log="0.3"
