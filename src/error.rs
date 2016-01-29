@@ -13,7 +13,7 @@ pub enum Error {
     EOL,
     /// An error while converting to utf8
     Utf8(Utf8Error),
-    UnexpectedQuote,
+    Malformed(&'static str),
 }
 
 /// Result type
@@ -25,7 +25,7 @@ impl fmt::Display for Error {
             Error::Io(ref err) => write!(f, "{}", err),
             Error::Utf8(ref err) => write!(f, "{}", err),
             Error::EOL => write!(f, "Trying to access column but found End Of Line"),
-            Error::UnexpectedQuote => write!(f, "Unexpected quote while parsing attributes"),
+            Error::Malformed(ref err) => write!(f, "Malformed xml: {}", err),
         }
     }
 }
@@ -36,7 +36,7 @@ impl ::std::error::Error for Error {
             Error::Io(..) => "IO error",
             Error::Utf8(..) => "Error while converting to utf8",
             Error::EOL => "Trying to access column but found End Of Line",
-            Error::UnexpectedQuote => "Unexpected quote while parsing attributes",
+            Error::Malformed(..) => "Xml is malformed",
         }
     }
 
