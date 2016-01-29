@@ -22,15 +22,23 @@ enum TagState {
     Closed,
 }
 
+/// Xml reader
+///
+/// Consumes a `BufRead` and streams xml Event
 pub struct XmlReader<B: BufRead> {
     /// reader
     reader: B,
     /// if was error, exit next
     exit: bool,
+    /// true when last Start element was a <.. />
     next_close: bool,
+    /// all currently Started elements which didn't have a matching End element yet
     opened: Vec<Element>,
+    /// current state Open/Close
     tag_state: TagState,
+    /// trims Text events, skip the element if text is empty
     trim_text: bool,
+    /// check if End nodes match last Start node
     with_check: bool,
 }
 
@@ -49,11 +57,18 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    /// Change trim_text default behaviour (false per default)
+    ///
+    /// When set to true, all Text events are trimed. If they are empty, no event if pushed
     pub fn trim_text(mut self, val: bool) -> XmlReader<B> {
         self.trim_text = val;
         self
     }
 
+    /// Change default with_check (true per default)
+    ///
+    /// When set to true, it won't check if End node match last Start node.
+    /// If the xml is known to be sane (already processed etc ...) this saves extra time
     pub fn with_check(mut self, val: bool) -> XmlReader<B> {
         self.with_check = val;
         self
@@ -61,7 +76,7 @@ impl<B: BufRead> XmlReader<B> {
 }
 
 impl XmlReader<BufReader<File>> {
-    /// Creates a csv from a file path
+    /// Creates a xml reader from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<XmlReader<BufReader<File>>>
     {
         let reader = BufReader::new(try!(File::open(path)));
@@ -70,7 +85,7 @@ impl XmlReader<BufReader<File>> {
 }
 
 impl<'a> XmlReader<&'a [u8]> {
-    /// Creates a CSV reader for an in memory string buffer.
+    /// Creates a xml reader for an in memory string buffer.
     pub fn from_str(s: &'a str) -> XmlReader<&'a [u8]> {
         XmlReader::from_reader(s.as_bytes())
     }
@@ -194,6 +209,10 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 }
 
 #[derive(Debug, Clone)]
+/// Wrapper around Vec<u8> representing the content of an event (aka node)
+///
+/// The purpose of not returning a String directly is to postpone calculations (utf8 conversion)
+/// to the last moment: byte checks are enough in most cases
 pub struct Element {
     buf: Vec<u8>,
     start: usize,
@@ -203,6 +222,7 @@ pub struct Element {
 
 impl Element {
 
+    /// private function to create a new element
     fn new(buf: Vec<u8>, start: usize, end: usize, name_end: usize) -> Element {
         Element {
             buf: buf,
@@ -212,14 +232,14 @@ impl Element {
         }
     }
     
-    /// name part of element (without eventual attributes)
+    /// name as &[u8] (without eventual attributes)
     pub fn as_bytes(&self) -> &[u8] {
         &self.buf[self.start..self.name_end]
     }
 
-    /// whole element seen as str, without parsing if there are blanks etc ...
+    /// name as str, (without eventual attributes)
     pub fn as_str(&self) -> Result<&str> {
-        ::std::str::from_utf8(self.as_bytes()).map_err(|e| Error::from(e))
+        ::std::str::from_utf8(self.as_bytes()).map_err(|e| Error::Utf8(e))
     }
 
     /// get attributes iterator
@@ -227,17 +247,15 @@ impl Element {
         Attributes::new(&self.buf[self.start..self.end], self.name_end)
     }
 
-    /// consumes entire self (including attributes) and returns string
+    /// consumes entire self (including eventual attributes!) and returns `String`
     ///
     /// useful when we need to get Text event value (which don't have attributes)
     pub fn into_string(self) -> Result<String> {
-        match ::std::string::String::from_utf8(self.buf) {
-            Ok(s) => Ok(s),
-            Err(e) => Err(Error::Utf8(e.utf8_error())),
-        }
+        ::std::string::String::from_utf8(self.buf).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 }
 
+/// Event to interprete node as they are parsed
 #[derive(Debug)]
 pub enum Event {
     Start(Element),
@@ -249,6 +267,8 @@ pub enum Event {
 }
 
 impl Event {
+
+    /// returns inner Element for the event
     pub fn element(&self) -> &Element {
         match self {
             &Event::Start(ref e) |
