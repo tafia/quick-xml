@@ -4,6 +4,7 @@
 extern crate log;
 
 pub mod error;
+pub mod attributes;
 
 #[cfg(test)]
 mod test;
@@ -14,6 +15,7 @@ use std::iter::Iterator;
 use std::path::Path;
 
 use error::{Error, Result};
+use attributes::Attributes;
 
 enum TagState {
     Opened,
@@ -29,6 +31,7 @@ pub struct XmlReader<B: BufRead> {
     opened: Vec<Element>,
     tag_state: TagState,
     trim_text: bool,
+    with_check: bool,
 }
 
 impl<B: BufRead> XmlReader<B> {
@@ -42,11 +45,17 @@ impl<B: BufRead> XmlReader<B> {
             opened: Vec::new(),
             tag_state: TagState::Closed,
             trim_text: false,
+            with_check: true,
         }
     }
 
     pub fn trim_text(mut self, val: bool) -> XmlReader<B> {
         self.trim_text = val;
+        self
+    }
+
+    pub fn with_check(mut self, val: bool) -> XmlReader<B> {
+        self.with_check = val;
         self
     }
 }
@@ -64,66 +73,6 @@ impl<'a> XmlReader<&'a [u8]> {
     /// Creates a CSV reader for an in memory string buffer.
     pub fn from_str(s: &'a str) -> XmlReader<&'a [u8]> {
         XmlReader::from_reader(s.as_bytes())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Element {
-    buf: Vec<u8>,
-    start: usize,
-    end: usize,
-    name_end: usize,
-}
-
-impl Element {
-
-    fn new(buf: Vec<u8>, start: usize, end: usize, name_end: usize) -> Element {
-        Element {
-            buf: buf,
-            start: start,
-            end: end,
-            name_end: name_end,
-        }
-    }
-    
-    /// name part of element
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.buf[self.start..self.name_end]
-    }
-
-    /// whole element seen as str, without parsing if there are blanks etc ...
-    pub fn as_str(&self) -> Result<&str> {
-        ::std::str::from_utf8(self.as_bytes()).map_err(|e| Error::from(e))
-    }
-
-    pub fn attributes<'a>(&'a self) -> Attributes<'a> {
-        Attributes {
-            bytes: &self.buf[self.start..self.end],
-            position: self.name_end,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum Event {
-    Start(Element),
-    End(Element),
-    Text(Element),
-    Comment(Element),
-    CData(Element),
-    Header(Element),
-}
-
-impl Event {
-    pub fn element(&self) -> &Element {
-        match self {
-            &Event::Start(ref e) |
-            &Event::End(ref e) |
-            &Event::Text(ref e) |
-            &Event::Comment(ref e) |
-            &Event::CData(ref e) |
-            &Event::Header(ref e) => e,
-        }
     }
 }
 
@@ -146,47 +95,69 @@ impl<B: BufRead> Iterator for XmlReader<B> {
                     Ok(0) => None,
                     Ok(_n) => {
                         let len = buf.len();
-                        if &buf[..1] == b"/" {
-                            Some(Ok(Event::End(Element::new(buf, 1, len, len))))
-                        } else if len >= 3 && &buf[..3] == b"!--" {
-                            if len < 5 || &buf[(len - 2)..] != b"--" {
-                                self.exit = true;
-                                Some(Err(Error::Malformed("Expecting '--', found '>'")))
-                            } else {
-                                Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))))
-                            }
-                        } else if len >= 8 && &buf[..8] == b"![CDATA[" {
-                            loop {
-                                let len = buf.len();
-                                if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                    return Some(Ok(Event::CData(Element::new(buf, 8, len - 2, len - 2))))
+                        match buf[0] {
+                            b'/' => {
+                                if self.with_check && &buf[1..] != self.opened.pop().unwrap().as_bytes() {
+                                    self.exit = true;
+                                    return Some(Err(Error::Malformed(
+                                            "End event doesn't match last opened element")));
                                 }
-                                buf.push(b'>');
-                                match read_until(&mut self.reader, b'>', &mut buf) {
-                                    Ok(0) => {
-                                        self.exit = true;
-                                        return Some(Err(Error::Malformed("Unescaped CDATA tag")));
-                                    },
-                                    Err(e) => {
-                                        self.exit = true;
-                                        return Some(Err(Error::from(e)));
-                                    },
-                                    _ => (),
+                                return Some(Ok(Event::End(Element::new(buf, 1, len, len))))
+                            },
+                            b'?' => {
+                                if len > 1 && buf[len - 1] == b'?' {
+                                    return Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))));
+                                } else {
+                                    self.exit = true;
+                                    return Some(Err(Error::Malformed("Unescaped Header event")));
                                 }
-                            }
-                        } else if &buf[..1] == b"?" && &buf[(len - 2)..] == b"?" {
-                            Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))))
+                            },
+                            b'!' => {
+                                if len >= 3 && &buf[1..3] == b"--" {
+                                    if len < 5 || &buf[(len - 2)..] != b"--" {
+                                        self.exit = true;
+                                        return Some(Err(Error::Malformed("Unescaped Comment event")));
+                                    } else {
+                                        return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
+                                    }
+                                } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
+                                    loop {
+                                        let len = buf.len();
+                                        if len >= 10 && &buf[(len - 2)..] == b"]]" {
+                                            return Some(Ok(Event::CData(Element::new(buf, 8, len - 2, len - 2))));
+                                        }
+                                        buf.push(b'>');
+                                        match read_until(&mut self.reader, b'>', &mut buf) {
+                                            Ok(0) => {
+                                                self.exit = true;
+                                                return Some(Err(Error::Malformed("Unescaped CDATA event")));
+                                            },
+                                            Err(e) => {
+                                                self.exit = true;
+                                                return Some(Err(Error::from(e)));
+                                            },
+                                            _ => (),
+                                        }
+                                    }
+                                }
+                            },
+                            _ => (),
+                        }
+
+                        // default case regular start or start/end
+                        if buf[len - 1] == b'/' {
+                            self.next_close = true;
+                            let element = Element::new(buf, 0, len - 1, len - 1);
+                            self.opened.push(element.clone());
+                            Some(Ok(Event::Start(element)))
                         } else {
-                            if &buf[(len - 1)..] == b"/" {
-                                self.next_close = true;
-                                let element = Element::new(buf, 0, len - 1, len - 1);
+                            // TODO: do this directly when reading bufreader ...
+                            let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+                            let element = Element::new(buf, 0, len, name_end);
+                            if self.with_check {
                                 self.opened.push(element.clone());
-                                Some(Ok(Event::Start(element)))
-                            } else {
-                                // TODO: do this directly when reading bufreader ...
-                                let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
-                                Some(Ok(Event::Start(Element::new(buf, 0, len, name_end))))
                             }
+                            Some(Ok(Event::Start(element)))
                         }
                     },
                     Err(e) => {
@@ -222,95 +193,79 @@ impl<B: BufRead> Iterator for XmlReader<B> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Element {
+    buf: Vec<u8>,
+    start: usize,
+    end: usize,
+    name_end: usize,
+}
+
+impl Element {
+
+    fn new(buf: Vec<u8>, start: usize, end: usize, name_end: usize) -> Element {
+        Element {
+            buf: buf,
+            start: start,
+            end: end,
+            name_end: name_end,
+        }
+    }
+    
+    /// name part of element (without eventual attributes)
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buf[self.start..self.name_end]
+    }
+
+    /// whole element seen as str, without parsing if there are blanks etc ...
+    pub fn as_str(&self) -> Result<&str> {
+        ::std::str::from_utf8(self.as_bytes()).map_err(|e| Error::from(e))
+    }
+
+    /// get attributes iterator
+    pub fn attributes<'a>(&'a self) -> Attributes<'a> {
+        Attributes::new(&self.buf[self.start..self.end], self.name_end)
+    }
+
+    /// consumes entire self (including attributes) and returns string
+    ///
+    /// useful when we need to get Text event value (which don't have attributes)
+    pub fn into_string(self) -> Result<String> {
+        match ::std::string::String::from_utf8(self.buf) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(Error::Utf8(e.utf8_error())),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Event {
+    Start(Element),
+    End(Element),
+    Text(Element),
+    Comment(Element),
+    CData(Element),
+    Header(Element),
+}
+
+impl Event {
+    pub fn element(&self) -> &Element {
+        match self {
+            &Event::Start(ref e) |
+            &Event::End(ref e) |
+            &Event::Text(ref e) |
+            &Event::Comment(ref e) |
+            &Event::CData(ref e) |
+            &Event::Header(ref e) => e,
+        }
+    }
+}
+
 #[inline(always)]
 fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
         _ => false,
-    }
-}
-
-pub struct Attributes<'a> {
-    bytes: &'a [u8],
-    position: usize,
-}
-
-impl<'a> Iterator for Attributes<'a> {
-    type Item = Result<(&'a[u8], &'a str)>;
-    fn next(&mut self) -> Option<Self::Item> {
-        
-        let len = self.bytes.len();
-        let p = self.position;
-        let mut iter = self.bytes[p..].iter().cloned().enumerate();
-
-        let start_key = {
-            let mut found_space = false;
-            let p: usize;
-            loop {
-                match iter.next() {
-                    Some((_, b' '))
-                        | Some((_, b'\r')) 
-                        | Some((_, b'\n'))
-                        | Some((_, b'\t')) => if !found_space { found_space = true; },
-                    Some((i, _)) => if found_space { 
-                        p = i;
-                        break;
-                    },
-                    None => {
-                        self.position = len;
-                        return None;
-                    }
-                }
-            }
-            p
-        };
-
-        let mut has_equal = false;
-        let mut end_key = None;
-        let mut start_val = None;
-        let mut end_val = None;
-        loop {
-            match iter.next() {
-                Some((i, b' '))
-                    | Some((i, b'\r')) 
-                    | Some((i, b'\n'))
-                    | Some((i, b'\t')) => {
-                    if end_key.is_none() { end_key = Some(i); }
-                },
-                Some((i, b'=')) => {
-                    if has_equal {
-                        debug!("has_equal x2 !");
-                        return None; // TODO: return error instead
-                    }
-                    has_equal = true;
-                    if end_key.is_none() {
-                        end_key = Some(i);
-                    }
-                },
-                Some((i, b'"')) => {
-                    if !has_equal {
-                        return Some(Err(Error::Malformed("Unexpected quote before '='")));
-                    }
-                    if start_val.is_none() {
-                        start_val = Some(i + 1);
-                    } else if end_val.is_none() {
-                        end_val = Some(i);
-                        break;
-                    }
-                },
-                Some((_, _)) => (),
-                None => {
-                    self.position = len;
-                    return None;
-                }
-            }
-        }
-        self.position = end_val.unwrap() + 1;
-
-        match ::std::str::from_utf8(&self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())]) {
-            Ok(s) => Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())], s))),
-            Err(e) => Some(Err(Error::from(e))),
-        }
     }
 }
 
