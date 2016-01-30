@@ -13,7 +13,7 @@ pub enum Error {
     EOL,
     /// An error while converting to utf8
     Utf8(Utf8Error),
-    Malformed(&'static str),
+    Malformed(String),
 }
 
 /// Result type

@@ -1,25 +1,22 @@
-use super::{XmlReader, Event};
+use super::{XmlReader, Element};
+use super::Event::*;
+use std::str::from_utf8;
 
 macro_rules! next_eq {
     ($r: expr, $($t:path, $bytes:expr),*) => {
         $(
             match $r.next() {
                 Some(Ok($t(ref e))) => {
-                    if e.as_bytes() == $bytes {
-                        assert!(true)
-                    } else {
-                        println!("expecting {:?}, found {:?}", 
-                                 ::std::str::from_utf8($bytes), e.as_str());
-                        assert!(false)
-                    }
+                    assert!(e.as_bytes() == $bytes, "expecting {:?}, found {:?}", 
+                            from_utf8($bytes), e.as_str());
                 },
                 Some(Ok(e)) => {
-                    println!("found {:?}, {:?}", e, e.element().as_str());
-                    assert!(false)
+                    assert!(false, "expecting {:?}, found {:?}", 
+                            $t(Element::new($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
                 },
                 p => {
-                    println!("found {:?}", p);
-                    assert!(false)
+                    assert!(false, "expecting {:?}, found {:?}", 
+                            $t(Element::new($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
                 }
             }
         )*
@@ -29,56 +26,112 @@ macro_rules! next_eq {
 #[test]
 fn test_start() {
     let mut r = XmlReader::from_str("<a>").trim_text(true);
-    next_eq!(r, Event::Start, b"a");
+    next_eq!(r, Start, b"a");
 }
    
 #[test]
 fn test_start_end() {
     let mut r = XmlReader::from_str("<a/>").trim_text(true);
-    next_eq!(r, Event::Start, b"a", Event::End, b"a");
+    next_eq!(r, Start, b"a", End, b"a");
+}
+   
+#[test]
+fn test_start_end_attr() {
+    let mut r = XmlReader::from_str("<a b=\"test\" />").trim_text(true);
+    next_eq!(r, Start, b"a", End, b"a");
+}
+   
+#[test]
+fn test_start_end_comment() {
+    let mut r = XmlReader::from_str("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>").trim_text(true);
+    next_eq!(r, 
+             Start, b"b",
+             Start, b"a", 
+             End, b"a",
+             Start, b"a", 
+             End, b"a",
+             Comment, b"t",
+             End, b"b"
+            );
 }
 
 #[test]
 fn test_start_txt_end() {
     let mut r = XmlReader::from_str("<a>test</a>").trim_text(true);
-    next_eq!(r, Event::Start, b"a", Event::Text, b"test", Event::End, b"a");
+    next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
     let mut r = XmlReader::from_str("<!--test-->").trim_text(true);
-    next_eq!(r, Event::Comment, b"test");
+    next_eq!(r, Comment, b"test");
+}
+
+#[test]
+fn test_header() {
+    let mut r = XmlReader::from_str("<?header?>").trim_text(true);
+    next_eq!(r, Header, b"header");
+}
+
+#[test]
+fn test_trim_test() {
+    let txt = "<a><b>  </b></a>";
+    let mut r = XmlReader::from_str(&txt).trim_text(true);
+    next_eq!(r, Start, b"a",
+                Start, b"b",
+                End, b"b",
+                End, b"a");
+
+    let mut r = XmlReader::from_str(&txt).trim_text(false);
+    next_eq!(r, Text, b"",
+                Start, b"a",
+                Text, b"",
+                Start, b"b",
+                Text, b"  ",
+                End, b"b",
+                Text, b"",
+                End, b"a");
 }
 
 #[test]
 fn test_cdata() {
     let mut r = XmlReader::from_str("<![CDATA[test]]>").trim_text(true);
-    next_eq!(r, Event::CData, b"test");
+    next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
     let mut r = XmlReader::from_str("<![CDATA[test <> test]]>").trim_text(true);
-    next_eq!(r, Event::CData, b"test <> test");
+    next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
     let mut r = XmlReader::from_str("<a b=\"c\">").trim_text(true);
-    next_eq!(r, Event::Start, b"a");
+    next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_nested() {
     let mut r = XmlReader::from_str("<a><b>test</b><c/></a>").trim_text(true);
     next_eq!(r, 
-             Event::Start, b"a", 
-             Event::Start, b"b", 
-             Event::Text, b"test", 
-             Event::End, b"b",
-             Event::Start, b"c", 
-             Event::End, b"c",
-             Event::End, b"a"
+             Start, b"a", 
+             Start, b"b", 
+             Text, b"test", 
+             End, b"b",
+             Start, b"c", 
+             End, b"c",
+             End, b"a"
             );
 }
 
+#[test]
+fn test_html() {
+    let r = XmlReader::from_file("/home/johann/Downloads/Rust (programming language) - Wikipedia, the free encyclopedia.html")
+        .unwrap().trim_text(true);
+    let mut c = 0;
+    for e in r {
+        c += 1;
+        assert!(e.is_ok(), "{:?} at {}", e, c);
+    }
+}

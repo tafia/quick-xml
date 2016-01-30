@@ -68,7 +68,7 @@ impl<'a> Iterator for Attributes<'a> {
                 },
                 Some((i, b'"')) => {
                     if !has_equal {
-                        return Some(Err(Error::Malformed("Unexpected quote before '='")));
+                        return Some(Err(Error::Malformed("Unexpected quote before '='".to_owned())));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);

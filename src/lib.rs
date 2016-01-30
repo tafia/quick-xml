@@ -13,6 +13,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::iter::Iterator;
 use std::path::Path;
+use std::fmt;
 
 use error::{Error, Result};
 use attributes::Attributes;
@@ -100,7 +101,8 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         if self.exit { return None; }
         if self.next_close {
             self.next_close = false;
-            return Some(Ok(Event::End(self.opened.pop().unwrap())));
+            let e = self.opened.pop().unwrap();
+            return Some(Ok(Event::End(e)));
         }
         let mut buf = Vec::new();
         match self.tag_state {
@@ -112,10 +114,14 @@ impl<B: BufRead> Iterator for XmlReader<B> {
                         let len = buf.len();
                         match buf[0] {
                             b'/' => {
-                                if self.with_check && &buf[1..] != self.opened.pop().unwrap().as_bytes() {
-                                    self.exit = true;
-                                    return Some(Err(Error::Malformed(
-                                            "End event doesn't match last opened element")));
+                                if self.with_check {
+                                    let e = self.opened.pop().unwrap();
+                                    if &buf[1..] != e.as_bytes() {
+                                        self.exit = true;
+                                        return Some(Err(Error::Malformed(format!(
+                                                "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
+                                                Element::new(buf, 1, len, len), e, self.opened))));
+                                    }
                                 }
                                 return Some(Ok(Event::End(Element::new(buf, 1, len, len))))
                             },
@@ -124,16 +130,28 @@ impl<B: BufRead> Iterator for XmlReader<B> {
                                     return Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))));
                                 } else {
                                     self.exit = true;
-                                    return Some(Err(Error::Malformed("Unescaped Header event")));
+                                    return Some(Err(Error::Malformed("Unescaped Header event".to_owned())));
                                 }
                             },
                             b'!' => {
                                 if len >= 3 && &buf[1..3] == b"--" {
-                                    if len < 5 || &buf[(len - 2)..] != b"--" {
-                                        self.exit = true;
-                                        return Some(Err(Error::Malformed("Unescaped Comment event")));
-                                    } else {
-                                        return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
+                                    loop {
+                                        let len = buf.len();
+                                        if len >= 5 && &buf[(len - 2)..] == b"--" {
+                                            return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
+                                        }
+                                        buf.push(b'>');
+                                        match read_until(&mut self.reader, b'>', &mut buf) {
+                                            Ok(0) => {
+                                                self.exit = true;
+                                                return Some(Err(Error::Malformed("Unescaped Comment event".to_owned())));
+                                            },
+                                            Err(e) => {
+                                                self.exit = true;
+                                                return Some(Err(Error::from(e)));
+                                            },
+                                            _ => (),
+                                        }
                                     }
                                 } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
                                     loop {
@@ -145,7 +163,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
                                                 self.exit = true;
-                                                return Some(Err(Error::Malformed("Unescaped CDATA event")));
+                                                return Some(Err(Error::Malformed("Unescaped CDATA event".to_owned())));
                                             },
                                             Err(e) => {
                                                 self.exit = true;
@@ -160,14 +178,15 @@ impl<B: BufRead> Iterator for XmlReader<B> {
                         }
 
                         // default case regular start or start/end
+                        // TODO: do this directly when reading bufreader ...
+                        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
                         if buf[len - 1] == b'/' {
                             self.next_close = true;
-                            let element = Element::new(buf, 0, len - 1, len - 1);
+                            let element = Element::new(buf, 0, len - 1, 
+                                                       if name_end < len { name_end } else { len - 1 });
                             self.opened.push(element.clone());
                             Some(Ok(Event::Start(element)))
                         } else {
-                            // TODO: do this directly when reading bufreader ...
-                            let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
                             let element = Element::new(buf, 0, len, name_end);
                             if self.with_check {
                                 self.opened.push(element.clone());
@@ -208,7 +227,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 /// Wrapper around Vec<u8> representing the content of an event (aka node)
 ///
 /// The purpose of not returning a String directly is to postpone calculations (utf8 conversion)
@@ -252,6 +271,13 @@ impl Element {
     /// useful when we need to get Text event value (which don't have attributes)
     pub fn into_string(self) -> Result<String> {
         ::std::string::String::from_utf8(self.buf).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+}
+
+impl fmt::Debug for Element {
+    fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
+        write!(f, "Element {{ buf: {:?}, name_end: {}, end: {} }}", 
+               self.as_str(), self.name_end, self.end)
     }
 }
 
