@@ -1,4 +1,35 @@
 //! Quick XmlReader reader which performs **very** well.
+//!
+//! # Example
+//!
+//! ```
+//! use quick_xml::{XmlReader, Event};
+//! 
+//! let xml = r#"<tag1 att1 = \"test\">
+//!                 <tag2><!--Test comment-->Test</b>
+//!                 <tag2>
+//!                     Test 2
+//!                 </tag2>
+//!             </tag1>"#;
+//! let reader = XmlReader::from_str(xml).trim_text(true);
+//! let mut count = 0;
+//! let mut txt = Vec::new();
+//! for r in reader {
+//!     match r {
+//!         Ok(Event::Start(ref e)) => {
+//!             match e.as_bytes() {
+//!                 b"a" => println!("attributes values: {:?}", 
+//!                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
+//!                 b"b" => count += 1,
+//!                 _ => (),
+//!             }
+//!         },
+//!         Ok(Event::Text(e)) => txt.push(e.into_string()),
+//!         Err(e) => println!("{:?}", e),
+//!         _ => (),
+//!     }
+//! }
+//! ```
 
 #[macro_use]
 extern crate log;

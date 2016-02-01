@@ -125,13 +125,3 @@ fn test_nested() {
             );
 }
 
-#[test]
-fn test_html() {
-    let r = XmlReader::from_file("/home/johann/Downloads/Rust (programming language) - Wikipedia, the free encyclopedia.html")
-        .unwrap().trim_text(true);
-    let mut c = 0;
-    for e in r {
-        c += 1;
-        assert!(e.is_ok(), "{:?} at {}", e, c);
-    }
-}
