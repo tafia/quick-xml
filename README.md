@@ -77,3 +77,6 @@ Any PR is welcomed!
 I am not an expert in xml specifications, I simply have to work with big xmls. As a result, 
 I may not implement some basic functionalities, simply because I don't know/need them.
 
+## License
+
+MIT
