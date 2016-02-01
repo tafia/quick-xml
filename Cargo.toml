@@ -1,7 +1,12 @@
 [package]
 name = "quick-xml"
 version = "0.1.0"
-authors = ["Johann Tuffe"]
+authors = ["Johann Tuffe <tafia973@gmail.com"]
+description = "High performance xml pull reader"
+repository = "https://github.com/tafia/quick-xml"
+readme = "README.md"
+keywords = ["xml", "reader", "parser"]
+license = "MIT"
 
 [dependencies]
 log="0.3"

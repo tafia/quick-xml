@@ -105,6 +105,127 @@ impl<B: BufRead> XmlReader<B> {
         self.with_check = val;
         self
     }
+
+    /// private function to read until '<' is found
+    fn read_until_open(&mut self) -> Option<Result<Event>> {
+        self.tag_state = TagState::Opened;
+        let mut buf = Vec::new();
+        match read_until(&mut self.reader, b'<', &mut buf) {
+            Ok(0) => None,
+            Ok(_n) => {
+                let (start, len) = if self.trim_text {
+                    match buf.iter().position(|&b| !is_whitespace(b)) {
+                        Some(start) => (start, buf.len() - buf.iter().rev()
+                                        .position(|&b| !is_whitespace(b)).unwrap_or(0)),
+                        None => return self.next()
+                    }
+                } else {
+                    (0, buf.len())
+                };
+                Some(Ok(Event::Text(Element::new(buf, start, len, len))))
+            },
+            Err(e) => {
+                self.exit = true;
+                Some(Err(Error::from(e)))
+            },
+        }
+    }
+
+    fn read_until_close(&mut self) -> Option<Result<Event>> {
+        self.tag_state = TagState::Closed;
+        let mut buf = Vec::new();
+        match read_until(&mut self.reader, b'>', &mut buf) {
+            Ok(0) => None,
+            Ok(_n) => {
+                let len = buf.len();
+                match buf[0] {
+                    b'/' => {
+                        if self.with_check {
+                            let e = self.opened.pop().unwrap();
+                            if &buf[1..] != e.as_bytes() {
+                                self.exit = true;
+                                return Some(Err(Error::Malformed(format!(
+                                        "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
+                                        Element::new(buf, 1, len, len), e, self.opened))));
+                            }
+                        }
+                        return Some(Ok(Event::End(Element::new(buf, 1, len, len))))
+                    },
+                    b'?' => {
+                        if len > 1 && buf[len - 1] == b'?' {
+                            return Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))));
+                        } else {
+                            self.exit = true;
+                            return Some(Err(Error::Malformed("Unescaped Header event".to_owned())));
+                        }
+                    },
+                    b'!' => {
+                        if len >= 3 && &buf[1..3] == b"--" {
+                            loop {
+                                let len = buf.len();
+                                if len >= 5 && &buf[(len - 2)..] == b"--" {
+                                    return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
+                                }
+                                buf.push(b'>');
+                                match read_until(&mut self.reader, b'>', &mut buf) {
+                                    Ok(0) => {
+                                        self.exit = true;
+                                        return Some(Err(Error::Malformed("Unescaped Comment event".to_owned())));
+                                    },
+                                    Err(e) => {
+                                        self.exit = true;
+                                        return Some(Err(Error::from(e)));
+                                    },
+                                    _ => (),
+                                }
+                            }
+                        } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
+                            loop {
+                                let len = buf.len();
+                                if len >= 10 && &buf[(len - 2)..] == b"]]" {
+                                    return Some(Ok(Event::CData(Element::new(buf, 8, len - 2, len - 2))));
+                                }
+                                buf.push(b'>');
+                                match read_until(&mut self.reader, b'>', &mut buf) {
+                                    Ok(0) => {
+                                        self.exit = true;
+                                        return Some(Err(Error::Malformed("Unescaped CDATA event".to_owned())));
+                                    },
+                                    Err(e) => {
+                                        self.exit = true;
+                                        return Some(Err(Error::from(e)));
+                                    },
+                                    _ => (),
+                                }
+                            }
+                        }
+                    },
+                    _ => (),
+                }
+
+                // default case regular start or start/end
+                // TODO: do this directly when reading bufreader ...
+                let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+                if buf[len - 1] == b'/' {
+                    self.next_close = true;
+                    let element = Element::new(buf, 0, len - 1, 
+                                               if name_end < len { name_end } else { len - 1 });
+                    self.opened.push(element.clone());
+                    Some(Ok(Event::Start(element)))
+                } else {
+                    let element = Element::new(buf, 0, len, name_end);
+                    if self.with_check {
+                        self.opened.push(element.clone());
+                    }
+                    Some(Ok(Event::Start(element)))
+                }
+            },
+            Err(e) => {
+                self.exit = true;
+                Some(Err(Error::from(e)))
+            },
+        }
+    }
 }
 
 impl XmlReader<BufReader<File>> {
@@ -135,127 +256,12 @@ impl<B: BufRead> Iterator for XmlReader<B> {
             let e = self.opened.pop().unwrap();
             return Some(Ok(Event::End(e)));
         }
-        let mut buf = Vec::new();
         match self.tag_state {
-            TagState::Opened => {
-                self.tag_state = TagState::Closed;
-                match read_until(&mut self.reader, b'>', &mut buf) {
-                    Ok(0) => None,
-                    Ok(_n) => {
-                        let len = buf.len();
-                        match buf[0] {
-                            b'/' => {
-                                if self.with_check {
-                                    let e = self.opened.pop().unwrap();
-                                    if &buf[1..] != e.as_bytes() {
-                                        self.exit = true;
-                                        return Some(Err(Error::Malformed(format!(
-                                                "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
-                                                Element::new(buf, 1, len, len), e, self.opened))));
-                                    }
-                                }
-                                return Some(Ok(Event::End(Element::new(buf, 1, len, len))))
-                            },
-                            b'?' => {
-                                if len > 1 && buf[len - 1] == b'?' {
-                                    return Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))));
-                                } else {
-                                    self.exit = true;
-                                    return Some(Err(Error::Malformed("Unescaped Header event".to_owned())));
-                                }
-                            },
-                            b'!' => {
-                                if len >= 3 && &buf[1..3] == b"--" {
-                                    loop {
-                                        let len = buf.len();
-                                        if len >= 5 && &buf[(len - 2)..] == b"--" {
-                                            return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
-                                        }
-                                        buf.push(b'>');
-                                        match read_until(&mut self.reader, b'>', &mut buf) {
-                                            Ok(0) => {
-                                                self.exit = true;
-                                                return Some(Err(Error::Malformed("Unescaped Comment event".to_owned())));
-                                            },
-                                            Err(e) => {
-                                                self.exit = true;
-                                                return Some(Err(Error::from(e)));
-                                            },
-                                            _ => (),
-                                        }
-                                    }
-                                } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
-                                    loop {
-                                        let len = buf.len();
-                                        if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                            return Some(Ok(Event::CData(Element::new(buf, 8, len - 2, len - 2))));
-                                        }
-                                        buf.push(b'>');
-                                        match read_until(&mut self.reader, b'>', &mut buf) {
-                                            Ok(0) => {
-                                                self.exit = true;
-                                                return Some(Err(Error::Malformed("Unescaped CDATA event".to_owned())));
-                                            },
-                                            Err(e) => {
-                                                self.exit = true;
-                                                return Some(Err(Error::from(e)));
-                                            },
-                                            _ => (),
-                                        }
-                                    }
-                                }
-                            },
-                            _ => (),
-                        }
-
-                        // default case regular start or start/end
-                        // TODO: do this directly when reading bufreader ...
-                        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
-                        if buf[len - 1] == b'/' {
-                            self.next_close = true;
-                            let element = Element::new(buf, 0, len - 1, 
-                                                       if name_end < len { name_end } else { len - 1 });
-                            self.opened.push(element.clone());
-                            Some(Ok(Event::Start(element)))
-                        } else {
-                            let element = Element::new(buf, 0, len, name_end);
-                            if self.with_check {
-                                self.opened.push(element.clone());
-                            }
-                            Some(Ok(Event::Start(element)))
-                        }
-                    },
-                    Err(e) => {
-                        self.exit = true;
-                        Some(Err(Error::from(e)))
-                    },
-                }
-            },
-            TagState::Closed => {
-                self.tag_state = TagState::Opened;
-                match read_until(&mut self.reader, b'<', &mut buf) {
-                    Ok(0) => None,
-                    Ok(_n) => {
-                        let (start, len) = if self.trim_text {
-                            // trim start
-                            match buf.iter().position(|&b| !is_whitespace(b)) {
-                                Some(start) => (start, buf.len() - buf.iter().rev()
-                                                .position(|&b| !is_whitespace(b)).unwrap_or(0)),
-                                None => return self.next()
-                            }
-                        } else {
-                            (0, buf.len())
-                        };
-                        Some(Ok(Event::Text(Element::new(buf, start, len, len))))
-                    },
-                    Err(e) => {
-                        self.exit = true;
-                        Some(Err(Error::from(e)))
-                    },
-                }
-            }
+            TagState::Opened => self.read_until_close(),
+            TagState::Closed => self.read_until_open(),
         }
     }
+
 }
 
 #[derive(Clone)]
@@ -289,11 +295,11 @@ impl Element {
 
     /// name as str, (without eventual attributes)
     pub fn as_str(&self) -> Result<&str> {
-        ::std::str::from_utf8(self.as_bytes()).map_err(|e| Error::Utf8(e))
+        ::std::str::from_utf8(self.as_bytes()).map_err(Error::Utf8)
     }
 
     /// get attributes iterator
-    pub fn attributes<'a>(&'a self) -> Attributes<'a> {
+    pub fn attributes(&self) -> Attributes {
         Attributes::new(&self.buf[self.start..self.end], self.name_end)
     }
 
@@ -327,18 +333,17 @@ impl Event {
 
     /// returns inner Element for the event
     pub fn element(&self) -> &Element {
-        match self {
-            &Event::Start(ref e) |
-            &Event::End(ref e) |
-            &Event::Text(ref e) |
-            &Event::Comment(ref e) |
-            &Event::CData(ref e) |
-            &Event::Header(ref e) => e,
+        match *self {
+            Event::Start(ref e) |
+            Event::End(ref e) |
+            Event::Text(ref e) |
+            Event::Comment(ref e) |
+            Event::CData(ref e) |
+            Event::Header(ref e) => e,
         }
     }
 }
 
-#[inline(always)]
 fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
@@ -346,10 +351,10 @@ fn is_whitespace(b: u8) -> bool {
     }
 }
 
-#[inline(always)]
 /// read_until slighly modified from rust std library
 ///
 /// only change is that we do not write the matching character
+#[inline(always)]
 fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     let mut read = 0;
     let mut done = false;
