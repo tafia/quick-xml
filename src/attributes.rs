@@ -3,6 +3,7 @@ use error::{Error, Result};
 pub struct Attributes<'a> {
     bytes: &'a [u8],
     position: usize,
+    was_error: bool,
 }
 
 impl<'a> Attributes<'a> {
@@ -10,6 +11,7 @@ impl<'a> Attributes<'a> {
         Attributes {
             bytes: buf,
             position: pos,
+            was_error: false,
         }
     }
 }
@@ -18,13 +20,17 @@ impl<'a> Iterator for Attributes<'a> {
     type Item = Result<(&'a[u8], &'a str)>;
     fn next(&mut self) -> Option<Self::Item> {
         
+        if self.was_error { return None; }
+
         let len = self.bytes.len();
         let p = self.position;
+        if len == p { return None; }
+
         let mut iter = self.bytes[p..].iter().cloned().enumerate();
 
         let start_key = {
             let mut found_space = false;
-            let p: usize;
+            let start: usize;
             loop {
                 match iter.next() {
                     Some((_, b' '))
@@ -32,7 +38,7 @@ impl<'a> Iterator for Attributes<'a> {
                         | Some((_, b'\n'))
                         | Some((_, b'\t')) => if !found_space { found_space = true; },
                     Some((i, _)) => if found_space { 
-                        p = i;
+                        start = i;
                         break;
                     },
                     None => {
@@ -41,7 +47,7 @@ impl<'a> Iterator for Attributes<'a> {
                     }
                 }
             }
-            p
+            start
         };
 
         let mut has_equal = false;
@@ -58,8 +64,8 @@ impl<'a> Iterator for Attributes<'a> {
                 },
                 Some((i, b'=')) => {
                     if has_equal {
-                        debug!("has_equal x2 !");
-                        return None; // TODO: return error instead
+                        self.was_error = true;
+                        return Some(Err(Error::Malformed("Got 2 '=' tokens".to_owned())));
                     }
                     has_equal = true;
                     if end_key.is_none() {
@@ -68,6 +74,7 @@ impl<'a> Iterator for Attributes<'a> {
                 },
                 Some((i, b'"')) => {
                     if !has_equal {
+                        self.was_error = true;
                         return Some(Err(Error::Malformed("Unexpected quote before '='".to_owned())));
                     }
                     if start_val.is_none() {
@@ -77,14 +84,14 @@ impl<'a> Iterator for Attributes<'a> {
                         break;
                     }
                 },
-                Some((_, _)) => (),
                 None => {
                     self.position = len;
                     return None;
                 }
+                Some((_, _)) => (),
             }
         }
-        self.position = end_val.unwrap() + 1;
+        self.position += end_val.unwrap() + 1;
 
         match ::std::str::from_utf8(&self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())]) {
             Ok(s) => Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())], s))),
