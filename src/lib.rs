@@ -38,7 +38,6 @@
 //! use quick_xml::Event::*;
 //! use std::io::Cursor;
 //! use std::iter;
-//! use std::str::from_utf8;
 //! 
 //! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 //! let reader = XmlReader::from_str(xml).trim_text(true);
@@ -47,19 +46,16 @@
 //!     match r {
 //!         Ok(Event::Start(ref e)) if e.as_bytes() == b"this_tag" => {
 //!             // collect existing attributes
-//!             let mut attrs = e.attributes().map(|attr| {
-//!                 let (k,v) = attr.unwrap();
-//!                 (from_utf8(k).unwrap(), v)
-//!             }).collect::<Vec<_>>();
+//!             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
 //!
-//!             // adds a new mykey="somevalue" attribute
-//!             attrs.push(("mykey", "somevalue"));
+//!             // adds a new my-key="some value" attribute
+//!             attrs.push((b"my-key", "some value"));
 //!
 //!             // writes the event to the writer
 //!             assert!(writer.write(Start(Element::new("my_elem", attrs.into_iter()))).is_ok());
 //!         },
 //!         Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
-//!             assert!(writer.write(End(Element::new("my_elem", iter::empty()))).is_ok());
+//!             assert!(writer.write(End(Element::new("my_elem", iter::empty::<(&str, &str)>()))).is_ok());
 //!         },
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
 //!         Err(e) => panic!("{:?}", e),
@@ -67,7 +63,7 @@
 //! }
 //!
 //! let result = writer.into_inner().into_inner();
-//! let expected = r#"<my_elem k1="v1" k2="v2" mykey="somevalue"><child>text</child></my_elem>"#;
+//! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 //! assert_eq!(result, expected.as_bytes());
 //! ```
 
@@ -319,15 +315,19 @@ pub struct Element {
 impl Element {
 
     /// Creates a new Element from the given name and attributes.
-    /// attributes are represented as an iterator over (key, value) tuples where
-    /// key and value are both &str.
-    pub fn new<'a, I: Iterator<Item = (&'a str, &'a str)>>(name: &str, attributes: I) -> Element {
-        let mut string = String::from(name);
-        let name_end = string.len();
+    /// attributes are represented as an iterator over (key, value) tuples.
+    /// Key and value can be anything that implements the AsRef<[u8]> trait,
+    /// like byte slices and strings.
+    pub fn new<'a, K: AsRef<[u8]>, V: AsRef<[u8]>, I: Iterator<Item = (K, V)>>(name: &str, attributes: I) -> Element {
+        let mut bytes = Vec::from(name.as_bytes());
+        let name_end = bytes.len();
         for attr in attributes {
-            string.push_str(&format!(" {}=\"{}\"", attr.0, attr.1));
+            bytes.push(b' ');
+            bytes.extend_from_slice(attr.0.as_ref());
+            bytes.extend_from_slice(b"=\"");
+            bytes.extend_from_slice(attr.1.as_ref());
+            bytes.push(b'"');
         }
-        let bytes = string.into_bytes();
         let end = bytes.len();
         Element {
             buf: bytes,
