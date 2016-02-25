@@ -1,6 +1,7 @@
-use super::{XmlReader, Element};
+use super::{Element, XmlReader, XmlWriter};
 use super::Event::*;
 use std::str::from_utf8;
+use std::io::Cursor;
 
 macro_rules! next_eq {
     ($r: expr, $($t:path, $bytes:expr),*) => {
@@ -125,3 +126,15 @@ fn test_nested() {
             );
 }
 
+#[test]
+fn test_writer() {
+    let str = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
+    let reader = XmlReader::from_str(&str).trim_text(true);
+    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    for event in reader {
+        assert!(writer.write(event.unwrap()).is_ok());
+    }
+
+	let result = writer.into_inner().into_inner();
+    assert_eq!(result, str.as_bytes());
+}

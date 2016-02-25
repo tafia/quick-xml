@@ -41,7 +41,7 @@ pub mod attributes;
 mod test;
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Write};
 use std::iter::Iterator;
 use std::path::Path;
 use std::fmt;
@@ -395,3 +395,61 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
     Ok(read)
 }
 
+/// Xml writer
+///
+/// Consumes a `Write` and writes xml Events
+pub struct XmlWriter<W: Write> {
+    /// underlying writer
+    writer: W
+}
+
+impl<W: Write> XmlWriter<W> {
+
+    /// Creates a XmlWriter from a generic Write
+    pub fn new(inner: W) -> XmlWriter<W> {
+        XmlWriter {
+            writer: inner
+        }
+    }
+
+    /// Consumes this Xml Writer, returning the underlying writer.
+    pub fn into_inner(self) -> W { self.writer }
+
+    pub fn write(&mut self, event: Event) -> Result<()> {
+        match event {
+            Event::Start(ref e) => self.write_start_tag(e),
+            Event::End(ref e) => self.write_wrapped_str(b"</", e, b">"),
+            Event::Text(ref e) => self.write_bytes(e.as_bytes()),
+            Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
+            Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
+            Event::Header(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
+        }
+    }
+
+	#[inline]
+    fn write_bytes(&mut self, value: &[u8]) -> Result<()> {
+        try!(self.writer.write(value));
+        Ok(())
+    }
+
+    fn write_start_tag(&mut self, element: &Element) -> Result<()> {
+        try!(self.write_bytes(b"<"));
+        try!(self.write_bytes(element.as_bytes()));
+        for attr in element.attributes() {
+            let attr = try!(attr);
+            try!(self.write_bytes(b" "));
+            try!(self.write_bytes(attr.0));
+            try!(self.write_bytes(b"=\""));
+            try!(self.write_bytes(attr.1.as_bytes()));
+            try!(self.write_bytes(b"\""));
+        }
+        self.write_bytes(b">")
+    }
+
+    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8]) -> Result<()> {
+        try!(self.write_bytes(before));
+        try!(self.write_bytes(element.as_bytes()));
+        self.write_bytes(after)
+    }
+
+}
