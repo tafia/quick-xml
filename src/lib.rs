@@ -303,6 +303,25 @@ impl Element {
         Attributes::new(&self.buf[self.start..self.end], self.name_end)
     }
 
+    /// Creates a new Element from the given name and attributes.
+    /// attributes are represented as an iterator over (key, value) tuples where
+    /// key and value are both &str.
+    pub fn create<'a, I: Iterator<Item = (&'a str, &'a str)>>(name: &str, attributes: I) -> Element {
+        let mut string = String::from(name);
+        let name_end = string.len();
+        for attr in attributes {
+            string.push_str(&format!(" {}=\"{}\"", attr.0, attr.1));
+        }
+        let bytes = string.into_bytes();
+        let end = bytes.len();
+        Element {
+            buf: bytes,
+            start: 0,
+            end: end,
+            name_end: name_end
+        }
+    }
+
     /// consumes entire self (including eventual attributes!) and returns `String`
     ///
     /// useful when we need to get Text event value (which don't have attributes)
@@ -417,7 +436,7 @@ impl<W: Write> XmlWriter<W> {
 
     pub fn write(&mut self, event: Event) -> Result<()> {
         match event {
-            Event::Start(ref e) => self.write_start_tag(e),
+            Event::Start(e) => self.write_start_tag(e),
             Event::End(ref e) => self.write_wrapped_str(b"</", e, b">"),
             Event::Text(ref e) => self.write_bytes(e.as_bytes()),
             Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
@@ -432,17 +451,9 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_start_tag(&mut self, element: &Element) -> Result<()> {
+    fn write_start_tag(&mut self, element: Element) -> Result<()> {
         try!(self.write_bytes(b"<"));
-        try!(self.write_bytes(element.as_bytes()));
-        for attr in element.attributes() {
-            let attr = try!(attr);
-            try!(self.write_bytes(b" "));
-            try!(self.write_bytes(attr.0));
-            try!(self.write_bytes(b"=\""));
-            try!(self.write_bytes(attr.1.as_bytes()));
-            try!(self.write_bytes(b"\""));
-        }
+        try!(self.write_bytes(&try!(element.into_string()).into_bytes()));
         self.write_bytes(b">")
     }
 

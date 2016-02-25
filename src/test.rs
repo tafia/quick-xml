@@ -138,3 +138,30 @@ fn test_writer() {
 	let result = writer.into_inner().into_inner();
     assert_eq!(result, str.as_bytes());
 }
+
+#[test]
+fn test_write_attrs() {
+    let str_from = r#"<elem attr="val"></elem>"#;
+    let expected = r#"<elem attr="val" another="one"></elem>"#;
+    let reader = XmlReader::from_str(&str_from).trim_text(true);
+    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    for event in reader {
+        let event = event.unwrap();
+        let event = match event {
+            Start(elem) => {
+                let mut attrs = elem.attributes().map(|e| {
+                    let (k,v) = e.unwrap();
+                    (from_utf8(k).unwrap(), v)
+                }).collect::<Vec<_>>();
+                attrs.push(("another", "one"));
+                let elem = Element::create("elem", attrs.into_iter());
+                Start(elem)
+            },
+            _ => event
+        };
+        assert!(writer.write(event).is_ok());
+    }
+
+	let result = writer.into_inner().into_inner();
+    assert_eq!(result, expected.as_bytes());
+}
