@@ -5,8 +5,8 @@
 //! ```
 //! use quick_xml::{XmlReader, Event};
 //! 
-//! let xml = r#"<tag1 att1 = \"test\">
-//!                 <tag2><!--Test comment-->Test</b>
+//! let xml = r#"<tag1 att1 = "test">
+//!                 <tag2><!--Test comment-->Test</tag2>
 //!                 <tag2>
 //!                     Test 2
 //!                 </tag2>
@@ -18,17 +18,57 @@
 //!     match r {
 //!         Ok(Event::Start(ref e)) => {
 //!             match e.as_bytes() {
-//!                 b"a" => println!("attributes values: {:?}", 
+//!                 b"tag1" => println!("attributes values: {:?}", 
 //!                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
-//!                 b"b" => count += 1,
+//!                 b"tag2" => count += 1,
 //!                 _ => (),
 //!             }
 //!         },
 //!         Ok(Event::Text(e)) => txt.push(e.into_string()),
-//!         Err(e) => println!("{:?}", e),
+//!         Err(e) => panic!("{:?}", e),
 //!         _ => (),
 //!     }
 //! }
+//! ```
+//!
+//! # Example of transforming XML
+//!
+//! ```
+//! use quick_xml::{Element, Event, XmlReader, XmlWriter};
+//! use quick_xml::Event::*;
+//! use std::io::Cursor;
+//! use std::iter;
+//! use std::str::from_utf8;
+//! 
+//! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
+//! let reader = XmlReader::from_str(xml).trim_text(true);
+//! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+//! for r in reader {
+//!     match r {
+//!         Ok(Event::Start(ref e)) if e.as_bytes() == b"this_tag" => {
+//!             // collect existing attributes
+//!             let mut attrs = e.attributes().map(|attr| {
+//!                 let (k,v) = attr.unwrap();
+//!                 (from_utf8(k).unwrap(), v)
+//!             }).collect::<Vec<_>>();
+//!
+//!             // adds a new mykey="somevalue" attribute
+//!             attrs.push(("mykey", "somevalue"));
+//!
+//!             // writes the event to the writer
+//!             assert!(writer.write(Start(Element::new("my_elem", attrs.into_iter()))).is_ok());
+//!         },
+//!         Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
+//!             assert!(writer.write(End(Element::new("my_elem", iter::empty()))).is_ok());
+//!         },
+//!         Ok(e) => assert!(writer.write(e).is_ok()),
+//!         Err(e) => panic!("{:?}", e),
+//!     }
+//! }
+//!
+//! let result = writer.into_inner().into_inner();
+//! let expected = r#"<my_elem k1="v1" k2="v2" mykey="somevalue"><child>text</child></my_elem>"#;
+//! assert_eq!(result, expected.as_bytes());
 //! ```
 
 #[macro_use]
@@ -122,7 +162,7 @@ impl<B: BufRead> XmlReader<B> {
                 } else {
                     (0, buf.len())
                 };
-                Some(Ok(Event::Text(Element::new(buf, start, len, len))))
+                Some(Ok(Event::Text(Element::from_buffer(buf, start, len, len))))
             },
             Err(e) => {
                 self.exit = true;
@@ -146,14 +186,14 @@ impl<B: BufRead> XmlReader<B> {
                                 self.exit = true;
                                 return Some(Err(Error::Malformed(format!(
                                         "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
-                                        Element::new(buf, 1, len, len), e, self.opened))));
+                                        Element::from_buffer(buf, 1, len, len), e, self.opened))));
                             }
                         }
-                        return Some(Ok(Event::End(Element::new(buf, 1, len, len))))
+                        return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))))
                     },
                     b'?' => {
                         if len > 1 && buf[len - 1] == b'?' {
-                            return Some(Ok(Event::Header(Element::new(buf, 1, len - 1, len - 1))));
+                            return Some(Ok(Event::Header(Element::from_buffer(buf, 1, len - 1, len - 1))));
                         } else {
                             self.exit = true;
                             return Some(Err(Error::Malformed("Unescaped Header event".to_owned())));
@@ -164,7 +204,7 @@ impl<B: BufRead> XmlReader<B> {
                             loop {
                                 let len = buf.len();
                                 if len >= 5 && &buf[(len - 2)..] == b"--" {
-                                    return Some(Ok(Event::Comment(Element::new(buf, 3, len - 2, len - 2))));
+                                    return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
                                 }
                                 buf.push(b'>');
                                 match read_until(&mut self.reader, b'>', &mut buf) {
@@ -183,7 +223,7 @@ impl<B: BufRead> XmlReader<B> {
                             loop {
                                 let len = buf.len();
                                 if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                    return Some(Ok(Event::CData(Element::new(buf, 8, len - 2, len - 2))));
+                                    return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
                                 }
                                 buf.push(b'>');
                                 match read_until(&mut self.reader, b'>', &mut buf) {
@@ -208,12 +248,12 @@ impl<B: BufRead> XmlReader<B> {
                 let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
                 if buf[len - 1] == b'/' {
                     self.next_close = true;
-                    let element = Element::new(buf, 0, len - 1, 
-                                               if name_end < len { name_end } else { len - 1 });
+                    let element = Element::from_buffer(buf, 0, len - 1, 
+                                                       if name_end < len { name_end } else { len - 1 });
                     self.opened.push(element.clone());
                     Some(Ok(Event::Start(element)))
                 } else {
-                    let element = Element::new(buf, 0, len, name_end);
+                    let element = Element::from_buffer(buf, 0, len, name_end);
                     if self.with_check {
                         self.opened.push(element.clone());
                     }
@@ -278,35 +318,10 @@ pub struct Element {
 
 impl Element {
 
-    /// private function to create a new element
-    fn new(buf: Vec<u8>, start: usize, end: usize, name_end: usize) -> Element {
-        Element {
-            buf: buf,
-            start: start,
-            end: end,
-            name_end: name_end,
-        }
-    }
-    
-    /// name as &[u8] (without eventual attributes)
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.buf[self.start..self.name_end]
-    }
-
-    /// name as str, (without eventual attributes)
-    pub fn as_str(&self) -> Result<&str> {
-        ::std::str::from_utf8(self.as_bytes()).map_err(Error::Utf8)
-    }
-
-    /// get attributes iterator
-    pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self.buf[self.start..self.end], self.name_end)
-    }
-
     /// Creates a new Element from the given name and attributes.
     /// attributes are represented as an iterator over (key, value) tuples where
     /// key and value are both &str.
-    pub fn create<'a, I: Iterator<Item = (&'a str, &'a str)>>(name: &str, attributes: I) -> Element {
+    pub fn new<'a, I: Iterator<Item = (&'a str, &'a str)>>(name: &str, attributes: I) -> Element {
         let mut string = String::from(name);
         let name_end = string.len();
         for attr in attributes {
@@ -320,6 +335,31 @@ impl Element {
             end: end,
             name_end: name_end
         }
+    }
+
+    /// private function to create a new element from a buffer.
+    fn from_buffer(buf: Vec<u8>, start: usize, end: usize, name_end: usize) -> Element {
+        Element {
+            buf: buf,
+            start: start,
+            end: end,
+            name_end: name_end,
+        }
+    }
+
+    /// name as &[u8] (without eventual attributes)
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.buf[self.start..self.name_end]
+    }
+
+    /// name as str, (without eventual attributes)
+    pub fn as_str(&self) -> Result<&str> {
+        ::std::str::from_utf8(self.as_bytes()).map_err(Error::Utf8)
+    }
+
+    /// get attributes iterator
+    pub fn attributes(&self) -> Attributes {
+        Attributes::new(&self.buf[self.start..self.end], self.name_end)
     }
 
     /// consumes entire self (including eventual attributes!) and returns `String`
@@ -434,6 +474,7 @@ impl<W: Write> XmlWriter<W> {
     /// Consumes this Xml Writer, returning the underlying writer.
     pub fn into_inner(self) -> W { self.writer }
 
+    /// Writes the given event to the underlying writer.
     pub fn write(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Start(e) => self.write_start_tag(e),
@@ -445,7 +486,7 @@ impl<W: Write> XmlWriter<W> {
         }
     }
 
-	#[inline]
+    #[inline]
     fn write_bytes(&mut self, value: &[u8]) -> Result<()> {
         try!(self.writer.write(value));
         Ok(())

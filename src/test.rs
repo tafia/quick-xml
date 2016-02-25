@@ -13,11 +13,11 @@ macro_rules! next_eq {
                 },
                 Some(Ok(e)) => {
                     assert!(false, "expecting {:?}, found {:?}", 
-                            $t(Element::new($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
+                            $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
                 },
                 p => {
                     assert!(false, "expecting {:?}, found {:?}", 
-                            $t(Element::new($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
+                            $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
                 }
             }
         )*
@@ -135,7 +135,7 @@ fn test_writer() {
         assert!(writer.write(event.unwrap()).is_ok());
     }
 
-	let result = writer.into_inner().into_inner();
+    let result = writer.into_inner().into_inner();
     assert_eq!(result, str.as_bytes());
 }
 
@@ -154,7 +154,7 @@ fn test_write_attrs() {
                     (from_utf8(k).unwrap(), v)
                 }).collect::<Vec<_>>();
                 attrs.push(("another", "one"));
-                let elem = Element::create("elem", attrs.into_iter());
+                let elem = Element::new("elem", attrs.into_iter());
                 Start(elem)
             },
             _ => event
@@ -162,6 +162,6 @@ fn test_write_attrs() {
         assert!(writer.write(event).is_ok());
     }
 
-	let result = writer.into_inner().into_inner();
+    let result = writer.into_inner().into_inner();
     assert_eq!(result, expected.as_bytes());
 }
