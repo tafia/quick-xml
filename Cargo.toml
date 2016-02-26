@@ -1,11 +1,11 @@
 [package]
 name = "quick-xml"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Johann Tuffe <tafia973@gmail.com"]
-description = "High performance xml pull reader"
+description = "High performance xml reader and writer"
 repository = "https://github.com/tafia/quick-xml"
 readme = "README.md"
-keywords = ["xml", "reader", "parser"]
+keywords = ["xml", "reader", "parser", "write"]
 license = "MIT"
 
 [dependencies]

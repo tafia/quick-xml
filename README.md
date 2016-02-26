@@ -1,6 +1,6 @@
 # quick-xml
 
-High performance xml pull reader for simple enough xmls.
+High performance xml pull reader/writer for simple enough xmls.
 
 Inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
@@ -17,6 +17,8 @@ extern crate quick_xml;
 ```
 
 ## Example
+
+### Reader
 
 ```rust
 use quick_xml::{XmlReader, Event};
@@ -45,6 +47,42 @@ for r in reader {
         _ => (),
     }
 }
+```
+
+### Writer
+
+```rust
+use quick_xml::{Element, Event, XmlReader, XmlWriter};
+use quick_xml::Event::*;
+use std::io::Cursor;
+use std::iter;
+
+let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
+let reader = XmlReader::from_str(xml).trim_text(true);
+let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+for r in reader {
+    match r {
+        Ok(Event::Start(ref e)) if e.as_bytes() == b"this_tag" => {
+            // collect existing attributes
+            let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
+
+            // adds a new my-key="some value" attribute
+            attrs.push((b"my-key", "some value"));
+
+            // writes the event to the writer
+            assert!(writer.write(Start(Element::new("my_elem", attrs.into_iter()))).is_ok());
+        },
+        Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
+            assert!(writer.write(End(Element::new("my_elem", iter::empty::<(&str, &str)>()))).is_ok());
+        },
+        Ok(e) => assert!(writer.write(e).is_ok()),
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+let result = writer.into_inner().into_inner();
+let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
+assert_eq!(result, expected.as_bytes());
 ```
 
 ## Current state
