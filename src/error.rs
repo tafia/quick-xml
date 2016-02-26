@@ -15,6 +15,8 @@ pub enum Error {
     Utf8(Utf8Error),
     /// Xml is malformed
     Malformed(String),
+    /// Unexpected
+    Unexpected(String),
 }
 
 /// Result type
@@ -27,6 +29,7 @@ impl fmt::Display for Error {
             Error::Utf8(ref err) => write!(f, "{}", err),
             Error::EOL => write!(f, "Trying to access column but found End Of Line"),
             Error::Malformed(ref err) => write!(f, "Malformed xml: {}", err),
+            Error::Unexpected(ref err) => write!(f, "Unexpected error: {}", err),
         }
     }
 }
@@ -38,6 +41,7 @@ impl ::std::error::Error for Error {
             Error::Utf8(..) => "Error while converting to utf8",
             Error::EOL => "Trying to access column but found End Of Line",
             Error::Malformed(..) => "Xml is malformed",
+            Error::Unexpected(..) => "An unexpected error has occured",
         }
     }
 

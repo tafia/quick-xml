@@ -165,3 +165,19 @@ fn test_write_attrs() {
     let result = writer.into_inner().into_inner();
     assert_eq!(result, expected.as_bytes());
 }
+
+#[test]
+fn test_map_starts() {
+    let mut r = XmlReader::from_str("<a><b>test</b>\
+        <b>test 2</b><c/><b>test 3</b></a>").trim_text(true);
+    let mut tests = Vec::new();
+    r.map_starts::<_, &str>(None, |r, e| match e.as_bytes() {
+        b"a" => r.map_starts(Some("a"), |r, e| match e.as_bytes() {
+            b"b" => r.read_text("b").map(|t| tests.push(t)),
+            name => r.read_to_end(name)
+        }),
+        name => r.read_to_end(name),
+    }).unwrap();
+    let expected = vec!["test".to_owned(), "test 2".to_owned(), "test 3".to_owned()];
+    assert_eq!(tests, expected);
+}

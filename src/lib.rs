@@ -83,6 +83,7 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::iter::Iterator;
 use std::path::Path;
 use std::fmt;
+use std::str::from_utf8;
 
 use error::{Error, Result};
 use attributes::Attributes;
@@ -144,6 +145,92 @@ impl<B: BufRead> XmlReader<B> {
         self
     }
 
+    /// Reads until end element is found
+    ///
+    /// Manages nested cases where parent and child elements have the same name
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+        let mut depth = 0;
+        let end = end.as_ref();
+        loop {
+            match self.next() {
+                Some(Ok(Event::End(ref e))) if e.as_bytes() == end => {
+                    if depth == 0 { return Ok(()); }
+                    depth -= 1;
+                },
+                Some(Ok(Event::Start(ref e))) if e.as_bytes() == end => depth += 1,
+                Some(Err(e)) => return Err(e),
+                None => {
+                    warn!("EOF instead of {:?}", from_utf8(end));
+                    return Err(Error::Unexpected(format!("Reached EOF, expecting {:?} end tag",
+                                                         from_utf8(end))));
+                },
+                _ => (),
+            }
+        }
+    }
+
+    /// Reads next event, if `Event::Text` or `Event::End`, 
+    /// then returns a `String`, else returns an error
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> Result<String> {
+        match self.next() {
+            Some(Ok(Event::Text(e))) => {
+                self.read_to_end(end).and_then(|_| e.into_string())
+            },
+            Some(Ok(Event::End(ref e))) if e.as_bytes() == end.as_ref() => Ok("".to_owned()),
+            Some(Err(e)) => Err(e),
+            None => Err(Error::Unexpected("Reached EOF while reading text".to_owned())),
+            Some(Ok(_)) => {
+                Err(Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()))
+            },
+        }
+    }
+
+    /// Loop over elements and apply a `f` closure on start elements
+    /// Ends when `end` `Event::End` is found
+    ///
+    /// # Example:
+    /// ```
+    /// # use quick_xml::{XmlReader, Event};
+    /// let mut r = XmlReader::from_str("<a><b>test</b>\
+    ///     <b>test 2</b><c/><b>test 3</b></a>").trim_text(true);
+    /// let mut tests = Vec::new();
+    /// r.map_starts::<_, &str>(None, |r, e| match e.as_bytes() {
+    ///     b"a" => r.map_starts(Some("a"), |r, e| match e.as_bytes() {
+    ///         b"b" => r.read_text("b").map(|t| tests.push(t)),
+    ///         name => r.read_to_end(name)
+    ///     }),
+    ///     name => r.read_to_end(name),
+    /// }).unwrap();
+    /// ```
+    pub fn map_starts<F, K: AsRef<[u8]>>(&mut self, end: Option<K>, mut f: F) -> Result<()>
+        where F: FnMut(&mut XmlReader<B>, &Element) -> Result<()> 
+    {
+        let end = end.as_ref();
+        match end {
+            Some(end) => {
+                let end = end.as_ref();
+                loop {
+                    match self.next() {
+                        Some(Ok(Event::End(ref e))) if e.as_bytes() == end => return Ok(()),
+                        Some(Ok(Event::Start(ref e))) => try!(f(self, e)),
+                        Some(Err(e)) => return Err(e),
+                        None => return Err(Error::Unexpected(format!("Unexpected end of {:?}",
+                                                                     from_utf8(end)))),
+                        _ => (),
+                    }
+                }
+            },
+            None => loop {
+                match self.next() {
+                    Some(Ok(Event::Start(ref e))) => try!(f(self, e)),
+                    None => return Ok(()),
+                    Some(Err(e)) => return Err(e),
+                    _ => (),
+                }
+            },
+        }
+    }
+
     /// private function to read until '<' is found
     fn read_until_open(&mut self) -> Option<Result<Event>> {
         self.tag_state = TagState::Opened;
@@ -169,6 +256,7 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    /// private function to read until '>' is found
     fn read_until_close(&mut self) -> Option<Result<Event>> {
         self.tag_state = TagState::Closed;
         let mut buf = Vec::new();
@@ -358,7 +446,7 @@ impl Element {
 
     /// name as str, (without eventual attributes)
     pub fn as_str(&self) -> Result<&str> {
-        ::std::str::from_utf8(self.as_bytes()).map_err(Error::Utf8)
+        from_utf8(self.as_bytes()).map_err(Error::Utf8)
     }
 
     /// get attributes iterator
