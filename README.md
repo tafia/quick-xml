@@ -4,6 +4,8 @@ High performance xml pull reader/writer for simple enough xmls.
 
 Inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
+[documentation](http://tafia.github.io/quick-xml/quick_xml/index.html)
+
 ## Usage
 
 Carto.toml
