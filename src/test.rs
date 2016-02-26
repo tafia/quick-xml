@@ -141,22 +141,21 @@ fn test_writer() {
 
 #[test]
 fn test_write_attrs() {
-    let str_from = r#"<elem attr="val"></elem>"#;
-    let expected = r#"<elem attr="val" another="one"></elem>"#;
+    let str_from = r#"<source attr="val"></source>"#;
+    let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
     let reader = XmlReader::from_str(&str_from).trim_text(true);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     for event in reader {
         let event = event.unwrap();
         let event = match event {
             Start(elem) => {
-                let mut attrs = elem.attributes().map(|e| {
-                    let (k,v) = e.unwrap();
-                    (from_utf8(k).unwrap(), v)
-                }).collect::<Vec<_>>();
-                attrs.push(("another", "one"));
-                let elem = Element::new("elem", attrs.into_iter());
+                let mut attrs = elem.attributes().map(|e| e.unwrap()).collect::<Vec<_>>();
+                attrs.extend_from_slice(&[(b"a", "b"), (b"c", "d")]);
+                let mut elem = Element::new("copy").with_attributes(attrs);
+                elem.push_attribute("x", "y");
                 Start(elem)
             },
+            End(_elem) => End(Element::new("copy")),
             _ => event
         };
         assert!(writer.write(event).is_ok());
