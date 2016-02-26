@@ -186,7 +186,9 @@ impl<B: BufRead> XmlReader<B> {
     }
 
     /// Loop over elements and apply a `f` closure on start elements
+    ///
     /// Ends when `end` `Event::End` is found
+    /// This helper method is particularly useful for nested searches
     ///
     /// # Example:
     /// ```
