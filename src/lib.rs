@@ -67,6 +67,8 @@
 //! assert_eq!(result, expected.as_bytes());
 //! ```
 
+#![deny(missing_docs)]
+
 #[macro_use]
 extern crate log;
 
@@ -318,7 +320,9 @@ impl Element {
     /// attributes are represented as an iterator over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn new<'a, K: AsRef<[u8]>, V: AsRef<[u8]>, I: Iterator<Item = (K, V)>>(name: &str, attributes: I) -> Element {
+    pub fn new<'a, K, V, I>(name: &str, attributes: I) -> Element 
+        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: Iterator<Item = (K, V)>
+    {
         let mut bytes = Vec::from(name.as_bytes());
         let name_end = bytes.len();
         for attr in attributes {
@@ -380,11 +384,17 @@ impl fmt::Debug for Element {
 /// Event to interprete node as they are parsed
 #[derive(Debug)]
 pub enum Event {
+    /// <...> eventually with attributes 
     Start(Element),
+    /// </...>
     End(Element),
+    /// Data between Start and End element
     Text(Element),
+    /// <!-- ... -->
     Comment(Element),
+    /// <![CDATA[...]]>
     CData(Element),
+    /// <?...?>
     Header(Element),
 }
 

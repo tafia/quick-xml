@@ -13,6 +13,7 @@ pub enum Error {
     EOL,
     /// An error while converting to utf8
     Utf8(Utf8Error),
+    /// Xml is malformed
     Malformed(String),
 }
 

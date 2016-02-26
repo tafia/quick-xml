@@ -1,5 +1,9 @@
+//! Xml Attributes module
+//!
+//! Provides an iterator over attributes key/value pairs
 use error::{Error, Result};
 
+/// Iterator over attributes key/value pairs
 pub struct Attributes<'a> {
     bytes: &'a [u8],
     position: usize,
@@ -7,6 +11,10 @@ pub struct Attributes<'a> {
 }
 
 impl<'a> Attributes<'a> {
+    /// creates a new attribute from a buffer
+    /// 
+    /// pos represents current position of the iterator 
+    /// (starts after start element name)
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
             bytes: buf,
