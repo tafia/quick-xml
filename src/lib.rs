@@ -48,14 +48,15 @@
 //!             // collect existing attributes
 //!             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
 //!
-//!             // adds a new my-key="some value" attribute
-//!             attrs.push((b"my-key", "some value"));
+//!             // copy existing attributes, adds a new my-key="some value" attribute
+//!             let mut elem = Element::new("my_elem").with_attributes(attrs);
+//!             elem.push_attribute(b"my-key", "some value");
 //!
 //!             // writes the event to the writer
-//!             assert!(writer.write(Start(Element::new("my_elem", attrs.into_iter()))).is_ok());
+//!             assert!(writer.write(Start(elem)).is_ok());
 //!         },
 //!         Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
-//!             assert!(writer.write(End(Element::new("my_elem", iter::empty::<(&str, &str)>()))).is_ok());
+//!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 //!         },
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
 //!         Err(e) => panic!("{:?}", e),
@@ -80,7 +81,7 @@ mod test;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
-use std::iter::Iterator;
+use std::iter::IntoIterator;
 use std::path::Path;
 use std::fmt;
 use std::str::from_utf8;
@@ -406,28 +407,16 @@ pub struct Element {
 
 impl Element {
 
-    /// Creates a new Element from the given name and attributes.
-    /// attributes are represented as an iterator over (key, value) tuples.
-    /// Key and value can be anything that implements the AsRef<[u8]> trait,
-    /// like byte slices and strings.
-    pub fn new<'a, K, V, I>(name: &str, attributes: I) -> Element 
-        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: Iterator<Item = (K, V)>
-    {
-        let mut bytes = Vec::from(name.as_bytes());
-        let name_end = bytes.len();
-        for attr in attributes {
-            bytes.push(b' ');
-            bytes.extend_from_slice(attr.0.as_ref());
-            bytes.extend_from_slice(b"=\"");
-            bytes.extend_from_slice(attr.1.as_ref());
-            bytes.push(b'"');
-        }
+    /// Creates a new Element from the given name.
+    /// name is a reference that can be converted to a byte slice, such as &[u8] or &str
+    pub fn new<A>(name: A) -> Element where A: AsRef<[u8]> {
+        let bytes = Vec::from(name.as_ref());
         let end = bytes.len();
         Element {
             buf: bytes,
             start: 0,
             end: end,
-            name_end: name_end
+            name_end: end
         }
     }
 
@@ -439,6 +428,18 @@ impl Element {
             end: end,
             name_end: name_end,
         }
+    }
+
+    /// Consumes self and adds attributes to this element from an iterator over (key, value) tuples.
+    /// Key and value can be anything that implements the AsRef<[u8]> trait,
+    /// like byte slices and strings.
+    pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
+        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: IntoIterator<Item = (K, V)>
+    {
+        for attr in attributes {
+            self.push_attribute(attr.0, attr.1);
+        }
+        self
     }
 
     /// name as &[u8] (without eventual attributes)
@@ -461,6 +462,21 @@ impl Element {
     /// useful when we need to get Text event value (which don't have attributes)
     pub fn into_string(self) -> Result<String> {
         ::std::string::String::from_utf8(self.buf).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
+    /// Adds an attribute to this element from the given key and value.
+    /// Key and value can be anything that implements the AsRef<[u8]> trait,
+    /// like byte slices and strings.
+    pub fn push_attribute<K, V>(&mut self, key: K, value: V)
+        where K: AsRef<[u8]>, V: AsRef<[u8]>
+    {
+        let bytes = &mut self.buf;
+        bytes.push(b' ');
+        bytes.extend_from_slice(key.as_ref());
+        bytes.extend_from_slice(b"=\"");
+        bytes.extend_from_slice(value.as_ref());
+        bytes.push(b'"');
+        self.end = bytes.len();
     }
 }
 
