@@ -25,7 +25,7 @@ impl<'a> Attributes<'a> {
 }
 
 impl<'a> Iterator for Attributes<'a> {
-    type Item = Result<(&'a[u8], &'a str)>;
+    type Item = Result<(&'a [u8], &'a [u8])>;
     fn next(&mut self) -> Option<Self::Item> {
         
         if self.was_error { return None; }
@@ -101,9 +101,7 @@ impl<'a> Iterator for Attributes<'a> {
         }
         self.position += end_val.unwrap() + 1;
 
-        match ::std::str::from_utf8(&self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())]) {
-            Ok(s) => Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())], s))),
-            Err(e) => Some(Err(Error::from(e))),
-        }
+        Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())],
+           &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
     }
 }

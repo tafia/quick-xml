@@ -25,8 +25,8 @@ extern crate quick_xml;
 ```rust
 use quick_xml::{XmlReader, Event};
 
-let xml = r#"<tag1 att1 = \"test\">
-                <tag2><!--Test comment-->Test</b>
+let xml = r#"<tag1 att1 = "test">
+                <tag2><!--Test comment-->Test</tag2>
                 <tag2>
                     Test 2
                 </tag2>
@@ -37,7 +37,7 @@ let mut txt = Vec::new();
 for r in reader {
     match r {
         Ok(Event::Start(ref e)) => {
-            match e.as_bytes() {
+            match e.name() {
                 b"tag1" => println!("attributes values: {:?}", 
                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
                 b"tag2" => count += 1,
@@ -45,7 +45,7 @@ for r in reader {
             }
         },
         Ok(Event::Text(e)) => txt.push(e.into_string()),
-        Err(e) => println!("{:?}", e),
+        Err(e) => panic!("{:?}", e),
         _ => (),
     }
 }
@@ -54,7 +54,7 @@ for r in reader {
 ### Writer
 
 ```rust
-use quick_xml::{Element, Event, XmlReader, XmlWriter};
+use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
 use quick_xml::Event::*;
 use std::io::Cursor;
 use std::iter;
@@ -64,18 +64,19 @@ let reader = XmlReader::from_str(xml).trim_text(true);
 let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 for r in reader {
     match r {
-        Ok(Event::Start(ref e)) if e.as_bytes() == b"this_tag" => {
+        Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
             // collect existing attributes
             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
 
-            // adds a new my-key="some value" attribute
-            attrs.push((b"my-key", "some value"));
+            // copy existing attributes, adds a new my-key="some value" attribute
+            let mut elem = Element::new("my_elem").with_attributes(attrs);
+            elem.push_attribute(b"my-key", "some value");
 
             // writes the event to the writer
-            assert!(writer.write(Start(Element::new("my_elem", attrs.into_iter()))).is_ok());
+            assert!(writer.write(Start(elem)).is_ok());
         },
-        Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
-            assert!(writer.write(End(Element::new("my_elem", iter::empty::<(&str, &str)>()))).is_ok());
+        Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+            assert!(writer.write(End(Element::new("my_elem"))).is_ok());
         },
         Ok(e) => assert!(writer.write(e).is_ok()),
         Err(e) => panic!("{:?}", e),

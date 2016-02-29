@@ -17,7 +17,7 @@
 //! for r in reader {
 //!     match r {
 //!         Ok(Event::Start(ref e)) => {
-//!             match e.as_bytes() {
+//!             match e.name() {
 //!                 b"tag1" => println!("attributes values: {:?}", 
 //!                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
 //!                 b"tag2" => count += 1,
@@ -34,7 +34,7 @@
 //! # Example of transforming XML
 //!
 //! ```
-//! use quick_xml::{Element, Event, XmlReader, XmlWriter};
+//! use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
 //! use quick_xml::Event::*;
 //! use std::io::Cursor;
 //! use std::iter;
@@ -44,7 +44,7 @@
 //! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 //! for r in reader {
 //!     match r {
-//!         Ok(Event::Start(ref e)) if e.as_bytes() == b"this_tag" => {
+//!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 //!             // collect existing attributes
 //!             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
 //!
@@ -55,7 +55,7 @@
 //!             // writes the event to the writer
 //!             assert!(writer.write(Start(elem)).is_ok());
 //!         },
-//!         Ok(Event::End(ref e)) if e.as_bytes() == b"this_tag" => {
+//!         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
 //!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 //!         },
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
@@ -92,6 +92,19 @@ use attributes::Attributes;
 enum TagState {
     Opened,
     Closed,
+}
+
+/// A trait to support on-demand conversion from UTF-8
+pub trait AsStr {
+    /// Converts this to an &str
+    fn as_str(&self) -> Result<&str>;
+}
+
+/// Implements AsStr for a byte slice
+impl AsStr for [u8] {
+    fn as_str(&self) -> Result<&str> {
+        from_utf8(self).map_err(Error::Utf8)
+    }
 }
 
 /// Xml reader
@@ -154,11 +167,11 @@ impl<B: BufRead> XmlReader<B> {
         let end = end.as_ref();
         loop {
             match self.next() {
-                Some(Ok(Event::End(ref e))) if e.as_bytes() == end => {
+                Some(Ok(Event::End(ref e))) if e.name() == end => {
                     if depth == 0 { return Ok(()); }
                     depth -= 1;
                 },
-                Some(Ok(Event::Start(ref e))) if e.as_bytes() == end => depth += 1,
+                Some(Ok(Event::Start(ref e))) if e.name() == end => depth += 1,
                 Some(Err(e)) => return Err(e),
                 None => {
                     warn!("EOF instead of {:?}", from_utf8(end));
@@ -177,7 +190,7 @@ impl<B: BufRead> XmlReader<B> {
             Some(Ok(Event::Text(e))) => {
                 self.read_to_end(end).and_then(|_| e.into_string())
             },
-            Some(Ok(Event::End(ref e))) if e.as_bytes() == end.as_ref() => Ok("".to_owned()),
+            Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => Ok("".to_owned()),
             Some(Err(e)) => Err(e),
             None => Err(Error::Unexpected("Reached EOF while reading text".to_owned())),
             Some(Ok(_)) => {
@@ -197,8 +210,8 @@ impl<B: BufRead> XmlReader<B> {
     /// let mut r = XmlReader::from_str("<a><b>test</b>\
     ///     <b>test 2</b><c/><b>test 3</b></a>").trim_text(true);
     /// let mut tests = Vec::new();
-    /// r.map_starts::<_, &str>(None, |r, e| match e.as_bytes() {
-    ///     b"a" => r.map_starts(Some("a"), |r, e| match e.as_bytes() {
+    /// r.map_starts::<_, &str>(None, |r, e| match e.name() {
+    ///     b"a" => r.map_starts(Some("a"), |r, e| match e.name() {
     ///         b"b" => r.read_text("b").map(|t| tests.push(t)),
     ///         name => r.read_to_end(name)
     ///     }),
@@ -214,7 +227,7 @@ impl<B: BufRead> XmlReader<B> {
                 let end = end.as_ref();
                 loop {
                     match self.next() {
-                        Some(Ok(Event::End(ref e))) if e.as_bytes() == end => return Ok(()),
+                        Some(Ok(Event::End(ref e))) if e.name() == end => return Ok(()),
                         Some(Ok(Event::Start(ref e))) => try!(f(self, e)),
                         Some(Err(e)) => return Err(e),
                         None => return Err(Error::Unexpected(format!("Unexpected end of {:?}",
@@ -271,7 +284,7 @@ impl<B: BufRead> XmlReader<B> {
                     b'/' => {
                         if self.with_check {
                             let e = self.opened.pop().unwrap();
-                            if &buf[1..] != e.as_bytes() {
+                            if &buf[1..] != e.name() {
                                 self.exit = true;
                                 return Some(Err(Error::Malformed(format!(
                                         "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
@@ -443,18 +456,30 @@ impl Element {
     }
 
     /// name as &[u8] (without eventual attributes)
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn name(&self) -> &[u8] {
         &self.buf[self.start..self.name_end]
     }
 
-    /// name as str, (without eventual attributes)
-    pub fn as_str(&self) -> Result<&str> {
-        from_utf8(self.as_bytes()).map_err(Error::Utf8)
+    /// whole content as &[u8] (including eventual attributes)
+    pub fn content(&self) -> &[u8] {
+        &self.buf[self.start..self.end]
     }
 
     /// get attributes iterator
     pub fn attributes(&self) -> Attributes {
         Attributes::new(&self.buf[self.start..self.end], self.name_end)
+    }
+
+    /// extend the attributes of this element from an iterator over (key, value) tuples.
+    /// Key and value can be anything that implements the AsRef<[u8]> trait,
+    /// like byte slices and strings.
+    pub fn extend_attributes<K, V, I>(&mut self, attributes: I) -> &mut Element
+        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: IntoIterator<Item = (K, V)>
+    {
+        for attr in attributes {
+            self.push_attribute(attr.0, attr.1);
+        }
+        self
     }
 
     /// consumes entire self (including eventual attributes!) and returns `String`
@@ -483,7 +508,7 @@ impl Element {
 impl fmt::Debug for Element {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         write!(f, "Element {{ buf: {:?}, name_end: {}, end: {} }}", 
-               self.as_str(), self.name_end, self.end)
+               self.content().as_str(), self.name_end, self.end)
     }
 }
 
@@ -593,9 +618,9 @@ impl<W: Write> XmlWriter<W> {
     /// Writes the given event to the underlying writer.
     pub fn write(&mut self, event: Event) -> Result<()> {
         match event {
-            Event::Start(e) => self.write_start_tag(e),
+            Event::Start(ref e) => self.write_wrapped_str(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped_str(b"</", e, b">"),
-            Event::Text(ref e) => self.write_bytes(e.as_bytes()),
+            Event::Text(ref e) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
             Event::Header(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
@@ -608,15 +633,9 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_start_tag(&mut self, element: Element) -> Result<()> {
-        try!(self.write_bytes(b"<"));
-        try!(self.write_bytes(&try!(element.into_string()).into_bytes()));
-        self.write_bytes(b">")
-    }
-
     fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8]) -> Result<()> {
         try!(self.write_bytes(before));
-        try!(self.write_bytes(element.as_bytes()));
+        try!(self.write_bytes(&element.content()));
         self.write_bytes(after)
     }
 
