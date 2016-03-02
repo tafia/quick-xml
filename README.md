@@ -1,5 +1,7 @@
 # quick-xml
 
+[![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
+
 High performance xml pull reader/writer for simple enough xmls.
 
 Inspired by [xml-rs](https://github.com/netvl/xml-rs).
