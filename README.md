@@ -1,5 +1,6 @@
 # quick-xml
 
+[![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/appsignal/quick-xml)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
 
 High performance xml pull reader/writer for simple enough xmls.
