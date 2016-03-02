@@ -564,7 +564,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::from(e)),
+                Err(e) => return Err(Error::Io(e)),
             };
             
             let mut bytes = available.iter().enumerate();
