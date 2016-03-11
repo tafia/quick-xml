@@ -3,18 +3,18 @@
 [![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/appsignal/quick-xml)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
 
-High performance xml pull reader/writer for simple enough xmls.
+High performance xml pull reader/writer.
 
 Inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
-[documentation](http://tafia.github.io/quick-xml/quick_xml/index.html)
+[Documentation](http://tafia.github.io/quick-xml/quick_xml/index.html)
 
 ## Usage
 
 Carto.toml
 ```toml
 [dependencies]
-quick-xml="0.1"
+quick-xml = "0.1"
 ```
 
 ``` rust
@@ -110,16 +110,13 @@ There are many xml specifications not implemented yet:
 - [ ] namespaces
 - [ ] non-utf8
 - [ ] parse xml prologue
-- [ ] XQuries ?
+- [ ] ~~XQueries~~
 - [ ] more checks
 - [ ] ... and many other things I don't even know!
 
 ## Contribute
 
 Any PR is welcomed!
-
-I am not an expert in xml specifications, I simply have to work with big xmls. As a result, 
-I may not implement some basic functionalities, simply because I don't know/need them.
 
 ## License
 

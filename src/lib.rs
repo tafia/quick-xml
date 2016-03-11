@@ -283,7 +283,12 @@ impl<B: BufRead> XmlReader<B> {
                 match buf[0] {
                     b'/' => {
                         if self.with_check {
-                            let e = self.opened.pop().unwrap();
+                            let e = match self.opened.pop() {
+                                Some(e) => e,
+                                None => return Some(Err(Error::Malformed(format!(
+                                        "Cannot close {:?} element, there is no opened element",
+                                        buf[1..].as_str())))),
+                            };
                             if &buf[1..] != e.name() {
                                 self.exit = true;
                                 return Some(Err(Error::Malformed(format!(
