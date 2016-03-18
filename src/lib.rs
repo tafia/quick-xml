@@ -125,6 +125,8 @@ pub struct XmlReader<B: BufRead> {
     trim_text: bool,
     /// check if End nodes match last Start node
     with_check: bool,
+    /// current position, useful for debuging errors
+    position: usize,
 }
 
 impl<B: BufRead> XmlReader<B> {
@@ -139,6 +141,7 @@ impl<B: BufRead> XmlReader<B> {
             tag_state: TagState::Closed,
             trim_text: false,
             with_check: true,
+            position: 0,
         }
     }
 
@@ -243,13 +246,20 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    /// Gets the current BufRead position
+    /// Useful when debugging errors
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
     /// private function to read until '<' is found
     fn read_until_open(&mut self) -> Option<Result<Event>> {
         self.tag_state = TagState::Opened;
         let mut buf = Vec::new();
         match read_until(&mut self.reader, b'<', &mut buf) {
             Ok(0) => None,
-            Ok(_n) => {
+            Ok(n) => {
+                self.position += n;
                 let (start, len) = if self.trim_text {
                     match buf.iter().position(|&b| !is_whitespace(b)) {
                         Some(start) => (start, buf.len() - buf.iter().rev()
@@ -274,7 +284,8 @@ impl<B: BufRead> XmlReader<B> {
         let mut buf = Vec::new();
         match read_until(&mut self.reader, b'>', &mut buf) {
             Ok(0) => None,
-            Ok(_n) => {
+            Ok(n) => {
+                self.position += n;
                 let len = buf.len();
                 match buf[0] {
                     b'/' => {
