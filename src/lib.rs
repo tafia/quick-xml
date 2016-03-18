@@ -187,15 +187,11 @@ impl<B: BufRead> XmlReader<B> {
     /// then returns a `String`, else returns an error
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> Result<String> {
         match self.next() {
-            Some(Ok(Event::Text(e))) => {
-                self.read_to_end(end).and_then(|_| e.into_string())
-            },
+            Some(Ok(Event::Text(e))) => self.read_to_end(end).and_then(|_| e.into_string()),
             Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => Ok("".to_owned()),
             Some(Err(e)) => Err(e),
             None => Err(Error::Unexpected("Reached EOF while reading text".to_owned())),
-            Some(Ok(_)) => {
-                Err(Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()))
-            },
+            _ => Err(Error::Unexpected("Cannot read text, expecting Event::Text".to_owned())),
         }
     }
 
@@ -355,8 +351,8 @@ impl<B: BufRead> XmlReader<B> {
                 let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
                 if buf[len - 1] == b'/' {
                     self.next_close = true;
-                    let element = Element::from_buffer(buf, 0, len - 1, 
-                                                       if name_end < len { name_end } else { len - 1 });
+                    let end = if name_end < len { name_end } else { len - 1 };
+                    let element = Element::from_buffer(buf, 0, len - 1, end);
                     self.opened.push(element.clone());
                     Some(Ok(Event::Start(element)))
                 } else {
@@ -454,9 +450,7 @@ impl Element {
     pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
         where K: AsRef<[u8]>, V: AsRef<[u8]>, I: IntoIterator<Item = (K, V)>
     {
-        for attr in attributes {
-            self.push_attribute(attr.0, attr.1);
-        }
+        self.extend_attributes(attributes);
         self
     }
 
@@ -472,7 +466,7 @@ impl Element {
 
     /// get attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self.buf[self.start..self.end], self.name_end)
+        Attributes::new(self.content(), self.name_end)
     }
 
     /// extend the attributes of this element from an iterator over (key, value) tuples.
@@ -638,7 +632,9 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8]) -> Result<()> {
+    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8])
+        -> Result<()> 
+    {
         try!(self.write_bytes(before));
         try!(self.write_bytes(&element.content()));
         self.write_bytes(after)
