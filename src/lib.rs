@@ -25,7 +25,7 @@
 //!             }
 //!         },
 //!         Ok(Event::Text(e)) => txt.push(e.into_string()),
-//!         Err(e) => panic!("{:?}", e),
+//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!         _ => (),
 //!     }
 //! }
@@ -59,7 +59,7 @@
 //!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 //!         },
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
-//!         Err(e) => panic!("{:?}", e),
+//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!     }
 //! }
 //!
@@ -86,7 +86,7 @@ use std::path::Path;
 use std::fmt;
 use std::str::from_utf8;
 
-use error::{Error, Result};
+use error::{Error, Result, ResultPos};
 use attributes::Attributes;
 
 enum TagState {
@@ -165,7 +165,7 @@ impl<B: BufRead> XmlReader<B> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<()> {
         let mut depth = 0;
         let end = end.as_ref();
         loop {
@@ -178,8 +178,9 @@ impl<B: BufRead> XmlReader<B> {
                 Some(Err(e)) => return Err(e),
                 None => {
                     warn!("EOF instead of {:?}", from_utf8(end));
-                    return Err(Error::Unexpected(format!("Reached EOF, expecting {:?} end tag",
-                                                         from_utf8(end))));
+                    return Err((Error::Unexpected(
+                                format!("Reached EOF, expecting {:?} end tag",
+                                        from_utf8(end))), self.position));
                 },
                 _ => (),
             }
@@ -188,61 +189,14 @@ impl<B: BufRead> XmlReader<B> {
 
     /// Reads next event, if `Event::Text` or `Event::End`, 
     /// then returns a `String`, else returns an error
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> Result<String> {
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
         match self.next() {
-            Some(Ok(Event::Text(e))) => self.read_to_end(end).and_then(|_| e.into_string()),
+            Some(Ok(Event::Text(e))) => self.read_to_end(end)
+                .and_then(|_| e.into_string().map_err(|e| (e, self.position))),
             Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => Ok("".to_owned()),
             Some(Err(e)) => Err(e),
-            None => Err(Error::Unexpected("Reached EOF while reading text".to_owned())),
-            _ => Err(Error::Unexpected("Cannot read text, expecting Event::Text".to_owned())),
-        }
-    }
-
-    /// Loop over elements and apply a `f` closure on start elements
-    ///
-    /// Ends when `end` `Event::End` is found
-    /// This helper method is particularly useful for nested searches
-    ///
-    /// # Example:
-    /// ```
-    /// # use quick_xml::{XmlReader, Event};
-    /// let mut r = XmlReader::from_str("<a><b>test</b>\
-    ///     <b>test 2</b><c/><b>test 3</b></a>").trim_text(true);
-    /// let mut tests = Vec::new();
-    /// r.map_starts::<_, &str>(None, |r, e| match e.name() {
-    ///     b"a" => r.map_starts(Some("a"), |r, e| match e.name() {
-    ///         b"b" => r.read_text("b").map(|t| tests.push(t)),
-    ///         name => r.read_to_end(name)
-    ///     }),
-    ///     name => r.read_to_end(name),
-    /// }).unwrap();
-    /// ```
-    pub fn map_starts<F, K: AsRef<[u8]>>(&mut self, end: Option<K>, mut f: F) -> Result<()>
-        where F: FnMut(&mut XmlReader<B>, &Element) -> Result<()> 
-    {
-        let end = end.as_ref();
-        match end {
-            Some(end) => {
-                let end = end.as_ref();
-                loop {
-                    match self.next() {
-                        Some(Ok(Event::End(ref e))) if e.name() == end => return Ok(()),
-                        Some(Ok(Event::Start(ref e))) => try!(f(self, e)),
-                        Some(Err(e)) => return Err(e),
-                        None => return Err(Error::Unexpected(format!("Unexpected end of {:?}",
-                                                                     from_utf8(end)))),
-                        _ => (),
-                    }
-                }
-            },
-            None => loop {
-                match self.next() {
-                    Some(Ok(Event::Start(ref e))) => try!(f(self, e)),
-                    None => return Ok(()),
-                    Some(Err(e)) => return Err(e),
-                    _ => (),
-                }
-            },
+            None => Err((Error::Unexpected("Reached EOF while reading text".to_owned()), self.position)),
+            _ => Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()), self.position)),
         }
     }
 
@@ -264,7 +218,7 @@ impl<B: BufRead> XmlReader<B> {
                     match buf.iter().position(|&b| !is_whitespace(b)) {
                         Some(start) => (start, buf.len() - buf.iter().rev()
                                         .position(|&b| !is_whitespace(b)).unwrap_or(0)),
-                        None => return self.next()
+                        None => return self.next().map(|n| n.map_err(|(e, _)| e))
                     }
                 } else {
                     (0, buf.len())
@@ -401,9 +355,9 @@ impl<'a> XmlReader<&'a [u8]> {
 /// Iterator on csv returning rows
 impl<B: BufRead> Iterator for XmlReader<B> {
 
-    type Item = Result<Event>;
+    type Item = ResultPos<Event>;
 
-    fn next(&mut self) -> Option<Result<Event>> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.exit { return None; }
         if self.next_close {
             self.next_close = false;
@@ -413,7 +367,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
             TagState::Closed => self.read_until_open(),
-        }
+        }.map(|n| n.map_err(|e| (e, self.position)))
     }
 
 }

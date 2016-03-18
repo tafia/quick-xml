@@ -48,7 +48,7 @@ for r in reader {
             }
         },
         Ok(Event::Text(e)) => txt.push(e.into_string()),
-        Err(e) => panic!("{:?}", e),
+        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
         _ => (),
     }
 }
@@ -82,7 +82,7 @@ for r in reader {
             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
         },
         Ok(e) => assert!(writer.write(e).is_ok()),
-        Err(e) => panic!("{:?}", e),
+        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
     }
 }
 

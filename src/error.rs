@@ -21,6 +21,8 @@ pub enum Error {
 
 /// Result type
 pub type Result<T> = ::std::result::Result<T, Error>;
+/// Result type with current buffer position
+pub type ResultPos<T> = ::std::result::Result<T, (Error, usize)>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
