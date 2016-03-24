@@ -16,6 +16,9 @@ macro_rules! next_eq {
                     assert!(false, "expecting {:?}, found {:?}", 
                             $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
                 },
+                Some(Err((e, pos))) => {
+                    assert!(false, "{:?} at buffer position {}", e, pos);
+                },
                 p => {
                     assert!(false, "expecting {:?}, found {:?}", 
                             $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
@@ -166,3 +169,14 @@ fn test_write_attrs() {
     assert_eq!(result, expected.as_bytes());
 }
 
+#[test]
+fn test_buf_position() {
+    let mut r = XmlReader::from_str("</a>")
+        .trim_text(true).with_check(true);
+    match r.next() {
+        Some(Err((_, 4))) => assert!(true),
+        Some(Err((_, n))) => assert!(false, "expecting buf_pos = 4, found {}", n),
+        e => assert!(false, "expecting error, found {:?}", e),
+    }
+}
+   
