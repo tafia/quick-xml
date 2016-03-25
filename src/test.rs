@@ -78,11 +78,12 @@ fn test_xml_decl() {
     match r.next() {
         Some(Ok(Decl(ref e))) => {
             match e.version() {
-                Ok(v) => assert!(v == "1.0", "expecting version '1.0', got '{}", v),
+                Ok(v) => assert!(v == b"1.0", "expecting version '1.0', got '{:?}", v.as_str()),
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
-                Some(Ok(v)) => assert!(v == "utf-8", "expecting encoding 'utf-8', got '{}", v),
+                Some(Ok(v)) => assert!(v == b"utf-8", "expecting encoding 'utf-8', got '{:?}",
+                                       v.as_str()),
                 Some(Err(e)) => assert!(false, "{:?}", e),
                 None => assert!(false, "cannot find encoding"),
             }

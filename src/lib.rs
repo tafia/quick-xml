@@ -494,10 +494,10 @@ pub struct XmlDecl {
 impl XmlDecl {
 
     /// Gets xml version, including quotes (' or ")
-    pub fn version(&self) -> Result<&str> {
+    pub fn version(&self) -> Result<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok((b"version", v))) => v.as_str(),
+            Some(Ok((b"version", v))) => Ok(v),
             Some(Ok((k, _))) => Err(Error::Malformed(format!(
                         "XmlDecl must start with 'version' attribute, found {:?}", k.as_str()))),
             None => Err(Error::Malformed(
@@ -506,11 +506,11 @@ impl XmlDecl {
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<Result<&str>> {
+    pub fn encoding(&self) -> Option<Result<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok((b"encoding", v)) => return Some(v.as_str()),
+                Ok((b"encoding", v)) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -518,11 +518,11 @@ impl XmlDecl {
     }
 
     /// Gets xml standalone, including quotes (' or ")
-    pub fn standalone(&self) -> Option<Result<&str>> {
+    pub fn standalone(&self) -> Option<Result<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok((b"standalone", v)) => return Some(v.as_str()),
+                Ok((b"standalone", v)) => return Some(Ok(v)),
                 _ => (),
             }
         }
