@@ -97,12 +97,12 @@ On my first tests (200mb+ xmls) it performs much better (minimum 10x)
 
 ## Todo
 
-- [ ] namespaces: on demand (have a running HashMap of namespaces adding items when returning `Event::Start` and removing them on `Event::End` ?)
-- [ ] non-utf8: as most of the methods returns `&u[u8]`, it might not be a real issue, could probably just add a relevant methods in `AsStr`
-- [x] parse xml declaration
+- [ ] [namespaces](https://github.com/tafia/quick-xml/issues/14)
+- [ ] non-utf8: most methods return `&u[u8]` => probably not too relevant for the moment
+- [x] [parse xml declaration](https://github.com/tafia/quick-xml/pull/10)
+- [ ] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
+- [ ] [escape characters](https://github.com/tafia/quick-xml/issues/12)
 - [ ] more checks
-- [ ] benchmarks: basics, with huge files and comparing with other libs
-- [ ] [escape characters](http://stackoverflow.com/questions/1091945/what-characters-do-i-need-to-escape-in-xml-documents) on demand (probably a special method on `Element` ?
 - [ ] ... ?
 
 ## Contribute
