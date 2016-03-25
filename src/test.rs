@@ -73,9 +73,30 @@ fn test_comment() {
 }
 
 #[test]
-fn test_header() {
-    let mut r = XmlReader::from_str("<?header?>").trim_text(true);
-    next_eq!(r, Header, b"header");
+fn test_xml_decl() {
+    let mut r = XmlReader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>").trim_text(true);
+    match r.next() {
+        Some(Ok(Decl(ref e))) => {
+            match e.version() {
+                Ok(v) => assert!(v == b"1.0", "expecting version '1.0', got '{:?}", v.as_str()),
+                Err(e) => assert!(false, "{:?}", e),
+            }
+            match e.encoding() {
+                Some(Ok(v)) => assert!(v == b"utf-8", "expecting encoding 'utf-8', got '{:?}",
+                                       v.as_str()),
+                Some(Err(e)) => assert!(false, "{:?}", e),
+                None => assert!(false, "cannot find encoding"),
+            }
+            match e.standalone() {
+                None => assert!(true),
+                e => assert!(false, "doesn't expect standalone, got {:?}", e),
+            }
+        },
+        Some(Err((e, pos))) => {
+            assert!(false, "{:?} at buffer position {}", e, pos);
+        },
+        _ => assert!(false, "unable to parse XmlDecl"),
+    }
 }
 
 #[test]

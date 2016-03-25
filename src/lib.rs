@@ -260,11 +260,18 @@ impl<B: BufRead> XmlReader<B> {
                         return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))))
                     },
                     b'?' => {
-                        if len > 1 && buf[len - 1] == b'?' {
-                            return Some(Ok(Event::Header(Element::from_buffer(buf, 1, len - 1, len - 1))));
+                        if len > 5 && buf[len - 1] == b'?' {
+                            if &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
+                                return Some(Ok(Event::Decl(XmlDecl { 
+                                    element: Element::from_buffer(buf, 1, len - 1, 3)
+                                })));
+                            } else {
+                                return Some(Err(Error::Malformed(
+                                            "Xml declaration must start with '?xml '".to_owned())));
+                            }
                         } else {
                             self.exit = true;
-                            return Some(Err(Error::Malformed("Unescaped Header event".to_owned())));
+                            return Some(Err(Error::Malformed("Unescaped XmlDecl event".to_owned())));
                         }
                     },
                     b'!' => {
@@ -476,6 +483,54 @@ impl fmt::Debug for Element {
     }
 }
 
+/// Wrapper around Element to parse XmlDecl
+///
+/// Postpone element parsing only when needed
+#[derive(Debug)]
+pub struct XmlDecl {
+    element: Element,
+}
+
+impl XmlDecl {
+
+    /// Gets xml version, including quotes (' or ")
+    pub fn version(&self) -> Result<&[u8]> {
+        match self.element.attributes().next() {
+            Some(Err(e)) => Err(e),
+            Some(Ok((b"version", v))) => Ok(v),
+            Some(Ok((k, _))) => Err(Error::Malformed(format!(
+                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str()))),
+            None => Err(Error::Malformed(
+                    "XmlDecl must start with 'version' attribute, found none".to_owned())),
+        }
+    }
+
+    /// Gets xml encoding, including quotes (' or ")
+    pub fn encoding(&self) -> Option<Result<&[u8]>> {
+        for a in self.element.attributes() {
+            match a {
+                Err(e) => return Some(Err(e)),
+                Ok((b"encoding", v)) => return Some(Ok(v)),
+                _ => (),
+            }
+        }
+        None
+    }
+
+    /// Gets xml standalone, including quotes (' or ")
+    pub fn standalone(&self) -> Option<Result<&[u8]>> {
+        for a in self.element.attributes() {
+            match a {
+                Err(e) => return Some(Err(e)),
+                Ok((b"standalone", v)) => return Some(Ok(v)),
+                _ => (),
+            }
+        }
+        None
+    }
+    
+}
+
 /// Event to interprete node as they are parsed
 #[derive(Debug)]
 pub enum Event {
@@ -489,8 +544,8 @@ pub enum Event {
     Comment(Element),
     /// <![CDATA[...]]>
     CData(Element),
-    /// <?...?>
-    Header(Element),
+    /// <?xml ...?>
+    Decl(XmlDecl),
 }
 
 impl Event {
@@ -502,8 +557,8 @@ impl Event {
             Event::End(ref e) |
             Event::Text(ref e) |
             Event::Comment(ref e) |
-            Event::CData(ref e) |
-            Event::Header(ref e) => e,
+            Event::CData(ref e) => e,
+            Event::Decl(ref e) => &e.element,
         }
     }
 }
@@ -587,7 +642,7 @@ impl<W: Write> XmlWriter<W> {
             Event::Text(ref e) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
-            Event::Header(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
+            Event::Decl(ref e) => self.write_wrapped_str(b"<?", &e.element, b"?>"),
         }
     }
 
