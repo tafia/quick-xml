@@ -25,7 +25,7 @@
 //!             }
 //!         },
 //!         Ok(Event::Text(e)) => txt.push(e.into_string()),
-//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+//!         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
 //!         _ => (),
 //!     }
 //! }
@@ -59,7 +59,7 @@
 //!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 //!         },
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
-//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+//!         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
 //!     }
 //! }
 //!
@@ -125,8 +125,8 @@ pub struct XmlReader<B: BufRead> {
     trim_text: bool,
     /// check if End nodes match last Start node
     with_check: bool,
-    /// current position, useful for debuging errors
-    position: usize,
+    /// current buffer position, useful for debuging errors
+    buf_position: usize,
 }
 
 impl<B: BufRead> XmlReader<B> {
@@ -141,7 +141,7 @@ impl<B: BufRead> XmlReader<B> {
             tag_state: TagState::Closed,
             trim_text: false,
             with_check: true,
-            position: 0,
+            buf_position: 0,
         }
     }
 
@@ -180,7 +180,7 @@ impl<B: BufRead> XmlReader<B> {
                     warn!("EOF instead of {:?}", from_utf8(end));
                     return Err((Error::Unexpected(
                                 format!("Reached EOF, expecting {:?} end tag",
-                                        from_utf8(end))), self.position));
+                                        from_utf8(end))), self.buf_position));
                 },
                 _ => (),
             }
@@ -192,18 +192,18 @@ impl<B: BufRead> XmlReader<B> {
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
         match self.next() {
             Some(Ok(Event::Text(e))) => self.read_to_end(end)
-                .and_then(|_| e.into_string().map_err(|e| (e, self.position))),
+                .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position))),
             Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => Ok("".to_owned()),
             Some(Err(e)) => Err(e),
-            None => Err((Error::Unexpected("Reached EOF while reading text".to_owned()), self.position)),
-            _ => Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()), self.position)),
+            None => Err((Error::Unexpected("Reached EOF while reading text".to_owned()), self.buf_position)),
+            _ => Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()), self.buf_position)),
         }
     }
 
     /// Gets the current BufRead position
     /// Useful when debugging errors
-    pub fn position(&self) -> usize {
-        self.position
+    pub fn buffer_position(&self) -> usize {
+        self.buf_position
     }
 
     /// private function to read until '<' is found
@@ -213,7 +213,7 @@ impl<B: BufRead> XmlReader<B> {
         match read_until(&mut self.reader, b'<', &mut buf) {
             Ok(0) => None,
             Ok(n) => {
-                self.position += n;
+                self.buf_position += n;
                 let (start, len) = if self.trim_text {
                     match buf.iter().position(|&b| !is_whitespace(b)) {
                         Some(start) => (start, buf.len() - buf.iter().rev()
@@ -239,7 +239,7 @@ impl<B: BufRead> XmlReader<B> {
         match read_until(&mut self.reader, b'>', &mut buf) {
             Ok(0) => None,
             Ok(n) => {
-                self.position += n;
+                self.buf_position += n;
                 let len = buf.len();
                 match buf[0] {
                     b'/' => {
@@ -374,7 +374,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
             TagState::Closed => self.read_until_open(),
-        }.map(|n| n.map_err(|e| (e, self.position)))
+        }.map(|n| n.map_err(|e| (e, self.buf_position)))
     }
 
 }
