@@ -260,19 +260,18 @@ impl<B: BufRead> XmlReader<B> {
                         return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))))
                     },
                     b'?' => {
-                        if len > 5 && buf[len - 1] == b'?' {
-                            if &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                                return Some(Ok(Event::Decl(XmlDecl { 
+                        return if len > 2 && buf[len - 1] == b'?' {
+                            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
+                                Some(Ok(Event::Decl(XmlDecl { 
                                     element: Element::from_buffer(buf, 1, len - 1, 3)
-                                })));
+                                })))
                             } else {
-                                return Some(Err(Error::Malformed(
-                                            "Xml declaration must start with '?xml '".to_owned())));
+                                Some(Ok(Event::PI(Element::from_buffer(buf, 1, len - 1, 3))))
                             }
                         } else {
                             self.exit = true;
-                            return Some(Err(Error::Malformed("Unescaped XmlDecl event".to_owned())));
-                        }
+                            Some(Err(Error::Malformed("Unescaped XmlDecl event".to_owned())))
+                        };
                     },
                     b'!' => {
                         if len >= 3 && &buf[1..3] == b"--" {
@@ -544,8 +543,10 @@ pub enum Event {
     Comment(Element),
     /// <![CDATA[...]]>
     CData(Element),
-    /// <?xml ...?>
+    /// Xml declaration <?xml ...?>
     Decl(XmlDecl),
+    /// Processing instruction <?...?>
+    PI(Element),
 }
 
 impl Event {
@@ -557,7 +558,8 @@ impl Event {
             Event::End(ref e) |
             Event::Text(ref e) |
             Event::Comment(ref e) |
-            Event::CData(ref e) => e,
+            Event::CData(ref e) | 
+            Event::PI(ref e) => e,
             Event::Decl(ref e) => &e.element,
         }
     }
@@ -643,6 +645,7 @@ impl<W: Write> XmlWriter<W> {
             Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped_str(b"<?", &e.element, b"?>"),
+            Event::PI(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
         }
     }
 
