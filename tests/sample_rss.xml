@@ -1,0 +1,1823 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" media="screen" href="/~d/styles/rss2enclosuresfull.xsl"?><?xml-stylesheet type="text/css" media="screen" href="http://feeds.feedburner.com/~d/styles/itemcontent.css"?><rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+    <channel>
+        <title>The Linux Action Show! OGG</title>
+        <link>http://www.jupiterbroadcasting.com</link>
+        <description>Ogg Vorbis audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</description>
+        <generator>Feeder 2.5.12(2294); Mac OS X Version 10.9.5 (Build 13F34) http://reinventedsoftware.com/feeder/</generator>
+        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+        <language>en</language>
+        <pubDate>Sun, 20 Mar 2016 19:10:54 -0700</pubDate>
+        <lastBuildDate>Sun, 20 Mar 2016 19:10:54 -0700</lastBuildDate>
+        <image><link>http://www.jupiterbroadcasting.com</link><url>http://jupiterbroadcasting.com/images/LAS-300-Badge.jpg</url><title>LAS 300 Logo</title></image>
+
+        <itunes:author>Jupiter Broadcasting</itunes:author>
+        <itunes:subtitle>Linux enthusiasts talk top news stories, current trends and any other subject regarding Linux and Open Source!</itunes:subtitle>
+        <itunes:summary>Linux enthusiasts talk top news stories, current trends and any other subject regarding Linux and Open Source!</itunes:summary>
+        <itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords>
+        <itunes:image href="http://www.linuxactionshow.com/images/tux-jedi_sickness_fun.png" />
+        <itunes:explicit>no</itunes:explicit>
+
+        <itunes:block>no</itunes:block>
+
+        <atom10:link xmlns:atom10="http://www.w3.org/2005/Atom" rel="self" type="application/rss+xml" href="http://feeds.feedburner.com/TheLinuxActionShowOGG" /><feedburner:info xmlns:feedburner="http://rssnamespace.org/feedburner/ext/1.0" uri="thelinuxactionshowogg" /><atom10:link xmlns:atom10="http://www.w3.org/2005/Atom" rel="hub" href="http://pubsubhubbub.appspot.com/" /><media:thumbnail url="http://www.linuxactionshow.com/images/tux-jedi_sickness_fun.png" /><media:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</media:keywords><media:category scheme="http://www.itunes.com/dtds/podcast-1.0.dtd">Technology/Tech News</media:category><itunes:owner><itunes:email>chris@linuxactionshow.com</itunes:email></itunes:owner><itunes:category text="Technology"><itunes:category text="Tech News" /></itunes:category><item>
+            <title>What Is KDE Neon? | LAS 409</title>
+            <link>http://www.jupiterbroadcasting.com/97801/what-is-kde-neon-las-409/</link>
+            <description><![CDATA[Jonathan Riddell joins us to discuss the KDE Neon project, the latest & greatest of KDE community software packaged on a rock-solid base. We kick the tires and give you our first impressions. Is this finally the Plasma Desktop just the way we\u2019ve always wanted it?]]></description>
+            <pubDate>Sun, 20 Mar 2016 19:09:07 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep409.ogg" length="69796480" type="audio/ogg" />
+            <guid isPermaLink="false">6CCB5D0E-6670-4CFC-BC43-373DC54D1EBF</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Jonathan Riddell joins to discuss the KDE Neon project, the latest &amp; greatest of KDE community software packaged on a rock-solid base. We kick the tires &amp; give you our first impression. Is this finally Plasma Desktop just the way we\u2019ve always wanted it?</itunes:subtitle>
+            <itunes:summary><![CDATA[Jonathan Riddell joins us to discuss the KDE Neon project, the latest & greatest of KDE community software packaged on a rock-solid base. We kick the tires and give you our first impressions. Is this finally the Plasma Desktop just the way we\u2019ve always wanted it?]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:29:32</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/03/las409-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep409.ogg" fileSize="69796480" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Making Music with Linux | LAS 408</title>
+            <link>http://www.jupiterbroadcasting.com/97561/making-music-with-linux-las-408/</link>
+            <description><![CDATA[<p>What\u2019s the best software under Linux to create music? We answer that & the best hardware that work together. We have something for the musician to casual hardware geek, we cover the dark art of creating music under Linux as we go inside Noah\u2019s music studio and see what he uses.</p>
+
+<p>Plus we chat with ownCloud\u2019s Community Manager about the new features in version 9, our thoughts on Microsoft\u2019s SQL for Linux announcement & more!</p>]]></description>
+            <pubDate>Sun, 13 Mar 2016 19:58:31 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep408.ogg" length="70772893" type="audio/ogg" />
+            <guid isPermaLink="false">9DE46946-2F90-4D5D-9047-7E9165C16E7C</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>What\u2019s the best software under Linux to create music? We have something for the musician to casual hardware geek, we cover the dark art of creating music under Linux. Plus a chat with ownCloud\u2019s Community Manager about the features in ownCloud 9 &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[What\u2019s the best software under Linux to create music? We answer that & the best hardware that work together. We have something for the musician to casual hardware geek, we cover the dark art of creating music under Linux as we go inside Noah\u2019s music studio and see what he uses.
+
+Plus we chat with ownCloud\u2019s Community Manager about the new features in version 9, our thoughts on Microsoft\u2019s SQL for Linux announcement & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:29:17</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/03/las408-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep408.ogg" fileSize="70772893" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>3rd Slice of Pi with Extra Mycroft | LAS 407</title>
+            <link>http://www.jupiterbroadcasting.com/97166/3rd-slice-of-pi-with-extra-mycroft-las-407/</link>
+            <description><![CDATA[<p>In special Rasberry Pi 3 edition of the show we look at the new hardware, review & chat with Mycroft CTO Ryan Sipes on how important the Raspberry Pi is for development of their open artificial intelligence platform & get the latest news.</p>
+
+<p>Plus replacing Spotify on Linux, the new Microsoft lock-in, our hosts face a moral quandary & more!</p>]]></description>
+            <pubDate>Sun, 06 Mar 2016 23:00:05 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep407.ogg" length="77861527" type="audio/ogg" />
+            <guid isPermaLink="false">55EE8E2F-138B-431C-8D38-32A971F578BA</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We look at the new Raspberry Pi 3, review &amp; chat with Mycroft CTO Ryan Sipes on how important the Raspberry Pi is for development of their open AI platform. Plus replacing Spotify on Linux, the new Microsoft lock-in, our hosts face a moral quandary &amp; more</itunes:subtitle>
+            <itunes:summary><![CDATA[In special Rasberry Pi 3 edition of the show we look at the new hardware, review & chat with Mycroft CTO Ryan Sipes on how important the Raspberry Pi is for development of their open artificial intelligence platform & get the latest news.
+
+Plus replacing Spotify on Linux, the new Microsoft lock-in, our hosts face a moral quandary & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:38:49</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/03/las407-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep407.ogg" fileSize="77861527" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Entroware Apollo: Linux Macbook Killer | LAS 406</title>
+            <link>http://www.jupiterbroadcasting.com/96836/entroware-apollo-linux-macbook-killer-las-406/</link>
+            <description><![CDATA[<p>Has Entroware built the ultimate 13 inch Linux laptop? We put their Apollo through our battery of tests & review this good looking Skylake powered Linux portable.</p>
+
+<p>Plus Microsoft buys the folks behind Mono, Canonical might have a ZFS fight on their hands & more!</p>]]></description>
+            <pubDate>Mon, 29 Feb 2016 01:45:12 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep406.ogg" length="98408612" type="audio/ogg" />
+            <guid isPermaLink="false">DA4D168C-87AA-46B2-ABC6-C4C9BF26E03D</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Has Entroware built the ultimate 13 inch Linux laptop? We put their Apollo through our battery of tests &amp; review this good looking Skylake powered Linux portable.
+
+Plus Microsoft buys the folks behind Mono, Canonical has a ZFS fight on their hands &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Has Entroware built the ultimate 13 inch Linux laptop? We put their Apollo through our battery of tests & review this good looking Skylake powered Linux portable.
+
+Plus Microsoft buys the folks behind Mono, Canonical might have a ZFS fight on their hands & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:02:00</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/02/las406-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep406.ogg" fileSize="98408612" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The High Price of Purism | LAS 405</title>
+            <link>http://www.jupiterbroadcasting.com/96641/the-high-price-of-purism-las-405-2/</link>
+            <description><![CDATA[<p>Is the Librem 15 the ultimate Linux laptop? We review Purism\u2019s Librem 15 laptop, crowd funded and pitched as \u201cthe first high-end laptop in the world that ships without mystery software in the kernel, operating system, or any software applications.\u201d Does it live up to the promise? Have we found the true Linux powered MacBook killer? </p>
+
+<p>Plus Linux Mint gets attacked, Ubuntu Touch on hardware you really want, why real ZFS support on Linux is near\u2026.</p>]]></description>
+            <pubDate>Sun, 21 Feb 2016 19:34:00 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep405.ogg" length="105019947" type="audio/ogg" />
+            <guid isPermaLink="false">61A06B01-D90B-4FB4-BC65-31449F3629BC</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Is the Librem 15 the ultimate Linux laptop? We review Purism\u2019s Librem 15 laptop, crowd funded and pitched as \u201cthe first high-end laptop in the world that ships without mystery software in the kernel, operating system, or any software applications.\u201d</itunes:subtitle>
+            <itunes:summary><![CDATA[Is the Librem 15 the ultimate Linux laptop? We review Purism\u2019s Librem 15 laptop, crowd funded and pitched as \u201cthe first high-end laptop in the world that ships without mystery software in the kernel, operating system, or any software applications.\u201d Does it live up to the promise? Have we found the true Linux powered MacBook killer?
+
+Plus Linux Mint gets attacked, Ubuntu Touch on hardware you really want, why real ZFS support on Linux is near\u2026. ]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:11:40</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/02/las-0405.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep405.ogg" fileSize="105019947" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>How Not to Install Discourse | LAS 404</title>
+            <link>http://www.jupiterbroadcasting.com/93751/how-not-to-install-discourse-las-404/</link>
+            <description><![CDATA[<p>This week we talk about how you can have a working web forum in 10 minutes or less & all open source! Last week we talked about team collaboration software, but what about when you need a wider approach? </p>
+
+<p>In the news we talk about an open source router; Russia dumping Windows, more updates to video editing on Linux, a super special live unboxing & more!</p>]]></description>
+            <pubDate>Sun, 14 Feb 2016 19:27:04 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep404.ogg" length="87788321" type="audio/ogg" />
+            <guid isPermaLink="false">41F1D002-7164-40DE-ADA4-8FECC337BECE</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>This week we talk about how you can have a working web forum in 10 minutes or less &amp; all open source!
+
+In the news we talk about an open source router; Russia dumping Windows, more updates to video editing on Linux, a super special live unboxing &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[This week we talk about how you can have a working web forum in 10 minutes or less & all open source! Last week we talked about team collaboration software, but what about when you need a wider approach?
+
+In the news we talk about an open source router; Russia dumping Windows, more updates to video editing on Linux, a super special live unboxing & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:54:27</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/02/las404-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep404.ogg" fileSize="87788321" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Rocket Chat &amp; Mattermost Cut the Slack | LAS 403</title>
+            <link>http://www.jupiterbroadcasting.com/93521/rocket-chat-mattermost-cut-the-slack-las-403/</link>
+            <description><![CDATA[<p>Teams collaborating over Slack is the new hot trend sweeping many open source projects, communities & others. We compare Rocket.Chat, Mattermost & Slack. See which best protects your privacy & makes it easier than ever to work with a group of people. Don\u2019t hate, collaborate with this week\u2019s episode!</p>
+
+<p>Plus all the details on the announced Ubuntu Tablet, the Keybase filesystem & more!</p>]]></description>
+            <pubDate>Sun, 07 Feb 2016 18:48:11 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep403.ogg" length="82818308" type="audio/ogg" />
+            <guid isPermaLink="false">C730645E-B346-40EB-88DA-A3A2B5E8434E</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Teams collaborating over Slack is the new hot trend sweeping many open source projects, communities &amp; others. We compare Rocket.Chat, Mattermost &amp; Slack.
+
+Plus all the details on the announced Ubuntu Tablet, the Keybase filesystem &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Teams collaborating over Slack is the new hot trend sweeping many open source projects, communities & others. We compare Rocket.Chat, Mattermost & Slack. See which best protects your privacy & makes it easier than ever to work with a group of people. Don\u2019t hate, collaborate with this week\u2019s episode!
+
+Plus all the details on the announced Ubuntu Tablet, the Keybase filesystem & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:46:10</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/02/las403-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep403.ogg" fileSize="82818308" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The Stories of SCALE14x | LAS 402</title>
+            <link>http://www.jupiterbroadcasting.com/93271/the-stories-of-scale14x-las-402/</link>
+            <description><![CDATA[<p>We share our best stories from 2016\u2019s SCALE14x. From the highlights to the bar fights we talk about what it's like to attend one of the largest community driven Linux events in the world.</p>
+
+<p>Plus the Linux Trojan that\u2019s snapping screenshots & recording audio, Linux Mint is building their own X-Apps, your live calls & more!</p>]]></description>
+            <pubDate>Mon, 01 Feb 2016 00:21:44 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep402.ogg" length="105860867" type="audio/ogg" />
+            <guid isPermaLink="false">5C6B9D0C-306A-48AF-A5CA-8925CB214370</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We share our stories from 2016\u2019s SCALE14x. We talk about attending one of the largest community driven Linux events in the world. Plus the Linux Trojan that\u2019s snapping screenshots &amp; recording audio, Linux Mint is building their own X-Apps &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We share our best stories from 2016\u2019s SCALE14x. From the highlights to the bar fights we talk about what it's like to attend one of the largest community driven Linux events in the world.
+
+Plus the Linux Trojan that\u2019s snapping screenshots & recording audio, Linux Mint is building their own X-Apps, your live calls & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:18:45</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/01/las402-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep402.ogg" fileSize="105860867" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Pre SCaLE LAS | LAS 401</title>
+            <link>http://www.jupiterbroadcasting.com/92926/pre-scale-las-las-401/</link>
+            <description><![CDATA[In this special episode of LAS, we go off the rails as we buckle down & prep for our visit to SCaLE live on the air! Plus picks, your feedback & more!]]></description>
+            <pubDate>Sun, 24 Jan 2016 10:13:58 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep401.ogg" length="28796988" type="audio/ogg" />
+            <guid isPermaLink="false">3EA0493B-68CC-4455-9977-75C17BE38C7E</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>In this special episode of LAS, we go off the rails as we buckle down &amp; prep for our visit to SCaLE live on the air! Plus picks, your feedback &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[In this special episode of LAS, we go off the rails as we buckle down & prep for our visit to SCaLE live on the air! Plus picks, your feedback & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/01/las401-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep401.ogg" fileSize="28796988" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>LAS 400 Phones Home | LAS 400</title>
+            <link>http://www.jupiterbroadcasting.com/92716/las-400-phones-home-las-400/</link>
+            <description><![CDATA[<p>We celebrate 400 episodes of the Linux Action Show, show you how easy it is to setup your own free phone system, never flash another USB stick again & the big Ubuntu rumors.</p>
+
+<p>Plus the openSSH bug you need to patch, the Steam Link SDK, Gnome 3 changes & more!</p>]]></description>
+            <pubDate>Fri, 15 Jan 2016 21:45:07 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep400.ogg" length="66079042" type="audio/ogg" />
+            <guid isPermaLink="false">CC11F959-9177-4BC8-A11B-8891108FCFEA</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We celebrate 400 episodes of the Linux Action Show, show you how easy it is to setup your own phone system, never flash another USB stick again &amp; the big Ubuntu rumors.
+
+Plus the openSSH bug you need to patch, the Steam Link SDK, Gnome 3 changes &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We celebrate 400 episodes of the Linux Action Show, show you how easy it is to setup your own free phone system, never flash another USB stick again & the big Ubuntu rumors.
+
+Plus the openSSH bug you need to patch, the Steam Link SDK, Gnome 3 changes & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:29:10</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/01/las400-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep400.ogg" fileSize="66079042" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>2016 Linux Wish List | LAS 399</title>
+            <link>http://www.jupiterbroadcasting.com/92471/2016-linux-wish-list-las-399/</link>
+            <description><![CDATA[<p>What if your humble hosts could have there way? A wave of their magic wands, whatever they want changed in Linux Land in 2016 would just happen? We spend sometime this week fantasizing about all things we wish would happen this year to make Linux better.</p>
+
+<p>Plus the welcome change in Ubuntu 16.04, Firefox OS finds new life, desktop picks that changed our lives & more!</p>]]></description>
+            <pubDate>Sun, 10 Jan 2016 20:38:55 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep399.ogg" length="112109740" type="audio/ogg" />
+            <guid isPermaLink="false">DA410A77-CF0B-4922-8F7B-1C36F6F28D8C</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>What if your humble hosts could have there way? A wave of their magic wands, whatever they want changed in Linux Land in 2016 would happen?
+
+Plus the welcome change in Ubuntu 16.04, Firefox OS finds new life, desktop picks that changed our lives &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[What if your humble hosts could have there way? A wave of their magic wands, whatever they want changed in Linux Land in 2016 would just happen? We spend sometime this week fantasizing about all things we wish would happen this year to make Linux better.
+
+Plus the welcome change in Ubuntu 16.04, Firefox OS finds new life, desktop picks that changed our lives & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:28:37</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/01/las399-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep399.ogg" fileSize="112109740" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Consulting the Oracle for 2016 | LAS 398</title>
+            <link>http://www.jupiterbroadcasting.com/92261/consulting-the-oracle-for-2016-las-398/</link>
+            <description><![CDATA[<p>We make our annual predictions for the land of Linux in 2016, Google drops the openJDK bomb & we pay tribute to Ian Murdock.</p>
+
+<p>Plus we announce our SCaLE 14x plans, some changes to the show & more!</p>]]></description>
+            <pubDate>Sun, 03 Jan 2016 18:37:16 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep398.ogg" length="94221581" type="audio/ogg" />
+            <guid isPermaLink="false">05FCEBA7-162A-4C92-9278-9269AC22B535</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We make our annual predictions for the land of Linux in 2016, Google drops the openJDK bomb &amp; we pay tribute to Ian Murdock.
+
+Plus we announce our SCaLE 14x plans, some changes to the show &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We make our annual predictions for the land of Linux in 2016, Google drops the openJDK bomb & we pay tribute to Ian Murdock.
+
+Plus we announce our SCaLE 14x plans, some changes to the show & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:02:24</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2016/01/las398-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep398.ogg" fileSize="94221581" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Big Moments From 2015 | LAS 397</title>
+            <link>http://www.jupiterbroadcasting.com/91986/big-moments-from-2015-las-397/</link>
+            <description><![CDATA[<p>Some of our very favorite moments from 2015. Witness as Chris attempts to slam a whole bunch of big show into one big show. </p>
+
+<p>Our favorite interview, our biggest rant & our most popular howto. Plus a look back at classic on-location moments from the year.</p>]]></description>
+            <pubDate>Sun, 27 Dec 2015 13:20:49 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep397.ogg" length="67387874" type="audio/ogg" />
+            <guid isPermaLink="false">2B1183C6-D971-4004-A9DF-88FC65425CE9</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Some of our very favorite moments from 2015. Witness as Chris attempts to slam a whole bunch of big show into one big show.
+
+Our favorite interview, our biggest rant &amp; our most popular howto. Plus a look back at classic on-location moments from the year.</itunes:subtitle>
+            <itunes:summary><![CDATA[Some of our very favorite moments from 2015. Witness as Chris attempts to slam a whole bunch of big show into one big show.
+
+Our favorite interview, our biggest rant & our most popular howto. Plus a look back at classic on-location moments from the year.
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:31:15</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/12/las397-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep397.ogg" fileSize="67387874" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Let's Encrypt: A New Hope | LAS 396</title>
+            <link>http://www.jupiterbroadcasting.com/91736/lets-encrypt-a-new-hope-las-396/</link>
+            <description><![CDATA[<p>Inspired by the Let\u2019s Encrypt project, we break down the basics of SSL & how easy it is to set up on your Linux box now. </p>
+
+<p>Plus hacking GRUB by hitting backspace 28 times, the Linux Foundation wants the Blockchain, without the Bitcoin and their bedfellows are concerning, the steady steps towards cross distro application bundles & more!</p>]]></description>
+            <pubDate>Sun, 20 Dec 2015 05:56:28 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep396.ogg" length="50705898" type="audio/ogg" />
+            <guid isPermaLink="false">49188463-6AC7-4089-AB15-7D9FE6472E1C</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Inspired by the Let\u2019s Encrypt project, we break down the basics of SSL &amp; how easy it is to set up on your Linux box now.
+
+Plus hacking GRUB by hitting backspace 28 times, the Linux Foundation wants the Blockchain &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Inspired by the Let\u2019s Encrypt project, we break down the basics of SSL & how easy it is to set up on your Linux box now.
+
+Plus hacking GRUB by hitting backspace 28 times, the Linux Foundation wants the Blockchain, without the Bitcoin and their bedfellows are concerning, the steady steps towards cross distro application bundles & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:06:25</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/12/las396-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep396.ogg" fileSize="50705898" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Shooting the Breeze with KDE | LAS 395</title>
+            <link>http://www.jupiterbroadcasting.com/91451/shooting-the-breeze-with-kde-las-395/</link>
+            <description><![CDATA[<p>Plasma Desktop 5.5 shipped this week. We cover what\u2019s new, what's improved & what work still remains for the latest & greatest from KDE. Plus some of the great supporting cast of applications that make the Plasma desktop great.</p>
+
+<p>Plus Mozilla ends their Smartphone plans, Microsoft is offering a Linux certification, the new KeePassX, your feedback & more!</p>]]></description>
+            <pubDate>Sun, 13 Dec 2015 06:12:44 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep395.ogg" length="65718553" type="audio/ogg" />
+            <guid isPermaLink="false">B982781A-42D1-4A70-B896-A3B990A3C7F9</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Plasma Desktop 5.5 shipped this week. We cover what\u2019s new, what's improved &amp; what work still remains for the latest &amp; greatest from KDE. Plus Mozilla ends their Smartphone plans, Microsoft offers a Linux cert, the new KeePassX, your feedback &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Plasma Desktop 5.5 shipped this week. We cover what\u2019s new, what's improved & what work still remains for the latest & greatest from KDE. Plus some of the great supporting cast of applications that make the Plasma desktop great.
+
+Plus Mozilla ends their Smartphone plans, Microsoft is offering a Linux certification, the new KeePassX, your feedback & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:31:10</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/12/las395-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep395.ogg" fileSize="65718553" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux in Mint Condition | LAS 394</title>
+            <link>http://www.jupiterbroadcasting.com/91181/linux-in-mint-condition-las-394/</link>
+            <description><![CDATA[<p>Linux Mint 17.3 proves you can based a Linux desktop on a stable core (Ubuntu 14.04) & still deliver an innovative and polished desktop. We take back some of our concerns about Linux Mint & discuss the areas where they are pushing user experience forward.</p>
+
+<p>Plus Mozilla plans to dump Thunderbird, the big release that completely ignores Windows & more!</p>]]></description>
+            <pubDate>Sun, 06 Dec 2015 09:17:43 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep394.ogg" length="92927782" type="audio/ogg" />
+            <guid isPermaLink="false">129D4171-4F83-4DBF-A9F4-4CD70B43F765</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Linux Mint 17.3 proves you can based a Linux desktop on a stable core. We take back some of our concerns about Linux Mint &amp; discuss the areas where they are pushing user experience forward. Plus Mozilla plans to dump Thunderbird &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Linux Mint 17.3 proves you can based a Linux desktop on a stable core (Ubuntu 14.04) & still deliver an innovative and polished desktop. We take back some of our concerns about Linux Mint & discuss the areas where they are pushing user experience forward.
+
+Plus Mozilla plans to dump Thunderbird, the big release that completely ignores Windows & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:03:10</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/12/las394-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep394.ogg" fileSize="92927782" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Thankfully It's Open Source | LAS 393</title>
+            <link>http://www.jupiterbroadcasting.com/90881/thankfully-its-open-source-las-393/</link>
+            <description><![CDATA[<p>It\u2019s a special holiday edition of the Linux Action Show & we get thankful for some super important, innovative, and critically necessary open source projects. We throw out the format and cover many projects listed in our notes & off the tops of our heads. </p>
+
+<p>Plus some really unique weekly picks, through providing feedback\u2026</p>
+
+<p>AND A FEW SURPRISES!</p>
+
+<p>All this week on, the Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 29 Nov 2015 18:45:25 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep393.ogg" length="85393159" type="audio/ogg" />
+            <guid isPermaLink="false">30A9B150-C55C-4CBE-8B8D-8348C75BD68D</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>It\u2019s a special holiday edition of the Linux Action Show, and we get thankful for some super important, innovative &amp; critically necessary open source projects. We throw out the format, and cover many projects listed in our notes &amp; off the tops of our heads</itunes:subtitle>
+            <itunes:summary><![CDATA[It\u2019s a special holiday edition of the Linux Action Show & we get thankful for some super important, innovative, and critically necessary open source projects. We throw out the format and cover many projects listed in our notes & off the tops of our heads.
+
+Plus some really unique weekly picks, through providing feedback\u2026
+
+AND A FEW SURPRISES!
+
+All this week on, the Linux Action Show!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:53:14</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/11/las393-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep393.ogg" fileSize="85393159" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The Evolution of Solus | LAS 392</title>
+            <link>http://www.jupiterbroadcasting.com/90616/the-evolution-of-solus-las-392/</link>
+            <description><![CDATA[<p>We review Solus OS, a new distribution from scratch with it\u2019s own GTK based desktop called Budgie. Budgie is the flagship desktop of the Solus Operating System & we give you our first impressions. </p>
+
+<p>Plus projects like Jolla & Canonical's convergence have been doomed from the start, the big changes coming to GTK, the Plasma desktop gets another great release, highlights from the 2015 kernel summit & more!</p>]]></description>
+            <pubDate>Sun, 22 Nov 2015 10:11:48 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep392.ogg" length="76371633" type="audio/ogg" />
+            <guid isPermaLink="false">2FD02426-EED7-4E5B-AC3A-8339F8E971A7</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We review Solus, a new distro from scratch with it\u2019s own GTK-based desktop called Budgie &amp; we give you our first impressions.
+
+Plus big changes coming to GTK, the Plasma desktop gets another great release, highlights from the 2015 kernel summit &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We review Solus OS, a new distribution from scratch with it\u2019s own GTK based desktop called Budgie. Budgie is the flagship desktop of the Solus Operating System & we give you our first impressions.
+
+Plus projects like Jolla & Canonical's convergence have been doomed from the start, the big changes coming to GTK, the Plasma desktop gets another great release, highlights from the 2015 kernel summit & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:45:04</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/11/las392-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep392.ogg" fileSize="76371633" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Live From System76 | LAS 391</title>
+            <link>http://www.jupiterbroadcasting.com/90386/live-from-system76-las-391/</link>
+            <description><![CDATA[<p>We traveled to Denver Colorado to meet the folks behind System76, tour their office & record a live show on location. Join us as we go behind the scenes of a dedicated Linux hardware manufacture.</p>
+
+<p>Plus Linux goes to space, Firefox OS has a new trick, the good news for open source router firmware & more!</p>]]></description>
+            <pubDate>Sun, 15 Nov 2015 10:58:53 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep391.ogg" length="59981540" type="audio/ogg" />
+            <guid isPermaLink="false">6E76F0A5-2165-4A61-9B04-C129AFD6A4D3</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We traveled to Denver Colorado to meet the folks behind System76, tour their office &amp; record a live show on location.
+
+Plus Linux goes to space, Firefox OS has a new trick, the good news for open source router firmware &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We traveled to Denver Colorado to meet the folks behind System76, tour their office & record a live show on location. Join us as we go behind the scenes of a dedicated Linux hardware manufacture.
+
+Plus Linux goes to space, Firefox OS has a new trick, the good news for open source router firmware & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:22:13</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/11/las391-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep391.ogg" fileSize="59981540" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Fedora from the Cockpit | LAS 390</title>
+            <link>http://www.jupiterbroadcasting.com/90206/fedora-from-the-cockpit-las-390/</link>
+            <description><![CDATA[<p>Fedora 23 has hit the web and we think this is the release that changes everything, forever. Find out why we think the changes made in Fedora 23 make this nearly a future proof distribution in some work cases. </p>
+
+<p>Plus Linus Torvalds is under attack this week from multiple sources, we\u2019ll break down one of the more technical assaults, Ubuntu is finally killing the software center & the biggest feature coming to systemd ever, just got delayed.</p>]]></description>
+            <pubDate>Sun, 08 Nov 2015 09:54:50 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep390.ogg" length="98297958" type="audio/ogg" />
+            <guid isPermaLink="false">C4EA75CA-546F-494C-B8CF-FF54B3675DC3</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Fedora 23 has hit the web and we think this is the release that changes everything, forever.  Plus Linus Torvalds is under attack from multiple sources. Ubuntu is finally killing the software center &amp; the biggest feature coming to systemd ever is delayed.</itunes:subtitle>
+            <itunes:summary><![CDATA[Fedora 23 has hit the web and we think this is the release that changes everything, forever. Find out why we think the changes made in Fedora 23 make this nearly a future proof distribution in some work cases.
+
+Plus Linus Torvalds is under attack this week from multiple sources, we\u2019ll break down one of the more technical assaults, Ubuntu is finally killing the software center & the biggest feature coming to systemd ever, just got delayed.]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:13:23</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/11/las390-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep390.ogg" fileSize="98297958" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The Linux WiFI Tower | LAS 389</title>
+            <link>http://www.jupiterbroadcasting.com/89956/the-linux-wifi-tower-las-389/</link>
+            <description><![CDATA[<p>We go 350ft into the air to find out how Linux powers a wireless ISP (WISP). Get an inside look at how a modern services business can be built around Linux.</p>
+
+<p>Plus our thoughts on Chrome OS & Android merging, what it means for desktop Linux, new secure messaging options & more!</p>]]></description>
+            <pubDate>Sun, 01 Nov 2015 17:12:51 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep389.ogg" length="75898087" type="audio/ogg" />
+            <guid isPermaLink="false">73AAAEDA-6580-4656-8ECD-385BC89D327A</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We go 350ft into the air to find out how Linux powers a wireless ISP (WISP). Plus our thoughts on Chrome OS &amp; Android merging, what it means for desktop Linux, new secure messaging options &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We go 350ft into the air to find out how Linux powers a wireless ISP (WISP). Get an inside look at how a modern services business can be built around Linux.
+
+Plus our thoughts on Chrome OS & Android merging, what it means for desktop Linux, new secure messaging options & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:43:35</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/11/las389-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep389.ogg" fileSize="75898087" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Wolfing Down Ubuntu 15.10 | LAS 388</title>
+            <link>http://www.jupiterbroadcasting.com/89676/wolfing-down-ubuntu-15-10-las-388/</link>
+            <description><![CDATA[<p>Our review of Ubuntu 15.10 Wily Werewolf, what new, noteworthy changes there are & who we think this new release is just right for. Also, we look the various flavors with bold new features worth checking out.</p>
+
+<p>Plus Kubuntu\u2019s release manager calls it quits, our impressions of the Steam Controller & more!</p>]]></description>
+            <pubDate>Sun, 25 Oct 2015 08:20:53 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep388.ogg" length="54074208" type="audio/ogg" />
+            <guid isPermaLink="false">28E9055B-EED6-4ABF-BAF5-18C9389D7441</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Our review of Ubuntu 15.10 Wily Werewolf, what new, noteworthy changes there are &amp; who we think this new release is just right for.
+
+Plus Kubuntu\u2019s release manager calls it quits, our impressions of the Steam Controller &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Our review of Ubuntu 15.10 Wily Werewolf, what new, noteworthy changes there are & who we think this new release is just right for. Also, we look the various flavors with bold new features worth checking out.
+
+Plus Kubuntu\u2019s release manager calls it quits, our impressions of the Steam Controller & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:12:39</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/10/las388-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep388.ogg" fileSize="54074208" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Passing On LastPass | LAS 387</title>
+            <link>http://www.jupiterbroadcasting.com/89366/passing-on-lastpass-las-387/</link>
+            <description><![CDATA[<p>Our best open source alternatives to LastPass. We run down the easy, the straight forward & the totally custom solutions to rolling your password managment. All our picks are totally open source, auditable & ready to use today.</p>
+
+<p>Plus the first reviews of the Steam Machines hit the web, Red Hat\u2019s big buy, GIMP in your browser & more!</p>]]></description>
+            <pubDate>Sun, 18 Oct 2015 11:47:34 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep387.ogg" length="96928596" type="audio/ogg" />
+            <guid isPermaLink="false">55A2ED6A-7756-4B19-AB13-A9404C844285</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Our best open source alternatives to LastPass. We run down the easy, the straight forward &amp; the totally custom solutions to your password managment. Plus the first reviews of the Steam Machines hit the web, Red Hat\u2019s big buy, GIMP in your browser &amp; more!
+</itunes:subtitle>
+            <itunes:summary><![CDATA[Our best open source alternatives to LastPass. We run down the easy, the straight forward & the totally custom solutions to rolling your password managment. All our picks are totally open source, auditable & ready to use today.
+
+Plus the first reviews of the Steam Machines hit the web, Red Hat\u2019s big buy, GIMP in your browser & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:11:20</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/10/las387-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep387.ogg" fileSize="96928596" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Rolling with Netrunner | LAS 386</title>
+            <link>http://www.jupiterbroadcasting.com/88931/rolling-with-netrunner-las-386/</link>
+            <pubDate>Sun, 11 Oct 2015 08:45:52 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep386.ogg" length="72146917" type="audio/ogg" />
+            <guid isPermaLink="false">A4AEFBBD-F5DF-4A68-97F7-97242514DD9D</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Some say it's the best Plasma 5 Desktop experience to be had, we review Netrunner Rolling &amp; take a walk on the KDE side of things for a bit. Then we put the great Ubuntu Conspiracy to bed, our best LastPass alternatives, a quick look at Slackel &amp; more!
+</itunes:subtitle>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:37:31</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/10/las386-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep386.ogg" fileSize="72146917" type="audio/ogg" /><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>OpenSUSE\u2019s Big Leap | LAS 385</title>
+            <link>http://www.jupiterbroadcasting.com/88561/opensuses-big-leap-las-385/</link>
+            <description><![CDATA[<p>It might just be the future of openSUSE. We take a indepth look at openSUSE Leap 42.1 beta. Find out why this might be the most ambitious Linux distribution release to date, the features that appeal the power user & the newbie.</p>
+
+<p>Plus the Linux malware that fixes up your box, why it might never be the year of the Linux desktop, the Linux botnet that hits with 150 Gbps DDoS attacks & more!</p>]]></description>
+            <pubDate>Sun, 04 Oct 2015 09:52:57 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep385.ogg" length="66379826" type="audio/ogg" />
+            <guid isPermaLink="false">456B8B53-2F24-450E-A582-3AA47FC2EA29</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>It might just be the future of openSUSE. We take a indepth look at openSUSE Leap 42.1 beta. Find out why this might be the most ambitious Linux distribution release to date. Plus the Linux malware that fixes up your box &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[It might just be the future of openSUSE. We take a indepth look at openSUSE Leap 42.1 beta. Find out why this might be the most ambitious Linux distribution release to date, the features that appeal the power user & the newbie.
+
+Plus the Linux malware that fixes up your box, why it might never be the year of the Linux desktop, the Linux botnet that hits with 150 Gbps DDoS attacks & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:25:05</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/10/las385-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep385.ogg" fileSize="66379826" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Rooting Noah's House | LAS 384</title>
+            <link>http://www.jupiterbroadcasting.com/88201/rooting-noahs-house-las-384/</link>
+            <description><![CDATA[<p>Home automation can make you feel like you're living in the future. This week we dig into the technology, advantages & disadvantages to fully automating all aspects of your home or office. We share our hard learned lessons!</p>
+
+<p>Plus Valve\u2019s huge milestone, what\u2019s great about Gnome 3.18, Ubuntu powered Drones, the creepy Windows 10 feature that\u2019s pushing people to adopt Linux & more!</p>]]></description>
+            <pubDate>Sun, 27 Sep 2015 10:51:33 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep384.ogg" length="64825874" type="audio/ogg" />
+            <guid isPermaLink="false">4C36F25C-7AE9-4A96-8CA4-BD1832D015A7</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Home automation can make you feel like you're living in the future. This week we dig into the tech of fully automating all aspects of your home or office.
+
+Plus Valve\u2019s milestone, Gnome 3.18, Ubuntu powered Drones &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Home automation can make you feel like you're living in the future. This week we dig into the technology, advantages & disadvantages to fully automating all aspects of your home or office. We share our hard learned lessons!
+
+Plus Valve\u2019s huge milestone, what\u2019s great about Gnome 3.18, Ubuntu powered Drones, the creepy Windows 10 feature that\u2019s pushing people to adopt Linux & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:24:45</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/09/las384-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep384.ogg" fileSize="64825874" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Open Source Plex Alternative | LAS 383</title>
+            <link>http://www.jupiterbroadcasting.com/87956/open-source-plex-alternative-las-383/</link>
+            <description><![CDATA[<p>Emby is an open source home media server, that  brings all of your media together into one place & automatically converts and streams your media on-the-fly to any device. In other words, a legitimate Plex competitor. We give you our in-depth look.</p>
+
+<p>Plus Microsoft announces its own Linux distribution, why it's the year of the Linux Desktop in China, why it might be time to drop VirtualBox & more!</p>]]></description>
+            <pubDate>Sun, 20 Sep 2015 09:41:32 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep383.ogg" length="70328116" type="audio/ogg" />
+            <guid isPermaLink="false">0076BBF6-BEC6-4638-B5A0-3670359763FE</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Emby is an open source home media server, a legitimate Plex competitor. We give you our in-depth look.
+
+Plus Microsoft announces its own Linux distribution, why it's the year of the Linux Desktop in China, why it might be time to drop VirtualBox &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Emby is an open source home media server, that  brings all of your media together into one place & automatically converts and streams your media on-the-fly to any device. In other words, a legitimate Plex competitor. We give you our in-depth look.
+
+Plus Microsoft announces its own Linux distribution, why it's the year of the Linux Desktop in China, why it might be time to drop VirtualBox & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:32:59</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/09/las383-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep383.ogg" fileSize="70328116" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Gmail in the Black Tank | LAS 382</title>
+            <link>http://www.jupiterbroadcasting.com/87616/gmail-in-the-black-tank-las-382/</link>
+            <description><![CDATA[<p>After the last straw Noah dumps Gmail, shares his battle and solution & Chris runs down five great open source Gmail alternatives.</p>
+
+<p>Plus why Dell stopped shipping the XPS 13 in Europe, a big update to a Linux video editor, the news of the week & more!</p>]]></description>
+            <pubDate>Sun, 13 Sep 2015 11:00:51 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep382.ogg" length="58424642" type="audio/ogg" />
+            <guid isPermaLink="false">56B2E36C-2904-4C38-A7B2-995CE50DEB21</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>After the last straw Noah dumps Gmail, shares his battle and solution &amp; Chris runs down five great open source Gmail alternatives.
+
+Plus why Dell stopped shipping the XPS 13 in Europe, a big update to a Linux video editor, the news of the week &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[After the last straw Noah dumps Gmail, shares his battle and solution & Chris runs down five great open source Gmail alternatives.
+
+Plus why Dell stopped shipping the XPS 13 in Europe, a big update to a Linux video editor, the news of the week & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:19:27</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/09/las382-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep382.ogg" fileSize="58424642" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>How We Got Started With Linux | LAS 381</title>
+            <link>http://www.jupiterbroadcasting.com/87321/how-we-got-started-with-linux-las-381/</link>
+            <description><![CDATA[<p>We finally share our getting started with Linux stories. And it turns out, it was nearly a freak happenstance for both of us & some great stories from our community.</p>
+
+<p>Plus the Safe Wifi campaign you need to know about, we discuss the new elementaryOS, an update on the Munich situation & more!</p>]]></description>
+            <pubDate>Sun, 06 Sep 2015 08:54:11 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep381.ogg" length="64224867" type="audio/ogg" />
+            <guid isPermaLink="false">F8DAE818-C3A3-499A-9CE3-EE35081EE1A5</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We finally share our getting started with Linux stories &amp; some great stories from our community.
+
+Plus the Safe Wifi campaign you need to know about, we discuss the new elementaryOS, an update on the Munich situation &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We finally share our getting started with Linux stories. And it turns out, it was nearly a freak happenstance for both of us & some great stories from our community.
+
+Plus the Safe Wifi campaign you need to know about, we discuss the new elementaryOS, an update on the Munich situation & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:25:19</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/09/las381-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep381.ogg" fileSize="64224867" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Remote Controlled Terminal | LAS 380</title>
+            <link>http://www.jupiterbroadcasting.com/87101/remote-controlled-terminal-las-380/</link>
+            <description><![CDATA[Share your terminal as a web application with anyone in the world in seconds, we\u2019ll show you how. Why Ubuntu\u2019s dominance over EC2 matters so much, Munich follow up, why Cortona can go suck a banana & more!]]></description>
+            <pubDate>Sun, 30 Aug 2015 07:29:17 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep380.ogg" length="91500438" type="audio/ogg" />
+            <guid isPermaLink="false">A928FE24-B4AA-47BD-9000-D8F3A7B665F0</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Share your terminal as a web application with anyone in the world in seconds, we\u2019ll show you how. Why Ubuntu\u2019s dominance over EC2 matters so much, Munich follow up, why Cortona can go suck a banana &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Share your terminal as a web application with anyone in the world in seconds, we\u2019ll show you how. Why Ubuntu\u2019s dominance over EC2 matters so much, Munich follow up, why Cortona can go suck a banana & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:52:40</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/08/las380-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep380.ogg" fileSize="91500438" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Experience LinuxCon 2015 | LAS 379</title>
+            <link>http://www.jupiterbroadcasting.com/86832/experience-linuxcon-2015-las-379/</link>
+            <description><![CDATA[<p>We take you to LinuxCon like never before. The container trend goes big and community leaders are taking bold stands & the quiet debate that\u2019s brewing. </p>
+
+<p>Plus a super thin Linux laptop, Google\u2019s Linux router the OnHub, Munich to ditch Linux for Windows & more!</p>]]></description>
+            <pubDate>Sun, 23 Aug 2015 19:41:40 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep379b.ogg" length="55483378" type="audio/ogg" />
+            <guid isPermaLink="false">F48CABDE-A791-4EA4-AF2C-AEDE3944BA85</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We take you to LinuxCon like never before. The container trend goes big and community leaders are taking bold stands &amp; the debate that\u2019s brewing.
+
+Plus a super thin Linux laptop, Google\u2019s Linux router the OnHub, Munich to ditch Linux for Windows &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We take you to LinuxCon like never before. The container trend goes big and community leaders are taking bold stands & the quiet debate that\u2019s brewing.
+
+Plus a super thin Linux laptop, Google\u2019s Linux router the OnHub, Munich to ditch Linux for Windows & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:17:34</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/08/las379-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep379b.ogg" fileSize="55483378" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Serval: A Desktop Dominator | LAS 378</title>
+            <link>http://www.jupiterbroadcasting.com/86577/serval-a-desktop-dominator-las-378/</link>
+            <description><![CDATA[<p>System76\u2019s Serval WS is in house & we put it through our series of tests. With it\u2019s 4Ghz Intel i7 CPU and Nvidia 970M GPU we set out to see what kind of workloads this desktop replacement is ideal for. </p>
+
+<p>Is the claim that a laptop can replace your desktop really true? We aim to find out! </p>
+
+<p>Plus the insane popularity of Chromebooks, how Google just gave a major boost to desktop Linux, looking back at 18 years of Gnome & more!</p>]]></description>
+            <pubDate>Sun, 16 Aug 2015 16:59:20 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep378.ogg" length="78443827" type="audio/ogg" />
+            <guid isPermaLink="false">6BC22B8E-5ED2-4B2B-A681-95D80A3C1FAA</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>System76\u2019s Serval WS is in house! Is the claim that a laptop can replace your desktop really true? We\u2019ll find out!
+
+Plus the insane popularity of Chromebooks, how Google just gave a major boost to desktop Linux, looking back at 18 years of Gnome &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[System76\u2019s Serval WS is in house & we put it through our series of tests. With it\u2019s 4Ghz Intel i7 CPU and Nvidia 970M GPU we set out to see what kind of workloads this desktop replacement is ideal for.
+
+Is the claim that a laptop can replace your desktop really true? We aim to find out!
+
+Plus the insane popularity of Chromebooks, how Google just gave a major boost to desktop Linux, looking back at 18 years of Gnome & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:39:13</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/08/las378-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep378.ogg" fileSize="78443827" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Level Up Your LAN | LAS 377</title>
+            <link>http://www.jupiterbroadcasting.com/86282/level-up-your-lan-las-377/</link>
+            <description><![CDATA[<p>We take a deep dive into the basics of getting a home network up and running. It you\u2019ve lived with whatever the ISP has given you have no fear, not only are we going to show you how to do it, it\u2019s going to be all done from Linux!</p>
+
+<p>Plus Firefox has a major flaw that impacts Linux users, an update on the Jolla tablet, we discuss our big format experiment & more!</p>]]></description>
+            <pubDate>Sun, 09 Aug 2015 11:05:06 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep377.ogg" length="49736351" type="audio/ogg" />
+            <guid isPermaLink="false">9146FEEE-DBB7-4D81-A918-6E987D4D7087</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We take a deep dive into the basics of getting a home network up and running. It you\u2019ve lived with whatever the ISP has given you have no fear.
+
+Plus Firefox has a major flaw, an update on the Jolla tablet, we discuss our big format experiment &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We take a deep dive into the basics of getting a home network up and running. It you\u2019ve lived with whatever the ISP has given you have no fear, not only are we going to show you how to do it, it\u2019s going to be all done from Linux!
+
+Plus Firefox has a major flaw that impacts Linux users, an update on the Jolla tablet, we discuss our big format experiment & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:51:53</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/08/las377-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep377.ogg" fileSize="49736351" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Windows 10 vs Linux | LAS 376</title>
+            <link>http://www.jupiterbroadcasting.com/85922/windows-10-vs-linux-las-376/</link>
+            <description><![CDATA[How do two long-time Linux users react to trying Windows 10? This week we run Windows so you don\u2019t have to. How does Windows 10 compare to the modern Linux desktop, are it\u2019s best new features a knockoff, and what areas does Windows 10 pull ahead? It\u2019s a review of Windows 10 like you won\u2019t find anywhere else!]]></description>
+            <pubDate>Sun, 02 Aug 2015 16:21:18 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep376.ogg" length="50406065" type="audio/ogg" />
+            <guid isPermaLink="false">3405DDD2-2D1E-48AF-BB57-3DB2F858385A</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>How do two long-time Linux users react to trying Windows 10? This week we run Windows so you don\u2019t have to. How does Windows 10 compare to the modern Linux desktop? It\u2019s a review of Windows 10 like you won\u2019t find anywhere else!</itunes:subtitle>
+            <itunes:summary><![CDATA[How do two long-time Linux users react to trying Windows 10? This week we run Windows so you don\u2019t have to. How does Windows 10 compare to the modern Linux desktop, are it\u2019s best new features a knockoff, and what areas does Windows 10 pull ahead? It\u2019s a review of Windows 10 like you won\u2019t find anywhere else!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:45:41</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/08/las376-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep376.ogg" fileSize="50406065" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>OSCON 2015 | LAS 375</title>
+            <link>http://www.jupiterbroadcasting.com/85582/oscon-2015-las-375/</link>
+            <description><![CDATA[<p>It was a huge OSCON this year, and we have a bunch of great interviews from the floor. We\u2019ll feature some amazing Linux powered gadgets, exciting hardware, and our massive interview with Todd Weaver, the man behind Purism Librem 13 and the Librem 15 Linux laptops.</p>
+
+<p>Plus our thoughts on the Plasma Phone, the Linux distro adding secret watermarks to files & more!</p>]]></description>
+            <pubDate>Sun, 26 Jul 2015 18:42:45 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep375.ogg" length="56603815" type="audio/ogg" />
+            <guid isPermaLink="false">2BCFBF2C-FE65-4176-AE2D-0C5F76393E5A</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>It was a huge OSCON this year! We\u2019ll feature some Linux powered gadgets, amazing hardware &amp; our interview with Todd Weaver, the man behind Purism Librem laptops. Plus thoughts on the Plasma Phone, the Linux distro adding secret watermarks to files &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[It was a huge OSCON this year, and we have a bunch of great interviews from the floor. We\u2019ll feature some amazing Linux powered gadgets, exciting hardware, and our massive interview with Todd Weaver, the man behind Purism Librem 13 and the Librem 15 Linux laptops.
+
+Plus our thoughts on the Plasma Phone, the Linux distro adding secret watermarks to files & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:06:08</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/07/las375-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep375.ogg" fileSize="56603815" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Get Going with X2Go | LAS 374</title>
+            <link>http://www.jupiterbroadcasting.com/85377/get-going-with-x2go-las-374/</link>
+            <description><![CDATA[<p>The best remote desktop experience has never been easier, we\u2019ll show you the power of X2Go with the security of SSH!</p>
+
+<p>Plus the push to kill flash picks up, Firefox OS fork \u201cH5OS\u201d gets a $100 million boost, how to watch Amazon Prime video under Linux & more!</p>]]></description>
+            <pubDate>Sun, 19 Jul 2015 15:50:03 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep374.ogg" length="34472552" type="audio/ogg" />
+            <guid isPermaLink="false">39581288-E38F-4264-B7CD-FC2BAAB55967</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>The best remote desktop experience has never been easier, we\u2019ll show you the power of X2Go with the security of SSH! Plus the push to kill flash picks up, Firefox OS fork \u201cH5OS\u201d gets a $100 million boost, how to watch Amazon Prime video under Linux &amp; more</itunes:subtitle>
+            <itunes:summary><![CDATA[The best remote desktop experience has never been easier, we\u2019ll show you the power of X2Go with the security of SSH!
+
+Plus the push to kill flash picks up, Firefox OS fork \u201cH5OS\u201d gets a $100 million boost, how to watch Amazon Prime video under Linux & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:12:35</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/07/las374-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep374.ogg" fileSize="34472552" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>SSH Authentication with YubiKey | LAS 373</title>
+            <link>http://www.jupiterbroadcasting.com/85062/ssh-authentication-with-yubikey-las-373/</link>
+            <description><![CDATA[<p>Take your Linux logins up to the next level with YubiKey. YubiKeys support one-time passcode, smart card & more \u2013 enabling one security key to an unlimited number of applications. Today we\u2019ll show you how to make it work with SSH under Linux.</p>
+
+<p>Plus our thoughts on the NSA using Red Hat, the big changes coming to openSUSE, our picks & more!</p>]]></description>
+            <pubDate>Sun, 12 Jul 2015 18:56:09 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep373.ogg" length="55683441" type="audio/ogg" />
+            <guid isPermaLink="false">672334E5-FA93-408F-9051-8A4382673185</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Take your Linux logins up to the next level with YubiKey. YubiKeys support one-time passcode, smart card &amp; more. We\u2019ll show you how to make it work with SSH under Linux.
+
+Plus our thoughts on NSA using Red Hat, the changes coming to openSUSE &amp; more!
+</itunes:subtitle>
+            <itunes:summary><![CDATA[Take your Linux logins up to the next level with YubiKey. YubiKeys support one-time passcode, smart card & more \u2013 enabling one security key to an unlimited number of applications. Today we\u2019ll show you how to make it work with SSH under Linux.
+
+Plus our thoughts on the NSA using Red Hat, the big changes coming to openSUSE, our picks & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:03:51</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/07/las373-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep373.ogg" fileSize="55683441" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux Photography in Focus | LAS 372</title>
+            <link>http://www.jupiterbroadcasting.com/84722/linux-photography-in-focus-las-372/</link>
+            <description><![CDATA[<p>From total beginner to photo pro, we\u2019ll share workflow tips, tools, tricks & backup techniques to super-charge your photography workflow under Linux.</p>
+
+<p>Plus the Pinos project promises to bring PulseAudio to video, how DirectX11 is coming to Linux, the Yotaphone upset, OwnCloud dreams & more!</p>]]></description>
+            <pubDate>Sun, 05 Jul 2015 17:32:11 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep372.ogg" length="36443435" type="audio/ogg" />
+            <guid isPermaLink="false">1BD48D6F-6A3B-45EE-B244-72AF0FDF82DE</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We share workflow tips, tools, tricks &amp; backup techniques to super-charge your photography workflow under Linux.
+
+Plus the Pinos project promises to bring PulseAudio to video, how DirectX11 is coming to Linux, the Yotaphone upset, OwnCloud dreams &amp; more!
+</itunes:subtitle>
+            <itunes:summary><![CDATA[From total beginner to photo pro, we\u2019ll share workflow tips, tools, tricks & backup techniques to super-charge your photography workflow under Linux.
+
+Plus the Pinos project promises to bring PulseAudio to video, how DirectX11 is coming to Linux, the Yotaphone upset, OwnCloud dreams & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:22:04</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/07/las372-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep372.ogg" fileSize="36443435" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>SIPing on some Linux | LAS 371</title>
+            <link>http://www.jupiterbroadcasting.com/84332/siping-on-some-linux-las-371/</link>
+            <description><![CDATA[<p>Find out about the best software and hardware to make and take amazingly good sounding calls. From the best open source solutions, to turnkey solutions today\u2019s episode has something from the beginner to the expert.</p>
+
+<p>Plus Google removes "always listening" code from Chromium, The Linux Foundation invests some serious cash, why Red Hat\u2019s CEO thinks Linux has \u201cwon\u201d the datacenter & more!</p>]]></description>
+            <pubDate>Sun, 28 Jun 2015 17:42:58 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep371.ogg" length="42444958" type="audio/ogg" />
+            <guid isPermaLink="false">9F91E078-4BA3-4092-9A72-63036F935EFF</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Find out about the best software and hardware to make and take amazingly good sounding calls. Plus Google removes "always listening" from Chromium, The Linux Foundation invests some cash, why Red Hat\u2019s CEO thinks Linux has \u201cwon\u201d the datacenter &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Find out about the best software and hardware to make and take amazingly good sounding calls. From the best open source solutions, to turnkey solutions today\u2019s episode has something from the beginner to the expert.
+
+Plus Google removes "always listening" code from Chromium, The Linux Foundation invests some serious cash, why Red Hat\u2019s CEO thinks Linux has \u201cwon\u201d the datacenter & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:34:58</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/06/las371-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep371.ogg" fileSize="42444958" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>A Chat with Red Hat | LAS 370</title>
+            <link>http://www.jupiterbroadcasting.com/84017/a-chat-with-red-hat-las-370/</link>
+            <description><![CDATA[The linux action show sits down to have a chat with Red Hat!]]></description>
+            <pubDate>Sun, 21 Jun 2015 08:20:59 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep370.ogg" length="24062254" type="audio/ogg" />
+            <guid isPermaLink="false">F025CD10-027D-4D86-B49C-F6371FAFE722</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>The linux action show sits down to have a chat with Red Hat!</itunes:subtitle>
+            <itunes:summary><![CDATA[The linux action show sits down to have a chat with Red Hat!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>55:33</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/06/las370-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep370.ogg" fileSize="24062254" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Live from SouthEast LinuxFest  | LAS 369</title>
+            <link>http://www.jupiterbroadcasting.com/83662/live-from-southeast-linuxfest-las-369/</link>
+            <description><![CDATA[<p>Exclusive interviews and coverage from one of the show\u2019s favorite events, SouthEast LinuxFest, aka SELF 2015. Find out the latest with the Ubuntu project, a humble approach to Linux advocacy & how the boundaries of science are being pushed by Linux.</p>
+
+<p>Plus the new MATE release, HP kills The Machine, a quick update on Ubuntu's Unity 8 & more!</p>]]></description>
+            <pubDate>Sun, 14 Jun 2015 17:32:49 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep369.ogg" length="52511911" type="audio/ogg" />
+            <guid isPermaLink="false">360E03E7-F301-4037-9C42-654A724DF943</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Exclusive interviews and coverage from SELF 2015. Find out the latest with the Ubuntu project, humble Linux advocacy &amp; how the boundaries of science are being pushed by Linux.
+
+Plus A new MATE release, HP kills The Machine, updates on Unity 8 &amp; more!
+</itunes:subtitle>
+            <itunes:summary><![CDATA[Exclusive interviews and coverage from one of the show\u2019s favorite events, SouthEast LinuxFest, aka SELF 2015. Find out the latest with the Ubuntu project, a humble approach to Linux advocacy & how the boundaries of science are being pushed by Linux.
+
+Plus the new MATE release, HP kills The Machine, a quick update on Ubuntu's Unity 8 & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:55:58</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/06/las369-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep369.ogg" fileSize="52511911" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Party with Linux | LAS 368</title>
+            <link>http://www.jupiterbroadcasting.com/83342/party-with-linux-las-368/</link>
+            <description><![CDATA[<p>Who doesn't like a good party? Some folks will tell you that Linux is boring, or for geeks. This week we'll show you how you can have a very loud and bright time with Linux.</p>
+
+<p>Plus Valve officially pins down a Steam Machine launch date. More encryption for Linux, and did the CHIP guys underestimate the cost of their $9 computer?</p>
+
+<p>Plus some great feedback, some helpful app picks & more!</p>]]></description>
+            <pubDate>Sun, 07 Jun 2015 19:08:12 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep368.ogg" length="36650517" type="audio/ogg" />
+            <guid isPermaLink="false">FDAB84DE-1777-4AA0-9705-A37595CF384C</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Who doesn't like a good party? Some folks will tell you that Linux is boring. This week we'll show you how you can have a very loud &amp; bright time with Linux.
+
+Plus Valve officially pins down a Steam Machine launch date. More encryption for Linux &amp; more!
+</itunes:subtitle>
+            <itunes:summary><![CDATA[Who doesn't like a good party? Some folks will tell you that Linux is boring, or for geeks. This week we'll show you how you can have a very loud and bright time with Linux.
+
+Plus Valve officially pins down a Steam Machine launch date. More encryption for Linux, and did the CHIP guys underestimate the cost of their $9 computer?
+
+Plus some great feedback, some helpful app picks & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:23:44</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/06/las368-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep368.ogg" fileSize="36650517" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Fedora 22 Review | LAS 367</title>
+            <link>http://www.jupiterbroadcasting.com/83032/fedora-22-review-las-367/</link>
+            <description><![CDATA[<p>Fedora 22 builds on top of the great Fedora 21 release. With big changes like the new DNF package manager, Gnome 3.16, and more there is a lot to talk about and a few bumps. We\u2019ll share our experience with Fedora\u2019s latest and greatest!</p>
+
+<p>Plus why Mandriva shutdown, SourceForge messes with GIMP, the Kubuntu drama we don\u2019t want to talk about, great feedback, some helpful app picks & more!</p>]]></description>
+            <pubDate>Sun, 31 May 2015 21:58:59 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep367.ogg" length="64035900" type="audio/ogg" />
+            <guid isPermaLink="false">1EBB849E-73DE-4649-97DE-02A7B9871E3B</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Fedora 22 builds on top of the Fedora 21 release. Changes like DNF package manager, Gnome 3.16 &amp; more!
+Plus why Mandriva shut down, SourceForge messes with GIMP, the Kubuntu drama we don\u2019t want to talk about, great feedback, some helpful app picks &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Fedora 22 builds on top of the great Fedora 21 release. With big changes like the new DNF package manager, Gnome 3.16, and more there is a lot to talk about and a few bumps. We\u2019ll share our experience with Fedora\u2019s latest and greatest!
+
+Plus why Mandriva shutdown, SourceForge messes with GIMP, the Kubuntu drama we don\u2019t want to talk about, great feedback, some helpful app picks & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>2:18:11</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/05/las367-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep367.ogg" fileSize="64035900" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Bodhi: Enlightened Linux | LAS 366</title>
+            <link>http://www.jupiterbroadcasting.com/82642/bodhi-enlightened-linux-las-366/</link>
+            <description><![CDATA[<p>Lead developer of Bodhi Linux, Jeff Hoogland, joins us to discuss this exciting distribution that showcases the Enlightenment desktop.</p>
+
+<p>Plus Canonical could be going public, but what will that mean for the desktop? We debate. Firefox OS see\u2019s a major course change ahead & more!</p>]]></description>
+            <pubDate>Sun, 24 May 2015 18:28:58 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep366.ogg" length="41244932" type="audio/ogg" />
+            <guid isPermaLink="false">63679E6B-ABB1-4CEA-8772-192AC5F0DE13</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Lead developer of Bodhi Linux, Jeff Hoogland, joins us to discuss this exciting distribution that showcases Enlightenment.
+
+Plus Canonical could be going public, but what will that mean for the desktop? Firefox OS see\u2019s a major course change ahead &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Lead developer of Bodhi Linux, Jeff Hoogland, joins us to discuss this exciting distribution that showcases the Enlightenment desktop.
+
+Plus Canonical could be going public, but what will that mean for the desktop? We debate. Firefox OS see\u2019s a major course change ahead & more!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:30:05</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/05/las366-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep366.ogg" fileSize="41244932" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The Emulation Game | LAS 365</title>
+            <link>http://www.jupiterbroadcasting.com/82207/the-emulation-game-las-365/</link>
+            <description><![CDATA[<p>We showcase the best in emulated gameplay experiences under Linux. A topic that sometimes is shrouded in shame is actually one of Linux\u2019s strongest suits. Backed by an historical announcement this week, if you had any doubts, today\u2019s episode will change your mind!</p>
+
+<p>Plus Oculus abandons their Linux backers & we\u2019ll explain why this short-sighted move might be a good thing, the next big Ubuntu phone ships & more!</p>]]></description>
+            <pubDate>Sun, 17 May 2015 19:08:36 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep365.ogg" length="46178255" type="audio/ogg" />
+            <guid isPermaLink="false">B399B61B-72C5-4610-B8FD-1238B17095FD</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We showcase the best in emulated gameplay experiences under Linux. A topic that sometimes is shrouded in shame is actually one of Linux\u2019s strongest suits.
+
+Plus Oculus abandons their Linux backers, the next big Ubuntu phone ships &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We showcase the best in emulated gameplay experiences under Linux. A topic that sometimes is shrouded in shame is actually one of Linux\u2019s strongest suits. Backed by an historical announcement this week, if you had any doubts, today\u2019s episode will change your mind!
+
+Plus Oculus abandons their Linux backers & we\u2019ll explain why this short-sighted move might be a good thing, the next big Ubuntu phone ships & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:41:55</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/05/las365-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep365.ogg" fileSize="46178255" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Krita Developer Interview | LAS 364</title>
+            <link>http://www.jupiterbroadcasting.com/81807/krita-developer-interview-las-364/</link>
+            <description><![CDATA[<p>We get the opportunity to talk to the Krita project. Can professional graphic design be done on Linux? What it will take to get the project to the next level? We find out! </p>
+
+<p>Plus a crazy member of our audience takes CentOS desktop challenge & we check in. CryEngine to support Linux, Firefox OS in Africa, Snappy packages, Python 3 in Ubuntu by Default & more!</p>]]></description>
+            <pubDate>Sun, 10 May 2015 18:03:27 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep364.ogg" length="38544464" type="audio/ogg" />
+            <guid isPermaLink="false">D491135F-F3A8-4624-A9E3-A581BDDD9917</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We get the opportunity to talk to the Krita project. Can professional graphic design be done on Linux?
+
+Plus a viewer takes CentOS desktop challenge &amp; we check in. CryEngine on Linux, Firefox OS in Africa, Snappy packages, Python 3 in Ubuntu &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We get the opportunity to talk to the Krita project. Can professional graphic design be done on Linux? What it will take to get the project to the next level? We find out!
+
+Plus a crazy member of our audience takes CentOS desktop challenge & we check in. CryEngine to support Linux, Firefox OS in Africa, Snappy packages, Python 3 in Ubuntu by Default & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:25:26</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/05/las364-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep364.ogg" fileSize="38544464" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux's Victory Blow | LAS 363</title>
+            <link>http://www.jupiterbroadcasting.com/81432/linuxs-victory-blow-las-363/</link>
+            <description><![CDATA[<p>The founder of Open Broadcaster, a free and open source software for video recording and live streaming joins us to discuss the project, challenges they face & what the future holds.</p>
+
+<p>Plus we go into detail on the miracles we pulled off to make LinuxFest Northwest coverage Linux powered. A new alternative to systemd, a cheap Linux PC for everyone, three years of Steam & more!</p>]]></description>
+            <pubDate>Sun, 03 May 2015 08:13:38 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep363.ogg" length="37572906" type="audio/ogg" />
+            <guid isPermaLink="false">576CB0B8-EAFB-4938-A82C-5B87F0FDAC66</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>The founder of Open Broadcaster joins to discuss the project, challenges they face &amp; what the future holds.
+
+Plus how we made LFNW coverage Linux powered. A new alternative to systemd, a cheap Linux PC for everyone, three years of Steam &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[The founder of Open Broadcaster, a free and open source software for video recording and live streaming joins us to discuss the project, challenges they face & what the future holds.
+
+Plus we go into detail on the miracles we pulled off to make LinuxFest Northwest coverage Linux powered. A new alternative to systemd, a cheap Linux PC for everyone, three years of Steam & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:22:52</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/05/las363-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep363.ogg" fileSize="37572906" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Rockin 2015 LinuxFest NW | LAS 362</title>
+            <link>http://www.jupiterbroadcasting.com/81137/rockin-2015-linuxfest-nw-las-362/</link>
+            <description><![CDATA[<p>Live from the floor of LinuxFest Northwest 2015, we chat with the new Microsoft about their new Linux attitude, chat with some familiar friends & take the pulse of the community.</p>
+
+<p>Plus an overview of the new Debian & Ubuntu releases, a historical app pick & more!</p>]]></description>
+            <pubDate>Sun, 26 Apr 2015 17:34:35 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep362.ogg" length="25943033" type="audio/ogg" />
+            <guid isPermaLink="false">ECCE25A0-D8A7-4120-99C7-1CB5965A7F53</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Live from the floor of LinuxFest Northwest 2015, we chat with the new Microsoft about their new Linux attitude, chat with some familiar friends &amp; take the pulse of the community.
+
+Plus an overview of the new distro releases, a historical app pick &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Live from the floor of LinuxFest Northwest 2015, we chat with the new Microsoft about their new Linux attitude, chat with some familiar friends & take the pulse of the community.
+
+Plus an overview of the new Debian & Ubuntu releases, a historical app pick & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:01:28</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/04/las362-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep362.ogg" fileSize="25943033" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>From Apples to Penguins | LAS 361</title>
+            <link>http://www.jupiterbroadcasting.com/80702/from-apples-to-penguins-las-361/</link>
+            <description><![CDATA[Since the beginning of the show, we've had project #1 & that project will finally be coming to a close. Recent changes in the MacOS system & key applications require the user to learn a new workflow, so Chris & Noah have begun the daunting task of converting Chris\u2019 wife & long-time Mac user, Angela, to Linux.]]></description>
+            <pubDate>Sun, 19 Apr 2015 17:59:44 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep361.ogg" length="38860344" type="audio/ogg" />
+            <guid isPermaLink="false">9EE28DC9-3117-44A8-9832-74250E7698B4</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Poject #1 will finally be coming to a close. Recent changes in the MacOS system &amp; key applications require the user to learn a new workflow, so Chris &amp; Noah have begun the daunting task of converting Chris\u2019 wife &amp; long-time Mac user, Angela, to Linux.</itunes:subtitle>
+            <itunes:summary><![CDATA[Since the beginning of the show, we've had project #1 & that project will finally be coming to a close. Recent changes in the MacOS system & key applications require the user to learn a new workflow, so Chris & Noah have begun the daunting task of converting Chris\u2019 wife & long-time Mac user, Angela, to Linux.]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:24:57</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/04/las361-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep361.ogg" fileSize="38860344" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Chronicles of a Linux Switcher | LAS 360</title>
+            <link>http://www.jupiterbroadcasting.com/80312/chronicles-of-a-linux-switcher-las-360/</link>
+            <description><![CDATA[<p>We follow the journey of users who have just made the switch to Linux. We document what went great & what hasn\u2019t worked. </p>
+
+<p>Plus a big announcement is made, great news for Ubuntu MATE, a quick look at Elementary OS Freya Beta & more!</p>]]></description>
+            <pubDate>Sun, 12 Apr 2015 18:22:53 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep360.ogg" length="51183164" type="audio/ogg" />
+            <guid isPermaLink="false">947104BE-EE7E-4F9F-8E45-CA8E4B4831A7</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We follow the journey of users who have just made the switch to Linux. We document what went great &amp; what hasn\u2019t worked.
+
+Plus a big announcement is made, great news for Ubuntu MATE, a quick look at Elementary OS Freya Beta &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We follow the journey of users who have just made the switch to Linux. We document what went great & what hasn\u2019t worked.
+
+Plus a big announcement is made, great news for Ubuntu MATE, a quick look at Elementary OS Freya Beta & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:53:35</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/04/las360-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep360.ogg" fileSize="51183164" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Get A Job, You Linux Bum! | LAS 359</title>
+            <link>http://www.jupiterbroadcasting.com/79937/get-a-job-you-linux-bum-las-359/</link>
+            <description><![CDATA[<p>Have you ever thought it\u2019s better to create a job then apply for one? This week we dive into what it takes to build a business that runs on open source & supports open source.</p>
+
+<p>Plus Microsoft\u2019s surprise move, openSUSE jumps ahead, running just about any Android app under Linux & more!</p>]]></description>
+            <pubDate>Sun, 05 Apr 2015 07:48:34 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep359.ogg" length="38619376" type="audio/ogg" />
+            <guid isPermaLink="false">6AE1A8D1-2707-4B44-8061-7B02A4D7AA9E</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Have you ever thought it\u2019s better to create a job then apply for one? This week we dive into what it takes to build a business that runs on &amp; supports open source.
+
+Plus Microsoft\u2019s surprise move, openSUSE jumps ahead, running Android apps on Linux &amp; more</itunes:subtitle>
+            <itunes:summary><![CDATA[Have you ever thought it\u2019s better to create a job then apply for one? This week we dive into what it takes to build a business that runs on open source & supports open source.
+
+Plus Microsoft\u2019s surprise move, openSUSE jumps ahead, running just about any Android app under Linux & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:26:46</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/04/las359-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep359.ogg" fileSize="38619376" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Remote Desktop Roundup | LAS 358</title>
+            <link>http://www.jupiterbroadcasting.com/79607/remote-desktop-roundup-las-358/</link>
+            <description><![CDATA[<p>We take a look at remote desktop on Linux. We go behind the scenes to see how Linux can be used to remotely support business at scale as well as providing help to family and friends and round up the best solutions. </p>
+
+<p>Plus is SteamOS diverging too far from Debian? LibreOffice has big online plans, Gnome 3.16 is out, tons of Kodi follow up & more!</p>]]></description>
+            <pubDate>Sun, 29 Mar 2015 18:37:43 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep358.ogg" length="45464463" type="audio/ogg" />
+            <guid isPermaLink="false">6A739E7B-D6D2-405E-B559-2C8AC08F0ECF</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We take a look at remote desktop on Linux. We go behind the scenes to see how Linux can be used to remotely suppor at scale. Plus is SteamOS diverging too far from Debian? LibreOffice has big online plans, Gnome 3.16 is out, tons of Kodi follow up &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[We take a look at remote desktop on Linux. We go behind the scenes to see how Linux can be used to remotely support business at scale as well as providing help to family and friends and round up the best solutions.
+
+Plus is SteamOS diverging too far from Debian? LibreOffice has big online plans, Gnome 3.16 is out, tons of Kodi follow up & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:41:02</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/03/las358-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep358.ogg" fileSize="45464463" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Kodiculious Review | LAS 357</title>
+            <link>http://www.jupiterbroadcasting.com/79247/kodiculious-review-las-357/</link>
+            <description><![CDATA[<p>Is Kodi the one true open source home theater system? We look at the latest release of Kodi, formerly known as XBMC. Discuss the projects current state, and what the future release holds.</p>
+
+<p>Plus the BQ Ubuntu Touch devices runs into some GPL issues, Microsoft\u2019s Secure Boot policy change, our picks & more!</p>]]></description>
+            <pubDate>Sun, 22 Mar 2015 18:30:40 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep357.ogg" length="39013006" type="audio/ogg" />
+            <guid isPermaLink="false">B6D17AB9-369C-4F2C-9486-0D1F64E61D71</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>We look at the latest release of Kodi, formerly known as XBMC. Discuss the projects current state, and what the future release holds.
+
+Plus the BQ Ubuntu Touch devices runs into some GPL issues, Microsoft\u2019s Secure Boot policy change, our picks &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Is Kodi the one true open source home theater system? We look at the latest release of Kodi, formerly known as XBMC. Discuss the projects current state, and what the future release holds.
+
+Plus the BQ Ubuntu Touch devices runs into some GPL issues, Microsoft\u2019s Secure Boot policy change, our picks & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:26:43</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/03/las357-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep357.ogg" fileSize="39013006" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux's Slice of HAM | LAS 356</title>
+            <link>http://www.jupiterbroadcasting.com/78797/linuxs-slice-of-ham-las-356/</link>
+            <description><![CDATA[<p>Have you heard of Ham Radio? It\u2019s the original open source! We dive in and take you into a ham shack to see what Ham Radio is all about, how it can done on Linux, and how the principles and communities of open source so closely align with this old hobby.</p>
+
+<p>Plus Linux hits over 1k games & the new distro that makes Fedora approachable & more!</p>]]></description>
+            <pubDate>Sun, 15 Mar 2015 17:26:59 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep356.ogg" length="41710240" type="audio/ogg" />
+            <guid isPermaLink="false">99310FF0-3C53-459E-87BB-6EA604B3D5D5</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Have you heard of Ham Radio? It\u2019s the original open source! We dive in and take you into a ham shack to see what Ham Radio is all about.  Plus Linux hits over 1k games &amp; the new distro that makes Fedora approachable &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Have you heard of Ham Radio? It\u2019s the original open source! We dive in and take you into a ham shack to see what Ham Radio is all about, how it can done on Linux, and how the principles and communities of open source so closely align with this old hobby.
+
+Plus Linux hits over 1k games & the new distro that makes Fedora approachable & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:32:08</itunes:duration>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/03/las356-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep356.ogg" fileSize="41710240" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux Media Production | LAS 355</title>
+            <link>http://www.jupiterbroadcasting.com/78447/linux-media-production-las-355/</link>
+            <description><![CDATA[<p>Over the past few weeks we\u2019ve been doubling down on production on Linux. We go over the tips, tricks & hardware we use to make the show now with more Linux.</p>
+
+<p>Plus the really big news for Linux gaming & the big new feature for Linux 4.0\u2026</p>]]></description>
+            <pubDate>Sun, 08 Mar 2015 20:07:58 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep355.ogg" length="51077635" type="audio/ogg" />
+            <guid isPermaLink="false">3F7CECEB-B597-47AA-AA9E-04DEB5841C57</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Over the past few weeks we\u2019ve been doubling down on production on Linux. We go over the tips, tricks &amp; hardware we use to make the show now with more Linux.
+
+Plus the really big news for Linux gaming &amp; the big new feature for Linux 4.0\u2026</itunes:subtitle>
+            <itunes:summary><![CDATA[Over the past few weeks we\u2019ve been doubling down on production on Linux. We go over the tips, tricks & hardware we use to make the show now with more Linux.
+
+Plus the really big news for Linux gaming & the big new feature for Linux 4.0\u2026]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:48:44</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/03/las355-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep355.ogg" fileSize="51077635" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Outstanding SCALE 13x | LAS 354</title>
+            <link>http://www.jupiterbroadcasting.com/78027/outstanding-scale-13x-las-354/</link>
+            <description><![CDATA[<p>Exclusive interviews from the Southern California Linux Expo. We chat with elementary OS, VLC, Firefox, System76 & many more.</p>
+
+<p>Plus the big news for Ubuntu MATE, XFCE, Gnome & others.</p>]]></description>
+            <pubDate>Sun, 01 Mar 2015 18:03:27 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep354.ogg" length="48821005" type="audio/ogg" />
+            <guid isPermaLink="false">A6886F63-F409-4894-B61F-C747C886BCA7</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Exclusive interviews from the Southern California Linux Expo. We chat with elementary OS, VLC, Firefox, System76 &amp; many more.
+
+Plus the big news for Ubuntu MATE, XFCE, Gnome &amp; others. </itunes:subtitle>
+            <itunes:summary><![CDATA[Exclusive interviews from the Southern California Linux Expo. We chat with elementary OS, VLC, Firefox, System76 & many more.
+
+Plus the big news for Ubuntu MATE, XFCE, Gnome & others. ]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:48:47</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/03/las354-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep354.ogg" fileSize="48821005" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Retro Blasted Action | LAS 353</title>
+            <link>http://www.jupiterbroadcasting.com/77752/retro-blasted-action-las-353/</link>
+            <description><![CDATA[Join us as we revisit some retro topics from the archives!]]></description>
+            <pubDate>Sun, 22 Feb 2015 08:08:54 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep353.ogg" length="38975124" type="audio/ogg" />
+            <guid isPermaLink="false">D2D9B6E8-1102-4DA0-9A8E-9A8364DFFDAB</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Join us as we revisit some retro topics from the archives!</itunes:subtitle>
+            <itunes:summary><![CDATA[Join us as we revisit some retro topics from the archives!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:26:36</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/02/las353-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep353.ogg" fileSize="38975124" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Questions for elementary OS | LAS 352</title>
+            <link>http://www.jupiterbroadcasting.com/77377/questions-for-elementary-os-las-352/</link>
+            <description><![CDATA[<p>Two members of the elementary OS project join us to discuss the recent dust up around their blog post asking for more funding from their users. We\u2019ll ask the hard questions you\u2019ve been wondering, get the latest from the project & talk about the future.</p>
+
+<p>Plus we look at the sales for the first BQ Ubuntu Touch edition, Linus\u2019 personal choice award, some good news for OpenShot & more!</p>]]></description>
+            <pubDate>Sun, 15 Feb 2015 18:03:42 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep352.ogg" length="36304720" type="audio/ogg" />
+            <guid isPermaLink="false">9B8083B0-82A8-4469-85D7-E9132F3E6453</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Two members of the elementary OS project join us to discuss the recent dust up around their blog post asking for more funding from their users. We ask the hard questions you\u2019ve been wondering, get the latest from the project, talk about the future &amp; more</itunes:subtitle>
+            <itunes:summary><![CDATA[Two members of the elementary OS project join us to discuss the recent dust up around their blog post asking for more funding from their users. We\u2019ll ask the hard questions you\u2019ve been wondering, get the latest from the project & talk about the future.
+
+Plus we look at the sales for the first BQ Ubuntu Touch edition, Linus\u2019 personal choice award, some good news for OpenShot & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:22:00</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/02/las352-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep352.ogg" fileSize="36304720" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Meet SELKS | Linux Action Show 351</title>
+            <link>http://www.jupiterbroadcasting.com/76982/meet-selks-linux-action-show-351/</link>
+            <description><![CDATA[<p>The Co-creators of a Linux distribution that allows you to harness some of the most powerful open source security software join us to discuss bringing Enterprise grade security to the masses.</p>
+
+<p>Plus building your own ideal Linux laptop, the Yolla Tablet surprise & more!</p>]]></description>
+            <pubDate>Sun, 08 Feb 2015 11:09:07 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep351.ogg" length="28631162" type="audio/ogg" />
+            <guid isPermaLink="false">367B2FE5-3738-452D-A976-D9C56D34392B</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>The Co-creators of a Linux distro that allows you to harness some of the most powerful open source security software join us to discuss Enterprise grade security for the masses.
+
+Plus building your own ideal Linux laptop, the Yolla Tablet surprise &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[The Co-creators of a Linux distribution that allows you to harness some of the most powerful open source security software join us to discuss bringing Enterprise grade security to the masses.
+
+Plus building your own ideal Linux laptop, the Yolla Tablet surprise & more!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:02:21</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/02/las351-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep351.ogg" fileSize="28631162" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>How Non-Devs Can Help Linux | LAS 350</title>
+            <link>http://www.jupiterbroadcasting.com/76592/how-non-devs-can-help-linux-las-350/</link>
+            <description><![CDATA[<p>What are the best options for non-coders and developers to contribute to their favorite open source project? We\u2019ll break down some of the barriers we\u2019ve faced & approaches we like to help out in a non-development capacity.</p>
+
+<p>Plus the common ways the Ghost vulnerability is being exploited, how you can do your taxes under Linux & a few surprises!</p>]]></description>
+            <pubDate>Sun, 01 Feb 2015 19:25:21 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep350.ogg" length="31815644" type="audio/ogg" />
+            <guid isPermaLink="false">211CA8F5-993A-4480-A8E2-0608F1F2881D</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>What are the best options for non-coders and developers to contribute to their favorite open source project? We discuss. Plus the common ways the Ghost vulnerability is being exploited, how you can do your taxes under Linux &amp; a few surprises!</itunes:subtitle>
+            <itunes:summary><![CDATA[What are the best options for non-coders and developers to contribute to their favorite open source project? We\u2019ll break down some of the barriers we\u2019ve faced & approaches we like to help out in a non-development capacity.
+
+Plus the common ways the Ghost vulnerability is being exploited, how you can do your taxes under Linux & a few surprises!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:09:23</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/02/las350-v.jpgWhat%20are%20the%20best%20options%20for%20non-coders%20and%20developers%20to%20contribute%20to%20their%20favorite%20open%20source%20project?%20We%E2%80%99ll%20break%20down%20some%20of%20the%20barriers%20we%E2%80%99ve%20faced%20&amp;%20approaches%20we%20like%20to%20help%20out%20in%20a%20non-development%20capacity.Plus%20the%20common%20ways%20the%20Ghost%20vulnerability%20is%20being%20exploited,%20how%20you%20can%20do%20your%20taxes%20under%20Linux%20&amp;%20a%20few%20surprises!" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep350.ogg" fileSize="31815644" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Trisquel Founder Interview | LAS 349</title>
+            <link>http://www.jupiterbroadcasting.com/76167/trisquel-founder-interview-las-349/</link>
+            <description><![CDATA[<p>The main developer and founder of Trisquel GNU/Linux Ruben Rodriguez joins us to discuss the projects mission, the major headwinds it faces, what the future holds, and their new focus on privacy.</p>
+
+<p>Plus: Mark Shuttleworth sees a future where Ubuntu powers Robots and Drones, a mini-review of KDE Plasma 5.2 desktop, what\u2019s coming up in Gnome\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 25 Jan 2015 20:51:34 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep349.ogg" length="28193578" type="audio/ogg" />
+            <guid isPermaLink="false">F980946B-73E4-4131-BF15-20252B73800E</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>The main developer and founder of Trisquel GNU/Linux Ruben Rodriguez joins us to discuss the projects mission, the headwinds it faces, what the future holds &amp; their new focus on privacy. Plus a mini-review of KDE Plasma 5.2 desktop &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[The main developer and founder of Trisquel GNU/Linux Ruben Rodriguez joins us to discuss the projects mission, the major headwinds it faces, what the future holds, and their new focus on privacy.
+
+Plus: Mark Shuttleworth sees a future where Ubuntu powers Robots and Drones, a mini-review of KDE Plasma 5.2 desktop, what\u2019s coming up in Gnome\u2026
+
+AND SO MUCH MORE!
+
+All this week on, The Linux Action Show!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:02:03</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/01/las349-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep349.ogg" fileSize="28193578" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>The Deepin Review | Linux Action Show 348</title>
+            <link>http://www.jupiterbroadcasting.com/75737/the-deepin-review-linux-action-show-348/</link>
+            <description><![CDATA[<p>Deepin Linux might just be one of the freshest takes on the desktop this year. We review this compelling Ubuntu based alternative. </p>
+
+<p>Plus: The Steam bug that leaves you fresh and clean, some great new open source releases, goodbye Photoshop\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 18 Jan 2015 16:09:06 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep348.ogg" length="25635649" type="audio/ogg" />
+            <guid isPermaLink="false">0E6C897D-CEA6-4464-A1EF-07D56E549E8B</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Deepin Linux might just be one of the freshest takes on the desktop this year. We review this compelling Ubuntu based alternative.
+
+Plus: The Steam bug that leaves you fresh and clean, some great new open source releases, goodbye Photoshop &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Deepin Linux might just be one of the freshest takes on the desktop this year. We review this compelling Ubuntu based alternative.
+
+Plus: The Steam bug that leaves you fresh and clean, some great new open source releases, goodbye Photoshop\u2026
+
+AND SO MUCH MORE!
+
+All this week on, The Linux Action Show!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>55:02</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/01/las348-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep348.ogg" fileSize="25635649" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Meet MATE\u2019s Mastermind | LAS 347</title>
+            <link>http://www.jupiterbroadcasting.com/75242/meet-mates-mastermind-las-347/</link>
+            <description><![CDATA[<p>Developer of the MATE desktop & more, Stefano Karapetsas joins us to discuss the projects transition to GTK3, balancing traditional desktop design with new features & the big challenges facing MATE.</p>
+
+<p>Plus a huge announcement, news, picks\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 11 Jan 2015 16:03:47 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep347.ogg" length="27435236" type="audio/ogg" />
+            <guid isPermaLink="false">8CF3457F-2B58-4284-98A4-418562CDC191</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Developer of the MATE desktop &amp; more, Stefano Karapetsas joins us to discuss the projects transition to GTK3, balancing traditional desktop design with new features &amp; the big challenges facing MATE.
+
+Plus a huge announcement! &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Developer of the MATE desktop & more, Stefano Karapetsas joins us to discuss the projects transition to GTK3, balancing traditional desktop design with new features & the big challenges facing MATE.
+
+Plus a huge announcement, news, picks\u2026
+
+AND SO MUCH MORE!
+
+All this week on, The Linux Action Show!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:00:27</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/01/las347-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep347.ogg" fileSize="27435236" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Greg KH: The Interview | LAS 346</title>
+            <link>http://www.jupiterbroadcasting.com/74867/greg-kh-the-interview-las-346/</link>
+            <description><![CDATA[<p>Greg Kroah-Hartman long time Linux kernel developer and maintainer of a few subsystems you depend on joins us to discuss his insights on the pace of Linux\u2019s development, third party involvement, the rolling future & what gets him excited about Linux.</p>
+
+<p>Plus Linus reviews Fedora 21, the questions facing Gnome Software\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 04 Jan 2015 18:30:35 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep346.ogg" length="29581927" type="audio/ogg" />
+            <guid isPermaLink="false">A8B91009-6CCC-4AA7-94F6-0887B74B2BC7</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>Greg Kroah-Hartman long time Linux kernel developer and maintainer of a few subsystems you depend on joins us to discuss the pace of Linux\u2019s development, third party involvement, the rolling future &amp; what gets him excited about Linux &amp; more!</itunes:subtitle>
+            <itunes:summary><![CDATA[Greg Kroah-Hartman long time Linux kernel developer and maintainer of a few subsystems you depend on joins us to discuss his insights on the pace of Linux\u2019s development, third party involvement, the rolling future & what gets him excited about Linux.
+
+Plus Linus reviews Fedora 21, the questions facing Gnome Software\u2026
+
+AND SO MUCH MORE!
+
+All this week on, The Linux Action Show!]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:07:25</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2015/01/las346-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep346.ogg" fileSize="29581927" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>2015 Linux Predictions | Linux Action Show 345</title>
+            <link>http://www.jupiterbroadcasting.com/74497/2015-linux-predictions-linux-action-show-345/</link>
+            <description><![CDATA[<p>With 2015 around the corner we own up to our predictions for 2014, we admit to what we got wrong, and what we got right. Then we look forward to 2015 and go on the record for the big developments we expect to see.</p>
+
+<p>Plus our picks, your feedback\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 28 Dec 2014 20:19:35 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep345.ogg" length="45660501" type="audio/ogg" />
+            <guid isPermaLink="false">EB39C819-CB6F-4FE6-93AC-F08F26F85373</guid>
+            <itunes:author>Jupiter Broadcasting</itunes:author>
+            <itunes:subtitle>With 2015 around the corner we own up to our predictions for 2014, we admit to what we got wrong, and what we got right. Then we look forward to 2015 and go on the record for the big developments we expect to see.
+
+Plus our picks &amp; your feedback!</itunes:subtitle>
+            <itunes:summary><![CDATA[With 2015 around the corner we own up to our predictions for 2014, we admit to what we got wrong, and what we got right. Then we look forward to 2015 and go on the record for the big developments we expect to see.
+
+Plus our picks, your feedback\u2026
+
+AND SO MUCH MORE!
+
+All this week on, The Linux Action Show!
+]]></itunes:summary>
+            <itunes:explicit>no</itunes:explicit>
+            <itunes:duration>1:40:08</itunes:duration>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/12/las345-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep345.ogg" fileSize="45660501" type="audio/ogg" /><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Best Of LAS 2014 | LAS 344</title>
+            <link>http://www.jupiterbroadcasting.com/74262/best-of-las-2014-las-344/</link>
+            <description><![CDATA[<p>We take a look back at the history of the Linux Action Show along with the audience and pick out some of our best moments plus a few bits of JB News.</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 21 Dec 2014 13:16:41 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep344.ogg" length="27415010" type="audio/ogg" />
+            <guid isPermaLink="false">C5370004-9B49-4761-8865-8E77E73E3A7B</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/12/las344-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep344.ogg" fileSize="27415010" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Fedora Developer Roundtable | LAS 343</title>
+            <link>http://www.jupiterbroadcasting.com/73857/fedora-developer-roundtable-las-343/</link>
+            <description><![CDATA[<p>We talk with five developers from the Fedora project behind some of the recent amazing work that has seen a major milestone release in Fedora 21, treating Fedora more as a product & laying the groundwork for amazing future technologies. </p>
+
+<p>Plus Dustin Kirkland from Canonical joins us to explain what Ubuntu Snappy Core is & some of it\u2019s killer new features, our picks, news\u2026</p>]]></description>
+            <pubDate>Sun, 14 Dec 2014 17:46:32 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep343.ogg" length="41170600" type="audio/ogg" />
+            <guid isPermaLink="false">84789F47-982D-4154-B0F9-71FE16997564</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/12/las343-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep343.ogg" fileSize="41170600" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Lennart's Linux Revolution | LAS 342</title>
+            <link>http://www.jupiterbroadcasting.com/73122/lennarts-linux-revolution-las-342/</link>
+            <description><![CDATA[<p>Lennart Poettering shares the surprising origins of systemd, his thoughts on the community reaction & his ideas for a universal Linux software installer. He addresses some common criticism & takes questions from the audience.</p>
+
+<p>Plus Brandon Philips the co-found of CoreOS discusses Rocket & Matthew Miller from the Fedora project talks about the upcoming Fedora 21 release...</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 07 Dec 2014 17:05:46 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep342.ogg" length="43320198" type="audio/ogg" />
+            <guid isPermaLink="false">6095668F-BD56-41BF-8CB1-33B0502C3110</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/12/las342-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep342.ogg" fileSize="43320198" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Mark Shuttleworth Interview | LAS 341</title>
+            <link>http://www.jupiterbroadcasting.com/72637/mark-shuttleworth-interview-las-341/</link>
+            <description><![CDATA[<p>Mark Shuttleworth sits down with the big show to reflect on 10 years of Ubuntu, the state of the Debian community, their efforts with Mir & the switch to systemd. Plus he\u2019ll give us some insights to his competitive advantage when dealing with a contentious market. </p>
+
+<p>Plus Mint 17.1 is out and we\u2019ll dig into what\u2019s great, the Debian fork is looking for funds, FreeBSD\u2019s plans to compete with systemd...</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 30 Nov 2014 19:31:44 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep341.ogg" length="41842553" type="audio/ogg" />
+            <guid isPermaLink="false">6BEA7DA2-20C1-4141-A516-D7507FA3EECE</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/11/las341-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep341.ogg" fileSize="41842553" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Rooting for the Kids | LAS 340</title>
+            <link>http://www.jupiterbroadcasting.com/72112/rooting-for-the-kids-las-340/</link>
+            <description><![CDATA[<p>Charlie Reisinger the pioneer of an extremely forward looking program to give every student a Linux laptop joins us. Find out how they integrate the students into the IT program, why they give their students root access & much more. It\u2019s a truly inspiring story of how Linux can make a difference in education.</p>
+
+<p>Plus the Jolla tablet is real, and boy is it funded! Ubuntu Phone rumors get white hot, our picks of the week\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 23 Nov 2014 17:55:53 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep340.ogg" length="46316763" type="audio/ogg" />
+            <guid isPermaLink="false">02691335-9A7F-42C1-9423-9748702976A4</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/11/las340-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep340.ogg" fileSize="46316763" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Making Linux Beautiful | LAS 339</title>
+            <link>http://www.jupiterbroadcasting.com/71512/making-linux-beautiful-las-339/</link>
+            <description><![CDATA[<p>We chat with three developers that are working to make the Linux desktop look even better. From building hardware to working with upstream we dig into the process at the ground level, with some exciting announcements. </p>
+
+<p>Plus why Linux makes Docker relevant, a quick tour of some new Ubuntu MATE features & more!</p>]]></description>
+            <pubDate>Sun, 16 Nov 2014 18:08:04 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep339.ogg" length="36482167" type="audio/ogg" />
+            <guid isPermaLink="false">6BAA3564-6CD9-4E21-B140-F449CAB21BDC</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/11/las339-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep339.ogg" fileSize="36482167" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Lumina Desktop Preview | LAS 338</title>
+            <link>http://www.jupiterbroadcasting.com/70922/lumina-desktop-preview-las-338/</link>
+            <description><![CDATA[<p>It\u2019s one of our favorite things to do, we look ahead at the not too distant future of desktop Linux. Ken Moore from PC-BSD, and the creator of the Lumina desktop joins us to give us a tour of his new Qt based lightweight desktop. </p>
+
+<p>Plus you know the old saying, where there is lots of blog rumors, there is fire. We\u2019ll the rumor mill is hot hot hot with predictions of an Ubuntu based Tablet shipping very soon. But is it legit?  The huge performance gain coming to Haswell Graphics users & the big Debian drama over the weekend.</p>]]></description>
+            <pubDate>Sun, 09 Nov 2014 19:00:25 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep338.ogg" length="38901087" type="audio/ogg" />
+            <guid isPermaLink="false">31415431-558B-4443-8807-19D23325456C</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/11/las338-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep338.ogg" fileSize="38901087" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>openSUSE 13.2 Review | Linux Action Show 337</title>
+            <link>http://www.jupiterbroadcasting.com/70397/opensuse-13-2-review-linux-action-show-337/</link>
+            <description><![CDATA[<p>Is openSUSE 13.2 the best distro to take advantage of tomorrow\u2019s Linux tools today? Or do the rough-spots of this distribution in transition leave us frustrated? We set out to live in openSUSE 13.2 & share our results. </p>
+
+<p>Plus China\u2019s big switch to Linux gets official, we call time out on feeding the drama monster & one of the best open source talks we\u2019ve ever seen & more!</p>]]></description>
+            <pubDate>Sun, 02 Nov 2014 16:16:58 -0800</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep337.ogg" length="32084779" type="audio/ogg" />
+            <guid isPermaLink="false">1CDEED74-8B28-499A-8C65-BCD61A566EE0</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/11/las337-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep337.ogg" fileSize="32084779" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Best of Ohio LinuxFest | Linux Action Show 336</title>
+            <link>http://www.jupiterbroadcasting.com/70022/best-of-ohio-linuxfest-linux-action-show-336/</link>
+            <description><![CDATA[<p>Our interviews, stories, and adventures from Ohio LinuxFest 2014. The big show traveled to Columbus Ohio for one of the best Linux events on the East coast of the US, and we came away with some great stories, friends, and interviews. We'll feature some of the best in today's episode.</p>
+
+<p>Plus the big news for openSUSE, Oculus Linux users get some love...</p>
+
+<p>And so much more!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Mon, 27 Oct 2014 20:13:04 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep336.ogg" length="37226898" type="audio/ogg" />
+            <guid isPermaLink="false">26D24380-E376-411D-B451-4A721AA2FD40</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/10/las336-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep336.ogg" fileSize="37226898" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Ubuntu 14.10 Mega Review | LAS 335</title>
+            <link>http://www.jupiterbroadcasting.com/69512/ubuntu-14-10-mega-review-las-335/</link>
+            <description><![CDATA[<p>Our review of the major flavors of Ubuntu 14.10. We\u2019ll show you how this tried and true desktop can be the fertile playground of future desktop technologies. Our all-star lineup will review everything from Kubuntu to the MATE Edition of Ubuntu 14.10 Utopic Unicorn.</p>
+
+<p>Plus Linus responds to the culture of hostility claims, Plasma 5\u2019s big update, Docker\u2019s surprising news, a new AAA game for Linux\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 19 Oct 2014 17:44:51 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep335.ogg" length="39654197" type="audio/ogg" />
+            <guid isPermaLink="false">18389638-95A2-4F93-817E-FB3CF9DC24F1</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/10/las335-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep335.ogg" fileSize="39654197" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Painless Plex Migration | Linux Action Show 334</title>
+            <link>http://www.jupiterbroadcasting.com/68967/painless-plex-migration-linux-action-show-334/</link>
+            <description><![CDATA[<p>Our guide to moving your Plex, btsync, SmokePing, and others to a new Linux server. And our take on how the Intel NUC performs as a home server with heavy Plex usage.</p>
+
+<p>Plus the big features coming to a distro near you & has Netflix coming to Linux shown us how Linux users are now \u201call-in with DRM\u201d? We debate.</p>]]></description>
+            <pubDate>Sun, 12 Oct 2014 16:03:20 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep334.ogg" length="32172041" type="audio/ogg" />
+            <guid isPermaLink="false">3560B616-17B2-4E7B-A80C-F0DC736A43C3</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/10/las334-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep334.ogg" fileSize="32172041" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Top 5 Linux Games | LAS 333</title>
+            <link>http://www.jupiterbroadcasting.com/68222/top-5-linux-games-las-333/</link>
+            <description><![CDATA[<p>The top 5 best Linux games on Steam for the fall get demoed on today\u2019s show. Every game we feature, will be one worth buying & how to get a lot more out of Steam.</p>
+
+<p>Then sandboxing any Linux process, the news of the week, our picks & much more!</p>]]></description>
+            <pubDate>Sun, 05 Oct 2014 17:25:09 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep333.ogg" length="46103937" type="audio/ogg" />
+            <guid isPermaLink="false">DBD93A2A-E20E-49F7-9FAD-675B17E1D691</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/10/las333-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep333.ogg" fileSize="46103937" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Weaponized Bash | Linux Action Show 332</title>
+            <link>http://www.jupiterbroadcasting.com/67717/weaponized-bash-linux-action-show-332/</link>
+            <description><![CDATA[<p>The Shellshock bug is taking the internet by storm, Fedora project lead Matthew Miller joins us to discuss how this Bash bug works, how big of a problem it really is, and how large projects are responding to the issue. Plus we chat a little Fedora.next and more!</p>
+
+<p>Then it\u2019s our look at what\u2019s great in Gnome 3.14, Ubuntu 14.10 & another systemd alternative that\u2019s doing it right.</p>]]></description>
+            <pubDate>Sun, 28 Sep 2014 18:00:11 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep332.ogg" length="36366271" type="audio/ogg" />
+            <guid isPermaLink="false">2FFA3CEF-D804-4E7B-9564-6B9920D54796</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/09/las332-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep332.ogg" fileSize="36366271" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Security Onion Review | LAS 331</title>
+            <link>http://www.jupiterbroadcasting.com/67182/security-onion-review-las-331/</link>
+            <description><![CDATA[<p>Security Onion can turn you into a network super warrior, with its easy to setup IDS, Network Syslog, and more. We'll show you how to take advantage of some of the best tools in open source, from beginner to expert!</p>
+
+<p>Plus a great new game for Linux, Uselessd looks needed but is stirring up drama, why Gnome 3.14 will be the best Gnome yet & more!</p>]]></description>
+            <pubDate>Sun, 21 Sep 2014 16:38:55 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep331.ogg" length="34631100" type="audio/ogg" />
+            <guid isPermaLink="false">3D8BB10A-8462-4D52-A34D-793573EBE418</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/09/las331-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep331.ogg" fileSize="34631100" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Switching Ubuntu to Gnome | LAS 330</title>
+            <link>http://Install%20the%20latest%20version%20of%20Gnome%20on%20your%20Ubuntu%20box,%20without%20losing%20your%20data,%20or%20needing%20to%20reinstall%20your%20apps.%20Our%20guide%20will%20get%20you%20up%20and%20running%20with%20the%20latest%20and%20greatest%20in%20no%20time.%20And%20also%20provides%20great%20insight%20for%20non-Ubuntu/Gnome%20users.Plus%20ZFS%20on%20Linux%20gets%20the%20green%20light,%20the%20great%20news%20for%20Arch%20usersAnd%20so%20much%20more!All%20this%20week%20on,%20the%20Linux%20Action%20Show!</link>
+            <description><![CDATA[<p>Install the latest version of Gnome on your Ubuntu box, without losing your data, or needing to reinstall your apps. Our guide will get you up and running with the latest and greatest in no time. And also provides great insight for non-Ubuntu/Gnome users.</p>
+
+<p>Plus ZFS on Linux gets the green light, the great news for Arch users</p>
+
+<p>And so much more!</p>
+
+<p>All this week on, the Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 14 Sep 2014 17:02:46 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep330.ogg" length="33987080" type="audio/ogg" />
+            <guid isPermaLink="false">A349F830-3697-44FC-AA28-AA062C2EEE88</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/09/las330-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep330.ogg" fileSize="33987080" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>OwnCloud Your Chromebook | LAS 329</title>
+            <link>http://www.jupiterbroadcasting.com/66142/owncloud-your-chromebook-las-329/</link>
+            <description><![CDATA[<p>Linux is the ultimate productivity OS. This week we\u2019ll show you how to divorce your Chromebook from Google, sync all your Linux desktops with free software, and improve your workflow at the same time.</p>
+
+<p>Plus the new tool from Red Hat you\u2019ll be using soon, Ubuntu shows developers some love & the big game coming to Linux we\u2019re excited about!</p>]]></description>
+            <pubDate>Sun, 07 Sep 2014 16:35:07 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep329.ogg" length="36181453" type="audio/ogg" />
+            <guid isPermaLink="false">D2F57FF1-4487-4EB2-9EF2-87529F76E380</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/09/las329-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep329.ogg" fileSize="36181453" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>A Chat with Icculus | LAS 328</title>
+            <link>http://www.jupiterbroadcasting.com/65607/a-chat-with-icculus-linux-action-show-328/</link>
+            <description><![CDATA[<p>Ryan C. Gordon aka Icculus joins us to discuss past, present and future of Linux gaming. Plus the fundamental technology challenges facing Linux gaming, the hope for SteamOS, and much more.</p>
+
+<p>Then - Red Hat\u2019s internal politics burst out into the spotlight, John C. Dvorak trolls Linux users\u2026.</p>]]></description>
+            <pubDate>Sun, 31 Aug 2014 17:36:43 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep328.ogg" length="39759972" type="audio/ogg" />
+            <guid isPermaLink="false">BB40C60F-966B-43DC-B304-7F94F56597B6</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/08/las328-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep328.ogg" fileSize="39759972" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Best of LinuxCon 2014 | LAS 327</title>
+            <link>http://www.jupiterbroadcasting.com/65207/best-of-linuxcon-2014-las-327/</link>
+            <description><![CDATA[<p>LinuxCon 2014 just wrapped up and we have five great interviews from the floor, cover some of the best talks, and more.</p>
+
+<p>Plus the big guy who\u2019s still pulling for Desktop Linux, the greatly exaggerated Munich situation & more!</p>]]></description>
+            <pubDate>Sun, 24 Aug 2014 16:10:18 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep327b.ogg" length="36026586" type="audio/ogg" />
+            <guid isPermaLink="false">6A0F44C1-85CE-4FB8-A95C-E7A28B181B14</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/08/las327-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep327b.ogg" fileSize="36026586" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>What\u2019s Next for Fedora | LAS 326</title>
+            <link>http://www.jupiterbroadcasting.com/64637/whats-next-for-fedora-las-326/</link>
+            <description><![CDATA[<p>The Fedora Project Lead joins us to explain Fedora.next, their ambitions for the cloud, desktop, and what success means for Fedora.next. Tyler from Arch Assault joins us to update us on the latest from Blackhat, the new developments with their distro, and the what the future holds.</p>
+
+<p>Plus news of the week, our picks, your feedback, and more!</p>]]></description>
+            <pubDate>Sun, 17 Aug 2014 20:00:21 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep326.ogg" length="39190749" type="audio/ogg" />
+            <guid isPermaLink="false">BF562E69-12E8-4A7D-97A4-ED3A4C769CA0</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/08/las326-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep326.ogg" fileSize="39190749" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Tomb of Secrets | LAS 325</title>
+            <link>http://www.jupiterbroadcasting.com/64207/tomb-of-secrets-las-325/</link>
+            <description><![CDATA[<p>What\u2019s the best TrueCrypt alternative for Linux? We\u2019ll introduce you to Tomb, a tool that sits on top of open source encryption tools you can trust, that come built into every install of Linux.</p>
+
+<p>Plus we\u2019ll demo native Netflix working on Linux without any plugins, the big changes coming to Fedora...</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 10 Aug 2014 16:54:26 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep325.ogg" length="38180976" type="audio/ogg" />
+            <guid isPermaLink="false">49E0FAD0-C0A5-4864-BE65-0AC1512AEF03</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/08/las325-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep325.ogg" fileSize="38180976" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>ownCloud 7 Interview | LAS 324</title>
+            <link>http://www.jupiterbroadcasting.com/63592/owncloud-7-interview-las-324/</link>
+            <description><![CDATA[<p>The founder of ownCloud joins us to discuss their latest release, future plans and challenges. And we\u2019ll ask a batch of the tough questions you sent in.</p>
+
+<p>Then we take a look at CRUX, a legendary Linux distribution with an amazing history. Plus an app pick that will instantly tickle your retro bone, a cautious tale\u2026</p>]]></description>
+            <pubDate>Sun, 03 Aug 2014 16:45:56 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep324.ogg" length="40745101" type="audio/ogg" />
+            <guid isPermaLink="false">C0A1AB02-A690-4924-969E-C12FD626834C</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/08/las324-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep324.ogg" fileSize="40745101" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>OSCON Interview Roundup | LAS 323</title>
+            <link>http://www.jupiterbroadcasting.com/63147/oscon-interview-roundup-las-323/</link>
+            <description><![CDATA[<p>We\u2019re back from OSCON 2014 with some great interviews with Christian Heilmann from the Mozilla Developer Evangelist, Karen Sandler  from the Software Freedom Conservancy, and Chris DiBona the director of open source at Google.</p>
+
+<p>Plus the UK Government adopts ODF, CoreOS gets a huge boost and a new release, making your Linux installers faster and easier than ever\u2026. </p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 27 Jul 2014 17:04:44 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep323.ogg" length="42094832" type="audio/ogg" />
+            <guid isPermaLink="false">53CF509E-5F98-44A1-901F-FFC0ECECCDCC</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/07/las323-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep323.ogg" fileSize="42094832" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Debunking Manjaro Myths | LAS 322</title>
+            <link>http://www.jupiterbroadcasting.com/62637/debunking-manjaro-myths-las-322/</link>
+            <description><![CDATA[<p>Rob McCathie from the Manjaro project joins us to discuss some recent troubles in the community, bust common myths about Manjaro, their relationship with Arch Linux, and what the future holds for the project.</p>
+
+<p>Plus we look at some Fedora 21 features, Google\u2019s Project Zero, Linus\u2019 home office\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 20 Jul 2014 16:00:49 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep322.ogg" length="37294223" type="audio/ogg" />
+            <guid isPermaLink="false">F4BC19A9-89A2-4BCA-B131-220139B0A15A</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/07/las322-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep322.ogg" fileSize="37294223" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Kali Linux Interview | LAS 321</title>
+            <link>http://www.jupiterbroadcasting.com/62177/kali-linux-interview-las-321/</link>
+            <description><![CDATA[<p>The core developer of Kali Linux joins us to discuss the projects history, what keeps Kali Linux so relevant in the penetration testing industry, the future and the major misconceptions he wants to correct about the distro.</p>
+
+<p>Plus we\u2019ll explains all the recent KDE releases, and demo the latest state of the Plasma 5 desktop and tour a radio station that runs linux.</p>]]></description>
+            <pubDate>Sun, 13 Jul 2014 18:17:25 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep321.ogg" length="35930779" type="audio/ogg" />
+            <guid isPermaLink="false">03A5C477-33BC-4009-8371-569338084A68</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/07/las321-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep321.ogg" fileSize="35930779" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Preventing a btrfs Nightmare | LAS 320</title>
+            <link>http://www.jupiterbroadcasting.com/61572/preventing-a-btrfs-nightmare-las-320/</link>
+            <description><![CDATA[<p>What happens when btrfs goes bad? After rescuing our system from a massive crash, we\u2019ll share what went wrong, how you can prevent problems, reclaim gigabytes of space, and optimize your Linux box for an SSD drive.</p>
+
+<p>Plus a quick look at Ubuntu MATE Remix, the NSA targets Linux users, solving the distro hopping bug\u2026.</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 06 Jul 2014 17:25:41 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep320.ogg" length="36144607" type="audio/ogg" />
+            <guid isPermaLink="false">76EFEB8F-54B1-480D-8FAF-595B62848CEB</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/07/las320-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep320.ogg" fileSize="36144607" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Sharing with Samba | LAS 319</title>
+            <link>http://www.jupiterbroadcasting.com/60967/sharing-with-samba-las-319/</link>
+            <description><![CDATA[<p>Easily share files between Windows and Linux, and we\u2019ll solve some common network browsing challenges under Linux. </p>
+
+<p>Plus a quick look at Linux Mint 17 KDE edition, the huge new features coming to OwnCloud, a new hacker event\u2026.</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 29 Jun 2014 15:40:01 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep319.ogg" length="31377378" type="audio/ogg" />
+            <guid isPermaLink="false">FBF146BA-C9AB-4D1A-89F8-624F2EB16885</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/06/las319-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep319.ogg" fileSize="31377378" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>SouthEast LinuxFest Highlights | LAS 318</title>
+            <link>http://www.jupiterbroadcasting.com/60412/southeast-linuxfest-highlights-las-318/</link>
+            <description><![CDATA[<p>Interviews and awesome gear from the floor of SouthEast LinuxFest 2014. We round up the highlights of Linux from the south!</p>
+
+<p>Plus some Firefox news we\u2019re stoked about, and we take another step closer to becoming a commandline ninja... </p>
+
+<p>And so much more!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 22 Jun 2014 16:01:05 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep318.ogg" length="36636034" type="audio/ogg" />
+            <guid isPermaLink="false">C25DD4E1-93BD-4035-9927-244AD3E438C5</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/06/las318-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jnite/linuxactionshowep318.ogg" fileSize="36636034" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Qubes OS: Security By Isolation | LAS 317</title>
+            <link>http://www.jupiterbroadcasting.com/59912/qubes-os-security-by-isolation-las-317/</link>
+            <description><![CDATA[<p>Qubes OS, you could call it Linux for the truly paranoid. This system offers a unique isolated approach to keep you and your data safe, we dive in to show you how this system works!</p>
+
+<p>Plus: The big Red Hat news, Docker goes 1.0, a Linux port done right\u2026</p>
+
+<p>And so much more!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 15 Jun 2014 15:19:00 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep317.ogg" length="26465791" type="audio/ogg" />
+            <guid isPermaLink="false">9076DB21-1A18-4A41-AAE8-CBA8951FC966</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/06/las317-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep317.ogg" fileSize="26465791" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:author>chris@linuxactionshow.com</itunes:author><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Introducing Bedrock Linux | LAS 316</title>
+            <link>http://www.jupiterbroadcasting.com/59352/introducing-bedrock-linux-las-316/</link>
+            <description><![CDATA[<p>With Bedrock Linux you are longer restricted to any single Linux distro\u2019s userland. Mix CentOS, Arch, Debian, Ubuntu and more all on the same installation! You can have your cake and eat it too! Want X11 from Debian and Chromium from Arch? No problem! We\u2019ll show you how Bedrock Linux make it all possible.</p>
+
+<p>Plus: A new round of SSL vulnerabilities strike Linux, the FSF helps you encrypt your emails, then a quick steam roundup\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 08 Jun 2014 17:53:29 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep316.ogg" length="28084577" type="audio/ogg" />
+            <guid isPermaLink="false">8A202515-D69B-45BF-840E-5C26D826EB3C</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/06/las316-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep316.ogg" fileSize="28084577" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>CoreOS: Future of Servers | LAS 315</title>
+            <link>http://www.jupiterbroadcasting.com/58602/coreos-future-of-servers-las-315/</link>
+            <description><![CDATA[<p>The CTO of CoreOS joins us to go into detail about how CoreOS deploys applications in Docker Containers, allows for automatic server updates, and might just finally fix security on the web.</p>
+
+<p>Plus: We\u2019ll wrap up the TrueCrypt upset, and discuss our preferred Linux TrueCrypt replacements, a quick look at Mint 17...</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 01 Jun 2014 17:58:14 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep315.ogg" length="33701911" type="audio/ogg" />
+            <guid isPermaLink="false">7C564816-0BB4-4150-9D3C-59F3E1718013</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/06/las315-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep315.ogg" fileSize="33701911" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>OpenShot 2.0 Interview | LAS 314</title>
+            <link>http://www.jupiterbroadcasting.com/58192/openshot-2-0-interview-las-314/</link>
+            <description><![CDATA[<p>Jonathan Thomas, founder of the OpenShot join us to update us on the latest with his open source cross platform video editor. Plus we discuss the challenges and benefits of crowd funded open source, the task of building a video editor for Linux, and more.</p>
+
+<p>Then our take on the big Linux gaming controversy of the week, a little Chrome hat eating\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 25 May 2014 15:28:05 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep314b.ogg" length="29844603" type="audio/ogg" />
+            <guid isPermaLink="false">E79AEA16-F9C0-46E2-96EC-E71B48480558</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/05/las314-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep314b.ogg" fileSize="29844603" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Arch Home Server Challenge | LAS 313</title>
+            <link>http://www.jupiterbroadcasting.com/57622/arch-home-server-challenge-las-313/</link>
+            <description><![CDATA[<p>Coming up on this week\u2019s episode of The Linux Action Show!</p>
+
+<p>Arch Linux can make the perfect Home Server, we\u2019ll share our tips to build the ultimate home server running the latest software, powered by Arch Linux.</p>
+
+<p>Plus Ubuntu rocks the OpenStack summit, a first look at Syncthing (the fully OSS Bittorrent Sync killer), results from our Btrfs poll, our picks\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 18 May 2014 17:31:57 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep313.ogg" length="40181309" type="audio/ogg" />
+            <guid isPermaLink="false">6BB6E161-91B1-4C6D-B285-B9FE052C083B</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/05/las313-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jbmirror/linuxactionshowep313.ogg" fileSize="40181309" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>LXQt the Xfce Killer? | LAS 312</title>
+            <link>http://www.jupiterbroadcasting.com/57112/lxqt-the-xfce-killer-las-312/</link>
+            <description><![CDATA[<p>The first big release of LXQt is out, and we give it our first look. Where does this minimal desktop fit? And is it taking a direct shot at XFCE\u2019s crown? </p>
+
+<p>Plus the community demonstrates their passion to Unreal, FireFox OS news AND do YOU trust Btrfs? </p>
+
+<p>All this week on, The Linux Action Show!</p>]]></description>
+            <pubDate>Sun, 11 May 2014 15:11:09 -0700</pubDate>
+            <enclosure url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep312.ogg" length="26079871" type="audio/ogg" />
+            <guid isPermaLink="false">7F66533D-4492-4F01-82D0-48D619199F56</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <dc:creator>chris@linuxactionshow.com</dc:creator>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/05/las312-v.jpg" />
+        <media:content url="http://www.podtrac.com/pts/redirect.ogg/traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep312.ogg" fileSize="26079871" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+        <item>
+            <title>Linux Gaming for Everyone | LAS 311</title>
+            <link>http://www.jupiterbroadcasting.com/56552/linux-gaming-for-everyone-las-311/</link>
+            <description><![CDATA[<p>Chris and Matt showcase some fun games for casual or hardcore gamers. From space shooters to fun puzzles, if you\u2019ve been holding off on gaming for Linux we\u2019ll change your mind!</p>
+
+<p>Plus: Is Ubuntu for Android dead? Linus receives another award, the big update to Edward Snowden\u2019s favorite Linux distribution\u2026</p>
+
+<p>AND SO MUCH MORE!</p>
+
+<p>All this week on, the Linux Action Show!</p>]]></description>
+            <pubDate>Mon, 05 May 2014 01:05:30 -0700</pubDate>
+            <enclosure url="http://traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep311.ogg" length="34826268" type="audio/ogg" />
+            <guid isPermaLink="false">B4B2FB8C-4154-4ADA-B72F-16CEE1FDFFAE</guid>
+            <itunes:explicit>no</itunes:explicit>
+            <media:thumbnail url="http://www.jupiterbroadcasting.com/wp-content/uploads/2014/05/las311-v.jpg" />
+        <author>chris@linuxactionshow.com</author><media:content url="http://traffic.libsyn.com/jupiterbroadcasting/linuxactionshowep311.ogg" fileSize="34826268" type="audio/ogg" /><itunes:subtitle>The Linux Action Show OGG Feed!</itunes:subtitle><itunes:author>chris@linuxactionshow.com</itunes:author><itunes:summary>Audio versions of The Linux Action Show! A show that covers everything geeks care about in the computer industry. Get a solid dose of Linux, gadgets, news events and much more!</itunes:summary><itunes:keywords>Linux,Unix,Ubuntu,Open,Source,OSS,News,Tech</itunes:keywords></item>
+    <media:credit role="author">Jupiter Broadcasting</media:credit><media:rating>nonadult</media:rating><media:description type="plain">Linux enthusiasts talk top news stories, current trends and any other subject regarding Linux and Open Source!</media:description></channel>
+</rss>
+

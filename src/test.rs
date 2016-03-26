@@ -202,4 +202,3 @@ fn test_buf_position() {
     }
 
 }
-   
