@@ -12,4 +12,18 @@ keywords = ["xml", "reader", "parser", "write"]
 license = "MIT"
 
 [dependencies]
-log="0.3"
+log = "0.3"
+
+[dev-dependencies]
+xml-rs = "0.3.0"
+
+[lib]
+bench = false
+
+[profile.bench]
+opt-level = 3
+debug = true
+rpath = false
+lto = false
+debug-assertions = false
+codegen-units = 1
