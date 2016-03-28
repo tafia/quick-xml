@@ -75,6 +75,7 @@ extern crate log;
 
 pub mod error;
 pub mod attributes;
+pub mod namespace;
 
 #[cfg(test)]
 mod test;
@@ -88,6 +89,7 @@ use std::str::from_utf8;
 
 use error::{Error, Result, ResultPos};
 use attributes::Attributes;
+use namespace::Namespaced;
 
 enum TagState {
     Opened,
@@ -143,6 +145,11 @@ impl<B: BufRead> XmlReader<B> {
             with_check: true,
             buf_position: 0,
         }
+    }
+
+    /// Converts into a `Namespaced` iterator
+    pub fn namespaced(self) -> Namespaced<B> {
+        Namespaced::new(self)
     }
 
     /// Change trim_text default behaviour (false per default)
