@@ -92,15 +92,20 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-On my first tests (200mb+ xmls) it performs much better (minimum 10x)
- than [xml-rs](https://github.com/netvl/xml-rs).
+Here is a simple comparison with [xml-rs](https://github.com/netvl/xml-rs) for very basic operations.
+
+```
+running 2 tests
+test bench_quick_xml ... bench:     703,323 ns/iter (+/- 11,915)
+test bench_xml_rs    ... bench:  14,104,316 ns/iter (+/- 444,845)
+```
 
 ## Todo
 
 - [ ] [namespaces](https://github.com/tafia/quick-xml/issues/14)
 - [ ] non-utf8: most methods return `&u[u8]` => probably not too relevant for the moment
 - [x] [parse xml declaration](https://github.com/tafia/quick-xml/pull/10)
-- [ ] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
+- [x] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
 - [ ] [escape characters](https://github.com/tafia/quick-xml/issues/12)
 - [ ] more checks
 - [ ] ... ?

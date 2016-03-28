@@ -9,7 +9,7 @@ use quick_xml::{XmlReader, Event};
 use xml::reader::{EventReader, XmlEvent};
 
 #[bench]
-fn bench_quick(b: &mut Bencher) {
+fn bench_quick_xml(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let r = XmlReader::from_reader(src);
