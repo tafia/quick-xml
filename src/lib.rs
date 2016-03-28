@@ -384,10 +384,11 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 /// Element is a wrapper over the bytes representing the node:
 ///
 /// E.g. given a node `<name att1="a", att2="b">`, the corresponding `Event` will be 
-/// ```rust
+///
+/// ```ignore
 /// Event::Start(Element { 
 ///     buf:    b"name att1=\"a\", att2=\"b\"",
-///     start:  0
+///     start:  0,
 ///     end:    b"name att1=\"a\", att2=\"b\"".len(),
 ///     name_end: b"name".len()
 /// })
@@ -395,11 +396,11 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 ///
 /// For performance reasons, most of the time, no character searches but 
 /// `b'<'` and `b'>'` are performed:
+///
 /// - no attribute parsing: use lazy `Attributes` iterator only when needed
 /// - no namespace awareness as it requires parsing all `Start` element attributes
-/// - no utf8 conversion: prefer searching statically known bytes patterns 
-/// when possible (`e.name() == b"myname"`) then use the `.as_str()` 
-/// or `.into_string()` methods
+/// - no utf8 conversion: prefer searching statically known bytes patterns when possible 
+/// (`e.name() == b"myname"`), then use the `.as_str()` or `.into_string()` methods
 pub struct Element {
     /// content of the element, before any utf8 conversion
     buf: Vec<u8>,
