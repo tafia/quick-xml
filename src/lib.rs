@@ -1,72 +1,15 @@
 //! Quick XmlReader reader which performs **very** well.
 //!
-//! # Example
+//! ## Reader
 //!
-//! ```
-//! use quick_xml::{XmlReader, Event};
-//! 
-//! let xml = r#"<tag1 att1 = "test">
-//!                 <tag2><!--Test comment-->Test</tag2>
-//!                 <tag2>
-//!                     Test 2
-//!                 </tag2>
-//!             </tag1>"#;
-//! let reader = XmlReader::from_str(xml).trim_text(true);
-//! let mut count = 0;
-//! let mut txt = Vec::new();
-//! for r in reader {
-//!     match r {
-//!         Ok(Event::Start(ref e)) => {
-//!             match e.name() {
-//!                 b"tag1" => println!("attributes values: {:?}", 
-//!                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
-//!                 b"tag2" => count += 1,
-//!                 _ => (),
-//!             }
-//!         },
-//!         Ok(Event::Text(e)) => txt.push(e.into_string()),
-//!         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
-//!         _ => (),
-//!     }
-//! }
-//! ```
+//! Depending on your needs, you can use:
 //!
-//! # Example of transforming XML
+//! - `XmlReader`: for best performance
+//! - `XmlnsReader`: if you need to resolve namespaces (around 20% slower than XmlReader)
 //!
-//! ```
-//! use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
-//! use quick_xml::Event::*;
-//! use std::io::Cursor;
-//! use std::iter;
-//! 
-//! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-//! let reader = XmlReader::from_str(xml).trim_text(true);
-//! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
-//! for r in reader {
-//!     match r {
-//!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
-//!             // collect existing attributes
-//!             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
+//! ## Writer
 //!
-//!             // copy existing attributes, adds a new my-key="some value" attribute
-//!             let mut elem = Element::new("my_elem").with_attributes(attrs);
-//!             elem.push_attribute(b"my-key", "some value");
-//!
-//!             // writes the event to the writer
-//!             assert!(writer.write(Start(elem)).is_ok());
-//!         },
-//!         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
-//!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
-//!         },
-//!         Ok(e) => assert!(writer.write(e).is_ok()),
-//!         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
-//!     }
-//! }
-//!
-//! let result = writer.into_inner().into_inner();
-//! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
-//! assert_eq!(result, expected.as_bytes());
-//! ```
+//! `XmlWriter`: to write xmls. Can be nested with readers if you want to transform xmls
 
 #![deny(missing_docs)]
 
@@ -75,6 +18,7 @@ extern crate log;
 
 pub mod error;
 pub mod attributes;
+pub mod namespace;
 
 #[cfg(test)]
 mod test;
@@ -88,6 +32,7 @@ use std::str::from_utf8;
 
 use error::{Error, Result, ResultPos};
 use attributes::Attributes;
+use namespace::XmlnsReader;
 
 enum TagState {
     Opened,
@@ -107,9 +52,36 @@ impl AsStr for [u8] {
     }
 }
 
-/// Xml reader
+/// A Xml reader
 ///
-/// Consumes a `BufRead` and streams xml Event
+/// Consumes a `BufRead` and streams xml `Event`s
+///
+/// ```
+/// use quick_xml::{XmlReader, Event};
+/// 
+/// let xml = r#"<tag1 att1 = "test">
+///                 <tag2><!--Test comment-->Test</tag2>
+///                 <tag2>Test 2</tag2>
+///             </tag1>"#;
+/// let reader = XmlReader::from_str(xml).trim_text(true);
+/// let mut count = 0;
+/// let mut txt = Vec::new();
+/// for r in reader {
+///     match r {
+///         Ok(Event::Start(ref e)) => {
+///             match e.name() {
+///                 b"tag1" => println!("attributes values: {:?}", 
+///                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
+///                 b"tag2" => count += 1,
+///                 _ => (),
+///             }
+///         },
+///         Ok(Event::Text(e)) => txt.push(e.into_string()),
+///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         _ => (),
+///     }
+/// }
+/// ```
 pub struct XmlReader<B: BufRead> {
     /// reader
     reader: B,
@@ -143,6 +115,11 @@ impl<B: BufRead> XmlReader<B> {
             with_check: true,
             buf_position: 0,
         }
+    }
+
+    /// Converts into a `XmlnsReader` iterator
+    pub fn namespaced(self) -> XmlnsReader<B> {
+        XmlnsReader::new(self)
     }
 
     /// Change trim_text default behaviour (false per default)
@@ -641,6 +618,41 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// Xml writer
 ///
 /// Consumes a `Write` and writes xml Events
+///
+/// ```
+/// use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
+/// use quick_xml::Event::*;
+/// use std::io::Cursor;
+/// use std::iter;
+/// 
+/// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
+/// let reader = XmlReader::from_str(xml).trim_text(true);
+/// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+/// for r in reader {
+///     match r {
+///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+///             // collect existing attributes
+///             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
+///
+///             // copy existing attributes, adds a new my-key="some value" attribute
+///             let mut elem = Element::new("my_elem").with_attributes(attrs);
+///             elem.push_attribute(b"my-key", "some value");
+///
+///             // writes the event to the writer
+///             assert!(writer.write(Start(elem)).is_ok());
+///         },
+///         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+///             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
+///         },
+///         Ok(e) => assert!(writer.write(e).is_ok()),
+///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///     }
+/// }
+///
+/// let result = writer.into_inner().into_inner();
+/// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
+/// assert_eq!(result, expected.as_bytes());
+/// ```
 pub struct XmlWriter<W: Write> {
     /// underlying writer
     writer: W

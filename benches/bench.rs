@@ -37,3 +37,19 @@ fn bench_xml_rs(b: &mut Bencher) {
         assert!(count == 1550);
     });
 }
+
+#[bench]
+fn bench_quick_xml_namespaced(b: &mut Bencher) {
+    let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
+    b.iter(|| {
+        let r = XmlReader::from_reader(src).namespaced();
+        let mut count = test::black_box(0);
+        for e in r {
+            if let Ok((_, Event::Start(_))) = e {
+                count += 1;
+            }
+        }
+        assert!(count == 1550);
+    });
+}
+
