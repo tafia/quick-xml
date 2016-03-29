@@ -335,7 +335,7 @@ impl<'a> XmlReader<&'a [u8]> {
     }
 }
 
-/// Iterator on csv returning rows
+/// Iterator on xml returning `Event`s
 impl<B: BufRead> Iterator for XmlReader<B> {
 
     type Item = ResultPos<Event>;
