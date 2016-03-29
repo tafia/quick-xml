@@ -41,6 +41,9 @@ let reader = XmlReader::from_str(xml).trim_text(true);
 let mut count = 0;
 let mut txt = Vec::new();
 for r in reader {
+// namespaced: the `for` loop moves the reader
+// => use `while let` so you can have access to `reader_ns.resolve` for attributes
+// while let Some(r) = reader.next() {
     match r {
         Ok(Event::Start(ref e)) => {
         // for namespaced:
@@ -48,13 +51,8 @@ for r in reader {
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}", 
                                  e.attributes().map(|a| a.unwrap().1)
-                                 // if you want to resolve attribute namespaces you need to use
-                                 // the `resolve` method of XmlnsReader
-                                 //
+                                 // namespaced: use `reader_ns.resolve`
                                  // e.attributes().map(|a| a.map(|(k, _)| reader_ns.resolve(k))) ...
-                                 //
-                                 // note: as the `for` loop moves the reader, you may need to use a
-                                 // `while let Some(r) = reader.next()` instead
                                  .collect::<Vec<_>>()),
                 b"tag2" => count += 1,
                 _ => (),
