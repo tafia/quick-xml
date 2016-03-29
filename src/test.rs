@@ -202,3 +202,25 @@ fn test_buf_position() {
     }
 
 }
+
+#[test]
+fn test_namespace() {
+    let mut r = XmlReader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>")
+        .trim_text(true).namespaced();;
+
+    if let Some(Ok((None, Start(_)))) = r.next() {        
+    } else {
+        assert!(false, "expecting start element with no namespace");
+    }
+
+    if let Some(Ok((Some(a), Start(_)))) = r.next() {
+        if &*a == b"www1" {
+            assert!(true);
+        } else {
+            assert!(false, "expecting namespace to resolve to 'www1'");
+        }
+    } else {
+        assert!(false, "expecting namespace resolution");
+    }
+}
+
