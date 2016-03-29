@@ -6,6 +6,7 @@
 High performance xml pull reader/writer.
 
 [Documentation](http://tafia.github.io/quick-xml/quick_xml/index.html)
+
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ## Usage
@@ -42,6 +43,8 @@ let mut txt = Vec::new();
 for r in reader {
     match r {
         Ok(Event::Start(ref e)) => {
+        // for namespaced:
+        // Ok((ref namespace_value, Event::Start(ref e)))
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}", 
                                  e.attributes().map(|a| a.unwrap().1)
