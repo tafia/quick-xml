@@ -89,7 +89,7 @@ use std::str::from_utf8;
 
 use error::{Error, Result, ResultPos};
 use attributes::Attributes;
-use namespace::Namespaced;
+use namespace::XmlnsReader;
 
 enum TagState {
     Opened,
@@ -147,9 +147,9 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
-    /// Converts into a `Namespaced` iterator
-    pub fn namespaced(self) -> Namespaced<B> {
-        Namespaced::new(self)
+    /// Converts into a `XmlnsReader` iterator
+    pub fn namespaced(self) -> XmlnsReader<B> {
+        XmlnsReader::new(self)
     }
 
     /// Change trim_text default behaviour (false per default)

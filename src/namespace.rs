@@ -1,4 +1,4 @@
-//! Module for managing Namespaced iterator
+//! Module for managing XmlnsReader iterator
 
 use {XmlReader, Event};
 use error::ResultPos;
@@ -20,18 +20,18 @@ impl Namespace {
     }
 }
 
-/// Namespaced iterator which wraps XmlReader iterator and
+/// XmlnsReader iterator which wraps XmlReader iterator and
 /// adds namespace resolutions
-pub struct Namespaced<R: BufRead> {
+pub struct XmlnsReader<R: BufRead> {
     reader: XmlReader<R>,
     namespaces: Vec<Namespace>,
 }
 
-impl<R: BufRead> Namespaced<R> {
+impl<R: BufRead> XmlnsReader<R> {
 
-    /// Converts a `XmlReader` into a `Namespaced` iterator
-    pub fn new(reader: XmlReader<R>) -> Namespaced<R> {
-        Namespaced {
+    /// Converts a `XmlReader` into a `XmlnsReader` iterator
+    pub fn new(reader: XmlReader<R>) -> XmlnsReader<R> {
+        XmlnsReader {
             reader: reader,
             namespaces: Vec::new(),
         }
@@ -46,7 +46,7 @@ impl<R: BufRead> Namespaced<R> {
     }
 }
 
-impl<R: BufRead> Iterator for Namespaced<R> {
+impl<R: BufRead> Iterator for XmlnsReader<R> {
     type Item = ResultPos<(Option<Vec<u8>>, Event)>;
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.next() {
