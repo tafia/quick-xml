@@ -22,6 +22,44 @@ impl Namespace {
 
 /// XmlnsReader iterator which wraps XmlReader iterator and
 /// adds namespace resolutions
+///
+/// # Example
+///
+/// ```
+/// use quick_xml::{XmlReader, Event};
+/// use quick_xml::namespace::XmlnsReader;
+/// 
+/// let xml = r#"<tag1 att1 = "test">
+///                 <tag2><!--Test comment-->Test</tag2>
+///                 <tag2>Test 2</tag2>
+///             </tag1>"#;
+/// let mut reader = XmlReader::from_str(xml).trim_text(true)
+///                  .namespaced();
+/// let mut count = 0;
+/// let mut txt = Vec::new();
+/// // need to use `while let` in order to have access to `reader.resolve` for attributes
+/// // namespaces
+/// while let Some(r) = reader.next() {
+///     match r {
+///         // XmlnsReader iterates ResultPos<(Option<&[u8]>, Event)> with the Option<&[u8]> being
+///         // the resolved Namespace, if any
+///         Ok((ref n, Event::Start(ref e))) => {
+///             match e.name() {
+///                 b"tag1" => println!("attributes keys: {:?}", 
+///                                  e.attributes()
+///                                  // use `reader.resolve` to get attribute namespace resolution
+///                                  .map(|a| reader.resolve(a.unwrap().0))
+///                                  .collect::<Vec<_>>()),
+///                 b"tag2" => count += 1,
+///                 _ => (),
+///             }
+///         },
+///         Ok((_, Event::Text(e))) => txt.push(e.into_string()),
+///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         _ => (),
+///     }
+/// }
+/// ```
 pub struct XmlnsReader<R: BufRead> {
     reader: XmlReader<R>,
     namespaces: Vec<Namespace>,

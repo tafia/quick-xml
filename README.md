@@ -34,6 +34,9 @@ let xml = r#"<tag1 att1 = "test">
                 </tag2>
             </tag1>"#;
 let reader = XmlReader::from_str(xml).trim_text(true);
+// if you want to use namespaces, you just need to convert the `XmlReader`
+// to an `XmlnsReader`:
+// let reader_ns = reader.namespaced();
 let mut count = 0;
 let mut txt = Vec::new();
 for r in reader {
@@ -41,7 +44,15 @@ for r in reader {
         Ok(Event::Start(ref e)) => {
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}", 
-                                 e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
+                                 e.attributes().map(|a| a.unwrap().1)
+                                 // if you want to resolve attribute namespaces you need to use
+                                 // the `resolve` method of XmlnsReader
+                                 //
+                                 // e.attributes().map(|a| a.map(|(k, _)| reader_ns.resolve(k))) ...
+                                 //
+                                 // note: as the `for` loop moves the reader, you may need to use a
+                                 // `while let Some(r) = reader.next()` instead
+                                 .collect::<Vec<_>>()),
                 b"tag2" => count += 1,
                 _ => (),
             }
@@ -95,14 +106,14 @@ assert_eq!(result, expected.as_bytes());
 Here is a simple comparison with [xml-rs](https://github.com/netvl/xml-rs) for very basic operations.
 
 ```
-running 2 tests
-test bench_quick_xml ... bench:     703,323 ns/iter (+/- 11,915)
-test bench_xml_rs    ... bench:  14,104,316 ns/iter (+/- 444,845)
+test bench_quick_xml            ... bench:     692,552 ns/iter (+/- 8,580)
+test bench_quick_xml_namespaced ... bench:     975,165 ns/iter (+/- 8,571)
+test bench_xml_rs               ... bench:  14,032,716 ns/iter (+/- 830,202
 ```
 
 ## Todo
 
-- [ ] [namespaces](https://github.com/tafia/quick-xml/issues/14)
+- [x] [namespaces](https://github.com/tafia/quick-xml/issues/14)
 - [ ] non-utf8: most methods return `&u[u8]` => probably not too relevant for the moment
 - [x] [parse xml declaration](https://github.com/tafia/quick-xml/pull/10)
 - [x] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
