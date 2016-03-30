@@ -120,18 +120,20 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
             }
             Some(Ok(Event::End(e))) => {
                 // decrement levels and remove namespaces with 0 level
-                let mut to_remove = false;
                 {
                     let name = e.name();
                     for n in self.namespaces.iter_mut() {
                         if name == &*n.element_name {
                             n.level -= 1;
-                            to_remove |= n.level == 0;
                         }
                     }
                 }
-                if to_remove {
-                    self.namespaces.retain(|n| n.level > 0);
+                match self.namespaces.iter().rev().position(|n| n.level > 0) {
+                    Some(0) | None => (),
+                    Some(p) => {
+                        let len = self.namespaces.len() - p;
+                        self.namespaces.truncate(len)
+                    },
                 }
                 let namespace = {
                     let name = e.name();
