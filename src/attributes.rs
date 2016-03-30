@@ -1,7 +1,7 @@
 //! Xml Attributes module
 //!
 //! Provides an iterator over attributes key/value pairs
-use error::{Error, Result};
+use error::{Error, ResultPos};
 
 /// Iterator over attributes key/value pairs
 pub struct Attributes<'a> {
@@ -25,7 +25,7 @@ impl<'a> Attributes<'a> {
 }
 
 impl<'a> Iterator for Attributes<'a> {
-    type Item = Result<(&'a [u8], &'a [u8])>;
+    type Item = ResultPos<(&'a [u8], &'a [u8])>;
     fn next(&mut self) -> Option<Self::Item> {
         
         if self.was_error { return None; }
@@ -74,7 +74,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, b'=')) => {
                     if has_equal {
                         self.was_error = true;
-                        return Some(Err(Error::Malformed("Got 2 '=' tokens".to_owned())));
+                        return Some(Err((Error::Malformed("Got 2 '=' tokens".to_owned()), p + i)));
                     }
                     has_equal = true;
                     if end_key.is_none() {
@@ -84,7 +84,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, q @ b'"')) | Some((i, q @ b'\'')) => {
                     if !has_equal {
                         self.was_error = true;
-                        return Some(Err(Error::Malformed("Unexpected quote before '='".to_owned())));
+                        return Some(Err((Error::Malformed("Unexpected quote before '='".to_owned()), p + i)));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);

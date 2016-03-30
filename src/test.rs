@@ -1,6 +1,6 @@
 use super::{AsStr, Element, XmlReader, XmlWriter};
 use super::Event::*;
-use super::error::Result;
+use super::error::ResultPos;
 use std::str::from_utf8;
 use std::io::Cursor;
 
@@ -174,7 +174,7 @@ fn test_write_attrs() {
         let event = event.unwrap();
         let event = match event {
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
+                let mut attrs = elem.attributes().collect::<ResultPos<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[(b"a", b"b"), (b"c", b"d")]);
                 let mut elem = Element::new("copy").with_attributes(attrs);
                 elem.push_attribute("x", "y");
@@ -196,8 +196,19 @@ fn test_buf_position() {
         .trim_text(true).with_check(true);
 
     match r.next() {
-        Some(Err((_, 4))) => assert!(true),
-        Some(Err((_, n))) => assert!(false, "expecting buf_pos = 4, found {}", n),
+        Some(Err((_, 2))) => assert!(true), // error at char 2: no opening tag
+        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
+        e => assert!(false, "expecting error, found {:?}", e),
+    }
+
+    r = XmlReader::from_str("<a><!--b>")
+        .trim_text(true).with_check(true);
+
+    next_eq!(r, Start, b"a");
+
+    match r.next() {
+        Some(Err((_, 5))) => assert!(true), // error at char 5: no closing --> tag found
+        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
         e => assert!(false, "expecting error, found {:?}", e),
     }
 

@@ -16,7 +16,6 @@ Carto.toml
 [dependencies]
 quick-xml = "0.1"
 ```
-
 ``` rust
 extern crate quick_xml;
 ```
@@ -59,7 +58,7 @@ for r in reader {
             }
         },
         Ok(Event::Text(e)) => txt.push(e.into_string()),
-        Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
         _ => (),
     }
 }
@@ -93,7 +92,7 @@ for r in reader {
             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
         },
         Ok(e) => assert!(writer.write(e).is_ok()),
-        Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
     }
 }
 
@@ -107,9 +106,9 @@ assert_eq!(result, expected.as_bytes());
 Here is a simple comparison with [xml-rs](https://github.com/netvl/xml-rs) for very basic operations.
 
 ```
-test bench_quick_xml            ... bench:     692,552 ns/iter (+/- 8,580)
-test bench_quick_xml_namespaced ... bench:     975,165 ns/iter (+/- 8,571)
-test bench_xml_rs               ... bench:  14,032,716 ns/iter (+/- 830,202
+test bench_quick_xml            ... bench:     549,643 ns/iter (+/- 11,789)
+test bench_quick_xml_namespaced ... bench:     830,328 ns/iter (+/- 17,818)
+test bench_xml_rs               ... bench:  14,102,427 ns/iter (+/- 231,446)
 ```
 
 ## Todo

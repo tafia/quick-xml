@@ -5,7 +5,7 @@
 //! Depending on your needs, you can use:
 //!
 //! - `XmlReader`: for best performance
-//! - `XmlnsReader`: if you need to resolve namespaces (around 20% slower than XmlReader)
+//! - `XmlnsReader`: if you need to resolve namespaces (around 50% slower than XmlReader)
 //!
 //! ## Writer
 //!
@@ -77,7 +77,7 @@ impl AsStr for [u8] {
 ///             }
 ///         },
 ///         Ok(Event::Text(e)) => txt.push(e.into_string()),
-///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///         _ => (),
 ///     }
 /// }
@@ -184,7 +184,7 @@ impl<B: BufRead> XmlReader<B> {
     }
 
     /// private function to read until '<' is found
-    fn read_until_open(&mut self) -> Option<Result<Event>> {
+    fn read_until_open(&mut self) -> Option<ResultPos<Event>> {
         self.tag_state = TagState::Opened;
         let mut buf = Vec::new();
         match read_until(&mut self.reader, b'<', &mut buf) {
@@ -195,7 +195,7 @@ impl<B: BufRead> XmlReader<B> {
                     match buf.iter().position(|&b| !is_whitespace(b)) {
                         Some(start) => (start, buf.len() - buf.iter().rev()
                                         .position(|&b| !is_whitespace(b)).unwrap_or(0)),
-                        None => return self.next().map(|n| n.map_err(|(e, _)| e))
+                        None => return self.next()
                     }
                 } else {
                     (0, buf.len())
@@ -204,13 +204,13 @@ impl<B: BufRead> XmlReader<B> {
             },
             Err(e) => {
                 self.exit = true;
-                Some(Err(Error::from(e)))
+                Some(Err((e, self.buf_position)))
             },
         }
     }
 
     /// private function to read until '>' is found
-    fn read_until_close(&mut self) -> Option<Result<Event>> {
+    fn read_until_close(&mut self) -> Option<ResultPos<Event>> {
         self.tag_state = TagState::Closed;
         let mut buf = Vec::new();
         match read_until(&mut self.reader, b'>', &mut buf) {
@@ -223,15 +223,18 @@ impl<B: BufRead> XmlReader<B> {
                         if self.with_check {
                             let e = match self.opened.pop() {
                                 Some(e) => e,
-                                None => return Some(Err(Error::Malformed(format!(
-                                        "Cannot close {:?} element, there is no opened element",
-                                        buf[1..].as_str())))),
+                                None => return Some(Err((
+                                            Error::Malformed(format!(
+                                                "Cannot close {:?} element, there is no opened element",
+                                                buf[1..].as_str())),
+                                             self.buf_position - len))),
                             };
                             if &buf[1..] != e.name() {
                                 self.exit = true;
-                                return Some(Err(Error::Malformed(format!(
+                                return Some(Err((Error::Malformed(format!(
                                         "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
-                                        Element::from_buffer(buf, 1, len, len), e, self.opened))));
+                                        Element::from_buffer(buf, 1, len, len), e, self.opened)),
+                                             self.buf_position - len)));
                             }
                         }
                         return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))))
@@ -247,7 +250,8 @@ impl<B: BufRead> XmlReader<B> {
                             }
                         } else {
                             self.exit = true;
-                            Some(Err(Error::Malformed("Unescaped XmlDecl event".to_owned())))
+                            Some(Err((Error::Malformed("Unescaped XmlDecl event".to_owned()),
+                                      self.buf_position - len)))
                         };
                     },
                     b'!' => {
@@ -261,13 +265,14 @@ impl<B: BufRead> XmlReader<B> {
                                 match read_until(&mut self.reader, b'>', &mut buf) {
                                     Ok(0) => {
                                         self.exit = true;
-                                        return Some(Err(Error::Malformed("Unescaped Comment event".to_owned())));
+                                        return Some(Err((Error::Malformed("Unescaped Comment event".to_owned()),
+                                                         self.buf_position - len)));
                                     },
+                                    Ok(n) => self.buf_position += n,
                                     Err(e) => {
                                         self.exit = true;
-                                        return Some(Err(Error::from(e)));
+                                        return Some(Err((e, self.buf_position)));
                                     },
-                                    _ => (),
                                 }
                             }
                         } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
@@ -280,13 +285,14 @@ impl<B: BufRead> XmlReader<B> {
                                 match read_until(&mut self.reader, b'>', &mut buf) {
                                     Ok(0) => {
                                         self.exit = true;
-                                        return Some(Err(Error::Malformed("Unescaped CDATA event".to_owned())));
+                                        return Some(Err((Error::Malformed("Unescaped CDATA event".to_owned()),
+                                                         self.buf_position - len)));
                                     },
+                                    Ok(n) => self.buf_position += n,
                                     Err(e) => {
                                         self.exit = true;
-                                        return Some(Err(Error::from(e)));
+                                        return Some(Err((e, self.buf_position)));
                                     },
-                                    _ => (),
                                 }
                             }
                         }
@@ -313,7 +319,7 @@ impl<B: BufRead> XmlReader<B> {
             },
             Err(e) => {
                 self.exit = true;
-                Some(Err(Error::from(e)))
+                Some(Err((e, self.buf_position)))
             },
         }
     }
@@ -350,7 +356,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
             TagState::Closed => self.read_until_open(),
-        }.map(|n| n.map_err(|e| (e, self.buf_position)))
+        }
     }
 
 }
@@ -492,19 +498,19 @@ pub struct XmlDecl {
 impl XmlDecl {
 
     /// Gets xml version, including quotes (' or ")
-    pub fn version(&self) -> Result<&[u8]> {
+    pub fn version(&self) -> ResultPos<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(Ok((b"version", v))) => Ok(v),
-            Some(Ok((k, _))) => Err(Error::Malformed(format!(
-                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str()))),
-            None => Err(Error::Malformed(
-                    "XmlDecl must start with 'version' attribute, found none".to_owned())),
+            Some(Ok((k, _))) => Err((Error::Malformed(format!(
+                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str())), 0)),
+            None => Err((Error::Malformed(
+                    "XmlDecl must start with 'version' attribute, found none".to_owned()), 0)),
         }
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<Result<&[u8]>> {
+    pub fn encoding(&self) -> Option<ResultPos<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -516,7 +522,7 @@ impl XmlDecl {
     }
 
     /// Gets xml standalone, including quotes (' or ")
-    pub fn standalone(&self) -> Option<Result<&[u8]>> {
+    pub fn standalone(&self) -> Option<ResultPos<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -645,7 +651,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 ///             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 ///         },
 ///         Ok(e) => assert!(writer.write(e).is_ok()),
-///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///     }
 /// }
 ///
