@@ -498,19 +498,19 @@ pub struct XmlDecl {
 impl XmlDecl {
 
     /// Gets xml version, including quotes (' or ")
-    pub fn version(&self) -> Result<&[u8]> {
+    pub fn version(&self) -> ResultPos<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(Ok((b"version", v))) => Ok(v),
-            Some(Ok((k, _))) => Err(Error::Malformed(format!(
-                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str()))),
-            None => Err(Error::Malformed(
-                    "XmlDecl must start with 'version' attribute, found none".to_owned())),
+            Some(Ok((k, _))) => Err((Error::Malformed(format!(
+                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str())), 0)),
+            None => Err((Error::Malformed(
+                    "XmlDecl must start with 'version' attribute, found none".to_owned()), 0)),
         }
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<Result<&[u8]>> {
+    pub fn encoding(&self) -> Option<ResultPos<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -522,7 +522,7 @@ impl XmlDecl {
     }
 
     /// Gets xml standalone, including quotes (' or ")
-    pub fn standalone(&self) -> Option<Result<&[u8]>> {
+    pub fn standalone(&self) -> Option<ResultPos<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),

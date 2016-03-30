@@ -1,6 +1,6 @@
 use super::{AsStr, Element, XmlReader, XmlWriter};
 use super::Event::*;
-use super::error::Result;
+use super::error::ResultPos;
 use std::str::from_utf8;
 use std::io::Cursor;
 
@@ -174,7 +174,7 @@ fn test_write_attrs() {
         let event = event.unwrap();
         let event = match event {
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
+                let mut attrs = elem.attributes().collect::<ResultPos<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[(b"a", b"b"), (b"c", b"d")]);
                 let mut elem = Element::new("copy").with_attributes(attrs);
                 elem.push_attribute("x", "y");

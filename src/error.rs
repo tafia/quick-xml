@@ -21,7 +21,13 @@ pub enum Error {
 
 /// Result type
 pub type Result<T> = ::std::result::Result<T, Error>;
-/// Result type with current buffer position
+/// Result type with position
+///
+/// Position represents byte index relative to 
+///
+/// - xml file when iterating xml `Event`s
+/// - element node when iterating on `Attribute`s. You can find xml 
+/// relative position using `XmlReader::buffer_position`
 pub type ResultPos<T> = ::std::result::Result<T, (Error, usize)>;
 
 impl fmt::Display for Error {
