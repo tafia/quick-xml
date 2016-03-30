@@ -55,7 +55,7 @@ impl Namespace {
 ///             }
 ///         },
 ///         Ok((_, Event::Text(e))) => txt.push(e.into_string()),
-///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///         _ => (),
 ///     }
 /// }

@@ -5,7 +5,7 @@
 //! Depending on your needs, you can use:
 //!
 //! - `XmlReader`: for best performance
-//! - `XmlnsReader`: if you need to resolve namespaces (around 20% slower than XmlReader)
+//! - `XmlnsReader`: if you need to resolve namespaces (around 50% slower than XmlReader)
 //!
 //! ## Writer
 //!
@@ -77,7 +77,7 @@ impl AsStr for [u8] {
 ///             }
 ///         },
 ///         Ok(Event::Text(e)) => txt.push(e.into_string()),
-///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///         _ => (),
 ///     }
 /// }
@@ -651,7 +651,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 ///             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
 ///         },
 ///         Ok(e) => assert!(writer.write(e).is_ok()),
-///         Err((e, pos)) => panic!("{:?} at buffer position {}", e, pos),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///     }
 /// }
 ///
