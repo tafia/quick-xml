@@ -196,8 +196,19 @@ fn test_buf_position() {
         .trim_text(true).with_check(true);
 
     match r.next() {
-        Some(Err((_, 4))) => assert!(true),
-        Some(Err((_, n))) => assert!(false, "expecting buf_pos = 4, found {}", n),
+        Some(Err((_, 2))) => assert!(true), // error at char 2: no opening tag
+        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
+        e => assert!(false, "expecting error, found {:?}", e),
+    }
+
+    r = XmlReader::from_str("<a><!--b>")
+        .trim_text(true).with_check(true);
+
+    next_eq!(r, Start, b"a");
+
+    match r.next() {
+        Some(Err((_, 5))) => assert!(true), // error at char 5: no closing --> tag found
+        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
