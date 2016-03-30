@@ -78,15 +78,16 @@ fn sample_1_short() {
 // 
 // }
 // 
-// #[test]
-// fn eof_1() {
-//     test(
-//         br#"<?xml"#,
-//         br#"1:6 Unexpected end of stream: no root element found"#,
-//         true
-//     );
-// }
-// 
+
+#[test]
+fn eof_1() {
+    test(
+        br#"<?xml"#,
+        br#"Malformed("Unescaped XmlDecl event")"#,
+        true
+    );
+}
+
 // #[test]
 // fn bad_1() {
 //     test(
@@ -103,7 +104,7 @@ fn sample_1_short() {
 //         br#"
 //             |1:14 Unexpected token '--' before ' '
 //         "#,
-//         true
+//         false
 //     );
 // 
 //     test(
@@ -114,29 +115,27 @@ fn sample_1_short() {
 //         true
 //     );
 // }
-// 
-// #[test]
-// fn tabs_1() {
-//     test(
-//         b"\t<a>\t<b/></a>",
-//         br#"
-//             StartDocument(1.0, UTF-8)
-//             StartElement(a)
-//             StartElement(b)
-//             EndElement(b)
-//             EndElement(a)
-//             EndDocument
-//         "#,
-//         true
-//     );
-// }
+
+#[test]
+fn tabs_1() {
+    test(
+        b"\t<a>\t<b/></a>",
+        br#"
+            StartElement(a)
+            StartElement(b)
+            EndElement(b)
+            EndElement(a)
+            EndDocument
+        "#,
+        true
+    );
+}
 // 
 // #[test]
 // fn issue_83_duplicate_attributes() {
 //     test(
 //         br#"<hello><some-tag a='10' a="20"></hello>"#,
 //         br#"
-//             |StartDocument(1.0, UTF-8)
 //             |StartElement(hello)
 //             |1:30 Attribute 'a' is redefined
 //         "#,
@@ -149,80 +148,83 @@ fn sample_1_short() {
 //     test(
 //         r#"<hello>&𤶼;</hello>"#.as_bytes(),
 //         r#"
-//             |StartDocument(1.0, UTF-8)
 //             |StartElement(hello)
 //             |1:10 Unexpected entity: 𤶼
 //         "#.as_bytes(),  // FIXME: it shouldn't be 10, looks like indices are off slightly
 //         true
 //     )
 // }
-// 
-// #[test]
-// fn issue_98_cdata_ending_with_right_bracket() {
-//     test(
-//         br#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
-//         br#"
-//             |StartDocument(1.0, UTF-8)
-//             |StartElement(hello)
-//             |CData("Foo [Bar]")
-//             |EndElement(hello)
-//             |EndDocument
-//         "#,
-//         true
-//     )
-// }
-// 
-// #[test]
-// fn issue_105_unexpected_double_dash() {
-//     test(
-//         br#"<hello>-- </hello>"#,
-//         br#"
-//             |StartDocument(1.0, UTF-8)
-//             |StartElement(hello)
-//             |Characters("-- ")
-//             |EndElement(hello)
-//             |EndDocument
-//         "#,
-//         true
-//     );
-// 
-//     test(
-//         br#"<hello>--</hello>"#,
-//         br#"
-//             |StartDocument(1.0, UTF-8)
-//             |StartElement(hello)
-//             |Characters("--")
-//             |EndElement(hello)
-//             |EndDocument
-//         "#,
-//         true
-//     );
-// 
-//     test(
-//         br#"<hello>--></hello>"#,
-//         br#"
-//             |StartDocument(1.0, UTF-8)
-//             |StartElement(hello)
-//             |Characters("-->")
-//             |EndElement(hello)
-//             |EndDocument
-//         "#,
-//         true
-//     );
-// 
-//     test(
-//         br#"<hello><![CDATA[--]]></hello>"#,
-//         br#"
-//             |StartDocument(1.0, UTF-8)
-//             |StartElement(hello)
-//             |CData("--")
-//             |EndElement(hello)
-//             |EndDocument
-//         "#,
-//         true
-//     );
-// }
-// 
+
+#[test]
+fn issue_98_cdata_ending_with_right_bracket() {
+    test(
+        br#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
+        br#"
+            |Characters()
+            |StartElement(hello)
+            |Characters()
+            |CData("Foo [Bar]")
+            |Characters()
+            |EndElement(hello)
+            |EndDocument
+        "#,
+        false
+    )
+}
+
+#[test]
+fn issue_105_unexpected_double_dash() {
+    test(
+        br#"<hello>-- </hello>"#,
+        br#"
+            |Characters()
+            |StartElement(hello)
+            |Characters("-- ")
+            |EndElement(hello)
+            |EndDocument
+        "#,
+        false
+    );
+
+    test(
+        br#"<hello>--</hello>"#,
+        br#"
+            |Characters()
+            |StartElement(hello)
+            |Characters("--")
+            |EndElement(hello)
+            |EndDocument
+        "#,
+        false
+    );
+
+    test(
+        br#"<hello>--></hello>"#,
+        br#"
+            |Characters()
+            |StartElement(hello)
+            |Characters("-->")
+            |EndElement(hello)
+            |EndDocument
+        "#,
+        false
+    );
+
+    test(
+        br#"<hello><![CDATA[--]]></hello>"#,
+        br#"
+            |Characters()
+            |StartElement(hello)
+            |Characters()
+            |CData("--")
+            |Characters()
+            |EndElement(hello)
+            |EndDocument
+        "#,
+        false
+    );
+}
+
 // #[test]
 // fn issue_attribues_have_no_default_namespace () {
 //     test(
@@ -281,6 +283,9 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                            SPLITTER, n + 1, spec, line, SPLITTER);
                 }
             } else {
+                if line == "EndDocument" {
+                    break;
+                }
                 panic!("Unexpected event: {}", line);
             }
         }
@@ -313,21 +318,33 @@ fn quick_xml_to_xmlrs(e: &Option<ResultPos<Event>>, is_short: bool) -> Option<St
             }
         },
         Some(Ok(Event::CData(ref e))) => {
-            if is_short {
-                Some(format!("Characters({})", e.content().as_str().unwrap()))
+            if e.content().is_empty() {
+                if is_short {
+                    Some("Characters()".to_owned())
+                } else {
+                    Some("CData()".to_owned())
+                }
             } else {
-                Some(format!("CData({})", e.content().as_str().unwrap()))
+                if is_short {
+                    Some(format!("Characters(\"{}\")", e.content().as_str().unwrap()))
+                } else {
+                    Some(format!("CData(\"{}\")", e.content().as_str().unwrap()))
+                }
             }
         },
         Some(Ok(Event::Text(ref e))) => {
-            Some(format!("Characters({})", e.content().as_str().unwrap()))
+            if e.content().is_empty() {
+                Some("Characters()".to_owned())
+            } else {
+                Some(format!("Characters(\"{}\")", e.content().as_str().unwrap()))
+            }
         },
         Some(Ok(Event::Decl(ref e))) => {
             Some(format!("StartDocument({}, {})", 
                          e.version().unwrap().as_str().unwrap(), 
                          e.encoding().unwrap().unwrap().as_str().unwrap()))
         },
-        Some(Err((ref e, i))) => Some(format!("error")),
+        Some(Err((ref e, i))) => Some(format!("{:?}", e)),
         None => Some("EndDocument".to_owned()),
         _ => None,
     }
