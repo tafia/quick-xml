@@ -19,6 +19,7 @@ extern crate log;
 pub mod error;
 pub mod attributes;
 pub mod namespace;
+mod escape;
 
 #[cfg(test)]
 mod test;
@@ -29,10 +30,12 @@ use std::iter::IntoIterator;
 use std::path::Path;
 use std::fmt;
 use std::str::from_utf8;
+use std::borrow::Cow;
 
 use error::{Error, Result, ResultPos};
-use attributes::Attributes;
+use attributes::{Attributes, UnescapedAttributes};
 use namespace::XmlnsReader;
+use escape::unescape;
 
 enum TagState {
     Opened,
@@ -420,7 +423,8 @@ impl Element {
         }
     }
 
-    /// Consumes self and adds attributes to this element from an iterator over (key, value) tuples.
+    /// Consumes self and adds attributes to this element from an iterator 
+    /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
@@ -440,9 +444,23 @@ impl Element {
         &self.buf[self.start..self.end]
     }
 
-    /// get attributes iterator
+    /// gets escaped content
+    ///
+    /// Searches for '&' into content and try to escape the coded character if possible
+    /// returns Malformed error with index within element if '&' is not followed by ';'
+    pub fn unescaped_content(&self) -> ResultPos<Cow<[u8]>> {
+        unescape(self.content())
+    }
+
+    /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
         Attributes::new(self.content(), self.name_end)
+    }
+
+    /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
+    /// by their corresponding cgaracter)
+    pub fn unescaped_attributes(&self) -> UnescapedAttributes {
+        Attributes::new(self.content(), self.name_end).unescaped()
     }
 
     /// extend the attributes of this element from an iterator over (key, value) tuples.

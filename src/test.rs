@@ -235,3 +235,28 @@ fn test_namespace() {
     }
 }
 
+#[test]
+fn test_escaped_content() {
+    let mut r = XmlReader::from_str("<a>&lt;test&gt;</a>").trim_text(true);
+    next_eq!(r, Start, b"a");
+    match r.next() {
+        Some(Ok(Text(ref e))) => {
+            if e.content() != b"&lt;test&gt;" {
+                panic!("content unexpected: expecting '&lt;test&gt;', got '{:?}'",
+                       e.content().as_str());
+            }
+            match e.unescaped_content() {
+                Ok(ref c) => if &**c != b"<test>" {
+                    panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
+                           c.as_str())
+                },
+                Err((e, i)) => panic!("cannot escape content at position {}: {:?}", i, e),
+            }
+        },
+        Some(Ok(ref e)) => panic!("Expecting text event, got {:?}", e),
+        Some(Err((e, i))) => panic!("Cannot get next event at position {}: {:?}", i, e),
+        None => panic!("Expecting text event, got None"),
+    }
+    next_eq!(r, End, b"a");
+}
+
