@@ -89,20 +89,15 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.next() {
             Some(Ok(Event::Start(e))) => {
-                let namespace = {
+                // increment existing namespace level if this same element
+                {
                     let name = e.name();
-                    // increment existing namespace level if this same element
                     for n in self.namespaces.iter_mut() {
                         if name == &*n.element_name {
                             n.level += 1;
                         }
                     }
-                    // clone namespace value, if any
-                    // iterate in reverse order to find the most recent one
-                    self.namespaces.iter().rev()
-                        .find(|ref n| n.is_match(name))
-                        .map(|ref n| n.value.clone())
-                };
+                }
                 // adds new namespaces for attributes starting with 'xmlns:'
                 for a in e.attributes() {
                     if let Ok((k, v)) = a {
@@ -116,6 +111,12 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                         }
                     }
                 }
+                // search namespace value
+                // iterate in reverse order to find the most recent one
+                let namespace = self.namespaces.iter().rev()
+                    .find(|ref n| n.is_match(e.name()))
+                    .map(|ref n| n.value.clone());
+
                 Some(Ok((namespace, Event::Start(e))))
             }
             Some(Ok(Event::End(e))) => {
