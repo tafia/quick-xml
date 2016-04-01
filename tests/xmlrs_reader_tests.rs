@@ -2,7 +2,7 @@ extern crate quick_xml;
 
 use std::io::{BufRead};
 
-use quick_xml::{XmlReader, Event, AsStr};
+use quick_xml::{XmlReader, Event, AsStr, Element};
 use quick_xml::error::ResultPos;
 use std::fmt;
 
@@ -24,14 +24,14 @@ fn sample_1_short() {
 //     );
 // }
 
-// #[test]
-// fn sample_2_short() {
-//     test(
-//         include_bytes!("documents/sample_2.xml"),
-//         include_bytes!("documents/sample_2_short.txt"),
-//         true
-//     );
-// }
+#[test]
+fn sample_2_short() {
+    test(
+        include_bytes!("documents/sample_2.xml"),
+        include_bytes!("documents/sample_2_short.txt"),
+        true
+    );
+}
 
 // #[test]
 // fn sample_2_full() {
@@ -248,8 +248,6 @@ fn convert_to_quick_xml(s: &str) -> String {
         let p = s.chars().position(|c| c == ' ').unwrap();
         s = &s[(p + 1) ..];
     }
-    
-
 
     if s.starts_with("Whitespace") {
         format!("Character{}", s)
@@ -260,7 +258,8 @@ fn convert_to_quick_xml(s: &str) -> String {
 
 fn test(input: &[u8], output: &[u8], is_short: bool) {
 
-    let mut reader = XmlReader::from_reader(input).trim_text(is_short);
+    let mut reader = XmlReader::from_reader(input).trim_text(is_short)
+        .namespaced();
 
     let mut spec_lines = output.lines()
         .map(|line| line.unwrap())
@@ -292,31 +291,42 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
     }
 }
 
-struct OptEvent(Option<ResultPos<Event>>);
+fn namespace_name(n: &Option<Vec<u8>>, e: &Element) -> String {
+    match n {
+        &Some(ref n) => 
+            format!("{{{}}}{}", n.as_str().unwrap(), e.name().as_str().unwrap()),
+        &None => e.name().as_str().unwrap().to_owned(),
+    }
+}
+
+struct OptEvent(Option<ResultPos<(Option<Vec<u8>>, Event)>>);
 
 impl fmt::Display for OptEvent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Some(Ok(Event::Start(ref e))) => {
+            Some(Ok((ref n, Event::Start(ref e)))) => {
                 let atts: String = e.attributes().unescaped().map(|a| a.unwrap())
+                    .filter(|&(k, _)| k.len() < 5 || &k[..5] != b"xmlns")
                     .map(|(k, v)| format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()))
                     .collect::<Vec<_>>().join(", ");
 
+                let name = namespace_name(n, e);
+
                 if atts.is_empty() {
-                    write!(f, "StartElement({})", e.name().as_str().unwrap())
+                    write!(f, "StartElement({})", &name)
                 } else {
-                    write!(f, "StartElement({} [{}])", e.name().as_str().unwrap(), &atts)
+                    write!(f, "StartElement({} [{}])", &name, &atts)
                 }
             },
-            Some(Ok(Event::End(ref e))) =>
-                write!(f, "EndElement({})", e.name().as_str().unwrap()),
-            Some(Ok(Event::Comment(ref e))) =>
+            Some(Ok((ref n, Event::End(ref e)))) =>
+                write!(f, "EndElement({})", namespace_name(n, e)),
+            Some(Ok((ref n, Event::Comment(ref e)))) =>
                 write!(f, "Comment({:?})", e.content().as_str().unwrap()),
-            Some(Ok(Event::CData(ref e))) =>
+            Some(Ok((ref n, Event::CData(ref e)))) =>
                 write!(f, "CData({:?})", e.content().as_str().unwrap()),
-            Some(Ok(Event::DocType(ref e))) =>
+            Some(Ok((ref n, Event::DocType(ref e)))) =>
                 write!(f, "DocType({:?})", e.content().as_str().unwrap()),
-            Some(Ok(Event::Text(ref e))) => {
+            Some(Ok((ref n, Event::Text(ref e)))) => {
                 match e.unescaped_content() {
                     Ok(c) => {
                         if c.is_empty() {
@@ -328,13 +338,13 @@ impl fmt::Display for OptEvent {
                     Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
-            Some(Ok(Event::Decl(ref e))) => {
+            Some(Ok((ref n, Event::Decl(ref e)))) => {
                 let version = e.version().unwrap().as_str().unwrap();
                 let encoding = e.encoding().unwrap().unwrap().as_str().unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             },
             None => write!(f, "EndDocument"),
-            Some(Ok(Event::PI(ref e))) =>
+            Some(Ok((ref n, Event::PI(ref e)))) =>
                 write!(f, "ProcessingInstruction({}={:?})", 
                     e.name().as_str().unwrap(), e.content().as_str().unwrap()),
             Some(Err((ref e, _))) => write!(f, "{}", e),
