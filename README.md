@@ -114,10 +114,13 @@ test bench_xml_rs               ... bench:  14,102,427 ns/iter (+/- 231,446)
 ## Todo
 
 - [x] [namespaces](https://github.com/tafia/quick-xml/issues/14)
-- [ ] non-utf8: most methods return `&u[u8]` => probably not too relevant for the moment
+- non-utf8
+  - [x] most methods return `&u[u8]`
+  - [x] escaped characters are properly managed
+  - [ ] what else?
 - [x] [parse xml declaration](https://github.com/tafia/quick-xml/pull/10)
 - [x] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
-- [ ] [escape characters](https://github.com/tafia/quick-xml/issues/12)
+- [x] [escape characters](https://github.com/tafia/quick-xml/issues/12)
 - [ ] more checks
 - [ ] ... ?
 
