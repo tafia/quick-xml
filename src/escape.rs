@@ -64,11 +64,13 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                                 }
                             }
                         }
-                    }
-                    bytes => {
-                        return Err((Error::Malformed(format!("Unexpected entity: {:?}",
-                                                             bytes.as_str())), i))
-                    }
+                    },
+                    bytes => match bytes.as_str() {
+                        Ok(s) => return Err((Error::Malformed(format!(
+                                    "Unexpected entity: {}", s)), i)),
+                        Err(e) => return Err((Error::Malformed(format!(
+                                    "Unexpected entity and utf8 error: {:?}", e)), i)),
+                    },
                 }
             } else {
                 return Err((Error::Malformed("Cannot find ';' after '&'".to_string()), i));

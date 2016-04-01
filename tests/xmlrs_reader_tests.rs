@@ -84,7 +84,7 @@ fn sample_1_short() {
 fn eof_1() {
     test(
         br#"<?xml"#,
-        br#"Malformed("Unescaped XmlDecl event")"#,
+        br#"Malformed xml: Unescaped XmlDecl event"#,
         true
     );
 }
@@ -143,18 +143,19 @@ fn tabs_1() {
 //         true
 //     );
 // }
-// 
-// #[test]
-// fn issue_93_large_characters_in_entity_references() {
-//     test(
-//         r#"<hello>&𤶼;</hello>"#.as_bytes(),
-//         r#"
-//             |StartElement(hello)
-//             |1:10 Unexpected entity: 𤶼
-//         "#.as_bytes(),  // FIXME: it shouldn't be 10, looks like indices are off slightly
-//         true
-//     )
-// }
+
+#[test]
+fn issue_93_large_characters_in_entity_references() {
+    test(
+        r#"<hello>&𤶼;</hello>"#.as_bytes(),
+        r#"
+            |StartElement(hello)
+            |1:10 Malformed xml: Unexpected entity: 𤶼
+            |EndElement(hello)
+        "#.as_bytes(),
+        true
+    )
+}
 
 #[test]
 fn issue_98_cdata_ending_with_right_bracket() {
@@ -313,12 +314,18 @@ impl fmt::Display for OptEvent {
                 write!(f, "Comment({:?})", e.content().as_str().unwrap()),
             Some(Ok(Event::CData(ref e))) =>
                 write!(f, "CData({:?})", e.content().as_str().unwrap()),
+            Some(Ok(Event::DocType(ref e))) =>
+                write!(f, "DocType({:?})", e.content().as_str().unwrap()),
             Some(Ok(Event::Text(ref e))) => {
-                let c = e.unescaped_content().unwrap();
-                if c.is_empty() {
-                    write!(f, "Characters()")
-                } else {
-                    write!(f, "Characters({:?})", c.as_str().unwrap())
+                match e.unescaped_content() {
+                    Ok(c) => {
+                        if c.is_empty() {
+                            write!(f, "Characters()")
+                        } else {
+                            write!(f, "Characters({:?})", c.as_str().unwrap())
+                        }
+                    },
+                    Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
             Some(Ok(Event::Decl(ref e))) => {
@@ -330,7 +337,7 @@ impl fmt::Display for OptEvent {
             Some(Ok(Event::PI(ref e))) =>
                 write!(f, "ProcessingInstruction({}={:?})", 
                     e.name().as_str().unwrap(), e.content().as_str().unwrap()),
-            Some(Err((ref e, _))) => write!(f, "{:?}", e),
+            Some(Err((ref e, _))) => write!(f, "{}", e),
         }
     }
 }
