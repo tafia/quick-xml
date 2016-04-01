@@ -19,7 +19,7 @@ fn bench_quick_xml(b: &mut Bencher) {
                 count += 1;
             }
         }
-        assert!(count == 1550);
+        assert_eq!(count, 1550);
     });
 }
 
@@ -34,7 +34,7 @@ fn bench_xml_rs(b: &mut Bencher) {
                 count += 1;
             }
         }
-        assert!(count == 1550);
+        assert_eq!(count, 1550);
     });
 }
 
@@ -49,7 +49,7 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
                 count += 1;
             }
         }
-        assert!(count == 1550);
+        assert_eq!(count, 1550);
     });
 }
 
@@ -67,8 +67,8 @@ fn bench_quick_xml_escaped(b: &mut Bencher) {
                 _ => (),
             }
         }
-        assert!(count == 1550);
-        assert!(nbtxt == 66063);
+        assert_eq!(count, 1550);
+        assert_eq!(nbtxt, 66277);
     });
 }
 
