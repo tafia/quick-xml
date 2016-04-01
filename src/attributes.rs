@@ -1,7 +1,9 @@
 //! Xml Attributes module
 //!
 //! Provides an iterator over attributes key/value pairs
+use std::borrow::Cow;
 use error::{Error, ResultPos};
+use escape::unescape;
 
 /// Iterator over attributes key/value pairs
 pub struct Attributes<'a> {
@@ -20,6 +22,16 @@ impl<'a> Attributes<'a> {
             bytes: buf,
             position: pos,
             was_error: false,
+        }
+    }
+
+    /// gets unescaped variant
+    ///
+    /// all escaped characters ('&...;') in attribute values are replaced
+    /// with their corresponding character
+    pub fn unescaped(self) -> UnescapedAttributes<'a> {
+        UnescapedAttributes {
+            inner: self
         }
     }
 }
@@ -105,5 +117,20 @@ impl<'a> Iterator for Attributes<'a> {
 
         Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())],
            &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
+    }
+}
+
+/// Escaped attributes
+///
+/// Iterate over all attributes and unescapes attribute values
+pub struct UnescapedAttributes<'a> {
+    inner: Attributes<'a>
+}
+
+impl<'a> Iterator for UnescapedAttributes<'a> {
+    type Item = ResultPos<(&'a [u8], Cow<'a, [u8]>)>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+            .map(|a| a.and_then(|(k, v)| unescape(v).map(|v| (k, v))))
     }
 }
