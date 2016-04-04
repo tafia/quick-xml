@@ -278,25 +278,59 @@ impl<B: BufRead> XmlReader<B> {
                                     },
                                 }
                             }
-                        } else if len >= 8 && &buf[1..8] == b"[CDATA[" {
-                            loop {
-                                let len = buf.len();
-                                if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                    return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
-                                }
-                                buf.push(b'>');
-                                match read_until(&mut self.reader, b'>', &mut buf) {
-                                    Ok(0) => {
-                                        self.exit = true;
-                                        return Some(Err((Error::Malformed("Unescaped CDATA event".to_owned()),
-                                                         self.buf_position - len)));
-                                    },
-                                    Ok(n) => self.buf_position += n,
-                                    Err(e) => {
-                                        self.exit = true;
-                                        return Some(Err((e, self.buf_position)));
-                                    },
-                                }
+                        } else if len >= 8 {
+                            match &buf[1..8] {
+                                b"[CDATA[" => {
+                                    loop {
+                                        let len = buf.len();
+                                        if len >= 10 && &buf[(len - 2)..] == b"]]" {
+                                            return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
+                                        }
+                                        buf.push(b'>');
+                                        match read_until(&mut self.reader, b'>', &mut buf) {
+                                            Ok(0) => {
+                                                self.exit = true;
+                                                return Some(Err((Error::Malformed("Unescaped CDATA event".to_owned()),
+                                                                 self.buf_position - len)));
+                                            },
+                                            Ok(n) => self.buf_position += n,
+                                            Err(e) => {
+                                                self.exit = true;
+                                                return Some(Err((e, self.buf_position)));
+                                            },
+                                        }
+                                    }
+                                },
+                                b"DOCTYPE" => {
+                                    let mut count = buf.iter().filter(|&&b| b == b'<').count();
+                                    while count > 0 {
+                                        match read_until(&mut self.reader, b'>', &mut buf) {
+                                            Ok(0) => {
+                                                self.exit = true;
+                                                return Some(Err((Error::Malformed("Unescaped DOCTYPE node".to_owned()),
+                                                                 self.buf_position - buf.len())));
+                                            },
+                                            Ok(n) => {
+                                                self.buf_position += n;
+                                                let start = buf.len() - n;
+                                                count += buf[start..].iter()
+                                                    .filter(|&&b| b == b'<').count() - 1;
+                                            },
+                                            Err(e) => {
+                                                self.exit = true;
+                                                return Some(Err((e, self.buf_position)));
+                                            },
+                                        }
+                                    }
+                                    let len = buf.len();
+                                    return Some(Ok(Event::DocType(Element::from_buffer(buf, 1, len, 8))));
+                                },
+                                _ => {
+                                    self.exit = true;
+                                    return Some(Err((Error::Malformed("Only Comment, CDATA and \
+                                        DOCTYPE nodes can start with a '!'".to_owned()), 
+                                                   self.buf_position - buf.len())));
+                                },
                             }
                         }
                     },
@@ -562,14 +596,16 @@ pub enum Event {
     End(Element),
     /// Data between Start and End element
     Text(Element),
-    /// <!-- ... -->
+    /// Comment <!-- ... -->
     Comment(Element),
-    /// <![CDATA[...]]>
+    /// CData <![CDATA[...]]>
     CData(Element),
     /// Xml declaration <?xml ...?>
     Decl(XmlDecl),
     /// Processing instruction <?...?>
     PI(Element),
+    /// Doctype <!DOCTYPE...>
+    DocType(Element),
 }
 
 impl Event {
@@ -582,7 +618,8 @@ impl Event {
             Event::Text(ref e) |
             Event::Comment(ref e) |
             Event::CData(ref e) | 
-            Event::PI(ref e) => e,
+            Event::PI(ref e) |
+            Event::DocType(ref e) => e,
             Event::Decl(ref e) => &e.element,
         }
     }
@@ -704,6 +741,7 @@ impl<W: Write> XmlWriter<W> {
             Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped_str(b"<?", &e.element, b"?>"),
             Event::PI(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
+            Event::DocType(ref e) => self.write_wrapped_str(b"<!DOCTYPE", e, b">"),
         }
     }
 
