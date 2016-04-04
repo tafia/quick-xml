@@ -1,4 +1,5 @@
 StartDocument(1.0, utf-8)
+DocType(DOCTYPE data SYSTEM "abcd.dtd")
 StartElement({urn:x}p:data [z=">"])
 StartElement(a)
 Characters("test")

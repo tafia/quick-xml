@@ -89,15 +89,15 @@ fn eof_1() {
     );
 }
 
-// #[test]
-// fn bad_1() {
-//     test(
-//         br#"<?xml&.,"#,
-//         br#"1:6 Unexpected token: <?xml&"#,
-//         true
-//     );
-// }
-// 
+#[test]
+fn bad_1() {
+    test(
+        br#"<?xml&.,"#,
+        br#"1:6 Malformed xml: Unescaped XmlDecl event"#,
+        true
+    );
+}
+
 // #[test]
 // fn dashes_in_comments() {
 //     test(
@@ -227,7 +227,6 @@ fn issue_105_unexpected_double_dash() {
 //     test(
 //         br#"<hello xmlns="urn:foo" x="y"/>"#,
 //         br#"
-//             |StartDocument(1.0, UTF-8)
 //             |StartElement({urn:foo}hello [x="y"])
 //             |EndElement({urn:foo}hello)
 //             |EndDocument
@@ -276,18 +275,18 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         
         let line = format!("{}", OptEvent(e));
 
-            if let Some((n, spec)) = spec_lines.next() {
-                if line != spec {
-                    const SPLITTER: &'static str = "-------------------";
-                    panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound:    {}\n{}\n",
-                           SPLITTER, n + 1, spec, line, SPLITTER);
-                }
-            } else {
-                if line == "EndDocument" {
-                    break;
-                }
-                panic!("Unexpected event: {}", line);
+        if let Some((n, spec)) = spec_lines.next() {
+            if line != spec {
+                const SPLITTER: &'static str = "-------------------";
+                panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound:    {}\n{}\n",
+                       SPLITTER, n + 1, spec, line, SPLITTER);
             }
+        } else {
+            if line == "EndDocument" {
+                break;
+            }
+            panic!("Unexpected event: {}", line);
+        }
     }
 }
 
@@ -320,13 +319,11 @@ impl fmt::Display for OptEvent {
             },
             Some(Ok((ref n, Event::End(ref e)))) =>
                 write!(f, "EndElement({})", namespace_name(n, e)),
-            Some(Ok((ref n, Event::Comment(ref e)))) =>
+            Some(Ok((_, Event::Comment(ref e)))) =>
                 write!(f, "Comment({:?})", e.content().as_str().unwrap()),
-            Some(Ok((ref n, Event::CData(ref e)))) =>
+            Some(Ok((_, Event::CData(ref e)))) =>
                 write!(f, "CData({:?})", e.content().as_str().unwrap()),
-            Some(Ok((ref n, Event::DocType(ref e)))) =>
-                write!(f, "DocType({:?})", e.content().as_str().unwrap()),
-            Some(Ok((ref n, Event::Text(ref e)))) => {
+            Some(Ok((_, Event::Text(ref e)))) => {
                 match e.unescaped_content() {
                     Ok(c) => {
                         if c.is_empty() {
@@ -338,16 +335,18 @@ impl fmt::Display for OptEvent {
                     Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
-            Some(Ok((ref n, Event::Decl(ref e)))) => {
+            Some(Ok((_, Event::Decl(ref e)))) => {
                 let version = e.version().unwrap().as_str().unwrap();
                 let encoding = e.encoding().unwrap().unwrap().as_str().unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             },
             None => write!(f, "EndDocument"),
-            Some(Ok((ref n, Event::PI(ref e)))) =>
+            Some(Ok((_, Event::PI(ref e)))) =>
                 write!(f, "ProcessingInstruction({}={:?})", 
                     e.name().as_str().unwrap(), e.content().as_str().unwrap()),
             Some(Err((ref e, _))) => write!(f, "{}", e),
+            Some(Ok((_, Event::DocType(ref e)))) => 
+                write!(f, "DocType({})", e.content().as_str().unwrap()),
         }
     }
 }
