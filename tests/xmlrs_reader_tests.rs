@@ -131,18 +131,22 @@ fn tabs_1() {
         true
     );
 }
-// 
-// #[test]
-// fn issue_83_duplicate_attributes() {
-//     test(
-//         br#"<hello><some-tag a='10' a="20"></hello>"#,
-//         br#"
-//             |StartElement(hello)
-//             |1:30 Attribute 'a' is redefined
-//         "#,
-//         true
-//     );
-// }
+
+#[test]
+fn issue_83_duplicate_attributes() {
+    // Error when parsing attributes won't stop main event reader
+    // as it is a lazy operation => add ending events
+    test(
+        br#"<hello><some-tag a='10' a="20"/></hello>"#,
+        br#"
+            |StartElement(hello)
+            |1:30 Malformed xml: Duplicate attribute at position 9 and 16
+            |EndElement(some-tag)
+            |EndElement(hello)
+        "#,
+        true
+    );
+}
 
 #[test]
 fn issue_93_large_characters_in_entity_references() {
@@ -323,17 +327,20 @@ impl fmt::Display for OptEvent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             Some(Ok((ref n, Event::Start(ref e)))) => {
-                let atts: String = e.attributes().unescaped().map(|a| a.unwrap())
-                    .filter(|&(k, _)| k.len() < 5 || &k[..5] != b"xmlns")
-                    .map(|(k, v)| format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()))
-                    .collect::<Vec<_>>().join(", ");
-
+                let mut atts = Vec::new();
+                for a in e.attributes().unescaped() {
+                    match a {
+                        Ok((k, v)) => if k.len() < 5 || &k[..5] != b"xmlns" {
+                            atts.push(format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()));
+                        },
+                        Err((e, _)) => return write!(f, "{}", e),
+                    }
+                }
                 let name = namespace_name(n, e);
-
                 if atts.is_empty() {
                     write!(f, "StartElement({})", &name)
                 } else {
-                    write!(f, "StartElement({} [{}])", &name, &atts)
+                    write!(f, "StartElement({} [{}])", &name, &atts.join(", "))
                 }
             },
             Some(Ok((ref n, Event::End(ref e)))) =>
