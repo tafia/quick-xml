@@ -11,10 +11,9 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ## Usage
 
-Carto.toml
 ```toml
 [dependencies]
-quick-xml = "0.1"
+quick-xml = "0.1.9"
 ```
 ``` rust
 extern crate quick_xml;
@@ -106,9 +105,10 @@ assert_eq!(result, expected.as_bytes());
 Here is a simple comparison with [xml-rs](https://github.com/netvl/xml-rs) for very basic operations.
 
 ```
-test bench_quick_xml            ... bench:     549,643 ns/iter (+/- 11,789)
-test bench_quick_xml_namespaced ... bench:     830,328 ns/iter (+/- 17,818)
-test bench_xml_rs               ... bench:  14,102,427 ns/iter (+/- 231,446)
+test bench_quick_xml            ... bench:     581,276 ns/iter (+/- 42,399)
+test bench_quick_xml_escaped    ... bench:     711,507 ns/iter (+/- 35,773)
+test bench_quick_xml_namespaced ... bench:     795,207 ns/iter (+/- 28,658)
+test bench_xml_rs               ... bench:  14,219,434 ns/iter (+/- 366,288)
 ```
 
 ## Todo
