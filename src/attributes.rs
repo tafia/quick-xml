@@ -34,6 +34,12 @@ impl<'a> Attributes<'a> {
             inner: self
         }
     }
+
+    /// check if attributes are distincts
+    pub fn with_checks(mut self, val: bool) -> Attributes<'a> {
+        self.with_checks = val;
+        self
+    }
 }
 
 impl<'a> Iterator for Attributes<'a> {

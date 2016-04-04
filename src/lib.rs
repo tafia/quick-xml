@@ -517,7 +517,7 @@ impl Element {
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
     /// by their corresponding cgaracter)
     pub fn unescaped_attributes(&self) -> UnescapedAttributes {
-        Attributes::new(self.content(), self.name_end).unescaped()
+        self.attributes().unescaped()
     }
 
     /// extend the attributes of this element from an iterator over (key, value) tuples.
