@@ -100,6 +100,8 @@ pub struct XmlReader<B: BufRead> {
     trim_text: bool,
     /// check if End nodes match last Start node
     with_check: bool,
+    /// check if comments contains `--` (false per default)
+    check_comments: bool,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
 }
@@ -117,6 +119,7 @@ impl<B: BufRead> XmlReader<B> {
             trim_text: false,
             with_check: true,
             buf_position: 0,
+            check_comments: false,
         }
     }
 
@@ -139,6 +142,16 @@ impl<B: BufRead> XmlReader<B> {
     /// If the xml is known to be sane (already processed etc ...) this saves extra time
     pub fn with_check(mut self, val: bool) -> XmlReader<B> {
         self.with_check = val;
+        self
+    }
+
+    /// Change default check_comment (false per default)
+    ///
+    /// When set to true, every Comment event will be checked for not containing `--`
+    /// Most of the time we don't want comments at all so we don't really care about
+    /// comment correctness, thus default value is false for performance reason
+    pub fn check_comments(mut self, val: bool) -> XmlReader<B> {
+        self.check_comments = val;
         self
     }
 
@@ -259,11 +272,8 @@ impl<B: BufRead> XmlReader<B> {
                     },
                     b'!' => {
                         if len >= 3 && &buf[1..3] == b"--" {
-                            loop {
-                                let len = buf.len();
-                                if len >= 5 && &buf[(len - 2)..] == b"--" {
-                                    return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
-                                }
+                            let mut len = buf.len();
+                            while len < 5 || &buf[(len - 2)..] != b"--" {
                                 buf.push(b'>');
                                 match read_until(&mut self.reader, b'>', &mut buf) {
                                     Ok(0) => {
@@ -277,15 +287,25 @@ impl<B: BufRead> XmlReader<B> {
                                         return Some(Err((e, self.buf_position)));
                                     },
                                 }
+                                len = buf.len();
                             }
+                            if self.check_comments {
+                                let mut start = self.buf_position - len + 3;
+                                for w in buf[3..(len - 1)].windows(2) {
+                                    if &*w == b"--" {
+                                        self.exit = true;
+                                        return Some(Err((Error::Malformed(
+                                                        "Unexpected token '--'".to_owned()), start)));
+                                    }
+                                    start += 1;
+                                }
+                            }
+                            return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
                         } else if len >= 8 {
                             match &buf[1..8] {
                                 b"[CDATA[" => {
-                                    loop {
-                                        let len = buf.len();
-                                        if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                            return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
-                                        }
+                                    let mut len = buf.len();
+                                    while len < 10 || &buf[(len - 2)..] != b"]]" {
                                         buf.push(b'>');
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
@@ -299,11 +319,14 @@ impl<B: BufRead> XmlReader<B> {
                                                 return Some(Err((e, self.buf_position)));
                                             },
                                         }
+                                        len = buf.len();
                                     }
+                                    return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
                                 },
                                 b"DOCTYPE" => {
                                     let mut count = buf.iter().filter(|&&b| b == b'<').count();
                                     while count > 0 {
+                                        buf.push(b'>');
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
                                                 self.exit = true;
