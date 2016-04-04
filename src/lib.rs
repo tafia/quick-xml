@@ -100,6 +100,8 @@ pub struct XmlReader<B: BufRead> {
     trim_text: bool,
     /// check if End nodes match last Start node
     with_check: bool,
+    /// check if comments contains `--` (false per default)
+    check_comments: bool,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
 }
@@ -117,6 +119,7 @@ impl<B: BufRead> XmlReader<B> {
             trim_text: false,
             with_check: true,
             buf_position: 0,
+            check_comments: false,
         }
     }
 
@@ -139,6 +142,16 @@ impl<B: BufRead> XmlReader<B> {
     /// If the xml is known to be sane (already processed etc ...) this saves extra time
     pub fn with_check(mut self, val: bool) -> XmlReader<B> {
         self.with_check = val;
+        self
+    }
+
+    /// Change default check_comment (false per default)
+    ///
+    /// When set to true, every Comment event will be checked for not containing `--`
+    /// Most of the time we don't want comments at all so we don't really care about
+    /// comment correctness, thus default value is false for performance reason
+    pub fn check_comments(mut self, val: bool) -> XmlReader<B> {
+        self.check_comments = val;
         self
     }
 
@@ -262,6 +275,16 @@ impl<B: BufRead> XmlReader<B> {
                             loop {
                                 let len = buf.len();
                                 if len >= 5 && &buf[(len - 2)..] == b"--" {
+                                    if self.check_comments {
+                                        let mut start = self.buf_position - len + 3;
+                                        for w in buf[3..(len - 1)].windows(2) {
+                                            if &*w == b"--" {
+                                                return Some(Err((Error::Malformed(
+                                                                "Unexpected token '--'".to_owned()), start)));
+                                            }
+                                            start += 1;
+                                        }
+                                    }
                                     return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
                                 }
                                 buf.push(b'>');
