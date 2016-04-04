@@ -272,21 +272,8 @@ impl<B: BufRead> XmlReader<B> {
                     },
                     b'!' => {
                         if len >= 3 && &buf[1..3] == b"--" {
-                            loop {
-                                let len = buf.len();
-                                if len >= 5 && &buf[(len - 2)..] == b"--" {
-                                    if self.check_comments {
-                                        let mut start = self.buf_position - len + 3;
-                                        for w in buf[3..(len - 1)].windows(2) {
-                                            if &*w == b"--" {
-                                                return Some(Err((Error::Malformed(
-                                                                "Unexpected token '--'".to_owned()), start)));
-                                            }
-                                            start += 1;
-                                        }
-                                    }
-                                    return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
-                                }
+                            let mut len = buf.len();
+                            while len < 5 || &buf[(len - 2)..] != b"--" {
                                 buf.push(b'>');
                                 match read_until(&mut self.reader, b'>', &mut buf) {
                                     Ok(0) => {
@@ -300,15 +287,25 @@ impl<B: BufRead> XmlReader<B> {
                                         return Some(Err((e, self.buf_position)));
                                     },
                                 }
+                                len = buf.len();
                             }
+                            if self.check_comments {
+                                let mut start = self.buf_position - len + 3;
+                                for w in buf[3..(len - 1)].windows(2) {
+                                    if &*w == b"--" {
+                                        self.exit = true;
+                                        return Some(Err((Error::Malformed(
+                                                        "Unexpected token '--'".to_owned()), start)));
+                                    }
+                                    start += 1;
+                                }
+                            }
+                            return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
                         } else if len >= 8 {
                             match &buf[1..8] {
                                 b"[CDATA[" => {
-                                    loop {
-                                        let len = buf.len();
-                                        if len >= 10 && &buf[(len - 2)..] == b"]]" {
-                                            return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
-                                        }
+                                    let mut len = buf.len();
+                                    while len < 10 || &buf[(len - 2)..] != b"]]" {
                                         buf.push(b'>');
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
@@ -322,11 +319,14 @@ impl<B: BufRead> XmlReader<B> {
                                                 return Some(Err((e, self.buf_position)));
                                             },
                                         }
+                                        len = buf.len();
                                     }
+                                    return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
                                 },
                                 b"DOCTYPE" => {
                                     let mut count = buf.iter().filter(|&&b| b == b'<').count();
                                     while count > 0 {
+                                        buf.push(b'>');
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
                                                 self.exit = true;
