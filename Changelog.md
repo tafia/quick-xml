@@ -1,7 +1,11 @@
 ## master
+- feat: support `Event::DocType`
+
+## v0.1.9
 - feat: return more precise index when erroring
 - feat: have `Attributes` iterate ResultPos instead of `Result`
-- perf: better perf
+- feat: provide functions to unescape `&...;` characters
+- fix: have namespace resolution start one level higher
 
 ## v0.1.8
 - feat: add `XmlnsReader` to iterate event and resolve namespaces!
