@@ -15,14 +15,14 @@ fn sample_1_short() {
     );
 }
 
-// #[test]
-// fn sample_1_full() {
-//     test(
-//         include_bytes!("documents/sample_1.xml"),
-//         include_bytes!("documents/sample_1_full.txt"),
-//         false
-//     );
-// }
+#[test]
+fn sample_1_full() {
+    test(
+        include_bytes!("documents/sample_1.xml"),
+        include_bytes!("documents/sample_1_full.txt"),
+        false
+    );
+}
 
 #[test]
 fn sample_2_short() {
@@ -33,14 +33,14 @@ fn sample_2_short() {
     );
 }
 
-// #[test]
-// fn sample_2_full() {
-//     test(
-//         include_bytes!("documents/sample_2.xml"),
-//         include_bytes!("documents/sample_2_full.txt"),
-//         false
-//     );
-// }
+#[test]
+fn sample_2_full() {
+    test(
+        include_bytes!("documents/sample_2.xml"),
+        include_bytes!("documents/sample_2_full.txt"),
+        false
+    );
+}
 
 // #[test]
 // fn sample_3_short() {
@@ -249,7 +249,7 @@ fn convert_to_quick_xml(s: &str) -> String {
     }
 
     if s.starts_with("Whitespace") {
-        format!("Character{}", s)
+        format!("Characters{}", &s[10..])
     } else {
         s.to_owned()
     }
@@ -278,6 +278,9 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         let line = format!("{}", OptEvent(e));
 
         if let Some((n, spec)) = spec_lines.next() {
+            if spec == "EndDocument" {
+                break;
+            }
             if line != spec {
                 const SPLITTER: &'static str = "-------------------";
                 panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound:    {}\n{}\n",
@@ -288,6 +291,20 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                 break;
             }
             panic!("Unexpected event: {}", line);
+        }
+
+        if !is_short && line.starts_with("StartDocument") {
+            // advance next Characters(empty space) ...
+            if let Some(Ok((_, Event::Text(ref e)))) = reader.next() {
+                if e.content().iter().any(|b| match *b {
+                    b' ' | b'\r' | b'\n' | b'\t' => false,
+                    _ => true,
+                }) {
+                    panic!("XmlReader expects empty Text event after a StartDocument");
+                }
+            } else {
+                panic!("XmlReader expects empty Text event after a StartDocument");
+            }
         }
     }
 }
