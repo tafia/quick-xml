@@ -98,24 +98,24 @@ fn bad_1() {
     );
 }
 
-// #[test]
-// fn dashes_in_comments() {
-//     test(
-//         br#"<!-- comment -- --><hello/>"#,
-//         br#"
-//             |1:14 Unexpected token '--' before ' '
-//         "#,
-//         false
-//     );
-// 
-//     test(
-//         br#"<!-- comment ---><hello/>"#,
-//         br#"
-//             |1:14 Unexpected token '--' before '-'
-//         "#,
-//         true
-//     );
-// }
+#[test]
+fn dashes_in_comments() {
+    test(
+        br#"<!-- comment -- --><hello/>"#,
+        br#"
+            |1:14 Malformed xml: Unexpected token '--'
+        "#,
+        false
+    );
+
+    test(
+        br#"<!-- comment ---><hello/>"#,
+        br#"
+            |1:14 Malformed xml: Unexpected token '--'
+        "#,
+        true
+    );
+}
 
 #[test]
 fn tabs_1() {
@@ -257,7 +257,9 @@ fn convert_to_quick_xml(s: &str) -> String {
 
 fn test(input: &[u8], output: &[u8], is_short: bool) {
 
-    let mut reader = XmlReader::from_reader(input).trim_text(is_short)
+    let mut reader = XmlReader::from_reader(input)
+        .trim_text(is_short)
+        .check_comments(true)
         .namespaced();
 
     let mut spec_lines = output.lines()
