@@ -1,10 +1,11 @@
 ## master
 - feat: support `Event::DocType`
+- feat: add `.check_comments` to check for invalid double dashes (`--`) in comments
 
 ## v0.1.9
 - feat: return more precise index when erroring
 - feat: have `Attributes` iterate ResultPos instead of `Result`
-- feat: provide functions to unescape `&...;` characters
+- feat: provide functions to unescape `&...;` characters (`.escaped_content` and `.escaped_attributes`)
 - fix: have namespace resolution start one level higher
 
 ## v0.1.8
