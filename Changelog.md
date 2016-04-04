@@ -1,6 +1,7 @@
 ## master
 - feat: support `Event::DocType`
 - feat: add `.check_comments` to check for invalid double dashes (`--`) in comments
+- fix: check that all attributes are distincts
 
 ## v0.1.9
 - feat: return more precise index when erroring

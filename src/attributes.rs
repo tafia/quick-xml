@@ -2,6 +2,7 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 use std::borrow::Cow;
+use std::ops::Range;
 use error::{Error, ResultPos};
 use escape::unescape;
 
@@ -10,6 +11,8 @@ pub struct Attributes<'a> {
     bytes: &'a [u8],
     position: usize,
     was_error: bool,
+    with_checks: bool,
+    consumed: Vec<Range<usize>>,
 }
 
 impl<'a> Attributes<'a> {
@@ -22,6 +25,8 @@ impl<'a> Attributes<'a> {
             bytes: buf,
             position: pos,
             was_error: false,
+            with_checks: true,
+            consumed: Vec::new(),
         }
     }
 
@@ -121,8 +126,19 @@ impl<'a> Iterator for Attributes<'a> {
         }
         self.position += end_val.unwrap() + 1;
 
-        Some(Ok((&self.bytes[(p + start_key)..(p + end_key.unwrap())],
-           &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
+        let r = (p + start_key)..(p + end_key.unwrap());
+        if self.with_checks {
+            let name = &self.bytes[r.clone()];
+            if let Some(ref r2) = self.consumed.iter().cloned().find(|r2| &self.bytes[r2.clone()] == name) {
+                self.was_error = true;
+                return Some(Err((Error::Malformed(format!(
+                                    "Duplicate attribute at position {} and {}",
+                                    r2.start, r.start)), r.start)));
+            }
+            self.consumed.push(r.clone());
+        }
+
+        Some(Ok((&self.bytes[r], &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
     }
 }
 
