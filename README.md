@@ -102,13 +102,19 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-Here is a simple comparison with [xml-rs](https://github.com/netvl/xml-rs) for very basic operations.
-
+You can benchmark with other libraries using features:
 ```
-test bench_quick_xml            ... bench:     581,276 ns/iter (+/- 42,399)
-test bench_quick_xml_escaped    ... bench:     711,507 ns/iter (+/- 35,773)
-test bench_quick_xml_namespaced ... bench:     795,207 ns/iter (+/- 28,658)
-test bench_xml_rs               ... bench:  14,219,434 ns/iter (+/- 366,288)
+cargo bench --features bench-xml-rs
+cargo bench --features bench-rusty-xml
+```
+
+Results:
+```
+test bench_quick_xml            ... bench:     610,970 ns/iter (+/- 40,766)
+test bench_quick_xml_escaped    ... bench:     721,361 ns/iter (+/- 21,095)
+test bench_quick_xml_namespaced ... bench:     820,220 ns/iter (+/- 11,309)
+test bench_xml_rs               ... bench:  14,012,890 ns/iter (+/- 12,378,389)
+test bench_rusty_xml            ... bench:   5,543,993 ns/iter (+/- 326,792)
 ```
 
 ## Todo
