@@ -1,11 +1,11 @@
-//! Quick XmlReader reader which performs **very** well.
+//! High performance xml reader/writer.
 //!
 //! ## Reader
 //!
 //! Depending on your needs, you can use:
 //!
 //! - `XmlReader`: for best performance
-//! - `XmlnsReader`: if you need to resolve namespaces (around 50% slower than XmlReader)
+//! - `XmlnsReader`: if you need to resolve namespaces (around 50% slower than `XmlReader`)
 //!
 //! ## Writer
 //!
@@ -48,7 +48,7 @@ pub trait AsStr {
     fn as_str(&self) -> Result<&str>;
 }
 
-/// Implements AsStr for a byte slice
+/// Implements `AsStr` for a byte slice
 impl AsStr for [u8] {
     fn as_str(&self) -> Result<&str> {
         from_utf8(self).map_err(Error::Utf8)
@@ -443,7 +443,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 /// - no attribute parsing: use lazy `Attributes` iterator only when needed
 /// - no namespace awareness as it requires parsing all `Start` element attributes
 /// - no utf8 conversion: prefer searching statically known bytes patterns when possible 
-/// (`e.name() == b"myname"`), then use the `.as_str()` or `.into_string()` methods
+/// (`e.name() == b"myname"`), then use the `as_str` or `into_string` methods
 pub struct Element {
     /// content of the element, before any utf8 conversion
     buf: Vec<u8>,
@@ -562,7 +562,7 @@ impl fmt::Debug for Element {
     }
 }
 
-/// Wrapper around Element to parse XmlDecl
+/// Wrapper around `Element` to parse `XmlDecl`
 ///
 /// Postpone element parsing only when needed
 #[derive(Debug)]
@@ -655,10 +655,10 @@ fn is_whitespace(b: u8) -> bool {
     }
 }
 
-/// read_until slighly modified from rust std library
+/// `read_until` slighly modified from rust std library
 ///
 /// only change is that we do not write the matching character
-#[inline(always)]
+#[inline]
 fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     let mut read = 0;
     let mut done = false;
