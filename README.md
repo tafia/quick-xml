@@ -33,7 +33,7 @@ let xml = r#"<tag1 att1 = "test">
                     Test 2
                 </tag2>
             </tag1>"#;
-let reader = XmlReader::from_str(xml).trim_text(true);
+let reader = XmlReader::from(xml).trim_text(true);
 // if you want to use namespaces, you just need to convert the `XmlReader`
 // to an `XmlnsReader`:
 // let reader_ns = reader.namespaced();
@@ -73,7 +73,7 @@ use std::io::Cursor;
 use std::iter;
 
 let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-let reader = XmlReader::from_str(xml).trim_text(true);
+let reader = XmlReader::from(xml).trim_text(true);
 let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 for r in reader {
     match r {
