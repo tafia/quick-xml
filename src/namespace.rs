@@ -1,4 +1,4 @@
-//! Module for managing XmlnsReader iterator
+//! Module for managing `XmlnsReader` iterator
 
 use {XmlReader, Event};
 use error::ResultPos;
@@ -20,7 +20,7 @@ impl Namespace {
     }
 }
 
-/// XmlnsReader iterator which wraps XmlReader iterator and
+/// `XmlnsReader` iterator which wraps `XmlReader` iterator and
 /// adds namespace resolutions
 ///
 /// # Example
@@ -33,7 +33,7 @@ impl Namespace {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///             </tag1>"#;
-/// let mut reader = XmlReader::from_str(xml).trim_text(true)
+/// let mut reader = XmlReader::from(xml).trim_text(true)
 ///                  .namespaced();
 /// let mut count = 0;
 /// let mut txt = Vec::new();
@@ -92,7 +92,7 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                 // increment existing namespace level if this same element
                 {
                     let name = e.name();
-                    for n in self.namespaces.iter_mut() {
+                    for n in &mut self.namespaces {
                         if name == &*n.element_name {
                             n.level += 1;
                         }
@@ -123,7 +123,7 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                 // decrement levels and remove namespaces with 0 level
                 {
                     let name = e.name();
-                    for n in self.namespaces.iter_mut() {
+                    for n in &mut self.namespaces {
                         if name == &*n.element_name {
                             n.level -= 1;
                         }
