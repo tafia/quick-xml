@@ -131,6 +131,10 @@ test bench_rusty_xml            ... bench:   5,543,993 ns/iter (+/- 326,792)
 - [ ] more checks
 - [ ] ... ?
 
+## Known issues:
+
+- [ ] attribute values with `>` character will likely result in parsing error
+
 ## Contribute
 
 Any PR is welcomed!

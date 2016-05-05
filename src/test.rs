@@ -30,25 +30,25 @@ macro_rules! next_eq {
 
 #[test]
 fn test_start() {
-    let mut r = XmlReader::from_str("<a>").trim_text(true);
+    let mut r = XmlReader::from("<a>").trim_text(true);
     next_eq!(r, Start, b"a");
 }
    
 #[test]
 fn test_start_end() {
-    let mut r = XmlReader::from_str("<a/>").trim_text(true);
+    let mut r = XmlReader::from("<a/>").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
    
 #[test]
 fn test_start_end_attr() {
-    let mut r = XmlReader::from_str("<a b=\"test\" />").trim_text(true);
+    let mut r = XmlReader::from("<a b=\"test\" />").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
    
 #[test]
 fn test_start_end_comment() {
-    let mut r = XmlReader::from_str("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>").trim_text(true);
+    let mut r = XmlReader::from("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>").trim_text(true);
     next_eq!(r, 
              Start, b"b",
              Start, b"a", 
@@ -62,19 +62,19 @@ fn test_start_end_comment() {
 
 #[test]
 fn test_start_txt_end() {
-    let mut r = XmlReader::from_str("<a>test</a>").trim_text(true);
+    let mut r = XmlReader::from("<a>test</a>").trim_text(true);
     next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
-    let mut r = XmlReader::from_str("<!--test-->").trim_text(true);
+    let mut r = XmlReader::from("<!--test-->").trim_text(true);
     next_eq!(r, Comment, b"test");
 }
 
 #[test]
 fn test_xml_decl() {
-    let mut r = XmlReader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>").trim_text(true);
+    let mut r = XmlReader::from("<?xml version=\"1.0\" encoding='utf-8'?>").trim_text(true);
     match r.next() {
         Some(Ok(Decl(ref e))) => {
             match e.version() {
@@ -102,13 +102,13 @@ fn test_xml_decl() {
 #[test]
 fn test_trim_test() {
     let txt = "<a><b>  </b></a>";
-    let mut r = XmlReader::from_str(&txt).trim_text(true);
+    let mut r = XmlReader::from(txt).trim_text(true);
     next_eq!(r, Start, b"a",
                 Start, b"b",
                 End, b"b",
                 End, b"a");
 
-    let mut r = XmlReader::from_str(&txt).trim_text(false);
+    let mut r = XmlReader::from(txt).trim_text(false);
     next_eq!(r, Text, b"",
                 Start, b"a",
                 Text, b"",
@@ -121,25 +121,25 @@ fn test_trim_test() {
 
 #[test]
 fn test_cdata() {
-    let mut r = XmlReader::from_str("<![CDATA[test]]>").trim_text(true);
+    let mut r = XmlReader::from("<![CDATA[test]]>").trim_text(true);
     next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
-    let mut r = XmlReader::from_str("<![CDATA[test <> test]]>").trim_text(true);
+    let mut r = XmlReader::from("<![CDATA[test <> test]]>").trim_text(true);
     next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
-    let mut r = XmlReader::from_str("<a b=\"c\">").trim_text(true);
+    let mut r = XmlReader::from("<a b=\"c\">").trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_nested() {
-    let mut r = XmlReader::from_str("<a><b>test</b><c/></a>").trim_text(true);
+    let mut r = XmlReader::from("<a><b>test</b><c/></a>").trim_text(true);
     next_eq!(r, 
              Start, b"a", 
              Start, b"b", 
@@ -153,22 +153,22 @@ fn test_nested() {
 
 #[test]
 fn test_writer() {
-    let str = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
-    let reader = XmlReader::from_str(&str).trim_text(true);
+    let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
+    let reader = XmlReader::from(txt).trim_text(true);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     for event in reader {
         assert!(writer.write(event.unwrap()).is_ok());
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, str.as_bytes());
+    assert_eq!(result, txt.as_bytes());
 }
 
 #[test]
 fn test_write_attrs() {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
-    let reader = XmlReader::from_str(&str_from).trim_text(true);
+    let reader = XmlReader::from(str_from).trim_text(true);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     for event in reader {
         let event = event.unwrap();
@@ -192,7 +192,7 @@ fn test_write_attrs() {
 
 #[test]
 fn test_buf_position() {
-    let mut r = XmlReader::from_str("</a>")
+    let mut r = XmlReader::from("</a>")
         .trim_text(true).with_check(true);
 
     match r.next() {
@@ -201,7 +201,7 @@ fn test_buf_position() {
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
-    r = XmlReader::from_str("<a><!--b>")
+    r = XmlReader::from("<a><!--b>")
         .trim_text(true).with_check(true);
 
     next_eq!(r, Start, b"a");
@@ -216,7 +216,7 @@ fn test_buf_position() {
 
 #[test]
 fn test_namespace() {
-    let mut r = XmlReader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>")
+    let mut r = XmlReader::from("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>")
         .trim_text(true).namespaced();;
 
     if let Some(Ok((None, Start(_)))) = r.next() {        
@@ -237,7 +237,7 @@ fn test_namespace() {
 
 #[test]
 fn test_escaped_content() {
-    let mut r = XmlReader::from_str("<a>&lt;test&gt;</a>").trim_text(true);
+    let mut r = XmlReader::from("<a>&lt;test&gt;</a>").trim_text(true);
     next_eq!(r, Start, b"a");
     match r.next() {
         Some(Ok(Text(ref e))) => {

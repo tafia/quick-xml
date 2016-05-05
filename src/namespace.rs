@@ -33,7 +33,7 @@ impl Namespace {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///             </tag1>"#;
-/// let mut reader = XmlReader::from_str(xml).trim_text(true)
+/// let mut reader = XmlReader::from(xml).trim_text(true)
 ///                  .namespaced();
 /// let mut count = 0;
 /// let mut txt = Vec::new();

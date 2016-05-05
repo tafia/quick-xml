@@ -44,7 +44,7 @@ enum TagState {
 
 /// A trait to support on-demand conversion from UTF-8
 pub trait AsStr {
-    /// Converts this to an &str
+    /// Converts this to an `&str`
     fn as_str(&self) -> Result<&str>;
 }
 
@@ -66,7 +66,7 @@ impl AsStr for [u8] {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///             </tag1>"#;
-/// let reader = XmlReader::from_str(xml).trim_text(true);
+/// let reader = XmlReader::from(xml).trim_text(true);
 /// let mut count = 0;
 /// let mut txt = Vec::new();
 /// for r in reader {
@@ -104,6 +104,12 @@ pub struct XmlReader<B: BufRead> {
     check_comments: bool,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
+}
+
+impl<'a> ::std::convert::From<&'a str> for XmlReader<&'a[u8]> {
+    fn from(reader: &'a str) -> XmlReader<&'a [u8]> {
+        XmlReader::from_reader(reader.as_bytes())
+    }
 }
 
 impl<B: BufRead> XmlReader<B> {
@@ -394,13 +400,6 @@ impl XmlReader<BufReader<File>> {
     }
 }
 
-impl<'a> XmlReader<&'a [u8]> {
-    /// Creates a xml reader for an in memory string buffer.
-    pub fn from_str(s: &'a str) -> XmlReader<&'a [u8]> {
-        XmlReader::from_reader(s.as_bytes())
-    }
-}
-
 /// Iterator on xml returning `Event`s
 impl<B: BufRead> Iterator for XmlReader<B> {
 
@@ -442,8 +441,8 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 ///
 /// - no attribute parsing: use lazy `Attributes` iterator only when needed
 /// - no namespace awareness as it requires parsing all `Start` element attributes
-/// - no utf8 conversion: prefer searching statically known bytes patterns when possible 
-/// (`e.name() == b"myname"`), then use the `as_str` or `into_string` methods
+/// - no utf8 conversion: prefer searching statically binary comparisons
+/// then use the `as_str` or `into_string` methods
 pub struct Element {
     /// content of the element, before any utf8 conversion
     buf: Vec<u8>,
@@ -710,7 +709,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// use std::iter;
 /// 
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-/// let reader = XmlReader::from_str(xml).trim_text(true);
+/// let reader = XmlReader::from(xml).trim_text(true);
 /// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 /// for r in reader {
 ///     match r {
