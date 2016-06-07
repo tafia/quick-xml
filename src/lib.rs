@@ -37,6 +37,7 @@ use attributes::{Attributes, UnescapedAttributes};
 use namespace::XmlnsReader;
 use escape::unescape;
 
+#[derive(Clone)]
 enum TagState {
     Opened,
     Closed,
@@ -61,7 +62,7 @@ impl AsStr for [u8] {
 ///
 /// ```
 /// use quick_xml::{XmlReader, Event};
-/// 
+///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
@@ -73,7 +74,7 @@ impl AsStr for [u8] {
 ///     match r {
 ///         Ok(Event::Start(ref e)) => {
 ///             match e.name() {
-///                 b"tag1" => println!("attributes values: {:?}", 
+///                 b"tag1" => println!("attributes values: {:?}",
 ///                                  e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
 ///                 b"tag2" => count += 1,
 ///                 _ => (),
@@ -85,6 +86,7 @@ impl AsStr for [u8] {
 ///     }
 /// }
 /// ```
+#[derive(Clone)]
 pub struct XmlReader<B: BufRead> {
     /// reader
     reader: B,
@@ -106,14 +108,13 @@ pub struct XmlReader<B: BufRead> {
     buf_position: usize,
 }
 
-impl<'a> ::std::convert::From<&'a str> for XmlReader<&'a[u8]> {
+impl<'a> ::std::convert::From<&'a str> for XmlReader<&'a [u8]> {
     fn from(reader: &'a str) -> XmlReader<&'a [u8]> {
         XmlReader::from_reader(reader.as_bytes())
     }
 }
 
 impl<B: BufRead> XmlReader<B> {
-
     /// Creates a XmlReader from a generic BufReader
     pub fn from_reader(reader: B) -> XmlReader<B> {
         XmlReader {
@@ -170,32 +171,42 @@ impl<B: BufRead> XmlReader<B> {
         loop {
             match self.next() {
                 Some(Ok(Event::End(ref e))) if e.name() == end => {
-                    if depth == 0 { return Ok(()); }
+                    if depth == 0 {
+                        return Ok(());
+                    }
                     depth -= 1;
-                },
+                }
                 Some(Ok(Event::Start(ref e))) if e.name() == end => depth += 1,
                 Some(Err(e)) => return Err(e),
                 None => {
                     warn!("EOF instead of {:?}", from_utf8(end));
-                    return Err((Error::Unexpected(
-                                format!("Reached EOF, expecting {:?} end tag",
-                                        from_utf8(end))), self.buf_position));
-                },
+                    return Err((Error::Unexpected(format!("Reached EOF, expecting {:?} end tag",
+                                                          from_utf8(end))),
+                                self.buf_position));
+                }
                 _ => (),
             }
         }
     }
 
-    /// Reads next event, if `Event::Text` or `Event::End`, 
+    /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns a `String`, else returns an error
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
         match self.next() {
-            Some(Ok(Event::Text(e))) => self.read_to_end(end)
-                .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position))),
+            Some(Ok(Event::Text(e))) => {
+                self.read_to_end(end)
+                    .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position)))
+            }
             Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => Ok("".to_owned()),
             Some(Err(e)) => Err(e),
-            None => Err((Error::Unexpected("Reached EOF while reading text".to_owned()), self.buf_position)),
-            _ => Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()), self.buf_position)),
+            None => {
+                Err((Error::Unexpected("Reached EOF while reading text".to_owned()),
+                     self.buf_position))
+            }
+            _ => {
+                Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_owned()),
+                     self.buf_position))
+            }
         }
     }
 
@@ -215,19 +226,25 @@ impl<B: BufRead> XmlReader<B> {
                 self.buf_position += n;
                 let (start, len) = if self.trim_text {
                     match buf.iter().position(|&b| !is_whitespace(b)) {
-                        Some(start) => (start, buf.len() - buf.iter().rev()
-                                        .position(|&b| !is_whitespace(b)).unwrap_or(0)),
-                        None => return self.next()
+                        Some(start) => {
+                            (start,
+                             buf.len() -
+                             buf.iter()
+                                .rev()
+                                .position(|&b| !is_whitespace(b))
+                                .unwrap_or(0))
+                        }
+                        None => return self.next(),
                     }
                 } else {
                     (0, buf.len())
                 };
                 Some(Ok(Event::Text(Element::from_buffer(buf, start, len, len))))
-            },
+            }
             Err(e) => {
                 self.exit = true;
                 Some(Err((e, self.buf_position)))
-            },
+            }
         }
     }
 
@@ -245,27 +262,30 @@ impl<B: BufRead> XmlReader<B> {
                         if self.with_check {
                             let e = match self.opened.pop() {
                                 Some(e) => e,
-                                None => return Some(Err((
-                                            Error::Malformed(format!(
-                                                "Cannot close {:?} element, there is no opened element",
-                                                buf[1..].as_str())),
-                                             self.buf_position - len))),
+                                None => {
+                                    return Some(Err((Error::Malformed(format!("Cannot close \
+                                                                               {:?} element, \
+                                                                               there is no \
+                                                                               opened element",
+                                                                              buf[1..].as_str())),
+                                                     self.buf_position - len)))
+                                }
                             };
                             if &buf[1..] != e.name() {
                                 self.exit = true;
                                 return Some(Err((Error::Malformed(format!(
-                                        "End event {:?} doesn't match last opened element {:?}, opened: {:?}", 
+                                        "End event {:?} doesn't match last opened element {:?}, opened: {:?}",
                                         Element::from_buffer(buf, 1, len, len), e, self.opened)),
                                              self.buf_position - len)));
                             }
                         }
-                        return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))))
-                    },
+                        return Some(Ok(Event::End(Element::from_buffer(buf, 1, len, len))));
+                    }
                     b'?' => {
                         return if len > 2 && buf[len - 1] == b'?' {
                             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                                Some(Ok(Event::Decl(XmlDecl { 
-                                    element: Element::from_buffer(buf, 1, len - 1, 3)
+                                Some(Ok(Event::Decl(XmlDecl {
+                                    element: Element::from_buffer(buf, 1, len - 1, 3),
                                 })))
                             } else {
                                 Some(Ok(Event::PI(Element::from_buffer(buf, 1, len - 1, 3))))
@@ -275,7 +295,7 @@ impl<B: BufRead> XmlReader<B> {
                             Some(Err((Error::Malformed("Unescaped XmlDecl event".to_owned()),
                                       self.buf_position - len)))
                         };
-                    },
+                    }
                     b'!' => {
                         if len >= 3 && &buf[1..3] == b"--" {
                             let mut len = buf.len();
@@ -284,14 +304,16 @@ impl<B: BufRead> XmlReader<B> {
                                 match read_until(&mut self.reader, b'>', &mut buf) {
                                     Ok(0) => {
                                         self.exit = true;
-                                        return Some(Err((Error::Malformed("Unescaped Comment event".to_owned()),
+                                        return Some(Err((Error::Malformed("Unescaped Comment \
+                                                                           event"
+                                            .to_owned()),
                                                          self.buf_position - len)));
-                                    },
+                                    }
                                     Ok(n) => self.buf_position += n,
                                     Err(e) => {
                                         self.exit = true;
                                         return Some(Err((e, self.buf_position)));
-                                    },
+                                    }
                                 }
                                 len = buf.len();
                             }
@@ -300,13 +322,17 @@ impl<B: BufRead> XmlReader<B> {
                                 for w in buf[3..(len - 1)].windows(2) {
                                     if &*w == b"--" {
                                         self.exit = true;
-                                        return Some(Err((Error::Malformed(
-                                                        "Unexpected token '--'".to_owned()), start)));
+                                        return Some(Err((Error::Malformed("Unexpected token '--'"
+                                            .to_owned()),
+                                                         start)));
                                     }
                                     start += 1;
                                 }
                             }
-                            return Some(Ok(Event::Comment(Element::from_buffer(buf, 3, len - 2, len - 2))));
+                            return Some(Ok(Event::Comment(Element::from_buffer(buf,
+                                                                               3,
+                                                                               len - 2,
+                                                                               len - 2))));
                         } else if len >= 8 {
                             match &buf[1..8] {
                                 b"[CDATA[" => {
@@ -316,19 +342,24 @@ impl<B: BufRead> XmlReader<B> {
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
                                                 self.exit = true;
-                                                return Some(Err((Error::Malformed("Unescaped CDATA event".to_owned()),
+                                                return Some(Err((Error::Malformed("Unescaped \
+                                                                                   CDATA event"
+                                                    .to_owned()),
                                                                  self.buf_position - len)));
-                                            },
+                                            }
                                             Ok(n) => self.buf_position += n,
                                             Err(e) => {
                                                 self.exit = true;
                                                 return Some(Err((e, self.buf_position)));
-                                            },
+                                            }
                                         }
                                         len = buf.len();
                                     }
-                                    return Some(Ok(Event::CData(Element::from_buffer(buf, 8, len - 2, len - 2))));
-                                },
+                                    return Some(Ok(Event::CData(Element::from_buffer(buf,
+                                                                                     8,
+                                                                                     len - 2,
+                                                                                     len - 2))));
+                                }
                                 b"DOCTYPE" => {
                                     let mut count = buf.iter().filter(|&&b| b == b'<').count();
                                     while count > 0 {
@@ -336,33 +367,42 @@ impl<B: BufRead> XmlReader<B> {
                                         match read_until(&mut self.reader, b'>', &mut buf) {
                                             Ok(0) => {
                                                 self.exit = true;
-                                                return Some(Err((Error::Malformed("Unescaped DOCTYPE node".to_owned()),
+                                                return Some(Err((Error::Malformed("Unescaped \
+                                                                                   DOCTYPE node"
+                                                    .to_owned()),
                                                                  self.buf_position - buf.len())));
-                                            },
+                                            }
                                             Ok(n) => {
                                                 self.buf_position += n;
                                                 let start = buf.len() - n;
-                                                count += buf[start..].iter()
-                                                    .filter(|&&b| b == b'<').count() - 1;
-                                            },
+                                                count += buf[start..]
+                                                    .iter()
+                                                    .filter(|&&b| b == b'<')
+                                                    .count() -
+                                                         1;
+                                            }
                                             Err(e) => {
                                                 self.exit = true;
                                                 return Some(Err((e, self.buf_position)));
-                                            },
+                                            }
                                         }
                                     }
                                     let len = buf.len();
-                                    return Some(Ok(Event::DocType(Element::from_buffer(buf, 1, len, 8))));
-                                },
+                                    return Some(Ok(Event::DocType(Element::from_buffer(buf,
+                                                                                       1,
+                                                                                       len,
+                                                                                       8))));
+                                }
                                 _ => {
                                     self.exit = true;
                                     return Some(Err((Error::Malformed("Only Comment, CDATA and \
-                                        DOCTYPE nodes can start with a '!'".to_owned()), 
-                                                   self.buf_position - buf.len())));
-                                },
+                                        DOCTYPE nodes can start with a '!'"
+                                        .to_owned()),
+                                                     self.buf_position - buf.len())));
+                                }
                             }
                         }
-                    },
+                    }
                     _ => (),
                 }
 
@@ -371,7 +411,11 @@ impl<B: BufRead> XmlReader<B> {
                 let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
                 if buf[len - 1] == b'/' {
                     self.next_close = true;
-                    let end = if name_end < len { name_end } else { len - 1 };
+                    let end = if name_end < len {
+                        name_end
+                    } else {
+                        len - 1
+                    };
                     let element = Element::from_buffer(buf, 0, len - 1, end);
                     self.opened.push(element.clone());
                     Some(Ok(Event::Start(element)))
@@ -382,19 +426,18 @@ impl<B: BufRead> XmlReader<B> {
                     }
                     Some(Ok(Event::Start(element)))
                 }
-            },
+            }
             Err(e) => {
                 self.exit = true;
                 Some(Err((e, self.buf_position)))
-            },
+            }
         }
     }
 }
 
 impl XmlReader<BufReader<File>> {
     /// Creates a xml reader from a file path
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<XmlReader<BufReader<File>>>
-    {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<XmlReader<BufReader<File>>> {
         let reader = BufReader::new(try!(File::open(path)));
         Ok(XmlReader::from_reader(reader))
     }
@@ -402,11 +445,12 @@ impl XmlReader<BufReader<File>> {
 
 /// Iterator on xml returning `Event`s
 impl<B: BufRead> Iterator for XmlReader<B> {
-
     type Item = ResultPos<Event>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.exit { return None; }
+        if self.exit {
+            return None;
+        }
         if self.next_close {
             self.next_close = false;
             let e = self.opened.pop().unwrap();
@@ -417,18 +461,15 @@ impl<B: BufRead> Iterator for XmlReader<B> {
             TagState::Closed => self.read_until_open(),
         }
     }
-
 }
-
-#[derive(Clone)]
 /// General content of an event (aka node)
 ///
 /// Element is a wrapper over the bytes representing the node:
 ///
-/// E.g. given a node `<name att1="a", att2="b">`, the corresponding `Event` will be 
+/// E.g. given a node `<name att1="a", att2="b">`, the corresponding `Event` will be
 ///
 /// ```ignore
-/// Event::Start(Element { 
+/// Event::Start(Element {
 ///     buf:    b"name att1=\"a\", att2=\"b\"",
 ///     start:  0,
 ///     end:    b"name att1=\"a\", att2=\"b\"".len(),
@@ -436,13 +477,14 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 /// })
 /// ```
 ///
-/// For performance reasons, most of the time, no character searches but 
+/// For performance reasons, most of the time, no character searches but
 /// `b'<'` and `b'>'` are performed:
 ///
 /// - no attribute parsing: use lazy `Attributes` iterator only when needed
 /// - no namespace awareness as it requires parsing all `Start` element attributes
 /// - no utf8 conversion: prefer searching statically binary comparisons
 /// then use the `as_str` or `into_string` methods
+#[derive(Clone)]
 pub struct Element {
     /// content of the element, before any utf8 conversion
     buf: Vec<u8>,
@@ -455,17 +497,18 @@ pub struct Element {
 }
 
 impl Element {
-
     /// Creates a new Element from the given name.
     /// name is a reference that can be converted to a byte slice, such as &[u8] or &str
-    pub fn new<A>(name: A) -> Element where A: AsRef<[u8]> {
+    pub fn new<A>(name: A) -> Element
+        where A: AsRef<[u8]>
+    {
         let bytes = Vec::from(name.as_ref());
         let end = bytes.len();
         Element {
             buf: bytes,
             start: 0,
             end: end,
-            name_end: end
+            name_end: end,
         }
     }
 
@@ -479,12 +522,14 @@ impl Element {
         }
     }
 
-    /// Consumes self and adds attributes to this element from an iterator 
+    /// Consumes self and adds attributes to this element from an iterator
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
-        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: IntoIterator<Item = (K, V)>
+        where K: AsRef<[u8]>,
+              V: AsRef<[u8]>,
+              I: IntoIterator<Item = (K, V)>
     {
         self.extend_attributes(attributes);
         self
@@ -523,7 +568,9 @@ impl Element {
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn extend_attributes<K, V, I>(&mut self, attributes: I) -> &mut Element
-        where K: AsRef<[u8]>, V: AsRef<[u8]>, I: IntoIterator<Item = (K, V)>
+        where K: AsRef<[u8]>,
+              V: AsRef<[u8]>,
+              I: IntoIterator<Item = (K, V)>
     {
         for attr in attributes {
             self.push_attribute(attr.0, attr.1);
@@ -542,7 +589,8 @@ impl Element {
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn push_attribute<K, V>(&mut self, key: K, value: V)
-        where K: AsRef<[u8]>, V: AsRef<[u8]>
+        where K: AsRef<[u8]>,
+              V: AsRef<[u8]>
     {
         let bytes = &mut self.buf;
         bytes.push(b' ');
@@ -556,30 +604,39 @@ impl Element {
 
 impl fmt::Debug for Element {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
-        write!(f, "Element {{ buf: {:?}, name_end: {}, end: {} }}", 
-               self.content().as_str(), self.name_end, self.end)
+        write!(f,
+               "Element {{ buf: {:?}, name_end: {}, end: {} }}",
+               self.content().as_str(),
+               self.name_end,
+               self.end)
     }
 }
 
 /// Wrapper around `Element` to parse `XmlDecl`
 ///
 /// Postpone element parsing only when needed
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct XmlDecl {
     element: Element,
 }
 
 impl XmlDecl {
-
     /// Gets xml version, including quotes (' or ")
     pub fn version(&self) -> ResultPos<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(Ok((b"version", v))) => Ok(v),
-            Some(Ok((k, _))) => Err((Error::Malformed(format!(
-                        "XmlDecl must start with 'version' attribute, found {:?}", k.as_str())), 0)),
-            None => Err((Error::Malformed(
-                    "XmlDecl must start with 'version' attribute, found none".to_owned()), 0)),
+            Some(Ok((k, _))) => {
+                Err((Error::Malformed(format!("XmlDecl must start with 'version' attribute, \
+                                               found {:?}",
+                                              k.as_str())),
+                     0))
+            }
+            None => {
+                Err((Error::Malformed("XmlDecl must start with 'version' attribute, found none"
+                    .to_owned()),
+                     0))
+            }
         }
     }
 
@@ -606,13 +663,12 @@ impl XmlDecl {
         }
         None
     }
-    
 }
 
 /// Event to interprete node as they are parsed
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Event {
-    /// <...> eventually with attributes 
+    /// <...> eventually with attributes
     Start(Element),
     /// </...>
     End(Element),
@@ -631,7 +687,6 @@ pub enum Event {
 }
 
 impl Event {
-
     /// returns inner Element for the event
     pub fn element(&self) -> &Element {
         match *self {
@@ -639,7 +694,7 @@ impl Event {
             Event::End(ref e) |
             Event::Text(ref e) |
             Event::Comment(ref e) |
-            Event::CData(ref e) | 
+            Event::CData(ref e) |
             Event::PI(ref e) |
             Event::DocType(ref e) => e,
             Event::Decl(ref e) => &e.element,
@@ -669,7 +724,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => return Err(Error::Io(e)),
             };
-            
+
             let mut bytes = available.iter().enumerate();
 
             let used: usize;
@@ -682,12 +737,12 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                             used = i + 1;
                             break;
                         }
-                    },
+                    }
                     None => {
                         buf.extend_from_slice(available);
                         used = available.len();
                         break;
-                    },
+                    }
                 }
             }
             used
@@ -707,7 +762,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// use quick_xml::Event::*;
 /// use std::io::Cursor;
 /// use std::iter;
-/// 
+///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 /// let reader = XmlReader::from(xml).trim_text(true);
 /// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
@@ -736,22 +791,22 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
 /// ```
+#[derive(Clone)]
 pub struct XmlWriter<W: Write> {
     /// underlying writer
-    writer: W
+    writer: W,
 }
 
 impl<W: Write> XmlWriter<W> {
-
     /// Creates a XmlWriter from a generic Write
     pub fn new(inner: W) -> XmlWriter<W> {
-        XmlWriter {
-            writer: inner
-        }
+        XmlWriter { writer: inner }
     }
 
     /// Consumes this Xml Writer, returning the underlying writer.
-    pub fn into_inner(self) -> W { self.writer }
+    pub fn into_inner(self) -> W {
+        self.writer
+    }
 
     /// Writes the given event to the underlying writer.
     pub fn write(&mut self, event: Event) -> Result<()> {
@@ -773,12 +828,9 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8])
-        -> Result<()> 
-    {
+    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8]) -> Result<()> {
         try!(self.write_bytes(before));
         try!(self.write_bytes(&element.content()));
         self.write_bytes(after)
     }
-
 }
