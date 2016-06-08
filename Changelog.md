@@ -1,4 +1,11 @@
 ## master
+
+## 0.2.1
+- feat: add `Clone` to more structs
+- style: apply rustfmt
+
+## 0.2.0
+- refactor: change `from_str` into impl `From<&str>`
 - feat: support `Event::DocType`
 - feat: add `.check_comments` to check for invalid double dashes (`--`) in comments
 - fix: check that all attributes are distincts
