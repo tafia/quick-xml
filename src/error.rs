@@ -23,10 +23,10 @@ pub enum Error {
 pub type Result<T> = ::std::result::Result<T, Error>;
 /// Result type with position
 ///
-/// Position represents byte index relative to 
+/// Position represents byte index relative to
 ///
 /// - xml file when iterating xml `Event`s
-/// - element node when iterating on `Attribute`s. You can find xml 
+/// - element node when iterating on `Attribute`s. You can find xml
 /// relative position using `XmlReader::buffer_position`
 pub type ResultPos<T> = ::std::result::Result<T, (Error, usize)>;
 
@@ -63,9 +63,13 @@ impl ::std::error::Error for Error {
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error { Error::Io(err) }
+    fn from(err: io::Error) -> Error {
+        Error::Io(err)
+    }
 }
 
 impl From<Utf8Error> for Error {
-    fn from(err: Utf8Error) -> Error { Error::Utf8(err) }
+    fn from(err: Utf8Error) -> Error {
+        Error::Utf8(err)
+    }
 }

@@ -4,6 +4,7 @@ use {XmlReader, Event};
 use error::ResultPos;
 use std::io::BufRead;
 
+#[derive(Clone)]
 struct Namespace {
     prefix: Vec<u8>,
     value: Vec<u8>,
@@ -14,9 +15,7 @@ struct Namespace {
 impl Namespace {
     fn is_match(&self, name: &[u8]) -> bool {
         let len = self.prefix.len();
-        name.len() > len && 
-        name[len] == b':' &&
-        &name[..len] == &*self.prefix
+        name.len() > len && name[len] == b':' && &name[..len] == &*self.prefix
     }
 }
 
@@ -28,7 +27,7 @@ impl Namespace {
 /// ```
 /// use quick_xml::{XmlReader, Event};
 /// use quick_xml::namespace::XmlnsReader;
-/// 
+///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
@@ -45,7 +44,7 @@ impl Namespace {
 ///         // the resolved Namespace, if any
 ///         Ok((ref n, Event::Start(ref e))) => {
 ///             match e.name() {
-///                 b"tag1" => println!("attributes keys: {:?}", 
+///                 b"tag1" => println!("attributes keys: {:?}",
 ///                                  e.attributes()
 ///                                  // use `reader.resolve` to get attribute namespace resolution
 ///                                  .map(|a| reader.resolve(a.unwrap().0))
@@ -60,13 +59,13 @@ impl Namespace {
 ///     }
 /// }
 /// ```
+#[derive(Clone)]
 pub struct XmlnsReader<R: BufRead> {
     reader: XmlReader<R>,
     namespaces: Vec<Namespace>,
 }
 
 impl<R: BufRead> XmlnsReader<R> {
-
     /// Converts a `XmlReader` into a `XmlnsReader` iterator
     pub fn new(reader: XmlReader<R>) -> XmlnsReader<R> {
         XmlnsReader {
@@ -76,7 +75,7 @@ impl<R: BufRead> XmlnsReader<R> {
     }
 
     /// Resolves a qualified name into (namespace value, local name)
-    pub fn resolve<'a, 'b>(&'a self, qname: &'b[u8]) -> (Option<&'a[u8]>, &'b[u8]) {
+    pub fn resolve<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
         match self.namespaces.iter().rev().find(|ref n| n.is_match(qname)) {
             Some(n) => (Some(&n.value), &qname[(n.prefix.len() + 1)..]),
             None => (None, qname),
@@ -103,7 +102,7 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                     if let Ok((k, v)) = a {
                         if k.len() > 6 && &k[..6] == b"xmlns:" {
                             self.namespaces.push(Namespace {
-                                prefix: k[6..].to_vec(), 
+                                prefix: k[6..].to_vec(),
                                 value: v.to_vec(),
                                 element_name: e.name().to_vec(),
                                 level: 1,
@@ -113,7 +112,9 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                 }
                 // search namespace value
                 // iterate in reverse order to find the most recent one
-                let namespace = self.namespaces.iter().rev()
+                let namespace = self.namespaces
+                    .iter()
+                    .rev()
                     .find(|ref n| n.is_match(e.name()))
                     .map(|ref n| n.value.clone());
 
@@ -134,16 +135,18 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                     Some(p) => {
                         let len = self.namespaces.len() - p;
                         self.namespaces.truncate(len)
-                    },
+                    }
                 }
                 let namespace = {
                     let name = e.name();
-                    self.namespaces.iter().rev()
+                    self.namespaces
+                        .iter()
+                        .rev()
                         .find(|ref n| n.is_match(name))
                         .map(|ref n| n.value.clone())
                 };
                 Some(Ok((namespace, Event::End(e))))
-            },
+            }
             Some(Ok(e)) => Some(Ok((None, e))),
             Some(Err(e)) => Some(Err(e)),
             None => None,

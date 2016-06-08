@@ -9,18 +9,18 @@ macro_rules! next_eq {
         $(
             match $r.next() {
                 Some(Ok($t(ref e))) => {
-                    assert!(e.name() == $bytes, "expecting {:?}, found {:?}", 
+                    assert!(e.name() == $bytes, "expecting {:?}, found {:?}",
                             from_utf8($bytes), e.content().as_str());
                 },
                 Some(Ok(e)) => {
-                    assert!(false, "expecting {:?}, found {:?}", 
+                    assert!(false, "expecting {:?}, found {:?}",
                             $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
                 },
                 Some(Err((e, pos))) => {
                     assert!(false, "{:?} at buffer position {}", e, pos);
                 },
                 p => {
-                    assert!(false, "expecting {:?}, found {:?}", 
+                    assert!(false, "expecting {:?}, found {:?}",
                             $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
                 }
             }
@@ -33,31 +33,38 @@ fn test_start() {
     let mut r = XmlReader::from("<a>").trim_text(true);
     next_eq!(r, Start, b"a");
 }
-   
+
 #[test]
 fn test_start_end() {
     let mut r = XmlReader::from("<a/>").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
-   
+
 #[test]
 fn test_start_end_attr() {
     let mut r = XmlReader::from("<a b=\"test\" />").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
-   
+
 #[test]
 fn test_start_end_comment() {
-    let mut r = XmlReader::from("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>").trim_text(true);
-    next_eq!(r, 
-             Start, b"b",
-             Start, b"a", 
-             End, b"a",
-             Start, b"a", 
-             End, b"a",
-             Comment, b"t",
-             End, b"b"
-            );
+    let mut r = XmlReader::from("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>")
+        .trim_text(true);
+    next_eq!(r,
+             Start,
+             b"b",
+             Start,
+             b"a",
+             End,
+             b"a",
+             Start,
+             b"a",
+             End,
+             b"a",
+             Comment,
+             b"t",
+             End,
+             b"b");
 }
 
 #[test]
@@ -78,12 +85,19 @@ fn test_xml_decl() {
     match r.next() {
         Some(Ok(Decl(ref e))) => {
             match e.version() {
-                Ok(v) => assert!(v == b"1.0", "expecting version '1.0', got '{:?}", v.as_str()),
+                Ok(v) => {
+                    assert!(v == b"1.0",
+                            "expecting version '1.0', got '{:?}",
+                            v.as_str())
+                }
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
-                Some(Ok(v)) => assert!(v == b"utf-8", "expecting encoding 'utf-8', got '{:?}",
-                                       v.as_str()),
+                Some(Ok(v)) => {
+                    assert!(v == b"utf-8",
+                            "expecting encoding 'utf-8', got '{:?}",
+                            v.as_str())
+                }
                 Some(Err(e)) => assert!(false, "{:?}", e),
                 None => assert!(false, "cannot find encoding"),
             }
@@ -91,10 +105,10 @@ fn test_xml_decl() {
                 None => assert!(true),
                 e => assert!(false, "doesn't expect standalone, got {:?}", e),
             }
-        },
+        }
         Some(Err((e, pos))) => {
             assert!(false, "{:?} at buffer position {}", e, pos);
-        },
+        }
         _ => assert!(false, "unable to parse XmlDecl"),
     }
 }
@@ -103,20 +117,26 @@ fn test_xml_decl() {
 fn test_trim_test() {
     let txt = "<a><b>  </b></a>";
     let mut r = XmlReader::from(txt).trim_text(true);
-    next_eq!(r, Start, b"a",
-                Start, b"b",
-                End, b"b",
-                End, b"a");
+    next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
 
     let mut r = XmlReader::from(txt).trim_text(false);
-    next_eq!(r, Text, b"",
-                Start, b"a",
-                Text, b"",
-                Start, b"b",
-                Text, b"  ",
-                End, b"b",
-                Text, b"",
-                End, b"a");
+    next_eq!(r,
+             Text,
+             b"",
+             Start,
+             b"a",
+             Text,
+             b"",
+             Start,
+             b"b",
+             Text,
+             b"  ",
+             End,
+             b"b",
+             Text,
+             b"",
+             End,
+             b"a");
 }
 
 #[test]
@@ -140,15 +160,21 @@ fn test_start_attr() {
 #[test]
 fn test_nested() {
     let mut r = XmlReader::from("<a><b>test</b><c/></a>").trim_text(true);
-    next_eq!(r, 
-             Start, b"a", 
-             Start, b"b", 
-             Text, b"test", 
-             End, b"b",
-             Start, b"c", 
-             End, b"c",
-             End, b"a"
-            );
+    next_eq!(r,
+             Start,
+             b"a",
+             Start,
+             b"b",
+             Text,
+             b"test",
+             End,
+             b"b",
+             Start,
+             b"c",
+             End,
+             b"c",
+             End,
+             b"a");
 }
 
 #[test]
@@ -179,9 +205,9 @@ fn test_write_attrs() {
                 let mut elem = Element::new("copy").with_attributes(attrs);
                 elem.push_attribute("x", "y");
                 Start(elem)
-            },
+            }
             End(_elem) => End(Element::new("copy")),
-            _ => event
+            _ => event,
         };
         assert!(writer.write(event).is_ok());
     }
@@ -193,7 +219,8 @@ fn test_write_attrs() {
 #[test]
 fn test_buf_position() {
     let mut r = XmlReader::from("</a>")
-        .trim_text(true).with_check(true);
+        .trim_text(true)
+        .with_check(true);
 
     match r.next() {
         Some(Err((_, 2))) => assert!(true), // error at char 2: no opening tag
@@ -202,7 +229,8 @@ fn test_buf_position() {
     }
 
     r = XmlReader::from("<a><!--b>")
-        .trim_text(true).with_check(true);
+        .trim_text(true)
+        .with_check(true);
 
     next_eq!(r, Start, b"a");
 
@@ -217,9 +245,10 @@ fn test_buf_position() {
 #[test]
 fn test_namespace() {
     let mut r = XmlReader::from("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>")
-        .trim_text(true).namespaced();;
+        .trim_text(true)
+        .namespaced();;
 
-    if let Some(Ok((None, Start(_)))) = r.next() {        
+    if let Some(Ok((None, Start(_)))) = r.next() {
     } else {
         assert!(false, "expecting start element with no namespace");
     }
@@ -246,17 +275,18 @@ fn test_escaped_content() {
                        e.content().as_str());
             }
             match e.unescaped_content() {
-                Ok(ref c) => if &**c != b"<test>" {
-                    panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
-                           c.as_str())
-                },
+                Ok(ref c) => {
+                    if &**c != b"<test>" {
+                        panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
+                               c.as_str())
+                    }
+                }
                 Err((e, i)) => panic!("cannot escape content at position {}: {:?}", i, e),
             }
-        },
+        }
         Some(Ok(ref e)) => panic!("Expecting text event, got {:?}", e),
         Some(Err((e, i))) => panic!("Cannot get next event at position {}: {:?}", i, e),
         None => panic!("Expecting text event, got None"),
     }
     next_eq!(r, End, b"a");
 }
-

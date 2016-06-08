@@ -7,6 +7,7 @@ use error::{Error, ResultPos};
 use escape::unescape;
 
 /// Iterator over attributes key/value pairs
+#[derive(Clone)]
 pub struct Attributes<'a> {
     bytes: &'a [u8],
     position: usize,
@@ -17,8 +18,8 @@ pub struct Attributes<'a> {
 
 impl<'a> Attributes<'a> {
     /// creates a new attribute from a buffer
-    /// 
-    /// pos represents current position of the iterator 
+    ///
+    /// pos represents current position of the iterator
     /// (starts after start element name)
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
@@ -35,9 +36,7 @@ impl<'a> Attributes<'a> {
     /// all escaped characters ('&...;') in attribute values are replaced
     /// with their corresponding character
     pub fn unescaped(self) -> UnescapedAttributes<'a> {
-        UnescapedAttributes {
-            inner: self
-        }
+        UnescapedAttributes { inner: self }
     }
 
     /// check if attributes are distincts
@@ -50,12 +49,16 @@ impl<'a> Attributes<'a> {
 impl<'a> Iterator for Attributes<'a> {
     type Item = ResultPos<(&'a [u8], &'a [u8])>;
     fn next(&mut self) -> Option<Self::Item> {
-        
-        if self.was_error { return None; }
+
+        if self.was_error {
+            return None;
+        }
 
         let len = self.bytes.len();
         let p = self.position;
-        if len <= p { return None; }
+        if len <= p {
+            return None;
+        }
 
         let mut iter = self.bytes[p..].iter().cloned().enumerate();
 
@@ -64,14 +67,17 @@ impl<'a> Iterator for Attributes<'a> {
             let start: usize;
             loop {
                 match iter.next() {
-                    Some((_, b' '))
-                        | Some((_, b'\r')) 
-                        | Some((_, b'\n'))
-                        | Some((_, b'\t')) => if !found_space { found_space = true; },
-                    Some((i, _)) => if found_space { 
-                        start = i;
-                        break;
-                    },
+                    Some((_, b' ')) | Some((_, b'\r')) | Some((_, b'\n')) | Some((_, b'\t')) => {
+                        if !found_space {
+                            found_space = true;
+                        }
+                    }
+                    Some((i, _)) => {
+                        if found_space {
+                            start = i;
+                            break;
+                        }
+                    }
                     None => {
                         self.position = len;
                         return None;
@@ -88,12 +94,11 @@ impl<'a> Iterator for Attributes<'a> {
         let mut quote = 0;
         loop {
             match iter.next() {
-                Some((i, b' '))
-                    | Some((i, b'\r')) 
-                    | Some((i, b'\n'))
-                    | Some((i, b'\t')) => {
-                    if end_key.is_none() { end_key = Some(i); }
-                },
+                Some((i, b' ')) | Some((i, b'\r')) | Some((i, b'\n')) | Some((i, b'\t')) => {
+                    if end_key.is_none() {
+                        end_key = Some(i);
+                    }
+                }
                 Some((i, b'=')) => {
                     if has_equal {
                         self.was_error = true;
@@ -103,11 +108,13 @@ impl<'a> Iterator for Attributes<'a> {
                     if end_key.is_none() {
                         end_key = Some(i);
                     }
-                },
-                Some((i, q @ b'"')) | Some((i, q @ b'\'')) => {
+                }
+                Some((i, q @ b'"')) |
+                Some((i, q @ b'\'')) => {
                     if !has_equal {
                         self.was_error = true;
-                        return Some(Err((Error::Malformed("Unexpected quote before '='".to_owned()), p + i)));
+                        return Some(Err((Error::Malformed("Unexpected quote before '='".to_owned()),
+                                         p + i)));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);
@@ -116,7 +123,7 @@ impl<'a> Iterator for Attributes<'a> {
                         end_val = Some(i);
                         break;
                     }
-                },
+                }
                 None => {
                     self.position = len;
                     return None;
@@ -129,11 +136,16 @@ impl<'a> Iterator for Attributes<'a> {
         let r = (p + start_key)..(p + end_key.unwrap());
         if self.with_checks {
             let name = &self.bytes[r.clone()];
-            if let Some(ref r2) = self.consumed.iter().cloned().find(|r2| &self.bytes[r2.clone()] == name) {
+            if let Some(ref r2) = self.consumed
+                .iter()
+                .cloned()
+                .find(|r2| &self.bytes[r2.clone()] == name) {
                 self.was_error = true;
-                return Some(Err((Error::Malformed(format!(
-                                    "Duplicate attribute at position {} and {}",
-                                    r2.start, r.start)), r.start)));
+                return Some(Err((Error::Malformed(format!("Duplicate attribute at position {} \
+                                                           and {}",
+                                                          r2.start,
+                                                          r.start)),
+                                 r.start)));
             }
             self.consumed.push(r.clone());
         }
@@ -146,13 +158,14 @@ impl<'a> Iterator for Attributes<'a> {
 ///
 /// Iterate over all attributes and unescapes attribute values
 pub struct UnescapedAttributes<'a> {
-    inner: Attributes<'a>
+    inner: Attributes<'a>,
 }
 
 impl<'a> Iterator for UnescapedAttributes<'a> {
     type Item = ResultPos<(&'a [u8], Cow<'a, [u8]>)>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
+        self.inner
+            .next()
             .map(|a| a.and_then(|(k, v)| unescape(v).map(|v| (k, v))))
     }
 }
