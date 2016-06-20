@@ -1,4 +1,5 @@
-## master
+## 0.2.2
+- style: code refactoring, split largest functions into smaller ones
 
 ## 0.2.1
 - feat: add `Clone` to more structs

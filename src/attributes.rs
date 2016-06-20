@@ -11,7 +11,7 @@ use escape::unescape;
 pub struct Attributes<'a> {
     bytes: &'a [u8],
     position: usize,
-    was_error: bool,
+    exit: bool,
     with_checks: bool,
     consumed: Vec<Range<usize>>,
 }
@@ -25,7 +25,7 @@ impl<'a> Attributes<'a> {
         Attributes {
             bytes: buf,
             position: pos,
-            was_error: false,
+            exit: false,
             with_checks: true,
             consumed: Vec::new(),
         }
@@ -44,13 +44,20 @@ impl<'a> Attributes<'a> {
         self.with_checks = val;
         self
     }
+
+    /// return Err((e, p))
+    /// sets `self.exit = true` to terminate the iterator
+    fn error(&mut self, e: Error, p: usize) -> ResultPos<(&'a [u8], &'a [u8])> {
+        self.exit = true;
+        Err((e, p))
+    }
 }
 
 impl<'a> Iterator for Attributes<'a> {
     type Item = ResultPos<(&'a [u8], &'a [u8])>;
     fn next(&mut self) -> Option<Self::Item> {
 
-        if self.was_error {
+        if self.exit {
             return None;
         }
 
@@ -67,7 +74,8 @@ impl<'a> Iterator for Attributes<'a> {
             let start: usize;
             loop {
                 match iter.next() {
-                    Some((_, b' ')) | Some((_, b'\r')) | Some((_, b'\n')) | Some((_, b'\t')) => {
+                    Some((_, b' ')) | Some((_, b'\r')) 
+                        | Some((_, b'\n')) | Some((_, b'\t')) => {
                         if !found_space {
                             found_space = true;
                         }
@@ -94,15 +102,16 @@ impl<'a> Iterator for Attributes<'a> {
         let mut quote = 0;
         loop {
             match iter.next() {
-                Some((i, b' ')) | Some((i, b'\r')) | Some((i, b'\n')) | Some((i, b'\t')) => {
+                Some((i, b' ')) | Some((i, b'\r')) 
+                    | Some((i, b'\n')) | Some((i, b'\t')) => {
                     if end_key.is_none() {
                         end_key = Some(i);
                     }
                 }
                 Some((i, b'=')) => {
                     if has_equal {
-                        self.was_error = true;
-                        return Some(Err((Error::Malformed("Got 2 '=' tokens".to_owned()), p + i)));
+                        return Some(self.error(Error::Malformed(
+                                    "Got 2 '=' tokens".to_string()), p + i));
                     }
                     has_equal = true;
                     if end_key.is_none() {
@@ -112,9 +121,8 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, q @ b'"')) |
                 Some((i, q @ b'\'')) => {
                     if !has_equal {
-                        self.was_error = true;
-                        return Some(Err((Error::Malformed("Unexpected quote before '='".to_owned()),
-                                         p + i)));
+                        return Some(self.error(Error::Malformed(
+                                    "Unexpected quote before '='".to_string()), p + i));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);
@@ -140,17 +148,15 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .cloned()
                 .find(|r2| &self.bytes[r2.clone()] == name) {
-                self.was_error = true;
-                return Some(Err((Error::Malformed(format!("Duplicate attribute at position {} \
-                                                           and {}",
-                                                          r2.start,
-                                                          r.start)),
-                                 r.start)));
+                    return Some(self.error(Error::Malformed(
+                            format!("Duplicate attribute at position {} and {}", 
+                                    r2.start, r.start)), r.start));
             }
             self.consumed.push(r.clone());
         }
 
-        Some(Ok((&self.bytes[r], &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
+        Some(Ok((&self.bytes[r], 
+                 &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
     }
 }
 

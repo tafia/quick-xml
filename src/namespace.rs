@@ -36,17 +36,18 @@ impl Namespace {
 ///                  .namespaced();
 /// let mut count = 0;
 /// let mut txt = Vec::new();
-/// // need to use `while let` in order to have access to `reader.resolve` for attributes
-/// // namespaces
+/// // need to use `while let` in order to have access to `reader.resolve` 
+/// // for attributes namespaces
 /// while let Some(r) = reader.next() {
 ///     match r {
-///         // XmlnsReader iterates ResultPos<(Option<&[u8]>, Event)> with the Option<&[u8]> being
-///         // the resolved Namespace, if any
+///         // XmlnsReader iterates ResultPos<(Option<&[u8]>, Event)> with 
+///         // the Option<&[u8]> being the resolved Namespace, if any
 ///         Ok((ref n, Event::Start(ref e))) => {
 ///             match e.name() {
 ///                 b"tag1" => println!("attributes keys: {:?}",
 ///                                  e.attributes()
-///                                  // use `reader.resolve` to get attribute namespace resolution
+///                                  // use `reader.resolve` to get attribute
+///                                  // namespace resolution
 ///                                  .map(|a| reader.resolve(a.unwrap().0))
 ///                                  .collect::<Vec<_>>()),
 ///                 b"tag2" => count += 1,
@@ -75,7 +76,9 @@ impl<R: BufRead> XmlnsReader<R> {
     }
 
     /// Resolves a qualified name into (namespace value, local name)
-    pub fn resolve<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
+    pub fn resolve<'a, 'b>(&'a self, qname: &'b [u8]) 
+        -> (Option<&'a [u8]>, &'b [u8]) 
+    {
         match self.namespaces.iter().rev().find(|ref n| n.is_match(qname)) {
             Some(n) => (Some(&n.value), &qname[(n.prefix.len() + 1)..]),
             None => (None, qname),

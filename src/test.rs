@@ -14,14 +14,22 @@ macro_rules! next_eq {
                 },
                 Some(Ok(e)) => {
                     assert!(false, "expecting {:?}, found {:?}",
-                            $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), e);
+                            $t(Element::from_buffer($bytes.to_vec(), 
+                                                    0, 
+                                                    $bytes.len(), 
+                                                    $bytes.len())), 
+                            e);
                 },
                 Some(Err((e, pos))) => {
                     assert!(false, "{:?} at buffer position {}", e, pos);
                 },
                 p => {
                     assert!(false, "expecting {:?}, found {:?}",
-                            $t(Element::from_buffer($bytes.to_vec(), 0, $bytes.len(), $bytes.len())), p);
+                            $t(Element::from_buffer($bytes.to_vec(), 
+                                                    0, 
+                                                    $bytes.len(), 
+                                                    $bytes.len())), 
+                            p);
                 }
             }
         )*
@@ -81,7 +89,8 @@ fn test_comment() {
 
 #[test]
 fn test_xml_decl() {
-    let mut r = XmlReader::from("<?xml version=\"1.0\" encoding='utf-8'?>").trim_text(true);
+    let mut r = XmlReader::from("<?xml version=\"1.0\" encoding='utf-8'?>")
+        .trim_text(true);
     match r.next() {
         Some(Ok(Decl(ref e))) => {
             match e.version() {
@@ -200,7 +209,8 @@ fn test_write_attrs() {
         let event = event.unwrap();
         let event = match event {
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<ResultPos<Vec<_>>>().unwrap();
+                let mut attrs = elem.attributes()
+                    .collect::<ResultPos<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[(b"a", b"b"), (b"c", b"d")]);
                 let mut elem = Element::new("copy").with_attributes(attrs);
                 elem.push_attribute("x", "y");
@@ -224,7 +234,8 @@ fn test_buf_position() {
 
     match r.next() {
         Some(Err((_, 2))) => assert!(true), // error at char 2: no opening tag
-        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
+        Some(Err((e, n))) => assert!(false, 
+                                     "expecting buf_pos = 2, found {}, err: {:?}", n, e),
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
@@ -236,7 +247,8 @@ fn test_buf_position() {
 
     match r.next() {
         Some(Err((_, 5))) => assert!(true), // error at char 5: no closing --> tag found
-        Some(Err((e, n))) => assert!(false, "expecting buf_pos = 2, found {}, err: {:?}", n, e),
+        Some(Err((e, n))) => assert!(false, 
+                                     "expecting buf_pos = 2, found {}, err: {:?}", n, e),
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
