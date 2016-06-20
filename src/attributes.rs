@@ -9,18 +9,22 @@ use escape::unescape;
 /// Iterator over attributes key/value pairs
 #[derive(Clone)]
 pub struct Attributes<'a> {
+    /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
+    /// current position of the iterator
     position: usize,
+    /// shall the next iterator early exit because there were an error last time
     exit: bool,
+    /// if true, checks for duplicate names
     with_checks: bool,
+    /// if `with_checks`, contains the ranges corresponding to the 
+    /// attribute names already parsed in this `Element`
     consumed: Vec<Range<usize>>,
 }
 
 impl<'a> Attributes<'a> {
-    /// creates a new attribute from a buffer
-    ///
-    /// pos represents current position of the iterator
-    /// (starts after start element name)
+
+    /// creates a new attribute iterator from a buffer
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
             bytes: buf,

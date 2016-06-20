@@ -27,6 +27,7 @@ mod test;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Write};
 use std::iter::IntoIterator;
+use std::ops::Range;
 use std::path::Path;
 use std::fmt;
 use std::str::from_utf8;
@@ -458,12 +459,10 @@ impl<B: BufRead> Iterator for XmlReader<B> {
 pub struct Element {
     /// content of the element, before any utf8 conversion
     buf: Vec<u8>,
-    /// start of name, e.g for `<![CDATA[` node, `start = b"![CDATA[".len()`
-    start: usize,
-    /// end of content: e.g. for `<?...?>` node, `end = buf.len() - b"?".len()`
-    end: usize,
-    /// name byte length
-    name_end: usize,
+    /// content range, excluding text defining Event type
+    content: Range<usize>,
+    /// element name range
+    name: Range<usize>,
 }
 
 impl Element {
@@ -475,12 +474,7 @@ impl Element {
     {
         let bytes = Vec::from(name.as_ref());
         let end = bytes.len();
-        Element {
-            buf: bytes,
-            start: 0,
-            end: end,
-            name_end: end,
-        }
+        Element::from_buffer(bytes, 0, end, end)
     }
 
     /// private function to create a new element from a buffer.
@@ -489,9 +483,8 @@ impl Element {
     {
         Element {
             buf: buf,
-            start: start,
-            end: end,
-            name_end: name_end,
+            content: Range { start: start, end: end },
+            name: Range { start: start, end: name_end },
         }
     }
 
@@ -510,12 +503,12 @@ impl Element {
 
     /// name as &[u8] (without eventual attributes)
     pub fn name(&self) -> &[u8] {
-        &self.buf[self.start..self.name_end]
+        &self.buf[self.name.clone()]
     }
 
     /// whole content as &[u8] (including eventual attributes)
     pub fn content(&self) -> &[u8] {
-        &self.buf[self.start..self.end]
+        &self.buf[self.content.clone()]
     }
 
     /// gets escaped content
@@ -528,7 +521,7 @@ impl Element {
 
     /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self.content(), self.name_end)
+        Attributes::new(self.content(), self.name.end)
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
@@ -572,7 +565,7 @@ impl Element {
         bytes.extend_from_slice(b"=\"");
         bytes.extend_from_slice(value.as_ref());
         bytes.push(b'"');
-        self.end = bytes.len();
+        self.content.end = bytes.len();
     }
 }
 
@@ -581,8 +574,8 @@ impl fmt::Debug for Element {
         write!(f,
                "Element {{ buf: {:?}, name_end: {}, end: {} }}",
                self.content().as_str(),
-               self.name_end,
-               self.end)
+               self.name.end,
+               self.content.end)
     }
 }
 

@@ -49,8 +49,7 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                                 None => {
                                     return Err((Error::Malformed(
                                                 format!("Invalid hexadecimal character number \
-                                                        in an entity: {}", name)), 
-                                            i))
+                                                        in an entity: {}", name)), i))
                                 }
                             }
                         } else {
@@ -61,22 +60,18 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                                 None => {
                                     return Err((Error::Malformed(
                                                 format!("Invalid decimal character number \
-                                                        in an entity: {}", name)), 
-                                            i))
+                                                        in an entity: {}", name)), i))
                                 }
                             }
                         }
                     }
                     bytes => {
                         return Err((Error::Malformed(format!("Unexpected entity: {:?}",
-                                                             bytes.as_str())),
-                                    i))
+                                                             bytes.as_str())), i))
                     }
                 }
             } else {
-                return Err((Error::Malformed(
-                            "Cannot find ';' after '&'".to_string()), 
-                        i));
+                return Err((Error::Malformed("Cannot find ';' after '&'".to_string()), i));
             }
         }
     }
