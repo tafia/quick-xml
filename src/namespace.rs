@@ -9,7 +9,7 @@ struct Namespace {
     prefix: Vec<u8>,
     value: Vec<u8>,
     element_name: Vec<u8>,
-    level: u8,
+    level: usize,
 }
 
 impl Namespace {
@@ -101,7 +101,7 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                     }
                 }
                 // adds new namespaces for attributes starting with 'xmlns:'
-                for a in e.attributes() {
+                for a in e.attributes().with_checks(false) {
                     if let Ok((k, v)) = a {
                         if k.len() > 6 && &k[..6] == b"xmlns:" {
                             self.namespaces.push(Namespace {
@@ -111,6 +111,8 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                                 level: 1,
                             });
                         }
+                    } else {
+                        break;
                     }
                 }
                 // search namespace value
