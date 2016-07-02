@@ -97,7 +97,7 @@ pub struct XmlReader<B: BufRead> {
     exit: bool,
     /// true when last Start element was a <.. />
     next_close: bool,
-    /// all currently Started elements which didn't have a matching 
+    /// all currently Started elements which didn't have a matching
     /// End element yet
     opened: Vec<Element>,
     /// current state Open/Close
@@ -151,7 +151,7 @@ impl<B: BufRead> XmlReader<B> {
     /// Change default with_check (true per default)
     ///
     /// When set to true, it won't check if End node match last Start node.
-    /// If the xml is known to be sane (already processed etc ...) 
+    /// If the xml is known to be sane (already processed etc ...)
     /// this saves extra time
     pub fn with_check(mut self, val: bool) -> XmlReader<B> {
         self.with_check = val;
@@ -187,7 +187,7 @@ impl<B: BufRead> XmlReader<B> {
                 None => {
                     warn!("EOF instead of {:?}", from_utf8(end));
                     return Err((Error::Unexpected(format!(
-                                    "Reached EOF, expecting {:?} end tag", 
+                                    "Reached EOF, expecting {:?} end tag",
                                     from_utf8(end))),
                                 self.buf_position));
                 }
@@ -271,7 +271,7 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
-    /// reads `Element` starting with a `/`, 
+    /// reads `Element` starting with a `/`,
     /// if `self.with_check`, checks that element matches last opened element
     /// return `End` event
     fn read_end(&mut self, buf: Vec<u8>) -> ResultPos<Event> {
@@ -286,7 +286,7 @@ impl<B: BufRead> XmlReader<B> {
             };
             if &buf[1..] != e.name() {
                 let m = format!("End event {:?} doesn't match last \
-                                opened element {:?}, opened: {:?}", 
+                                opened element {:?}, opened: {:?}",
                                 Element::from_buffer(buf, 1, len, len), e, &self.opened);
                 return self.error(Error::Malformed(m), len);
             }
@@ -294,7 +294,7 @@ impl<B: BufRead> XmlReader<B> {
         Ok(Event::End(Element::from_buffer(buf, 1, len, len)))
     }
 
-    /// reads `Element` starting with a `!`, 
+    /// reads `Element` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
     fn read_bang(&mut self, mut buf: Vec<u8>) -> ResultPos<Event> {
         let len = buf.len();
@@ -364,7 +364,7 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
-    /// reads `Element` starting with a `?`, 
+    /// reads `Element` starting with a `?`,
     /// return `Decl` or `PI` event
     fn read_question_mark(&mut self, buf: Vec<u8>) -> ResultPos<Event> {
         let len = buf.len();
@@ -467,7 +467,7 @@ pub struct Element {
 
 impl Element {
     /// Creates a new Element from the given name.
-    /// name is a reference that can be converted to a byte slice, 
+    /// name is a reference that can be converted to a byte slice,
     /// such as &[u8] or &str
     pub fn new<A>(name: A) -> Element
         where A: AsRef<[u8]>
@@ -478,8 +478,8 @@ impl Element {
     }
 
     /// private function to create a new element from a buffer.
-    fn from_buffer(buf: Vec<u8>, start: usize, end: usize, name_end: usize) 
-        -> Element 
+    fn from_buffer(buf: Vec<u8>, start: usize, end: usize, name_end: usize)
+        -> Element
     {
         Element {
             buf: buf,
@@ -525,7 +525,7 @@ impl Element {
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
-    /// by their corresponding cgaracter)
+    /// by their corresponding character)
     pub fn unescaped_attributes(&self) -> UnescapedAttributes {
         self.attributes().unescaped()
     }
@@ -679,8 +679,8 @@ fn is_whitespace(b: u8) -> bool {
 ///
 /// only change is that we do not write the matching character
 #[inline]
-fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) 
-    -> Result<usize> 
+fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>)
+    -> Result<usize>
 {
     let mut read = 0;
     let mut done = false;
@@ -797,8 +797,8 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8]) 
-        -> Result<()> 
+    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8])
+        -> Result<()>
     {
         try!(self.writer.write(before)
             .and_then(|_| self.writer.write(&element.content()))
