@@ -1,6 +1,7 @@
 ## 0.2.2
-- style: code refactoring, split largest functions into smaller ones
-- style: use `Range` instead of `usize`s in `Element` definition
+- refactor: code refactoring, split largest functions into smaller ones
+- refactor: use `Range` instead of `usize`s in `Element` definition
+- docs: fix typo
 
 ## 0.2.1
 - feat: add `Clone` to more structs
