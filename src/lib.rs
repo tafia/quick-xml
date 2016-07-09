@@ -781,7 +781,7 @@ impl<W: Write> XmlWriter<W> {
     pub fn write(&mut self, event: Event) -> Result<()> {
         match event {
             Event::Start(ref e) => self.write_wrapped_element(b"<", e, b">"),
-            Event::End(ref e) => self.write_wrapped_element(b"</", e, b">"),
+            Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
             Event::Text(ref e) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),
