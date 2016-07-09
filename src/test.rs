@@ -200,6 +200,20 @@ fn test_writer() {
 }
 
 #[test]
+fn test_write_empty_element_attrs() {
+    let str_from = r#"<source attr="val"/>"#;
+    let expected = r#"<source attr="val"></source>"#;
+    let reader = XmlReader::from(str_from);
+    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    for event in reader {
+        assert!(writer.write(event.unwrap()).is_ok());
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(String::from_utf8(result).unwrap(), expected);
+}
+
+#[test]
 fn test_write_attrs() {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
