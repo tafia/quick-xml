@@ -1,3 +1,6 @@
+## 0.2.3
+- fix: do not write attributes on `Event::End`
+ 
 ## 0.2.2
 - refactor: code refactoring, split largest functions into smaller ones
 - refactor: use `Range` instead of `usize`s in `Element` definition
