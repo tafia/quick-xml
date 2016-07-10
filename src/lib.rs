@@ -780,14 +780,14 @@ impl<W: Write> XmlWriter<W> {
     /// Writes the given event to the underlying writer.
     pub fn write(&mut self, event: Event) -> Result<()> {
         match event {
-            Event::Start(ref e) => self.write_wrapped_str(b"<", e, b">"),
-            Event::End(ref e) => self.write_wrapped_str(b"</", e, b">"),
+            Event::Start(ref e) => self.write_wrapped_element(b"<", e, b">"),
+            Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
             Event::Text(ref e) => self.write_bytes(e.content()),
-            Event::Comment(ref e) => self.write_wrapped_str(b"<!--", e, b"-->"),
-            Event::CData(ref e) => self.write_wrapped_str(b"<![CDATA[", e, b"]]>"),
-            Event::Decl(ref e) => self.write_wrapped_str(b"<?", &e.element, b"?>"),
-            Event::PI(ref e) => self.write_wrapped_str(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped_str(b"<!DOCTYPE", e, b">"),
+            Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
+            Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),
+            Event::Decl(ref e) => self.write_wrapped_element(b"<?", &e.element, b"?>"),
+            Event::PI(ref e) => self.write_wrapped_element(b"<?", e, b"?>"),
+            Event::DocType(ref e) => self.write_wrapped_element(b"<!DOCTYPE", e, b">"),
         }
     }
 
@@ -797,12 +797,19 @@ impl<W: Write> XmlWriter<W> {
         Ok(())
     }
 
-    fn write_wrapped_str(&mut self, before: &[u8], element: &Element, after: &[u8])
+    fn write_wrapped_bytes(&mut self, before: &[u8], value: &[u8], after: &[u8])
         -> Result<()>
     {
         try!(self.writer.write(before)
-            .and_then(|_| self.writer.write(&element.content()))
+            .and_then(|_| self.writer.write(value))
             .and_then(|_| self.writer.write(after)));
         Ok(())
+    }
+
+    #[inline]
+    fn write_wrapped_element(&mut self, before: &[u8], element: &Element, after: &[u8])
+        -> Result<()>
+    {
+        self.write_wrapped_bytes(before, &element.content(), after)
     }
 }
