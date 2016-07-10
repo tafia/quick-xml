@@ -1,3 +1,6 @@
+## 0.2.4
+- test: add most tests from xml-rs crate
+
 ## 0.2.3
 - fix: do not write attributes on `Event::End`
  
