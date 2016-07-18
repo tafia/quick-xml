@@ -316,3 +316,24 @@ fn test_escaped_content() {
     }
     next_eq!(r, End, b"a");
 }
+
+#[test]
+fn test_read_write_roundtrip_results_in_identity() {
+    let input = r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <section ns:label="header">
+            <section ns:label="empty element section" />
+            <section ns:label="start/end section"></section>
+            <section ns:label="with text">data</section>
+            </section>
+    "#;
+
+    let reader = XmlReader::from(input);
+    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    for event in reader {
+        assert!(writer.write(event.unwrap()).is_ok());
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(result, input.as_bytes());
+}
