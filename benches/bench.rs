@@ -13,8 +13,9 @@ fn bench_quick_xml(b: &mut Bencher) {
         let r = XmlReader::from_reader(src);
         let mut count = test::black_box(0);
         for e in r {
-            if let Ok(Event::Start(_)) = e {
-                count += 1;
+            match e {
+                Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
+                _ => (),
             }
         }
         assert_eq!(count, 1550);
@@ -32,7 +33,7 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
                 count += 1;
             }
         }
-        assert_eq!(count, 1550);
+        assert_eq!(count, 1247);
     });
 }
 
@@ -50,7 +51,7 @@ fn bench_quick_xml_escaped(b: &mut Bencher) {
                 _ => (),
             }
         }
-        assert_eq!(count, 1550);
+        assert_eq!(count, 1247);
         assert_eq!(nbtxt, 66277);
     });
 }
