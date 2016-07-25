@@ -44,30 +44,38 @@ fn test_start() {
 
 #[test]
 fn test_start_end() {
-    let mut r = XmlReader::from("<a/>").trim_text(true);
+    let mut r = XmlReader::from("<a></a>").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_attr() {
-    let mut r = XmlReader::from("<a b=\"test\" />").trim_text(true);
+    let mut r = XmlReader::from("<a b=\"test\"></a>").trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
+fn test_empty() {
+    let mut r = XmlReader::from("<a />").trim_text(true);
+    next_eq!(r, Empty, b"a");
+}
+
+#[test]
+fn test_empty_attr() {
+    let mut r = XmlReader::from("<a b=\"test\" />").trim_text(true);
+    next_eq!(r, Empty, b"a");
+}
+
+#[test]
 fn test_start_end_comment() {
-    let mut r = XmlReader::from("<b><a b=\"test\" c=\"test\" /> <a  /><!--t--></b>")
+    let mut r = XmlReader::from("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>")
         .trim_text(true);
     next_eq!(r,
              Start,
              b"b",
-             Start,
+             Empty,
              b"a",
-             End,
-             b"a",
-             Start,
-             b"a",
-             End,
+             Empty,
              b"a",
              Comment,
              b"t",
@@ -178,9 +186,7 @@ fn test_nested() {
              b"test",
              End,
              b"b",
-             Start,
-             b"c",
-             End,
+             Empty,
              b"c",
              End,
              b"a");
@@ -202,7 +208,7 @@ fn test_writer() {
 #[test]
 fn test_write_empty_element_attrs() {
     let str_from = r#"<source attr="val"/>"#;
-    let expected = r#"<source attr="val"></source>"#;
+    let expected = r#"<source attr="val"/>"#;
     let reader = XmlReader::from(str_from);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     for event in reader {

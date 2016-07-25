@@ -23,7 +23,7 @@ fn test_attributes_empty() {
     let src = b"<a att1='a' att2='b'/>";
     let mut r = XmlReader::from_reader(src as &[u8]).trim_text(true);
     match r.next() {
-        Some(Ok(Start(e))) => {
+        Some(Ok(Empty(e))) => {
             let mut atts = e.attributes();
             match atts.next() {
                 Some(Ok((b"att1", b"a"))) => (),
@@ -38,6 +38,6 @@ fn test_attributes_empty() {
                 e => panic!("Expecting None, found {:?}", e),
             }
         },
-        e => panic!("Expecting Start event, got {:?}", e),
+        e => panic!("Expecting Empty event, got {:?}", e),
     }
 }

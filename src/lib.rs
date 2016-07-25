@@ -95,8 +95,6 @@ pub struct XmlReader<B: BufRead> {
     reader: B,
     /// if was error, exit next
     exit: bool,
-    /// true when last Start element was a <.. />
-    next_close: bool,
     /// all currently Started elements which didn't have a matching
     /// End element yet
     opened: Vec<Element>,
@@ -124,7 +122,6 @@ impl<B: BufRead> XmlReader<B> {
         XmlReader {
             reader: reader,
             exit: false,
-            next_close: false,
             opened: Vec::new(),
             tag_state: TagState::Closed,
             trim_text: false,
@@ -380,17 +377,15 @@ impl<B: BufRead> XmlReader<B> {
     }
 
     /// reads `Element` starting with any character except `/`, `!` or ``?`
-    /// return `Start` event
+    /// return `Start` or `Empty` event
     fn read_start(&mut self, buf: Vec<u8>) -> ResultPos<Event> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if buf[len - 1] == b'/' {
-            self.next_close = true;
             let end = if name_end < len { name_end } else { len - 1 };
             let element = Element::from_buffer(buf, 0, len - 1, end);
-            self.opened.push(element.clone());
-            Ok(Event::Start(element))
+            Ok(Event::Empty(element))
         } else {
             let element = Element::from_buffer(buf, 0, len, name_end);
             if self.with_check { self.opened.push(element.clone()); }
@@ -421,11 +416,6 @@ impl<B: BufRead> Iterator for XmlReader<B> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.exit {
             return None;
-        }
-        if self.next_close {
-            self.next_close = false;
-            let e = self.opened.pop().unwrap();
-            return Some(Ok(Event::End(e)));
         }
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
@@ -634,10 +624,12 @@ impl XmlDecl {
 /// Event to interprete node as they are parsed
 #[derive(Clone, Debug)]
 pub enum Event {
-    /// <...> eventually with attributes
+    /// Start tag (with attributes) <...>
     Start(Element),
-    /// </...>
+    /// End tag </...>
     End(Element),
+    /// Empty element tag (with attributes) <.../>
+    Empty(Element),
     /// Data between Start and End element
     Text(Element),
     /// Comment <!-- ... -->
@@ -658,6 +650,7 @@ impl Event {
         match *self {
             Event::Start(ref e) |
             Event::End(ref e) |
+            Event::Empty(ref e) |
             Event::Text(ref e) |
             Event::Comment(ref e) |
             Event::CData(ref e) |
@@ -782,6 +775,7 @@ impl<W: Write> XmlWriter<W> {
         match event {
             Event::Start(ref e) => self.write_wrapped_element(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
+            Event::Empty(ref e) => self.write_wrapped_element(b"<", e, b"/>"),
             Event::Text(ref e) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),

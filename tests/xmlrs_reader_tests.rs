@@ -123,8 +123,7 @@ fn tabs_1() {
         b"\t<a>\t<b/></a>",
         br#"
             StartElement(a)
-            StartElement(b)
-            EndElement(b)
+            EmptyElement(b)
             EndElement(a)
             EndDocument
         "#,
@@ -140,8 +139,7 @@ fn issue_83_duplicate_attributes() {
         br#"<hello><some-tag a='10' a="20"/></hello>"#,
         br#"
             |StartElement(hello)
-            |1:30 Malformed xml: Duplicate attribute at position 9 and 16
-            |EndElement(some-tag)
+            |1:30 EmptyElement(some-tag, attr-error: Malformed xml: Duplicate attribute at position 9 and 16)
             |EndElement(hello)
         "#,
         true
@@ -231,8 +229,7 @@ fn issue_105_unexpected_double_dash() {
 //     test(
 //         br#"<hello xmlns="urn:foo" x="y"/>"#,
 //         br#"
-//             |StartElement({urn:foo}hello [x="y"])
-//             |EndElement({urn:foo}hello)
+//             |EmptyElement({urn:foo}hello [x="y"])
 //             |EndDocument
 //         "#,
 //         true
@@ -321,28 +318,40 @@ fn namespace_name(n: &Option<Vec<u8>>, e: &Element) -> String {
     }
 }
 
+fn make_attrs(e: &Element) -> Result<String, String> {
+    let mut atts = Vec::new();
+    for a in e.attributes().unescaped() {
+        match a {
+            Ok((k, v)) => if k.len() < 5 || &k[..5] != b"xmlns" {
+                atts.push(format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()));
+            },
+            Err((e, _)) => return Err(e.to_string()),
+        }
+    }
+    Ok(atts.join(", "))
+}
+
 struct OptEvent(Option<ResultPos<(Option<Vec<u8>>, Event)>>);
 
 impl fmt::Display for OptEvent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             Some(Ok((ref n, Event::Start(ref e)))) => {
-                let mut atts = Vec::new();
-                for a in e.attributes().unescaped() {
-                    match a {
-                        Ok((k, v)) => if k.len() < 5 || &k[..5] != b"xmlns" {
-                            atts.push(format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()));
-                        },
-                        Err((e, _)) => return write!(f, "{}", e),
-                    }
-                }
                 let name = namespace_name(n, e);
-                if atts.is_empty() {
-                    write!(f, "StartElement({})", &name)
-                } else {
-                    write!(f, "StartElement({} [{}])", &name, &atts.join(", "))
+                match make_attrs(e) {
+                    Ok(ref attrs) if attrs.is_empty() => write!(f, "StartElement({})", &name),
+                    Ok(ref attrs) => write!(f, "StartElement({} [{}])", &name, &attrs),
+                    Err(e) => write!(f, "StartElement({}, attr-error: {})", &name, &e),
                 }
             },
+            Some(Ok((ref n, Event::Empty(ref e)))) => {
+                let name = namespace_name(n, e);
+                match make_attrs(e) {
+                    Ok(ref attrs) if attrs.is_empty() => write!(f, "EmptyElement({})", &name),
+                    Ok(ref attrs) => write!(f, "EmptyElement({} [{}])", &name, &attrs),
+                    Err(e) => write!(f, "EmptyElement({}, attr-error: {})", &name, &e),
+                }
+            }
             Some(Ok((ref n, Event::End(ref e)))) =>
                 write!(f, "EndElement({})", namespace_name(n, e)),
             Some(Ok((_, Event::Comment(ref e)))) =>

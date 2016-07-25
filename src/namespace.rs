@@ -140,6 +140,9 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                 self.push_new_namespaces(&e);
                 Some(Ok((self.find_namespace_value(&e), Event::Start(e))))
             }
+            Some(Ok(Event::Empty(e))) => {
+                Some(Ok((self.find_namespace_value(&e), Event::Empty(e))))
+            }
             Some(Ok(Event::End(e))) => {
                 self.update_existing_ns_level(&e, -1);
                 self.pop_empty_namespaces();
