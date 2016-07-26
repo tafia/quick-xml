@@ -61,6 +61,12 @@ fn test_empty() {
 }
 
 #[test]
+fn test_empty_can_be_expanded() {
+    let mut r = XmlReader::from("<a />").trim_text(true).expand_empty_elements(true);
+    next_eq!(r, Start, b"a", End, b"a");
+}
+
+#[test]
 fn test_empty_attr() {
     let mut r = XmlReader::from("<a b=\"test\" />").trim_text(true);
     next_eq!(r, Empty, b"a");

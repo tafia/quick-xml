@@ -42,6 +42,7 @@ use escape::unescape;
 enum TagState {
     Opened,
     Closed,
+    Empty,
 }
 
 /// A trait to support on-demand conversion from UTF-8
@@ -100,6 +101,8 @@ pub struct XmlReader<B: BufRead> {
     opened: Vec<Element>,
     /// current state Open/Close
     tag_state: TagState,
+    /// expand empty element into an opening and closing element
+    expand_empty_elements: bool,
     /// trims Text events, skip the element if text is empty
     trim_text: bool,
     /// check if End nodes match last Start node
@@ -124,6 +127,7 @@ impl<B: BufRead> XmlReader<B> {
             exit: false,
             opened: Vec::new(),
             tag_state: TagState::Closed,
+            expand_empty_elements: false,
             trim_text: false,
             with_check: true,
             buf_position: 0,
@@ -134,6 +138,15 @@ impl<B: BufRead> XmlReader<B> {
     /// Converts into a `XmlnsReader` iterator
     pub fn namespaced(self) -> XmlnsReader<B> {
         XmlnsReader::new(self)
+    }
+
+    /// Change expand_empty_elements default behaviour (true per default)
+    ///
+    /// When set to true, all `Empty` events are expanded into an `Open` event
+    /// followed by a `Close` Event.
+    pub fn expand_empty_elements(mut self, val: bool) -> XmlReader<B> {
+        self.expand_empty_elements = val;
+        self
     }
 
     /// Change trim_text default behaviour (false per default)
@@ -376,6 +389,12 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    fn close_expanded_empty(&mut self) -> Option<ResultPos<Event>> {
+        self.tag_state = TagState::Closed;
+        let e = self.opened.pop().unwrap();
+        Some(Ok(Event::End(e)))
+    }
+
     /// reads `Element` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
     fn read_start(&mut self, buf: Vec<u8>) -> ResultPos<Event> {
@@ -385,7 +404,13 @@ impl<B: BufRead> XmlReader<B> {
         if buf[len - 1] == b'/' {
             let end = if name_end < len { name_end } else { len - 1 };
             let element = Element::from_buffer(buf, 0, len - 1, end);
-            Ok(Event::Empty(element))
+            if self.expand_empty_elements {
+                self.tag_state = TagState::Empty;
+                self.opened.push(element.clone());
+                Ok(Event::Start(element))
+            } else {
+                Ok(Event::Empty(element))
+            }
         } else {
             let element = Element::from_buffer(buf, 0, len, name_end);
             if self.with_check { self.opened.push(element.clone()); }
@@ -420,6 +445,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
             TagState::Closed => self.read_until_open(),
+            TagState::Empty => self.close_expanded_empty(),
         }
     }
 }
