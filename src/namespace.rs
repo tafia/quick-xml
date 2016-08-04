@@ -1,6 +1,6 @@
 //! Module for managing `XmlnsReader` iterator
 
-use {XmlReader, Event};
+use {XmlReader, Event, Element};
 use error::ResultPos;
 use std::io::BufRead;
 
@@ -9,7 +9,7 @@ struct Namespace {
     prefix: Vec<u8>,
     value: Vec<u8>,
     element_name: Vec<u8>,
-    level: usize,
+    level: i32,
 }
 
 impl Namespace {
@@ -84,6 +84,51 @@ impl<R: BufRead> XmlnsReader<R> {
             None => (None, qname),
         }
     }
+
+    fn find_namespace_value(&self, e: &Element) -> Option<Vec<u8>> {
+        self.namespaces
+            .iter()
+            .rev() // iterate in reverse order to find the most recent one
+            .find(|ref n| n.is_match(e.name()))
+            .map(|ref n| n.value.clone())
+    }
+
+    fn pop_empty_namespaces(&mut self) {
+        match self.namespaces.iter().rev().position(|n| n.level > 0) {
+            Some(0) | None => (),
+            Some(p) => {
+                let len = self.namespaces.len() - p;
+                self.namespaces.truncate(len)
+            }
+        }
+    }
+
+    fn push_new_namespaces(&mut self, e: &Element) {
+        // adds new namespaces for attributes starting with 'xmlns:'
+        for a in e.attributes().with_checks(false) {
+            if let Ok((k, v)) = a {
+                if k.len() > 6 && &k[..6] == b"xmlns:" {
+                    self.namespaces.push(Namespace {
+                        prefix: k[6..].to_vec(),
+                        value: v.to_vec(),
+                        element_name: e.name().to_vec(),
+                        level: 1,
+                    });
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn update_existing_ns_level(&mut self, e: &Element, increment: i32) {
+        let name = e.name();
+        for n in &mut self.namespaces {
+            if name == &*n.element_name {
+                n.level += increment;
+            }
+        }
+    }
 }
 
 impl<R: BufRead> Iterator for XmlnsReader<R> {
@@ -91,66 +136,17 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.next() {
             Some(Ok(Event::Start(e))) => {
-                // increment existing namespace level if this same element
-                {
-                    let name = e.name();
-                    for n in &mut self.namespaces {
-                        if name == &*n.element_name {
-                            n.level += 1;
-                        }
-                    }
-                }
-                // adds new namespaces for attributes starting with 'xmlns:'
-                for a in e.attributes().with_checks(false) {
-                    if let Ok((k, v)) = a {
-                        if k.len() > 6 && &k[..6] == b"xmlns:" {
-                            self.namespaces.push(Namespace {
-                                prefix: k[6..].to_vec(),
-                                value: v.to_vec(),
-                                element_name: e.name().to_vec(),
-                                level: 1,
-                            });
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                // search namespace value
-                // iterate in reverse order to find the most recent one
-                let namespace = self.namespaces
-                    .iter()
-                    .rev()
-                    .find(|ref n| n.is_match(e.name()))
-                    .map(|ref n| n.value.clone());
-
-                Some(Ok((namespace, Event::Start(e))))
+                self.update_existing_ns_level(&e, 1);
+                self.push_new_namespaces(&e);
+                Some(Ok((self.find_namespace_value(&e), Event::Start(e))))
+            }
+            Some(Ok(Event::Empty(e))) => {
+                Some(Ok((self.find_namespace_value(&e), Event::Empty(e))))
             }
             Some(Ok(Event::End(e))) => {
-                // decrement levels and remove namespaces with 0 level
-                {
-                    let name = e.name();
-                    for n in &mut self.namespaces {
-                        if name == &*n.element_name {
-                            n.level -= 1;
-                        }
-                    }
-                }
-                match self.namespaces.iter().rev().position(|n| n.level > 0) {
-                    Some(0) | None => (),
-                    Some(p) => {
-                        let len = self.namespaces.len() - p;
-                        self.namespaces.truncate(len)
-                    }
-                }
-                let namespace = {
-                    let name = e.name();
-                    self.namespaces
-                        .iter()
-                        .rev()
-                        .find(|ref n| n.is_match(name))
-                        .map(|ref n| n.value.clone())
-                };
-                Some(Ok((namespace, Event::End(e))))
+                self.update_existing_ns_level(&e, -1);
+                self.pop_empty_namespaces();
+                Some(Ok((self.find_namespace_value(&e), Event::End(e))))
             }
             Some(Ok(e)) => Some(Ok((None, e))),
             Some(Err(e)) => Some(Err(e)),

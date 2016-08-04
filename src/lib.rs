@@ -42,6 +42,7 @@ use escape::unescape;
 enum TagState {
     Opened,
     Closed,
+    Empty,
 }
 
 /// A trait to support on-demand conversion from UTF-8
@@ -95,13 +96,13 @@ pub struct XmlReader<B: BufRead> {
     reader: B,
     /// if was error, exit next
     exit: bool,
-    /// true when last Start element was a <.. />
-    next_close: bool,
     /// all currently Started elements which didn't have a matching
     /// End element yet
     opened: Vec<Element>,
     /// current state Open/Close
     tag_state: TagState,
+    /// expand empty element into an opening and closing element
+    expand_empty_elements: bool,
     /// trims Text events, skip the element if text is empty
     trim_text: bool,
     /// check if End nodes match last Start node
@@ -124,9 +125,9 @@ impl<B: BufRead> XmlReader<B> {
         XmlReader {
             reader: reader,
             exit: false,
-            next_close: false,
             opened: Vec::new(),
             tag_state: TagState::Closed,
+            expand_empty_elements: false,
             trim_text: false,
             with_check: true,
             buf_position: 0,
@@ -137,6 +138,15 @@ impl<B: BufRead> XmlReader<B> {
     /// Converts into a `XmlnsReader` iterator
     pub fn namespaced(self) -> XmlnsReader<B> {
         XmlnsReader::new(self)
+    }
+
+    /// Change expand_empty_elements default behaviour (true per default)
+    ///
+    /// When set to true, all `Empty` events are expanded into an `Open` event
+    /// followed by a `Close` Event.
+    pub fn expand_empty_elements(mut self, val: bool) -> XmlReader<B> {
+        self.expand_empty_elements = val;
+        self
     }
 
     /// Change trim_text default behaviour (false per default)
@@ -379,18 +389,28 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    fn close_expanded_empty(&mut self) -> Option<ResultPos<Event>> {
+        self.tag_state = TagState::Closed;
+        let e = self.opened.pop().unwrap();
+        Some(Ok(Event::End(e)))
+    }
+
     /// reads `Element` starting with any character except `/`, `!` or ``?`
-    /// return `Start` event
+    /// return `Start` or `Empty` event
     fn read_start(&mut self, buf: Vec<u8>) -> ResultPos<Event> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if buf[len - 1] == b'/' {
-            self.next_close = true;
             let end = if name_end < len { name_end } else { len - 1 };
             let element = Element::from_buffer(buf, 0, len - 1, end);
-            self.opened.push(element.clone());
-            Ok(Event::Start(element))
+            if self.expand_empty_elements {
+                self.tag_state = TagState::Empty;
+                self.opened.push(element.clone());
+                Ok(Event::Start(element))
+            } else {
+                Ok(Event::Empty(element))
+            }
         } else {
             let element = Element::from_buffer(buf, 0, len, name_end);
             if self.with_check { self.opened.push(element.clone()); }
@@ -422,14 +442,10 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         if self.exit {
             return None;
         }
-        if self.next_close {
-            self.next_close = false;
-            let e = self.opened.pop().unwrap();
-            return Some(Ok(Event::End(e)));
-        }
         match self.tag_state {
             TagState::Opened => self.read_until_close(),
             TagState::Closed => self.read_until_open(),
+            TagState::Empty => self.close_expanded_empty(),
         }
     }
 }
@@ -634,10 +650,12 @@ impl XmlDecl {
 /// Event to interprete node as they are parsed
 #[derive(Clone, Debug)]
 pub enum Event {
-    /// <...> eventually with attributes
+    /// Start tag (with attributes) <...>
     Start(Element),
-    /// </...>
+    /// End tag </...>
     End(Element),
+    /// Empty element tag (with attributes) <.../>
+    Empty(Element),
     /// Data between Start and End element
     Text(Element),
     /// Comment <!-- ... -->
@@ -658,6 +676,7 @@ impl Event {
         match *self {
             Event::Start(ref e) |
             Event::End(ref e) |
+            Event::Empty(ref e) |
             Event::Text(ref e) |
             Event::Comment(ref e) |
             Event::CData(ref e) |
@@ -782,6 +801,7 @@ impl<W: Write> XmlWriter<W> {
         match event {
             Event::Start(ref e) => self.write_wrapped_element(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
+            Event::Empty(ref e) => self.write_wrapped_element(b"<", e, b"/>"),
             Event::Text(ref e) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),

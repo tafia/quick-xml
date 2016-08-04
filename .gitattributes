@@ -1,0 +1,2 @@
+# Unit tests assume that all xml files have unix style line endings
+*.xml text eol=cr

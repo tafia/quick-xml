@@ -29,11 +29,13 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
         let r = XmlReader::from_reader(src).namespaced();
         let mut count = test::black_box(0);
         for e in r {
-            if let Ok((_, Event::Start(_))) = e {
-                count += 1;
+            match e {
+                Ok((_, Event::Start(_))) => count += 1,
+                Ok((_, Event::Empty(_))) => count += 1,
+                _ => ()
             }
         }
-        assert_eq!(count, 1247);
+        assert_eq!(count, 1550);
     });
 }
 
@@ -47,11 +49,12 @@ fn bench_quick_xml_escaped(b: &mut Bencher) {
         for e in r {
             match e {
                 Ok(Event::Start(_)) => count += 1,
+                Ok(Event::Empty(_)) => count += 1,
                 Ok(Event::Text(ref e)) => nbtxt += e.unescaped_content().unwrap().len(),
                 _ => (),
             }
         }
-        assert_eq!(count, 1247);
+        assert_eq!(count, 1550);
         assert_eq!(nbtxt, 66277);
     });
 }

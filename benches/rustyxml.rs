@@ -16,8 +16,9 @@ fn bench_rusty_xml(b: &mut Bencher) {
         r.feed_str(src);
         let mut count = black_box(0);
         for e in r {
-            if let Ok(Event::ElementStart(_)) = e {
-                count += 1;
+            match e {
+                Ok(Event::ElementStart(_)) => count += 1,
+                Ok(Event::ElementEmpty(_)) => count += 1,
             }
         }
         assert_eq!(count, 1550);
