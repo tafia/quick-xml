@@ -21,7 +21,9 @@ fn test_sample() {
 #[test]
 fn test_attributes_empty() {
     let src = b"<a att1='a' att2='b'/>";
-    let mut r = XmlReader::from_reader(src as &[u8]).trim_text(true);
+    let mut r = XmlReader::from_reader(src as &[u8])
+        .trim_text(true)
+        .expand_empty_elements(false);
     match r.next() {
         Some(Ok(Empty(e))) => {
             let mut atts = e.attributes();

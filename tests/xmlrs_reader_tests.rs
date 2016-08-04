@@ -261,6 +261,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
     let mut reader = XmlReader::from_reader(input)
         .trim_text(is_short)
         .check_comments(true)
+        .expand_empty_elements(false)
         .namespaced();
 
     let mut spec_lines = output.lines()

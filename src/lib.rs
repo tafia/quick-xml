@@ -127,7 +127,7 @@ impl<B: BufRead> XmlReader<B> {
             exit: false,
             opened: Vec::new(),
             tag_state: TagState::Closed,
-            expand_empty_elements: false,
+            expand_empty_elements: true,
             trim_text: false,
             with_check: true,
             buf_position: 0,
