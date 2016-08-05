@@ -1,3 +1,10 @@
+## 0.3.1
+- feat: set default to `expand_empty_elements = true`
+- fix: fix all broken tests because of `Empty` events
+
+## 0.2.5 - 0.3.0 (yanked)
+- feat: Add support for `Empty` event
+
 ## 0.2.4
 - test: add most tests from xml-rs crate
 
