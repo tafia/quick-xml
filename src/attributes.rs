@@ -113,13 +113,15 @@ impl<'a> Iterator for Attributes<'a> {
                     }
                 }
                 Some((i, b'=')) => {
-                    if has_equal {
-                        return Some(self.error(Error::Malformed(
-                                    "Got 2 '=' tokens".to_string()), p + i));
-                    }
-                    has_equal = true;
-                    if end_key.is_none() {
-                        end_key = Some(i);
+                    if start_val.is_none() {
+                        if has_equal {
+                            return Some(self.error(Error::Malformed(
+                                        "Got 2 '=' tokens".to_string()), p + i));
+                        }
+                        has_equal = true;
+                        if end_key.is_none() {
+                            end_key = Some(i);
+                        }
                     }
                 }
                 Some((i, q @ b'"')) |

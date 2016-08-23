@@ -43,3 +43,25 @@ fn test_attributes_empty() {
         e => panic!("Expecting Empty event, got {:?}", e),
     }
 }
+
+#[test]
+fn test_attribute_equal() {
+    let src = b"<a att1=\"a=b\"/>";
+    let mut r = XmlReader::from_reader(src as &[u8])
+        .trim_text(true)
+        .expand_empty_elements(false);
+    match r.next() {
+        Some(Ok(Empty(e))) => {
+            let mut atts = e.attributes();
+            match atts.next() {
+                Some(Ok((b"att1", b"a=b"))) => (),
+                e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
+            }
+            match atts.next() {
+                None => (),
+                e => panic!("Expecting None, found {:?}", e),
+            }
+        },
+        e => panic!("Expecting Empty event, got {:?}", e),
+    }
+}
