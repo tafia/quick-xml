@@ -13,6 +13,7 @@ struct Namespace {
 }
 
 impl Namespace {
+    #[inline]
     fn is_match(&self, name: &[u8]) -> bool {
         let len = self.prefix.len();
         name.len() > len && name[len] == b':' && &name[..len] == &*self.prefix
@@ -68,6 +69,7 @@ pub struct XmlnsReader<R: BufRead> {
 
 impl<R: BufRead> XmlnsReader<R> {
     /// Converts a `XmlReader` into a `XmlnsReader` iterator
+    #[inline]
     pub fn new(reader: XmlReader<R>) -> XmlnsReader<R> {
         XmlnsReader {
             reader: reader,

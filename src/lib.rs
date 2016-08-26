@@ -121,6 +121,7 @@ impl<'a> ::std::convert::From<&'a str> for XmlReader<&'a [u8]> {
 
 impl<B: BufRead> XmlReader<B> {
     /// Creates a XmlReader from a generic BufReader
+    #[inline]
     pub fn from_reader(reader: B) -> XmlReader<B> {
         XmlReader {
             reader: reader,
@@ -136,6 +137,7 @@ impl<B: BufRead> XmlReader<B> {
     }
 
     /// Converts into a `XmlnsReader` iterator
+    #[inline]
     pub fn namespaced(self) -> XmlnsReader<B> {
         XmlnsReader::new(self)
     }
@@ -144,6 +146,7 @@ impl<B: BufRead> XmlReader<B> {
     ///
     /// When set to true, all `Empty` events are expanded into an `Open` event
     /// followed by a `Close` Event.
+    #[inline]
     pub fn expand_empty_elements(mut self, val: bool) -> XmlReader<B> {
         self.expand_empty_elements = val;
         self
@@ -153,6 +156,7 @@ impl<B: BufRead> XmlReader<B> {
     ///
     /// When set to true, all Text events are trimed.
     /// If they are empty, no event if pushed
+    #[inline]
     pub fn trim_text(mut self, val: bool) -> XmlReader<B> {
         self.trim_text = val;
         self
@@ -163,6 +167,7 @@ impl<B: BufRead> XmlReader<B> {
     /// When set to true, it won't check if End node match last Start node.
     /// If the xml is known to be sane (already processed etc ...)
     /// this saves extra time
+    #[inline]
     pub fn with_check(mut self, val: bool) -> XmlReader<B> {
         self.with_check = val;
         self
@@ -173,6 +178,7 @@ impl<B: BufRead> XmlReader<B> {
     /// When set to true, every Comment event will be checked for not containing `--`
     /// Most of the time we don't want comments at all so we don't really care about
     /// comment correctness, thus default value is false for performance reason
+    #[inline]
     pub fn check_comments(mut self, val: bool) -> XmlReader<B> {
         self.check_comments = val;
         self
@@ -231,6 +237,7 @@ impl<B: BufRead> XmlReader<B> {
 
     /// Gets the current BufRead position
     /// Useful when debugging errors
+    #[inline]
     pub fn buffer_position(&self) -> usize {
         self.buf_position
     }
@@ -428,6 +435,7 @@ impl<B: BufRead> XmlReader<B> {
 
 impl XmlReader<BufReader<File>> {
     /// Creates a xml reader from a file path
+    #[inline]
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<XmlReader<BufReader<File>>> {
         let reader = BufReader::new(try!(File::open(path)));
         Ok(XmlReader::from_reader(reader))
@@ -485,6 +493,7 @@ impl Element {
     /// Creates a new Element from the given name.
     /// name is a reference that can be converted to a byte slice,
     /// such as &[u8] or &str
+    #[inline]
     pub fn new<A>(name: A) -> Element
         where A: AsRef<[u8]>
     {
@@ -494,6 +503,7 @@ impl Element {
     }
 
     /// private function to create a new element from a buffer.
+    #[inline]
     fn from_buffer(buf: Vec<u8>, start: usize, end: usize, name_end: usize)
         -> Element
     {
@@ -508,6 +518,7 @@ impl Element {
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
+    #[inline]
     pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
         where K: AsRef<[u8]>,
               V: AsRef<[u8]>,
@@ -518,11 +529,13 @@ impl Element {
     }
 
     /// name as &[u8] (without eventual attributes)
+    #[inline]
     pub fn name(&self) -> &[u8] {
         &self.buf[self.name.clone()]
     }
 
     /// whole content as &[u8] (including eventual attributes)
+    #[inline]
     pub fn content(&self) -> &[u8] {
         &self.buf[self.content.clone()]
     }
@@ -531,17 +544,20 @@ impl Element {
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
+    #[inline]
     pub fn unescaped_content(&self) -> ResultPos<Cow<[u8]>> {
         unescape(self.content())
     }
 
     /// gets attributes iterator
+    #[inline]
     pub fn attributes(&self) -> Attributes {
         Attributes::new(self.content(), self.name.end)
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
     /// by their corresponding character)
+    #[inline]
     pub fn unescaped_attributes(&self) -> UnescapedAttributes {
         self.attributes().unescaped()
     }
@@ -563,6 +579,7 @@ impl Element {
     /// consumes entire self (including eventual attributes!) and returns `String`
     ///
     /// useful when we need to get Text event value (which don't have attributes)
+    #[inline]
     pub fn into_string(self) -> Result<String> {
         ::std::string::String::from_utf8(self.buf)
             .map_err(|e| Error::Utf8(e.utf8_error()))
@@ -687,6 +704,7 @@ impl Event {
     }
 }
 
+#[inline]
 fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
@@ -787,11 +805,13 @@ pub struct XmlWriter<W: Write> {
 
 impl<W: Write> XmlWriter<W> {
     /// Creates a XmlWriter from a generic Write
+    #[inline]
     pub fn new(inner: W) -> XmlWriter<W> {
         XmlWriter { writer: inner }
     }
 
     /// Consumes this `XmlWriter`, returning the underlying writer.
+    #[inline]
     pub fn into_inner(self) -> W {
         self.writer
     }
