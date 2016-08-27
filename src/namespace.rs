@@ -13,6 +13,7 @@ struct Namespace {
 }
 
 impl Namespace {
+    #[inline]
     fn is_match(&self, name: &[u8]) -> bool {
         let len = self.prefix.len();
         name.len() > len && name[len] == b':' && &name[..len] == &*self.prefix

@@ -494,6 +494,7 @@ impl Element {
     }
 
     /// private function to create a new element from a buffer.
+    #[inline]
     fn from_buffer(buf: Vec<u8>, start: usize, end: usize, name_end: usize)
         -> Element
     {
@@ -687,6 +688,7 @@ impl Event {
     }
 }
 
+#[inline]
 fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
