@@ -69,7 +69,6 @@ pub struct XmlnsReader<R: BufRead> {
 
 impl<R: BufRead> XmlnsReader<R> {
     /// Converts a `XmlReader` into a `XmlnsReader` iterator
-    #[inline]
     pub fn new(reader: XmlReader<R>) -> XmlnsReader<R> {
         XmlnsReader {
             reader: reader,

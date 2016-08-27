@@ -25,7 +25,6 @@ pub struct Attributes<'a> {
 impl<'a> Attributes<'a> {
 
     /// creates a new attribute iterator from a buffer
-    #[inline]
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
             bytes: buf,
@@ -40,13 +39,11 @@ impl<'a> Attributes<'a> {
     ///
     /// all escaped characters ('&...;') in attribute values are replaced
     /// with their corresponding character
-    #[inline]
     pub fn unescaped(self) -> UnescapedAttributes<'a> {
         UnescapedAttributes { inner: self }
     }
 
     /// check if attributes are distincts
-    #[inline]
     pub fn with_checks(mut self, val: bool) -> Attributes<'a> {
         self.with_checks = val;
         self
@@ -54,7 +51,6 @@ impl<'a> Attributes<'a> {
 
     /// return Err((e, p))
     /// sets `self.exit = true` to terminate the iterator
-    #[inline]
     fn error(&mut self, e: Error, p: usize) -> ResultPos<(&'a [u8], &'a [u8])> {
         self.exit = true;
         Err((e, p))
@@ -177,7 +173,6 @@ pub struct UnescapedAttributes<'a> {
 
 impl<'a> Iterator for UnescapedAttributes<'a> {
     type Item = ResultPos<(&'a [u8], Cow<'a, [u8]>)>;
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .next()
