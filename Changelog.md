@@ -1,3 +1,7 @@
+## 0.4.0
+- fix: fix attributes with `=` character in their value
+- perf: inline some local functions
+
 ## 0.3.1
 - feat: set default to `expand_empty_elements = true`
 - fix: fix all broken tests because of `Empty` events
