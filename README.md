@@ -1,6 +1,6 @@
 # quick-xml
 
-[![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/appsignal/quick-xml)
+[![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/tafia/quick-xml)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
 [![Clippy Linting Result](https://clippy.bashy.io/github/tafia/quick-xml/master/badge.svg)](https://clippy.bashy.io/github/tafia/quick-xml/master/log)
 
