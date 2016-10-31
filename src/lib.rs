@@ -229,6 +229,46 @@ impl<B: BufRead> XmlReader<B> {
         }
     }
 
+    /// Reads next event, if `Event::Text` or `Event::End`,
+    /// then returns an unescaped `String`, else returns an error
+    ///
+    /// # Examples
+    /// 
+    /// ```
+    /// use quick_xml::{XmlReader, Event};
+    ///
+    /// let mut xml = XmlReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
+    /// match xml.next() {
+    ///     Some(Ok(Event::Start(ref e))) => {
+    ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
+    ///     },
+    ///     e => panic!("Expecting Start(a), found {:?}", e),
+    /// }
+    /// ```
+    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
+        match self.next() {
+            Some(Ok(Event::Text(e))) => {
+                self.read_to_end(end)
+                    .and_then(|_| e.unescaped_content())
+                    .and_then(|c| c.as_str()
+                              .map_err(|e| (e, self.buf_position))
+                              .map(|s| s.to_string()))
+            }
+            Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => {
+                Ok("".to_string())
+            },
+            Some(Err(e)) => Err(e),
+            None => {
+                Err((Error::Unexpected("Reached EOF while reading text".to_string()),
+                     self.buf_position))
+            }
+            _ => {
+                Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_string()),
+                     self.buf_position))
+            }
+        }
+    }
+
     /// Gets the current BufRead position
     /// Useful when debugging errors
     pub fn buffer_position(&self) -> usize {
