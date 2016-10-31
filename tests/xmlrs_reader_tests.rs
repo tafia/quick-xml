@@ -252,7 +252,7 @@ fn convert_to_quick_xml(s: &str) -> String {
     if s.starts_with("Whitespace") {
         format!("Characters{}", &s[10..])
     } else {
-        s.to_owned()
+        format!("{}", s)
     }
 }
 
@@ -265,10 +265,9 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         .namespaced();
 
     let mut spec_lines = output.lines()
-        .map(|line| line.unwrap())
-        .enumerate()
-        .map(|(i, line)| (i, convert_to_quick_xml(&line)))
-        .filter(|&(_, ref line)| !line.trim().is_empty());
+        .map(|line| convert_to_quick_xml(&line.unwrap()))
+        .filter(|line| !line.trim().is_empty())
+        .enumerate();
 
     if !is_short {
         reader.next();
@@ -285,7 +284,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
             }
             if line != spec {
                 const SPLITTER: &'static str = "-------------------";
-                panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound:    {}\n{}\n",
+                panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound: {}\n{}\n",
                        SPLITTER, n + 1, spec, line, SPLITTER);
             }
         } else {
