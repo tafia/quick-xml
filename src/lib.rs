@@ -608,6 +608,15 @@ impl Element {
         ::std::string::String::from_utf8(self.buf)
             .map_err(|e| Error::Utf8(e.utf8_error()))
     }
+    
+    /// consumes entire self (including eventual attributes!) and returns `String`
+    ///
+    /// useful when we need to get Text event value (which don't have attributes)
+    /// and unescape XML entities
+    pub fn into_unescaped_string(self) -> Result<String> {
+        ::std::string::String::from_utf8(try!(self.unescaped_content()).into_owned())
+            .map_err(|e| Error::Utf8(e.utf8_error()))
+    }
 
     /// Adds an attribute to this element from the given key and value.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
