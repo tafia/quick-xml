@@ -14,7 +14,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.4.1"
+quick-xml = "0.4.2"
 ```
 ``` rust
 extern crate quick_xml;
@@ -103,13 +103,6 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-You can benchmark with other libraries using features:
-```
-cargo bench --features bench-xml-rs
-cargo bench --features bench-rusty-xml
-```
-
-Results:
 ```
 // quick-xml benches
 test bench_quick_xml            ... bench:   1,772,803 ns/iter (+/- 21,071)
