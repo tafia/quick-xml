@@ -1,5 +1,4 @@
 #![feature(test)]
-#![cfg(feature = "bench-xml-rs")]
 
 extern crate xml;
 extern crate test;

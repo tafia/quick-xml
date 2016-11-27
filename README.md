@@ -6,7 +6,7 @@
 
 High performance xml pull reader/writer.
 
-[Documentation](http://tafia.github.io/quick-xml/quick_xml/index.html)
+[docs.rs](https://docs.rs/quick-xml)
 
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
@@ -111,25 +111,14 @@ cargo bench --features bench-rusty-xml
 
 Results:
 ```
-test bench_quick_xml            ... bench:     610,970 ns/iter (+/- 40,766)
-test bench_quick_xml_escaped    ... bench:     721,361 ns/iter (+/- 21,095)
-test bench_quick_xml_namespaced ... bench:     820,220 ns/iter (+/- 11,309)
-test bench_xml_rs               ... bench:  14,012,890 ns/iter (+/- 12,378,389)
-test bench_rusty_xml            ... bench:   5,543,993 ns/iter (+/- 326,792)
+// quick-xml benches
+test bench_quick_xml            ... bench:   1,772,803 ns/iter (+/- 21,071)
+test bench_quick_xml_escaped    ... bench:   2,048,106 ns/iter (+/- 20,597)
+test bench_quick_xml_namespaced ... bench:   2,585,081 ns/iter (+/- 28,941)
+
+// same bench with xml-rs
+test bench_xml_rs 		... bench:  39,683,007 ns/iter (+/- 533,863)
 ```
-
-## Todo
-
-- [x] [namespaces](https://github.com/tafia/quick-xml/issues/14)
-- non-utf8
-  - [x] most methods return `&u[u8]`
-  - [x] escaped characters are properly managed
-  - [ ] what else?
-- [x] [parse xml declaration](https://github.com/tafia/quick-xml/pull/10)
-- [x] [benchmarks](https://github.com/tafia/quick-xml/issues/13)
-- [x] [escape characters](https://github.com/tafia/quick-xml/issues/12)
-- [ ] more checks
-- [ ] ... ?
 
 ## Known issues:
 

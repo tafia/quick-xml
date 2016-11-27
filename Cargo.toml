@@ -4,22 +4,18 @@ version = "0.4.1"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
-documentation = "http://tafia.github.io/quick-xml/quick_xml/index.html"
+documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
 
 readme = "README.md"
-keywords = ["xml", "reader", "parser", "write"]
+keywords = ["xml", "reader", "parser", "writer"]
 license = "MIT"
 
-[features]
-bench-xml-rs = [ "xml-rs" ]
-bench-rusty-xml = [ "RustyXML" ]
-
 [dependencies]
-log = "0.3"
-xml-rs = { version = "0.3.0", optional = true }
-RustyXML = { version = "0.1.1", optional = true }
+log = "0.3.6"
+
+[dev-dependencies]
+xml-rs = "0.3.4"
 
 [lib]
 bench = false
-
