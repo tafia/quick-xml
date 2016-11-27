@@ -1,3 +1,26 @@
+> Legend:
+  - feat: A new feature
+  - fix: A bug fix
+  - docs: Documentation only changes
+  - style: White-space, formatting, missing semi-colons, etc
+  - refactor: A code change that neither fixes a bug nor adds a feature
+  - perf: A code change that improves performance
+  - test: Adding missing tests
+  - chore: Changes to the build process or auxiliary tools/libraries/documentation
+
+## master
+
+
+## 0.4.2
+- feat: add `into_unescaped_string`
+- refactor: remove RustyXML benches
+- docs: redirect to docs.rs for documentation
+- docs: add examples in lib.rs
+
+## 0.4.1
+- feat: add `read_text_unescaped`
+- fix: fix tests
+
 ## 0.4.0
 - fix: fix attributes with `=` character in their value
 - perf: inline some local functions
@@ -67,13 +90,3 @@
 ## 0.1.2 - 0.1.1
 - test: add tests
 - feat: add `with_check`
-
-> Legend:
-  - feat: A new feature
-  - fix: A bug fix
-  - docs: Documentation only changes
-  - style: White-space, formatting, missing semi-colons, etc
-  - refactor: A code change that neither fixes a bug nor adds a feature
-  - perf: A code change that improves performance
-  - test: Adding missing tests
-  - chore: Changes to the build process or auxiliary tools/libraries/documentation
