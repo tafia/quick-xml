@@ -614,7 +614,8 @@ impl Element {
     /// useful when we need to get Text event value (which don't have attributes)
     /// and unescape XML entities
     pub fn into_unescaped_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(try!(self.unescaped_content()).into_owned())
+        ::std::string::String::from_utf8(
+            try!(self.unescaped_content().map_err(|(e, _)| e)).into_owned())
             .map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
