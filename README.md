@@ -6,7 +6,7 @@
 
 High performance xml pull reader/writer.
 
-[Documentation](https://docs.rs/quick-xml)
+[docs.rs](https://docs.rs/quick-xml)
 
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
