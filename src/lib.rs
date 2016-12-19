@@ -106,14 +106,11 @@
 //!
 //! let xml = "/path/to/my/custom/encoding.xml";
 //! # let xml = "tests/documents/opennews_all.rss";
-//! let reader = XmlReader::from(xml).trim_text(true);
-//! let mut decoder = None;
+//! let mut reader = XmlReader::from(xml).trim_text(true);
+//! let reader = reader.decoded();
 //! for e in reader {
 //!     match e {
-//!         Ok(Event::Decl(e)) => decoder = e.encoder().expect("Cannot find 'encoding' attribute"),
-//!         Ok(Event::Text(e)) => println!("{}", e.content()
-//!                                        .as_string(decoder.as_ref())
-//!                                        .expect("Cannot decode Text node")),
+//!         Ok(Event::DecodedText(_, s)) => println!("{}", s),
 //!         _ => (),
 //!     }
 //! }
@@ -129,6 +126,7 @@ pub mod error;
 pub mod attributes;
 pub mod namespace;
 mod escape;
+mod decoded;
 
 #[cfg(test)]
 mod test;
@@ -149,6 +147,7 @@ use error::{Error, Result, ResultPos};
 use attributes::{Attributes, UnescapedAttributes};
 use namespace::XmlnsReader;
 use escape::unescape;
+pub use decoded::XmlDecoder;
 
 #[derive(Clone)]
 enum TagState {
@@ -263,6 +262,11 @@ impl<B: BufRead> XmlReader<B> {
     /// Converts into a `XmlnsReader` iterator
     pub fn namespaced(self) -> XmlnsReader<B> {
         XmlnsReader::new(self)
+    }
+
+    /// Converts into a `XmlDecoder`
+    pub fn decoded<'a>(&'a mut self) -> XmlDecoder<'a, B> {
+        XmlDecoder::new(self)
     }
 
     /// Change expand_empty_elements default behaviour (true per default)
@@ -845,6 +849,9 @@ pub enum Event {
     Empty(Element),
     /// Data between Start and End element
     Text(Element),
+    /// Data between Start and End element, 
+    /// decoded (returned by `XmlDecoder` only)
+    DecodedText(Element, String),
     /// Comment <!-- ... -->
     Comment(Element),
     /// CData <![CDATA[...]]>
@@ -865,6 +872,7 @@ impl Event {
             Event::End(ref e) |
             Event::Empty(ref e) |
             Event::Text(ref e) |
+            Event::DecodedText(ref e, _) |
             Event::Comment(ref e) |
             Event::CData(ref e) |
             Event::PI(ref e) |
@@ -991,6 +999,7 @@ impl<W: Write> XmlWriter<W> {
             Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
             Event::Empty(ref e) => self.write_wrapped_element(b"<", e, b"/>"),
             Event::Text(ref e) => self.write_bytes(e.content()),
+            Event::DecodedText(ref e, _) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped_element(b"<?", &e.element, b"?>"),
