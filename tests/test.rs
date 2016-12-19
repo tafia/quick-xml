@@ -65,3 +65,21 @@ fn test_attribute_equal() {
         e => panic!("Expecting Empty event, got {:?}", e),
     }
 }
+
+#[test]
+fn test_koi8_r_encoding() {
+    let src: &[u8] = include_bytes!("documents/opennews_all.rss");
+    let mut r = XmlReader::from_reader(src as &[u8])
+        .trim_text(true)
+        .expand_empty_elements(false);
+    for e in r {
+        match e.unwrap() {
+            Text(e) => {
+                if let Err(e) = e.into_string() {
+                    panic!("{:?}", e);
+                }
+            },
+            _ => (),
+        }
+    }
+}
