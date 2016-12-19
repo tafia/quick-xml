@@ -382,6 +382,7 @@ impl fmt::Display for OptEvent {
             Some(Err((ref e, _))) => write!(f, "{}", e),
             Some(Ok((_, Event::DocType(ref e)))) => 
                 write!(f, "DocType({})", e.content().as_str().unwrap()),
+            Some(Ok((_, Event::DecodedText(_, _)))) => unreachable!(),
         }
     }
 }

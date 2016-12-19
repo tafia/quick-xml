@@ -123,13 +123,13 @@ fn test_xml_decl() {
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
-                Some(Ok(v)) => {
+                Ok(Some(v)) => {
                     assert!(v == b"utf-8",
                             "expecting encoding 'utf-8', got '{:?}",
                             v.as_str())
                 }
-                Some(Err(e)) => assert!(false, "{:?}", e),
-                None => assert!(false, "cannot find encoding"),
+                Err(e) => assert!(false, "{:?}", e),
+                Ok(None) => assert!(false, "cannot find encoding"),
             }
             match e.standalone() {
                 None => assert!(true),

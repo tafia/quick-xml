@@ -30,11 +30,13 @@
 //! // let reader_ns = reader.namespaced();
 //! let mut count = 0;
 //! let mut txt = Vec::new();
+//! let mut decoder = None;
 //! for r in reader {
 //! // namespaced: the `for` loop moves the reader
 //! // => use `while let` so you can have access to `reader_ns.resolve` for attributes
 //! // while let Some(r) = reader.next() {
 //!     match r {
+//!         // Ok(Event::Decl(e)) => decoder = e.encoder().unwrap(),
 //!         Ok(Event::Start(ref e)) => {
 //!         // for namespaced:
 //!         // Ok((ref namespace_value, Event::Start(ref e)))
@@ -48,7 +50,7 @@
 //!                 _ => (),
 //!             }
 //!         },
-//!         Ok(Event::Text(e)) => txt.push(e.into_string()),
+//!         Ok(Event::Text(e)) => txt.push(e.into_string(decoder.as_ref())),
 //!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!         _ => (),
 //!     }
@@ -91,16 +93,40 @@
 //! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 //! assert_eq!(result, expected.as_bytes());
 //! ```
+//!
+//! ## Non utf8 encoding
+//!
+//! While most xmls are utf8 encoded `quick-xml` supports other encodings as well.
+//!
+//! Unfortunately decoding can be very expensive. As the focus of the library is performance, 
+//! user, for now, must opt-in using the relevant decoder (instead of the default utf8).
+//!
+//! ```rust
+//! use quick_xml::{Event, XmlReader};
+//!
+//! let xml = "/path/to/my/custom/encoding.xml";
+//! # let xml = "tests/documents/opennews_all.rss";
+//! let mut reader = XmlReader::from(xml).trim_text(true);
+//! let reader = reader.decoded();
+//! for e in reader {
+//!     match e {
+//!         Ok(Event::DecodedText(_, s)) => println!("{}", s),
+//!         _ => (),
+//!     }
+//! }
+//! ```
 
 #![deny(missing_docs)]
 
 #[macro_use]
 extern crate log;
+extern crate encoding;
 
 pub mod error;
 pub mod attributes;
 pub mod namespace;
 mod escape;
+mod decoded;
 
 #[cfg(test)]
 mod test;
@@ -114,10 +140,14 @@ use std::fmt;
 use std::str::from_utf8;
 use std::borrow::Cow;
 
+pub use encoding::types::EncodingRef;
+use encoding::label::encoding_from_whatwg_label;
+
 use error::{Error, Result, ResultPos};
 use attributes::{Attributes, UnescapedAttributes};
 use namespace::XmlnsReader;
 use escape::unescape;
+pub use decoded::XmlDecoder;
 
 #[derive(Clone)]
 enum TagState {
@@ -128,14 +158,26 @@ enum TagState {
 
 /// A trait to support on-demand conversion from UTF-8
 pub trait AsStr {
-    /// Converts this to an `&str`
+
+    /// Converts this to an `&str` using default `str::from_utf8`
     fn as_str(&self) -> Result<&str>;
+
+    /// Converts this to a `String` using either `EncodingRef` or `String::utf8`
+    fn as_string(&self, decoder: Option<&EncodingRef>) -> Result<String>;
 }
 
 /// Implements `AsStr` for a byte slice
 impl AsStr for [u8] {
     fn as_str(&self) -> Result<&str> {
         from_utf8(self).map_err(Error::Utf8)
+    }
+    fn as_string(&self, decoder: Option<&EncodingRef>) -> Result<String> {
+        match decoder {
+            Some(decoder) => decoder.decode(self, encoding::types::DecoderTrap::Ignore)
+                .map_err(Error::Decode),
+            None => ::std::string::String::from_utf8(self.to_vec())
+                .map_err(|e| Error::Utf8(e.utf8_error()))
+        }
     }
 }
 
@@ -165,7 +207,7 @@ impl AsStr for [u8] {
 ///                 _ => (),
 ///             }
 ///         },
-///         Ok(Event::Text(e)) => txt.push(e.into_string()),
+///         Ok(Event::Text(e)) => txt.push(e.into_string(None)),
 ///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///         _ => (),
 ///     }
@@ -201,6 +243,7 @@ impl<'a> ::std::convert::From<&'a str> for XmlReader<&'a [u8]> {
 }
 
 impl<B: BufRead> XmlReader<B> {
+
     /// Creates a XmlReader from a generic BufReader
     pub fn from_reader(reader: B) -> XmlReader<B> {
         XmlReader {
@@ -219,6 +262,11 @@ impl<B: BufRead> XmlReader<B> {
     /// Converts into a `XmlnsReader` iterator
     pub fn namespaced(self) -> XmlnsReader<B> {
         XmlnsReader::new(self)
+    }
+
+    /// Converts into a `XmlDecoder`
+    pub fn decoded<'a>(&'a mut self) -> XmlDecoder<'a, B> {
+        XmlDecoder::new(self)
     }
 
     /// Change expand_empty_elements default behaviour (true per default)
@@ -289,11 +337,11 @@ impl<B: BufRead> XmlReader<B> {
 
     /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns a `String`, else returns an error
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, decoder: Option<&EncodingRef>) -> ResultPos<String> {
         match self.next() {
             Some(Ok(Event::Text(e))) => {
                 self.read_to_end(end)
-                    .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position)))
+                    .and_then(|_| e.into_string(decoder).map_err(|e| (e, self.buf_position)))
             }
             Some(Ok(Event::End(ref e))) if e.name() == end.as_ref() => {
                 Ok("".to_string())
@@ -321,17 +369,17 @@ impl<B: BufRead> XmlReader<B> {
     /// let mut xml = XmlReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
     /// match xml.next() {
     ///     Some(Ok(Event::Start(ref e))) => {
-    ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
+    ///         assert_eq!(&xml.read_text_unescaped(e.name(), None).unwrap(), "<b>");
     ///     },
     ///     e => panic!("Expecting Start(a), found {:?}", e),
     /// }
     /// ```
-    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
+    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, decoder: Option<&EncodingRef>) -> ResultPos<String> {
         match self.next() {
             Some(Ok(Event::Text(e))) => {
                 self.read_to_end(end)
                     .and_then(|_| e.unescaped_content())
-                    .and_then(|c| c.as_str()
+                    .and_then(|c| c.as_string(decoder)
                               .map_err(|e| (e, self.buf_position))
                               .map(|s| s.to_string()))
             }
@@ -501,7 +549,8 @@ impl<B: BufRead> XmlReader<B> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                Ok(Event::Decl(XmlDecl { element: Element::from_buffer(buf, 1, len - 1, 3) }))
+                let xml_decl = XmlDecl { element: Element::from_buffer(buf, 1, len - 1, 3) };
+                Ok(Event::Decl(xml_decl))
             } else {
                 Ok(Event::PI(Element::from_buffer(buf, 1, len - 1, 3)))
             }
@@ -570,6 +619,7 @@ impl<B: BufRead> Iterator for XmlReader<B> {
         }
     }
 }
+
 /// General content of an event (aka node)
 ///
 /// Element is a wrapper over the bytes representing the node:
@@ -685,19 +735,16 @@ impl Element {
     /// consumes entire self (including eventual attributes!) and returns `String`
     ///
     /// useful when we need to get Text event value (which don't have attributes)
-    pub fn into_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(self.buf)
-            .map_err(|e| Error::Utf8(e.utf8_error()))
+    pub fn into_string(self, decoder: Option<&EncodingRef>) -> Result<String> {
+        self.buf.as_string(decoder)
     }
     
     /// consumes entire self (including eventual attributes!) and returns `String`
     ///
     /// useful when we need to get Text event value (which don't have attributes)
     /// and unescape XML entities
-    pub fn into_unescaped_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(
-            try!(self.unescaped_content().map_err(|(e, _)| e)).into_owned())
-            .map_err(|e| Error::Utf8(e.utf8_error()))
+    pub fn into_unescaped_string(self, decoder: Option<&EncodingRef>) -> Result<String> {
+        self.unescaped_content().map_err(|(e, _)| e).and_then(|c| c.as_string(decoder))
     }
 
     /// Adds an attribute to this element from the given key and value.
@@ -755,15 +802,27 @@ impl XmlDecl {
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<ResultPos<&[u8]>> {
+    pub fn encoding(&self) -> ResultPos<Option<&[u8]>> {
         for a in self.element.attributes() {
             match a {
-                Err(e) => return Some(Err(e)),
-                Ok((b"encoding", v)) => return Some(Ok(v)),
+                Err(e) => return Err(e),
+                Ok((b"encoding", v)) => return Ok(Some(v)),
                 _ => (),
             }
         }
-        None
+        Ok(None)
+    }
+
+    /// Gets encoder based on whatwg label
+    pub fn encoder(&self) -> ResultPos<Option<EncodingRef>> {
+        match self.encoding() {
+            Ok(Some(e)) => {
+                let encoding_str = e.as_str().map_err(|er| (er, 0))?;
+                Ok(encoding_from_whatwg_label(encoding_str))
+            },
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     /// Gets xml standalone, including quotes (' or ")
@@ -790,6 +849,9 @@ pub enum Event {
     Empty(Element),
     /// Data between Start and End element
     Text(Element),
+    /// Data between Start and End element, 
+    /// decoded (returned by `XmlDecoder` only)
+    DecodedText(Element, String),
     /// Comment <!-- ... -->
     Comment(Element),
     /// CData <![CDATA[...]]>
@@ -810,6 +872,7 @@ impl Event {
             Event::End(ref e) |
             Event::Empty(ref e) |
             Event::Text(ref e) |
+            Event::DecodedText(ref e, _) |
             Event::Comment(ref e) |
             Event::CData(ref e) |
             Event::PI(ref e) |
@@ -936,6 +999,7 @@ impl<W: Write> XmlWriter<W> {
             Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
             Event::Empty(ref e) => self.write_wrapped_element(b"<", e, b"/>"),
             Event::Text(ref e) => self.write_bytes(e.content()),
+            Event::DecodedText(ref e, _) => self.write_bytes(e.content()),
             Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped_element(b"<?", &e.element, b"?>"),

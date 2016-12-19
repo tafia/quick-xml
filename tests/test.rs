@@ -2,6 +2,7 @@ extern crate quick_xml;
 
 use quick_xml::XmlReader;
 use quick_xml::Event::*;
+use quick_xml::AsStr;
    
 #[test]
 fn test_sample() {
@@ -63,5 +64,25 @@ fn test_attribute_equal() {
             }
         },
         e => panic!("Expecting Empty event, got {:?}", e),
+    }
+}
+
+#[test]
+fn test_koi8_r_encoding() {
+    let src: &[u8] = include_bytes!("documents/opennews_all.rss");
+    let mut r = XmlReader::from_reader(src as &[u8])
+        .trim_text(true)
+        .expand_empty_elements(false);
+    let mut decoder = None;
+    for e in &mut r {
+        match e.unwrap() {
+            Decl(decl) => decoder = decl.encoder().unwrap(),
+            Text(e) => {
+                if let Err(e) = e.content().as_string(decoder.as_ref()) {
+                    panic!("{:?}", e);
+                }
+            },
+            _ => (),
+        }
     }
 }

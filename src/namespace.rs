@@ -55,7 +55,7 @@ impl Namespace {
 ///                 _ => (),
 ///             }
 ///         },
-///         Ok((_, Event::Text(e))) => txt.push(e.into_string()),
+///         Ok((_, Event::Text(e))) => txt.push(e.into_string(None)),
 ///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///         _ => (),
 ///     }
