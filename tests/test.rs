@@ -2,6 +2,7 @@ extern crate quick_xml;
 
 use quick_xml::XmlReader;
 use quick_xml::Event::*;
+use quick_xml::AsStr;
    
 #[test]
 fn test_sample() {
@@ -72,10 +73,12 @@ fn test_koi8_r_encoding() {
     let mut r = XmlReader::from_reader(src as &[u8])
         .trim_text(true)
         .expand_empty_elements(false);
-    for e in r {
+    let mut decoder = None;
+    for e in &mut r {
         match e.unwrap() {
+            Decl(decl) => decoder = decl.encoder().unwrap(),
             Text(e) => {
-                if let Err(e) = e.into_string() {
+                if let Err(e) = e.content().as_string(decoder.as_ref()) {
                     panic!("{:?}", e);
                 }
             },

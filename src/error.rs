@@ -3,6 +3,7 @@
 use std::fmt;
 use std::io;
 use std::str::Utf8Error;
+use std::borrow::Cow;
 
 /// An error produced by an operation on Xml data.
 #[derive(Debug)]
@@ -13,6 +14,8 @@ pub enum Error {
     EOL,
     /// An error while converting to utf8
     Utf8(Utf8Error),
+    /// An error while decoding bytes into utf8
+    Decode(Cow<'static, str>),
     /// Xml is malformed
     Malformed(String),
     /// Unexpected
@@ -21,6 +24,7 @@ pub enum Error {
 
 /// Result type
 pub type Result<T> = ::std::result::Result<T, Error>;
+
 /// Result type with position
 ///
 /// Position represents byte index relative to
@@ -35,6 +39,7 @@ impl fmt::Display for Error {
         match *self {
             Error::Io(ref err) => write!(f, "{}", err),
             Error::Utf8(ref err) => write!(f, "{}", err),
+            Error::Decode(ref err) => write!(f, "{}", err),
             Error::EOL => write!(f, "Trying to access column but found End Of Line"),
             Error::Malformed(ref err) => write!(f, "Malformed xml: {}", err),
             Error::Unexpected(ref err) => write!(f, "Unexpected error: {}", err),
@@ -47,6 +52,7 @@ impl ::std::error::Error for Error {
         match *self {
             Error::Io(..) => "IO error",
             Error::Utf8(..) => "Error while converting to utf8",
+            Error::Decode(..) => "Error while decoding to utf8",
             Error::EOL => "Trying to access column but found End Of Line",
             Error::Malformed(..) => "Xml is malformed",
             Error::Unexpected(..) => "An unexpected error has occured",
