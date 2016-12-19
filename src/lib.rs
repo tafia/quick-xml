@@ -102,7 +102,7 @@
 //! user, for now, must opt-in using the relevant decoder (instead of the default utf8).
 //!
 //! ```rust
-//! use quick_xml::{AsStr, Event, XmlReader};
+//! use quick_xml::{Event, XmlReader};
 //!
 //! let xml = "/path/to/my/custom/encoding.xml";
 //! # let xml = "tests/documents/opennews_all.rss";
