@@ -9,7 +9,7 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## master
-
+- feat: support for non utf8 charsets
 
 ## 0.4.2
 - feat: add `into_unescaped_string`
