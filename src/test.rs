@@ -312,6 +312,76 @@ fn test_namespace() {
 }
 
 #[test]
+fn test_default_namespace() {
+    let mut r = XmlReader::from("<a ><b xmlns=\"www1\"></b></a>")
+        .trim_text(true)
+        .namespaced();;
+
+    // <a>
+    if let Some(Ok((None, Start(_)))) = r.next() {
+    } else {
+        assert!(false, "expecting outer start element with no namespace");
+    }
+
+    // <b>
+    if let Some(Ok((Some(a), Start(_)))) = r.next() {
+        if &*a == b"www1" {
+            assert!(true);
+        } else {
+            assert!(false, "expecting namespace to resolve to 'www1'");
+        }
+    } else {
+        assert!(false, "expecting namespace resolution");
+    }
+
+    // </b>
+    if let Some(Ok((Some(a), End(_)))) = r.next() {
+        if &*a == b"www1" {
+            assert!(true);
+        } else {
+            assert!(false, "expecting namespace to resolve to 'www1'");
+        }
+    } else {
+        assert!(false, "expecting namespace resolution");
+    }
+
+    // </a> very important: a should not be in any namespace. The default namespace only applies to
+    // the sub-document it is defined on.
+    if let Some(Ok((None, End(_)))) = r.next() {
+    } else {
+        assert!(false, "expecting outer end element with no namespace");
+    }
+}
+
+#[test]
+fn test_default_namespace_reset() {
+    let mut r = XmlReader::from("<a xmlns=\"www1\"><b xmlns=\"\"></b></a>")
+        .trim_text(true)
+        .namespaced();;
+
+    if let Some(Ok((Some(a), Start(_)))) = r.next() {
+        assert_eq!(&a[..], b"www1", "expecting outer start element with to resolve to 'www1'");
+    } else {
+        assert!(false, "expecting outer start element with to resolve to 'www1'");
+    }
+
+    if let Some(Ok((None, Start(_)))) = r.next() {
+    } else {
+        assert!(false, "expecting inner start element");
+    }
+    if let Some(Ok((None, End(_)))) = r.next() {
+    } else {
+        assert!(false, "expecting inner end element");
+    }
+
+    if let Some(Ok((Some(a), End(_)))) = r.next() {
+        assert_eq!(&a[..], b"www1", "expecting outer end element with to resolve to 'www1'");
+    } else {
+        assert!(false, "expecting outer end element with to resolve to 'www1'");
+    }
+}
+
+#[test]
 fn test_escaped_content() {
     let mut r = XmlReader::from("<a>&lt;test&gt;</a>").trim_text(true);
     next_eq!(r, Start, b"a");

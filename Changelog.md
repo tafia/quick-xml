@@ -9,7 +9,8 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## master
-
+- feat: apply default namespaces (`xmlns="..."`) to unqualified elements
+- fix: scope for namespace resolution on empty elements
 
 ## 0.4.2
 - feat: add `into_unescaped_string`

@@ -78,7 +78,16 @@ fn sample_2_full() {
 //     );
 // 
 // }
-// 
+//
+
+#[test]
+fn sample_ns_short() {
+    test(
+        include_bytes!("documents/sample_ns.xml"),
+        include_bytes!("documents/sample_ns_short.txt"),
+        true
+    );
+}
 
 #[test]
 fn eof_1() {
@@ -224,17 +233,48 @@ fn issue_105_unexpected_double_dash() {
     );
 }
 
-// #[test]
-// fn issue_attribues_have_no_default_namespace () {
-//     test(
-//         br#"<hello xmlns="urn:foo" x="y"/>"#,
-//         br#"
-//             |EmptyElement({urn:foo}hello [x="y"])
-//             |EndDocument
-//         "#,
-//         true
-//     );
-// }
+ #[test]
+ fn issue_attributes_have_no_default_namespace () {
+     // At the moment, the 'test' method doesn't render namespaces for attribute names.
+     // This test only checks whether the default namespace got applied to the EmptyElement.
+     test(
+         br#"<hello xmlns="urn:foo" x="y"/>"#,
+         br#"
+             |EmptyElement({urn:foo}hello [x="y"])
+             |EndDocument
+         "#,
+         true
+     );
+ }
+
+    #[test]
+    fn issue_default_namespace_on_outermost_element () {
+        // Regression test
+        test(
+            br#"<hello xmlns="urn:foo"/>"#,
+            br#"
+                |EmptyElement({urn:foo}hello)
+                |EndDocument
+            "#,
+            true
+        );
+    }
+
+ #[test]
+ fn default_namespace_applies_to_end_elem () {
+    test(
+        br#"<hello xmlns="urn:foo" x="y">
+              <inner/>
+            </hello>"#,
+        br#"
+            |StartElement({urn:foo}hello [x="y"])
+            |EmptyElement({urn:foo}inner)
+            |EndElement({urn:foo}hello)
+            |EndDocument
+        "#,
+        true
+    );
+}
 
 // clones a lot but that's fine
 fn convert_to_quick_xml(s: &str) -> String {
