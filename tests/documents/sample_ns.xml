@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<naked xmlns:d="urn:example:double">
+  <p:data  xmlns:h="urn:example:header" xmlns:p="urn:example:namespace">
+    <datum id="34" xmlns="urn:example:datum-ns" other-name="15">
+      <h:dat-arg p:name="ns" name="">H</h:dat-arg>
+      <dat-arg p:name="ns" name="dat1">N</dat-arg>
+      <dat-arg dash-dot.prefix:name="ns" name="dat2" xmlns:dash-dot.prefix="urn:example:prefix"/>
+      <dat-arg xmlns="urn:example:shadowed" name="shadow" xmlns:p="urn:example:shadow-namespace" >
+        <p:name p:doc="shadow-ns">Name</p:name>
+        <d:name>Another name</d:name>
+        <arg xmlns="">
+          <naked dat:dat-val="dat" xmlns:dat="urn:example:datum-ns"/>
+        </arg>
+      </dat-arg>
+    </datum>
+  </p:data>
+</naked>
