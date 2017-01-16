@@ -14,7 +14,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.4.2"
+quick-xml = "0.5.0"
 ```
 ``` rust
 extern crate quick_xml;
@@ -112,10 +112,6 @@ test bench_quick_xml_namespaced ... bench:   2,585,081 ns/iter (+/- 28,941)
 // same bench with xml-rs
 test bench_xml_rs 		... bench:  39,683,007 ns/iter (+/- 533,863)
 ```
-
-## Known issues:
-
-- [ ] attribute values with `>` character will likely result in parsing error
 
 ## Contribute
 

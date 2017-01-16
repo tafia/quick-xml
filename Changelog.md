@@ -9,6 +9,8 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## master
+
+## 0.5.0
 - feat: apply default namespaces (`xmlns="..."`) to unqualified elements
 - fix: scope for namespace resolution on empty elements
 - fix: parsing of `>` in attribute values
