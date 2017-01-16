@@ -430,3 +430,87 @@ fn test_read_write_roundtrip_results_in_identity() {
     let result = writer.into_inner().into_inner();
     assert_eq!(result, input.as_bytes());
 }
+
+#[test]
+fn test_closing_bracket_in_single_quote_attr() {
+    let mut r = XmlReader::from("<a attr='>' check='2'></a>").trim_text(true);
+    match r.next() {
+        Some(Ok(Start(e))) => {
+            let mut attrs = e.attributes();
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b">"[..]), attr),
+                x => panic!("expected attribute 'attr', got {:?}", x)
+            }
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"2"[..]), attr),
+                x => panic!("expected attribute 'check', got {:?}", x)
+            }
+            assert!(attrs.next().is_none(), "expected only two attributes");
+        },
+        x => panic!("expected <a attr='>'>, got {:?}", x)
+    }
+    next_eq!(r, End, b"a");
+}
+
+#[test]
+fn test_closing_bracket_in_double_quote_attr() {
+    let mut r = XmlReader::from("<a attr=\">\" check=\"2\"></a>").trim_text(true);
+    match r.next() {
+        Some(Ok(Start(e))) => {
+            let mut attrs = e.attributes();
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b">"[..]), attr),
+                x => panic!("expected attribute 'attr', got {:?}", x)
+            }
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"2"[..]), attr),
+                x => panic!("expected attribute 'check', got {:?}", x)
+            }
+            assert!(attrs.next().is_none(), "expected only two attributes");
+        },
+        x => panic!("expected <a attr='>'>, got {:?}", x)
+    }
+    next_eq!(r, End, b"a");
+}
+
+#[test]
+fn test_closing_bracket_in_double_quote_mixed() {
+    let mut r = XmlReader::from("<a attr=\"'>'\" check=\"'2'\"></a>").trim_text(true);
+    match r.next() {
+        Some(Ok(Start(e))) => {
+            let mut attrs = e.attributes();
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b"'>'"[..]), attr),
+                x => panic!("expected attribute 'attr', got {:?}", x)
+            }
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"'2'"[..]), attr),
+                x => panic!("expected attribute 'check', got {:?}", x)
+            }
+            assert!(attrs.next().is_none(), "expected only two attributes");
+        },
+        x => panic!("expected <a attr='>'>, got {:?}", x)
+    }
+    next_eq!(r, End, b"a");
+}
+
+#[test]
+fn test_closing_bracket_in_single_quote_mixed() {
+    let mut r = XmlReader::from("<a attr='\">\"' check='\"2\"'></a>").trim_text(true);
+    match r.next() {
+        Some(Ok(Start(e))) => {
+            let mut attrs = e.attributes();
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b"\">\""[..]), attr),
+                x => panic!("expected attribute 'attr', got {:?}", x)
+            }
+            match attrs.next() {
+                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"\"2\""[..]), attr),
+                x => panic!("expected attribute 'check', got {:?}", x)
+            }
+            assert!(attrs.next().is_none(), "expected only two attributes");
+        },
+        x => panic!("expected <a attr='>'>, got {:?}", x)
+    }
+    next_eq!(r, End, b"a");
+}

@@ -386,20 +386,62 @@ impl<B: BufRead> XmlReader<B> {
     /// private function to read until '>' is found
     fn read_until_close(&mut self) -> Option<ResultPos<Event>> {
         self.tag_state = TagState::Closed;
-        let mut buf = Vec::new();
-        match read_until(&mut self.reader, b'>', &mut buf) {
-            Ok(0) => None,
-            Ok(n) => {
-                self.buf_position += n;
-                match buf[0] {
-                    b'/' => Some(self.read_end(buf)),
-                    b'!' => Some(self.read_bang(buf)),
-                    b'?' => Some(self.read_question_mark(buf)),
-                    _ => Some(self.read_start(buf)),
-                }
-            }
-            Err(e) => Some(self.error(e, 0)),
+
+        // need to read 1 character to decide whether pay special attention to attribute values
+        let start;
+        loop {
+            // Need to contain the `self.reader.fill_buf()` in a scope lexically separate from the
+            // `self.error()` call because both require `&mut self`.
+            let start_result = {
+                let available = match self.reader.fill_buf() {
+                    Ok(n) if n.is_empty() => return None,
+                    Ok(n) => Ok(n),
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(e),
+                };
+                // `available` is a non-empty slice => we only need the first byte to decide
+                available.map(|xs| xs[0])
+            };
+
+            // throw the error we couldn't throw in the block above because `self` was sill borrowed
+            start = match start_result {
+                Ok(s) => s,
+                Err(e) => return Some(self.error(Error::Io(e), 0))
+            };
+
+            // We intentionally don't `consume()` the byte, otherwise we would have to handle things
+            // like '<>' here already.
+            break;
         }
+
+        let mut buf = Vec::new();
+        if start != b'/' && start != b'!' && start != b'?' {
+            match read_elem_until(&mut self.reader, b'>', &mut buf) {
+                Ok(0) => None,
+                Ok(n) => {
+                    self.buf_position += n;
+                    // we already *know* that we are in this case
+                    Some(self.read_start(buf))
+                }
+                Err(e) => Some(self.error(e, 0)),
+            }
+        } else {
+            match read_until(&mut self.reader, b'>', &mut buf) {
+                Ok(0) => None,
+                Ok(n) => {
+                    self.buf_position += n;
+                    match start {
+                        b'/' => Some(self.read_end(buf)),
+                        b'!' => Some(self.read_bang(buf)),
+                        b'?' => Some(self.read_question_mark(buf)),
+                        _ => unreachable!("We checked that `start` must be one of [/!?], \
+                                            was {:?} instead.", start),
+                    }
+                }
+                Err(e) => Some(self.error(e, 0)),
+            }
+        }
+
     }
 
     /// reads `Element` starting with a `/`,
@@ -827,7 +869,7 @@ fn is_whitespace(b: u8) -> bool {
     }
 }
 
-/// `read_until` slighly modified from rust std library
+/// `read_until` slightly modified from rust std library
 ///
 /// only change is that we do not write the matching character
 #[inline]
@@ -857,6 +899,82 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>)
                             used = i + 1;
                             break;
                         }
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+                        used = available.len();
+                        break;
+                    }
+                }
+            }
+            used
+        };
+        r.consume(used);
+        read += used;
+    }
+    Ok(read)
+}
+
+/// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
+/// [W3C Extensible Markup Language (XML) 1.1 (2006)](https://www.w3.org/TR/xml11)
+///
+/// Attribute values are defined as follows:
+/// ```plain
+/// AttValue := '"' (([^<&"]) | Reference)* '"'
+///           | "'" (([^<&']) | Reference)* "'"
+/// ```
+/// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
+/// level)
+fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>)
+                          -> Result<usize>
+{
+    #[derive(Debug,Clone,Copy,PartialEq,Eq)]
+    enum ElemReadState {
+        /// The initial state (inside element, but outside of attribute value)
+        Elem,
+        /// Inside a single-quoted attribute value
+        SingleQ,
+        /// Inside a double-quoted attribute value
+        DoubleQ
+    }
+    let mut state = ElemReadState::Elem;
+    let mut read = 0;
+    let mut done = false;
+    while !done {
+        let used = {
+            let available = match r.fill_buf() {
+                Ok(n) if n.is_empty() => return Ok(read),
+                Ok(n) => n,
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(Error::Io(e)),
+            };
+
+            let mut bytes = available.iter().enumerate();
+
+            let used: usize;
+            loop {
+                match bytes.next() {
+                    Some((i, &b)) => {
+                        state = match (state, b) {
+                            (ElemReadState::Elem, b) if b == end_byte => {
+                                // only allowed to match `end_byte` while we are in state `Elem`
+                                buf.extend_from_slice(&available[..i]);
+                                done = true;
+                                used = i + 1;
+                                break;
+                            },
+                            (ElemReadState::Elem,  b'\'') => ElemReadState::SingleQ,
+                            (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
+
+                            // the only end_byte that gets us out of state 'SingleQ' is a single quote
+                            (ElemReadState::SingleQ, b'\'') => ElemReadState::Elem,
+
+                            // the only end_byte that gets us out of state 'DoubleQ' is a double quote
+                            (ElemReadState::DoubleQ, b'\"') => ElemReadState::Elem,
+
+                            // all other bytes: no state change
+                            _ => state,
+                        };
                     }
                     None => {
                         buf.extend_from_slice(available);
