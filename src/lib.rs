@@ -769,9 +769,11 @@ impl fmt::Debug for Element {
     }
 }
 
-/// Wrapper around `Element` to parse `XmlDecl`
+/// Wrapper around `Element` to parse/write `XmlDecl`
 ///
-/// Postpone element parsing only when needed
+/// Postpone element parsing only when needed.
+///
+/// [W3C XML 1.1 Prolog and Document Type Delcaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug)]
 pub struct XmlDecl {
     element: Element,
@@ -818,6 +820,40 @@ impl XmlDecl {
             }
         }
         None
+    }
+
+    /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
+    /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
+    /// attribute.
+    ///
+    /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
+    /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
+    /// the double quote character is not allowed in any of the attribute values.
+    pub fn new(version: &[u8], encoding: Option<&[u8]>, standalone: Option<&[u8]>) -> XmlDecl {
+        // Compute length of the buffer based on supplied attributes
+        // ' encoding=""'   => 12
+        let encoding_attr_len = if let Some(xs) = encoding { 12 + xs.len() } else { 0 };
+        // ' standalone=""' => 14
+        let standalone_attr_len = if let Some(xs) = standalone { 14 + xs.len() } else { 0 };
+        // 'xml version=""' => 14
+        let mut buf = Vec::with_capacity(14 + encoding_attr_len + standalone_attr_len);
+
+        buf.extend_from_slice(b"xml version=\"");
+        buf.extend_from_slice(version);
+
+        if let Some(encoding_val) = encoding {
+            buf.extend_from_slice(b"\" encoding=\"");
+            buf.extend_from_slice(encoding_val);
+        }
+
+        if let Some(standalone_val) = standalone {
+            buf.extend_from_slice(b"\" standalone=\"");
+            buf.extend_from_slice(standalone_val);
+        }
+        buf.push(b'"');
+
+        let buf_len = buf.len();
+        XmlDecl { element: Element::from_buffer(buf, 0, buf_len, 3) }
     }
 }
 

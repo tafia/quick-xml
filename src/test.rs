@@ -262,6 +262,69 @@ fn test_write_attrs() {
 }
 
 #[test]
+fn test_new_xml_decl_full() {
+    let mut writer = XmlWriter::new(Vec::new());
+    writer.write(Decl(super::XmlDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
+        .expect("writing xml decl should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
+        "writer output (LHS)");
+}
+
+#[test]
+fn test_new_xml_decl_standalone() {
+    let mut writer = XmlWriter::new(Vec::new());
+    writer.write(Decl(super::XmlDecl::new(b"1.2", None, Some(b"yo"))))
+        .expect("writing xml decl should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
+        "writer output (LHS)");
+}
+
+#[test]
+fn test_new_xml_decl_encoding() {
+    let mut writer = XmlWriter::new(Vec::new());
+    writer.write(Decl(super::XmlDecl::new(b"1.2", Some(b"utf-X"), None)))
+        .expect("writing xml decl should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
+        "writer output (LHS)");
+}
+
+#[test]
+fn test_new_xml_decl_version() {
+    let mut writer = XmlWriter::new(Vec::new());
+    writer.write(Decl(super::XmlDecl::new(b"1.2", None, None)))
+        .expect("writing xml decl should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\"?>".to_owned(),
+        "writer output (LHS)");
+}
+
+/// This test ensures that empty XML declaration attribute values are not a problem.
+#[test]
+fn test_new_xml_decl_empty() {
+    let mut writer = XmlWriter::new(Vec::new());
+    // An empty version should arguably be an error, but we don't expect anyone to actually supply
+    // an empty version.
+    writer.write(Decl(super::XmlDecl::new(b"", Some(b""), Some(b""))))
+        .expect("writing xml decl should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
+    "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
+    "writer output (LHS)");
+}
+
+#[test]
 fn test_buf_position() {
     let mut r = XmlReader::from("</a>")
         .trim_text(true)
