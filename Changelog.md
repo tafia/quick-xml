@@ -9,6 +9,7 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## master
+- feat: constructor for `XmlDecl`
 
 ## 0.5.0
 - feat: apply default namespaces (`xmlns="..."`) to unqualified elements
