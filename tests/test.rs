@@ -170,7 +170,8 @@ fn test_default_ns_shadowing_empty() {
     // <inner att1='a' xmlns='urn:example:i' />
     match r.next() {
         Some(Ok((Some(ns), Empty(e)))) => {
-            assert_eq!(String::from_utf8(ns).unwrap(), "urn:example:i");
+            use std::ops::Deref;
+            assert_eq!(String::from_utf8(ns.deref().clone()).unwrap(), "urn:example:i");
             assert_eq!(e.name(), b"e");
             let mut atts = e.attributes()
                 .map(|ar| ar.expect("Expecting attribute parsing to succeed."))

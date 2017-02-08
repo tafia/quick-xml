@@ -3,6 +3,7 @@
 use {XmlReader, Event, Element};
 use error::ResultPos;
 use std::io::BufRead;
+use std::rc::Rc;
 
 /// Start and end index into a vector with prefixes and namespaces
 #[derive(Clone)]
@@ -125,6 +126,8 @@ pub struct XmlnsReader<R: BufRead> {
     /// Buffer that holds concatenated prefixes and namespaces.
     /// The offsets are stored in stack of Namespace objects.
     namespace_buffer: Vec<u8>,
+    /// Buffer for passing to the caller of next().
+    iter_buffer: Rc<Vec<u8>>
 }
 
 impl<R: BufRead> XmlnsReader<R> {
@@ -135,7 +138,8 @@ impl<R: BufRead> XmlnsReader<R> {
             namespaces: Vec::new(),
             nesting_level: 0,
             pending_pop: false,
-            namespace_buffer: Vec::new()
+            namespace_buffer: Vec::new(),
+            iter_buffer: Rc::new(Vec::new())
         }
     }
 
@@ -167,7 +171,7 @@ impl<R: BufRead> XmlnsReader<R> {
         }
     }
 
-    fn find_namespace_value(&self, e: &Element) -> Option<&[u8]> {
+    fn find_namespace_value(&self, e: &Element) -> Option<NamespaceSlice> {
         // We pulled the qualified-vs-unqualified check out here so that it doesn't happen for each
         // namespace we are comparing against.
         let element_name = e.name();
@@ -177,14 +181,14 @@ impl<R: BufRead> XmlnsReader<R> {
                 .iter()
                 .rev() // iterate in reverse order to find the most recent one
                 .find(|ref n| n.matches_qualified(&self.namespace_buffer, element_name))
-                .and_then(|ref n| n.value.as_ref().map(|ns| ns.get(&self.namespace_buffer)))
+                .and_then(|ref n| n.value.clone())
         } else {
             // unqualified name (inherits current default namespace)
             self.namespaces
                 .iter()
                 .rev() // iterate in reverse order to find the most recent one
                 .find(|ref n| n.matches_unqualified_elem())
-                .and_then(|ref n| n.value.as_ref().map(|ns| ns.get(&self.namespace_buffer)))
+                .and_then(|ref n| n.value.clone())
         }
     }
 
@@ -207,8 +211,8 @@ impl<R: BufRead> XmlnsReader<R> {
 
     /// add a slice to namespace_buffer and return a NamespaceSlice
     fn add_slice(&mut self, name: &[u8]) -> NamespaceSlice {
-	let start = self.namespace_buffer.len();
-	self.namespace_buffer.extend_from_slice(name);
+        let start = self.namespace_buffer.len();
+        self.namespace_buffer.extend_from_slice(name);
         NamespaceSlice {
             start: start,
             end: self.namespace_buffer.len()
@@ -238,10 +242,26 @@ impl<R: BufRead> XmlnsReader<R> {
             }
         }
     }
+
+    fn set_iter_buffer(&mut self, element: &Element) -> Option<Rc<Vec<u8>>> {
+        let namespace = self.find_namespace_value(element);
+        match namespace {
+            Some(namespace) => {
+                {
+                    let b = Rc::make_mut(&mut self.iter_buffer);
+                    b.clear();
+                    let v = namespace.get(&self.namespace_buffer);
+                    b.extend_from_slice(v);
+                }
+                Some(self.iter_buffer.clone())
+            }
+            None => None
+        }
+    }
 }
 
 impl<R: BufRead> Iterator for XmlnsReader<R> {
-    type Item = ResultPos<(Option<Vec<u8>>, Event)>;
+    type Item = ResultPos<(Option<Rc<Vec<u8>>>, Event)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pending_pop {
@@ -253,7 +273,8 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
             Some(Ok(Event::Start(e))) => {
                 self.nesting_level += 1;
                 self.push_new_namespaces(&e);
-                Some(Ok((self.find_namespace_value(&e).map(|v|v.into()), Event::Start(e))))
+                let v = self.set_iter_buffer(&e);
+                Some(Ok((v, Event::Start(e))))
             }
             Some(Ok(Event::Empty(e))) => {
                 // For empty elements we need to 'artificially' keep the namespace scope on the
@@ -265,17 +286,18 @@ impl<R: BufRead> Iterator for XmlnsReader<R> {
                 self.push_new_namespaces(&e);
                 // notify next `next()` invocation that it needs to pop this namespace scope
                 self.pending_pop = true;
-                Some(Ok((self.find_namespace_value(&e).map(|v|v.into()), Event::Empty(e))))
+                let v = self.set_iter_buffer(&e);
+                Some(Ok((v, Event::Empty(e))))
             }
             Some(Ok(Event::End(e))) => {
                 // need to determine namespace of end element *before* we pop the current
                 // namespace scope. If namespace prefixes are shadowed or if default namespaces are
                 // defined, it is vital that we resolve the namespace of the end tag in the scope
                 // of that tag (not in the outer scope).
-                let element_ns = self.find_namespace_value(&e).map(|v|v.into());
+                let v = self.set_iter_buffer(&e);
                 self.nesting_level -= 1;
                 self.pop_empty_namespaces();
-                Some(Ok((element_ns, Event::End(e))))
+                Some(Ok((v, Event::End(e))))
                 // It could be argued that the 'End' event should also defer the 'pop' operation to
                 // the next `next()` call. The end tag still technically belongs to the
                 // 'tag scope'. Not sure if that behaviour is intuitive, though.

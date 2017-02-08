@@ -364,7 +364,8 @@ fn test_namespace() {
     }
 
     if let Some(Ok((Some(a), Start(_)))) = r.next() {
-        assert_eq!(a, b"www1", "expecting namespace to resolve to 'www1'");
+        use std::ops::Deref;
+        assert_eq!(a.deref(), b"www1", "expecting namespace to resolve to 'www1'");
     } else {
         assert!(false, "expecting namespace resolution");
     }

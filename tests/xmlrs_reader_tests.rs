@@ -315,6 +315,13 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
     loop {
         let e = reader.next();
+        use std::ops::Deref;
+        let e = match e {
+             Some(Ok((Some(a),b))) => Some(Ok((Some(a.deref().clone()),b))),
+             Some(Err(e)) => Some(Err(e)),
+             Some(Ok((None, b))) => Some(Ok((None, b))),
+             None => None
+        };
         
         let line = format!("{}", OptEvent(e));
 
