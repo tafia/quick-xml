@@ -364,11 +364,7 @@ fn test_namespace() {
     }
 
     if let Some(Ok((Some(a), Start(_)))) = r.next() {
-        if &*a == b"www1" {
-            assert!(true);
-        } else {
-            assert!(false, "expecting namespace to resolve to 'www1'");
-        }
+        assert_eq!(a, b"www1", "expecting namespace to resolve to 'www1'");
     } else {
         assert!(false, "expecting namespace resolution");
     }
