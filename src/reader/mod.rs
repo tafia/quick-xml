@@ -2,6 +2,7 @@
 
 pub mod attributes;
 pub mod namespace;
+pub mod bytes;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
