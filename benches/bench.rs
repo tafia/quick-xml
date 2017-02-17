@@ -40,6 +40,25 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_quick_xml_namespaced_while_loop(b: &mut Bencher) {
+    let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
+    b.iter(|| {
+        let mut r = XmlReader::from_reader(src).namespaced();
+        let mut count = test::black_box(0);
+        loop {
+            match r.next() {
+                Some(Ok((_, Event::Start(_)))) |
+                Some(Ok((_, Event::Empty(_)))) => count += 1,
+                None => break,
+                _ => ()
+
+            }
+        }
+        assert_eq!(count, 1550);
+    });
+}
+
+#[bench]
 fn bench_quick_xml_escaped(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {

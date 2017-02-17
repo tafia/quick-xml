@@ -57,7 +57,7 @@ impl Namespace {
 ///
 /// ```
 /// use quick_xml::{XmlReader, Event};
-/// use quick_xml::namespace::XmlnsReader;
+/// use quick_xml::reader::namespace::XmlnsReader;
 ///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
