@@ -81,6 +81,26 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_quick_xml_namespaced_bytes(b: &mut Bencher) {
+    let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
+    b.iter(|| {
+        let mut r = BytesReader::from_reader(src);
+        r.check_end_names(false).check_comments(false);
+        let mut count = test::black_box(0);
+        let mut buf = Vec::new();
+        loop {
+            match r.read_namespaced_event(&mut buf) {
+                Ok((_, BytesEvent::Start(_))) | Ok((_, BytesEvent::Empty(_))) => count += 1,
+                Ok((_, BytesEvent::Eof)) => break,
+                _ => ()
+            }
+            buf.clear();
+        }
+        assert_eq!(count, 1550);
+    });
+}
+
+#[bench]
 fn bench_quick_xml_namespaced_while_loop(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
