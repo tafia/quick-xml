@@ -675,96 +675,97 @@ impl<B: BufRead> XmlBytesReader<B> {
 }
 
 impl<B: BufRead> XmlBytesReader<B> {
-//     /// Reads until end element is found
-//     ///
-//     /// Manages nested cases where parent and child elements have the same name
-//     pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<()> {
-//         let mut depth = 0;
-//         let end = end.as_ref();
-//         loop {
-//             match self.next() {
-//                 Some(Ok(BytesEvent::End(ref e))) if e.name() == end => {
-//                     if depth == 0 {
-//                         return Ok(());
-//                     }
-//                     depth -= 1;
-//                 }
-//                 Some(Ok(BytesEvent::Start(ref e))) if e.name() == end => depth += 1,
-//                 Some(Err(e)) => return Err(e),
-//                 None => {
-//                     warn!("EOF instead of {:?}", from_utf8(end));
-//                     return Err((Error::Unexpected(format!(
-//                                     "Reached EOF, expecting {:?} end tag",
-//                                     from_utf8(end))),
-//                                 self.buf_position));
-//                 }
-//                 _ => (),
-//             }
-//         }
-//     }
-// 
-//     /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
-//     /// then returns a `String`, else returns an error
-//     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
-//         match self.next() {
-//             Some(Ok(BytesEvent::Text(e))) => {
-//                 self.read_to_end(end)
-//                     .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position)))
-//             }
-//             Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
-//                 Ok("".to_string())
-//             },
-//             Some(Err(e)) => Err(e),
-//             None => {
-//                 Err((Error::Unexpected("Reached EOF while reading text".to_string()),
-//                      self.buf_position))
-//             }
-//             _ => {
-//                 Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
-//                      self.buf_position))
-//             }
-//         }
-//     }
-// 
-//     /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
-//     /// then returns an unescaped `String`, else returns an error
-//     ///
-//     /// # Examples
-//     /// 
-//     /// ```
-//     /// use quick_xml::{XmlBytesReader, BytesEvent};
-//     ///
-//     /// let mut xml = XmlBytesReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
-//     /// match xml.next() {
-//     ///     Some(Ok(BytesEvent::Start(ref e))) => {
-//     ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
-//     ///     },
-//     ///     e => panic!("Expecting Start(a), found {:?}", e),
-//     /// }
-//     /// ```
-//     pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
-//         match self.next() {
-//             Some(Ok(BytesEvent::Text(e))) => {
-//                 self.read_to_end(end)
-//                     .and_then(|_| e.unescaped_content())
-//                     .and_then(|c| c.as_str()
-//                               .map_err(|e| (e, self.buf_position))
-//                               .map(|s| s.to_string()))
-//             }
-//             Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
-//                 Ok("".to_string())
-//             },
-//             Some(Err(e)) => Err(e),
-//             None => {
-//                 Err((Error::Unexpected("Reached EOF while reading text".to_string()),
-//                      self.buf_position))
-//             }
-//             _ => {
-//                 Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
-//                      self.buf_position))
-//             }
-//         }
-//     }
+
+    /// Reads until end element is found
+    ///
+    /// Manages nested cases where parent and child elements have the same name
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<()> {
+        let mut depth = 0;
+        let end = end.as_ref();
+        let mut buf = Vec::new();
+        loop {
+            match self.next_event(&mut buf) {
+                Some(Ok(BytesEvent::End(ref e))) if e.name() == end => {
+                    if depth == 0 { return Ok(()); }
+                    depth -= 1;
+                }
+                Some(Ok(BytesEvent::Start(ref e))) if e.name() == end => depth += 1,
+                Some(Err(e)) => return Err(e),
+                None => {
+                    warn!("EOF instead of {:?}", end.as_str());
+                    return Err((Error::Unexpected(format!("Reached EOF, expecting {:?} end tag", 
+                                                          end.as_str())), self.buf_position));
+                }
+                _ => (),
+            }
+            buf.clear();
+        }
+    }
+
+    /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
+    /// then returns a `String`, else returns an error
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
+        let mut buf = Vec::new();
+        match self.next_event(&mut buf) {
+            Some(Ok(BytesEvent::Text(e))) => {
+                self.read_to_end(end)
+                    .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position)))
+            }
+            Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
+                Ok("".to_string())
+            },
+            Some(Err(e)) => Err(e),
+            None => {
+                Err((Error::Unexpected("Reached EOF while reading text".to_string()),
+                     self.buf_position))
+            }
+            _ => {
+                Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                     self.buf_position))
+            }
+        }
+    }
+
+    /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
+    /// then returns an unescaped `String`, else returns an error
+    ///
+    /// # Examples
+    /// 
+    /// ```
+    /// use quick_xml::{XmlBytesReader, BytesEvent};
+    ///
+    /// let mut xml = XmlBytesReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
+    /// match xml.next() {
+    ///     Some(Ok(BytesEvent::Start(ref e))) => {
+    ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
+    ///     },
+    ///     e => panic!("Expecting Start(a), found {:?}", e),
+    /// }
+    /// ```
+    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
+        let mut buf = Vec::new();
+        match self.next_event(&mut buf) {
+            Some(Ok(BytesEvent::Text(e))) => {
+                self.read_to_end(end)
+                    .and_then(|_| e.unescaped_content())
+                    .and_then(|c| c.as_str()
+                              .map_err(|e| (e, self.buf_position))
+                              .map(|s| s.to_string()))
+            }
+            Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
+                Ok("".to_string())
+            },
+            Some(Err(e)) => Err(e),
+            None => {
+                Err((Error::Unexpected("Reached EOF while reading text".to_string()),
+                     self.buf_position))
+            }
+            _ => {
+                Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                     self.buf_position))
+            }
+        }
+    }
 }
 
 impl XmlBytesReader<BufReader<File>> {
