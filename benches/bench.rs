@@ -28,12 +28,13 @@ fn bench_quick_xml_bytes(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = XmlBytesReader::from_reader(src);
+        r.check_end_names(false).check_comments(false);
         let mut count = test::black_box(0);
         let mut buf = Vec::new();
         loop {
-            match r.next_event(&mut buf) {
-                Some(Ok(BytesEvent::Start(_))) | Some(Ok(BytesEvent::Empty(_))) => count += 1,
-                None => break,
+            match r.read_event(&mut buf) {
+                Ok(BytesEvent::Start(_)) | Ok(BytesEvent::Empty(_)) => count += 1,
+                Ok(BytesEvent::Eof) => break,
                 _ => (),
             }
         }
