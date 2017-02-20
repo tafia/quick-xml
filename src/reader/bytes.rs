@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::borrow::Cow;
-use std::ops::Range;
 
 use error::{Error, Result, ResultPos};
 use escape::unescape;
@@ -45,10 +44,8 @@ enum TagState {
 pub struct BytesElement<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
-    /// content range, excluding text defining BytesEvent type
-    content: Range<usize>,
-    /// element name range
-    name: Range<usize>,
+    /// end of the element name, the name starts at that the start of `buf`
+    name_end: usize
 }
 
 impl<'a> BytesElement<'a> {
@@ -59,18 +56,17 @@ impl<'a> BytesElement<'a> {
     pub fn new(name: &'a [u8]) -> BytesElement<'a> {
         let bytes = Cow::Borrowed(name.as_ref());
         let end = bytes.len();
-        BytesElement::from_buffer(bytes, 0, end, end)
+        BytesElement::from_buffer(bytes, end)
     }
 
     /// private function to create a new element from a buffer.
     #[inline]
-    fn from_buffer(buf: Cow<'a,[u8]>, start: usize, end: usize, name_end: usize)
+    fn from_buffer(buf: Cow<'a,[u8]>, name_end: usize)
         -> BytesElement
     {
         BytesElement {
             buf: buf,
-            content: start..end,
-            name: start..name_end,
+            name_end: name_end,
         }
     }
 
@@ -89,12 +85,12 @@ impl<'a> BytesElement<'a> {
 
     /// name as &[u8] (without eventual attributes)
     pub fn name(&self) -> &[u8] {
-        &self.buf[self.name.clone()]
+        &self.buf[..self.name_end]
     }
 
     /// whole content as &[u8] (including eventual attributes)
     pub fn content(&self) -> &[u8] {
-        &self.buf[self.content.clone()]
+        &*self.buf
     }
 
     /// gets escaped content
@@ -107,7 +103,7 @@ impl<'a> BytesElement<'a> {
 
     /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self.content(), self.name.end)
+        Attributes::new(self.content(), self.name_end)
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
@@ -161,17 +157,15 @@ impl<'a> BytesElement<'a> {
         bytes.extend_from_slice(b"=\"");
         bytes.extend_from_slice(value.as_ref());
         bytes.push(b'"');
-        self.content.end = bytes.len();
     }
 }
 
 impl<'a> fmt::Debug for BytesElement<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         write!(f,
-               "BytesElement {{ buf: {:?}, name_end: {}, end: {} }}",
+               "BytesElement {{ buf: {:?}, name_end: {} }}",
                self.content().as_str(),
-               self.name.end,
-               self.content.end)
+               self.name_end)
     }
 }
 
@@ -258,8 +252,7 @@ impl<'a> XmlBytesDecl<'a> {
         }
         buf.push(b'"');
 
-        let buf_len = buf.len();
-        XmlBytesDecl { element: BytesElement::from_buffer(Cow::Owned(buf), 0, buf_len, 3) }
+        XmlBytesDecl { element: BytesElement::from_buffer(Cow::Owned(buf), 3) }
     }
 }
 
@@ -452,7 +445,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                 } else {
                     (buf_start, buf.len())
                 };
-                Some(Ok(BytesEvent::Text(BytesElement::from_buffer(Cow::Borrowed(buf), start, len, len))))
+                Some(Ok(BytesEvent::Text(BytesElement::from_buffer(Cow::Borrowed(&buf[start..len]), len - start))))
             }
             Err(e) => Some(self.error(e, 0)),
         }
@@ -539,7 +532,7 @@ impl<B: BufRead> XmlBytesReader<B> {
 //                 return self.error(Error::Malformed(m), len);
 //             }
 //         }
-        Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Borrowed(buf), 1, len, len)))
+        Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Borrowed(&buf[1..]), len - 1)))
     }
 
     /// reads `BytesElement` starting with a `!`,
@@ -568,7 +561,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                     offset -= 1;
                 }
             }
-            Ok(BytesEvent::Comment(BytesElement::from_buffer(Cow::Borrowed(buf), buf_start + 3, len - 2, len - 2)))
+            Ok(BytesEvent::Comment(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 3..len - 2]), len - buf_start - 5)))
         } else if len >= 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
@@ -583,7 +576,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                         }
                         len = buf.len();
                     }
-                    Ok(BytesEvent::CData(BytesElement::from_buffer(Cow::Borrowed(buf), buf_start + 8, len - 2, len - 2)))
+                    Ok(BytesEvent::CData(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 8..len - 2]), len - buf_start - 10)))
                 }
                 b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
@@ -601,7 +594,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                         }
                     }
                     let len = buf.len();
-                    Ok(BytesEvent::DocType(BytesElement::from_buffer(Cow::Borrowed(buf), buf_start + 1, len, buf_start + 8)))
+                    Ok(BytesEvent::DocType(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 1..len]), 7)))
                 }
                 _ => self.error(Error::Malformed("Only Comment, CDATA and DOCTYPE nodes \
                                                  can start with a '!'".to_string()), 0),
@@ -618,9 +611,9 @@ impl<B: BufRead> XmlBytesReader<B> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                Ok(BytesEvent::Decl(XmlBytesDecl { element: BytesElement::from_buffer(Cow::Borrowed(buf), 1, len - 1, 3) }))
+                Ok(BytesEvent::Decl(XmlBytesDecl { element: BytesElement::from_buffer(Cow::Borrowed(&buf[1..len - 1]), 3) }))
             } else {
-                Ok(BytesEvent::PI(BytesElement::from_buffer(Cow::Borrowed(buf), 1, len - 1, 3)))
+                Ok(BytesEvent::PI(BytesElement::from_buffer(Cow::Borrowed(&buf[1..len - 1]), 3)))
             }
         } else {
             self.error(Error::Malformed("Unescaped XmlDecl event".to_string()), len)
@@ -641,7 +634,7 @@ impl<B: BufRead> XmlBytesReader<B> {
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if buf[len - 1] == b'/' {
             let end = if name_end < len { name_end } else { len - 1 };
-            let element = BytesElement::from_buffer(Cow::Borrowed(buf), 0, len - 1, end);
+            let element = BytesElement::from_buffer(Cow::Borrowed(&buf[..len - 1]), end - 1);
 //             if self.expand_empty_elements {
 //                 self.tag_state = TagState::Empty;
 //                 self.opened.push(element.clone());
@@ -650,7 +643,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                 Ok(BytesEvent::Empty(element))
 //             }
         } else {
-            let element = BytesElement::from_buffer(Cow::Borrowed(buf), 0, len, name_end);
+            let element = BytesElement::from_buffer(Cow::Borrowed(buf), name_end);
 //             if self.with_check { self.opened.push(element.clone()); }
             Ok(BytesEvent::Start(element))
         }
