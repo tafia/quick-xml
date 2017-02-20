@@ -2,8 +2,12 @@ extern crate quick_xml;
 
 use std::io::{BufRead};
 
-use quick_xml::{XmlReader, Event, AsStr, Element};
+use quick_xml::{AsStr};
 use quick_xml::error::ResultPos;
+use quick_xml::reader::bytes::BytesReader;
+use quick_xml::reader::bytes::BytesEvent;
+use quick_xml::reader::bytes::BytesStart;
+
 use std::fmt;
 
 #[test]
@@ -298,67 +302,71 @@ fn convert_to_quick_xml(s: &str) -> String {
 
 fn test(input: &[u8], output: &[u8], is_short: bool) {
 
-    let mut reader = XmlReader::from_reader(input)
-        .trim_text(is_short)
+    let mut reader = BytesReader::from_reader(input);
+    reader.trim_text(is_short)
         .check_comments(true)
-        .expand_empty_elements(false)
-        .namespaced();
+        .expand_empty_elements(false);
 
     let mut spec_lines = output.lines()
         .map(|line| convert_to_quick_xml(&line.unwrap()))
         .filter(|line| !line.trim().is_empty())
         .enumerate();
 
+    let mut buf = Vec::new();
+
     if !is_short {
-        reader.next();
+        reader.read_event(&mut buf).unwrap();
     }
 
     loop {
-        let e = reader.next();
-        
-        let line = format!("{}", OptEvent(e));
-
-        if let Some((n, spec)) = spec_lines.next() {
-            if spec == "EndDocument" {
-                break;
-            }
-            if line != spec {
-                const SPLITTER: &'static str = "-------------------";
-                panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound: {}\n{}\n",
-                       SPLITTER, n + 1, spec, line, SPLITTER);
-            }
-        } else {
-            if line == "EndDocument" {
-                break;
-            }
-            panic!("Unexpected event: {}", line);
-        }
-
-        if !is_short && line.starts_with("StartDocument") {
-            // advance next Characters(empty space) ...
-            if let Some(Ok((_, Event::Text(ref e)))) = reader.next() {
-                if e.content().iter().any(|b| match *b {
-                    b' ' | b'\r' | b'\n' | b'\t' => false,
-                    _ => true,
-                }) {
-                    panic!("XmlReader expects empty Text event after a StartDocument");
+        {
+            let line = {
+                let e = reader.read_namespaced_event(&mut buf);
+                format!("{}", OptEvent(e))
+            };
+            if let Some((n, spec)) = spec_lines.next() {
+                if spec == "EndDocument" {
+                    break;
+                }
+                if line != spec {
+                    const SPLITTER: &'static str = "-------------------";
+                    panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound: {}\n{}\n",
+                           SPLITTER, n + 1, spec, line, SPLITTER);
                 }
             } else {
-                panic!("XmlReader expects empty Text event after a StartDocument");
+                if line == "EndDocument" {
+                    break;
+                }
+                panic!("Unexpected event: {}", line);
+            }
+
+            if !is_short && line.starts_with("StartDocument") {
+                // advance next Characters(empty space) ...
+                if let Ok(BytesEvent::Text(ref e)) = reader.read_event(&mut buf) {
+                    if e.content().iter().any(|b| match *b {
+                        b' ' | b'\r' | b'\n' | b'\t' => false,
+                        _ => true,
+                    }) {
+                        panic!("XmlReader expects empty Text event after a StartDocument");
+                    }
+                } else {
+                    panic!("XmlReader expects empty Text event after a StartDocument");
+                }
             }
         }
+        buf.clear();
     }
 }
 
-fn namespace_name(n: &Option<Vec<u8>>, e: &Element) -> String {
+fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
     match n {
         &Some(ref n) => 
-            format!("{{{}}}{}", n.as_str().unwrap(), e.name().as_str().unwrap()),
-        &None => e.name().as_str().unwrap().to_owned(),
+            format!("{{{}}}{}", n.as_str().unwrap(), name.as_str().unwrap()),
+        &None => name.as_str().unwrap().to_owned(),
     }
 }
 
-fn make_attrs(e: &Element) -> Result<String, String> {
+fn make_attrs(e: &BytesStart) -> Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes().unescaped() {
         match a {
@@ -371,34 +379,34 @@ fn make_attrs(e: &Element) -> Result<String, String> {
     Ok(atts.join(", "))
 }
 
-struct OptEvent(Option<ResultPos<(Option<Vec<u8>>, Event)>>);
+struct OptEvent<'a, 'b>(ResultPos<(Option<&'a [u8]>, BytesEvent<'b>)>);
 
-impl fmt::Display for OptEvent {
+impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Some(Ok((ref n, Event::Start(ref e)))) => {
-                let name = namespace_name(n, e);
+            Ok((ref n, BytesEvent::Start(ref e))) => {
+                let name = namespace_name(n, e.name());
                 match make_attrs(e) {
                     Ok(ref attrs) if attrs.is_empty() => write!(f, "StartElement({})", &name),
                     Ok(ref attrs) => write!(f, "StartElement({} [{}])", &name, &attrs),
                     Err(e) => write!(f, "StartElement({}, attr-error: {})", &name, &e),
                 }
             },
-            Some(Ok((ref n, Event::Empty(ref e)))) => {
-                let name = namespace_name(n, e);
+            Ok((ref n, BytesEvent::Empty(ref e))) => {
+                let name = namespace_name(n, e.name());
                 match make_attrs(e) {
                     Ok(ref attrs) if attrs.is_empty() => write!(f, "EmptyElement({})", &name),
                     Ok(ref attrs) => write!(f, "EmptyElement({} [{}])", &name, &attrs),
                     Err(e) => write!(f, "EmptyElement({}, attr-error: {})", &name, &e),
                 }
             }
-            Some(Ok((ref n, Event::End(ref e)))) =>
-                write!(f, "EndElement({})", namespace_name(n, e)),
-            Some(Ok((_, Event::Comment(ref e)))) =>
+            Ok((ref n, BytesEvent::End(ref e))) =>
+                write!(f, "EndElement({})", namespace_name(n, e.name())),
+            Ok((_, BytesEvent::Comment(ref e))) =>
                 write!(f, "Comment({:?})", e.content().as_str().unwrap()),
-            Some(Ok((_, Event::CData(ref e)))) =>
+            Ok((_, BytesEvent::CData(ref e))) =>
                 write!(f, "CData({:?})", e.content().as_str().unwrap()),
-            Some(Ok((_, Event::Text(ref e)))) => {
+            Ok((_, BytesEvent::Text(ref e))) => {
                 match e.unescaped_content() {
                     Ok(c) => {
                         if c.is_empty() {
@@ -410,17 +418,18 @@ impl fmt::Display for OptEvent {
                     Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
-            Some(Ok((_, Event::Decl(ref e)))) => {
+            Ok((_, BytesEvent::Decl(ref e))) => {
                 let version = e.version().unwrap().as_str().unwrap();
                 let encoding = e.encoding().unwrap().unwrap().as_str().unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             },
-            None => write!(f, "EndDocument"),
-            Some(Ok((_, Event::PI(ref e)))) =>
-                write!(f, "ProcessingInstruction({}={:?})", 
-                    e.name().as_str().unwrap(), e.content().as_str().unwrap()),
-            Some(Err((ref e, _))) => write!(f, "{}", e),
-            Some(Ok((_, Event::DocType(ref e)))) => 
+            Ok((_, BytesEvent::Eof)) => write!(f, "EndDocument"),
+            Ok((_, BytesEvent::PI(ref e))) =>
+                write!(f, "ProcessingInstruction(PI={:?})", e.content().as_str().unwrap()),
+//                 write!(f, "ProcessingInstruction({}={:?})", 
+//                     e.name().as_str().unwrap(), e.content().as_str().unwrap()),
+            Err((ref e, _)) => write!(f, "{}", e),
+            Ok((_, BytesEvent::DocType(ref e))) => 
                 write!(f, "DocType({})", e.content().as_str().unwrap()),
         }
     }

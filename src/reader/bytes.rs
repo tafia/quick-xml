@@ -800,8 +800,6 @@ impl<B: BufRead> BytesReader<B> {
             }
             // drop all namespaces past the last valid namespace
             Some(last_valid_pos) => {
-                println!("all ns: {:?}", self.ns_slices);
-                println!("dropping after {:?}", self.ns_slices[last_valid_pos]);
                 self.ns_buffer.truncate(self.ns_slices[last_valid_pos].ns_buffer_end);
                 self.ns_slices.truncate(last_valid_pos + 1);
             }
