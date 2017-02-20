@@ -26,9 +26,7 @@ enum TagState {
 ///
 /// ```ignore
 /// BytesEvent::Start(BytesElement {
-///     buf:    b"name att1=\"a\", att2=\"b\"",
-///     start:  0,
-///     end:    b"name att1=\"a\", att2=\"b\"".len(),
+///     buf: Cow::Borrowed(b"name att1=\"a\", att2=\"b\""),
 ///     name_end: b"name".len()
 /// })
 /// ```
