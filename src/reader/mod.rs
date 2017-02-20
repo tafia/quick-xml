@@ -90,15 +90,17 @@ impl<'a, B: BufRead> Reader<'a, B> {
     /// # Examples
     /// 
     /// ```
-    /// use quick_xml::{Reader, Event};
+    /// use quick_xml::reader::Reader;
+    /// use quick_xml::reader::bytes::BytesEvent;
     ///
-    /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
-    /// match xml.next() {
-    ///     Some(Ok(Event::Start(ref e))) => {
-    ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
-    ///     },
+    /// let mut buf = Vec::new();
+    /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8], &mut buf);
+    /// xml.trim_text(true);
+    /// let name = match xml.read_event() {
+    ///     Ok(BytesEvent::Start(ref e)) => e.name().to_vec(),
     ///     e => panic!("Expecting Start(a), found {:?}", e),
-    /// }
+    /// };
+    /// assert_eq!(&xml.read_text_unescaped(&name).unwrap(), "<b>");
     /// ```
     pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
         self.buffer.clear();
