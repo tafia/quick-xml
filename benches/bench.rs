@@ -5,7 +5,8 @@ extern crate test;
 
 use test::{Bencher};
 use quick_xml::{XmlReader, Event};
-use quick_xml::reader::bytes::{XmlBytesReader, BytesEvent};
+use quick_xml::reader::bytes::{BytesReader, BytesEvent};
+use quick_xml::reader::Reader;
 
 #[bench]
 fn bench_quick_xml(b: &mut Bencher) {
@@ -27,12 +28,32 @@ fn bench_quick_xml(b: &mut Bencher) {
 fn bench_quick_xml_bytes(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
-        let mut r = XmlBytesReader::from_reader(src);
+        let mut r = BytesReader::from_reader(src);
         r.check_end_names(false).check_comments(false);
         let mut count = test::black_box(0);
         let mut buf = Vec::new();
         loop {
             match r.read_event(&mut buf) {
+                Ok(BytesEvent::Start(_)) | Ok(BytesEvent::Empty(_)) => count += 1,
+                Ok(BytesEvent::Eof) => break,
+                _ => (),
+            }
+            buf.clear();
+        }
+        assert_eq!(count, 1550);
+    });
+}
+
+#[bench]
+fn bench_quick_xml_bytes_wrapper(b: &mut Bencher) {
+    let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
+    b.iter(|| {
+        let mut buf = Vec::new();
+        let mut r = Reader::from_reader(src, &mut buf);
+        r.check_end_names(false).check_comments(false);
+        let mut count = test::black_box(0);
+        loop {
+            match r.read_event() {
                 Ok(BytesEvent::Start(_)) | Ok(BytesEvent::Empty(_)) => count += 1,
                 Ok(BytesEvent::Eof) => break,
                 _ => (),
