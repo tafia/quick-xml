@@ -15,7 +15,7 @@ use AsStr;
 enum TagState {
     Opened,
     Closed,
-//     Empty,
+    Empty,
 }
 
 /// General content of an event (aka node)
@@ -52,7 +52,7 @@ impl<'a> BytesElement<'a> {
     /// name is a reference that can be converted to a byte slice,
     /// such as &[u8] or &str
     pub fn new(name: &'a [u8]) -> BytesElement<'a> {
-        let bytes = Cow::Borrowed(name.as_ref());
+        let bytes = Cow::Borrowed(name);
         let end = bytes.len();
         BytesElement::from_buffer(bytes, end)
     }
@@ -72,7 +72,7 @@ impl<'a> BytesElement<'a> {
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn with_attributes<K, V, I>(mut self, attributes: I) -> Self
+    pub fn with_attributes<K, V, I>(&mut self, attributes: I) -> &mut Self
         where K: AsRef<[u8]>,
               V: AsRef<[u8]>,
               I: IntoIterator<Item = (K, V)>
@@ -336,7 +336,9 @@ pub struct XmlBytesReader<B: BufRead> {
     exit: bool,
     /// all currently Started elements which didn't have a matching
     /// End element yet
-//     opened: Vec<BytesElement>,
+    opened_buffer: Vec<u8>,
+    /// opened name start indexes
+    opened_starts: Vec<usize>,
     /// current state Open/Close
     tag_state: TagState,
     /// expand empty element into an opening and closing element
@@ -363,7 +365,8 @@ impl<B: BufRead> XmlBytesReader<B> {
         XmlBytesReader {
             reader: reader,
             exit: false,
-//             opened: Vec::new(),
+            opened_buffer: Vec::new(),
+            opened_starts: Vec::new(),
             tag_state: TagState::Closed,
             expand_empty_elements: true,
             trim_text: false,
@@ -515,21 +518,22 @@ impl<B: BufRead> XmlBytesReader<B> {
     /// return `End` event
     fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> ResultPos<BytesEvent<'b>> {
         let len = buf.len();
-//         if self.with_check {
-//             let e = match self.opened.pop() {
-//                 Some(e) => e,
-//                 None => return self.error(
-//                     Error::Malformed(format!("Cannot close {:?} element, \
-//                                              there is no opened element",
-//                                              buf[1..].as_str())), len),
-//             };
-//             if &buf[1..] != e.name() {
-//                 let m = format!("End event {:?} doesn't match last \
-//                                 opened element {:?}, opened: {:?}",
-//                                 BytesElement::from_buffer(Cow::Borrowed(buf), 1, len, len), e, &self.opened);
-//                 return self.error(Error::Malformed(m), len);
-//             }
-//         }
+        if self.with_check {
+            match self.opened_starts.pop() {
+                Some(start) => {
+                    if buf[1..] != self.opened_buffer[start..] {
+                        let m = format!("End event name '{:?}' doesn't match last opened element name '{:?}'",
+                                        &buf[1..].as_str(), self.opened_buffer[start..].as_str());
+                        return self.error(Error::Malformed(m), len);
+                    }
+                    self.opened_buffer.truncate(start);
+                },
+                None => return self.error(
+                    Error::Malformed(format!("Cannot close {:?} element, \
+                                             there is no opened element",
+                                             buf[1..].as_str())), len),
+            }
+        }
         Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Borrowed(&buf[1..]), len - 1)))
     }
 
@@ -618,11 +622,12 @@ impl<B: BufRead> XmlBytesReader<B> {
         }
     }
 
-//     fn close_expanded_empty(&mut self) -> Option<ResultPos<BytesEvent>> {
-//         self.tag_state = TagState::Closed;
-//         let e = self.opened.pop().unwrap();
-//         Some(Ok(BytesEvent::End(e)))
-//     }
+    fn close_expanded_empty(&mut self) -> Option<ResultPos<BytesEvent<'static>>> {
+        self.tag_state = TagState::Closed;
+        let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
+        let len = name.len();
+        Some(Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Owned(name), len))))
+    }
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
@@ -632,17 +637,19 @@ impl<B: BufRead> XmlBytesReader<B> {
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if buf[len - 1] == b'/' {
             let end = if name_end < len { name_end } else { len - 1 };
+            if self.expand_empty_elements {
+                self.tag_state = TagState::Empty;
+                self.opened_starts.push(self.opened_buffer.len());
+                self.opened_buffer.extend(&buf[..end - 1]);
+            }
             let element = BytesElement::from_buffer(Cow::Borrowed(&buf[..len - 1]), end - 1);
-//             if self.expand_empty_elements {
-//                 self.tag_state = TagState::Empty;
-//                 self.opened.push(element.clone());
-//                 Ok(BytesEvent::Start(element))
-//             } else {
-                Ok(BytesEvent::Empty(element))
-//             }
+            Ok(BytesEvent::Start(element))
         } else {
+            if self.with_check { 
+                self.opened_starts.push(self.opened_buffer.len());
+                self.opened_buffer.extend(&buf[..name_end]);
+            }
             let element = BytesElement::from_buffer(Cow::Borrowed(buf), name_end);
-//             if self.with_check { self.opened.push(element.clone()); }
             Ok(BytesEvent::Start(element))
         }
     }
@@ -662,7 +669,7 @@ impl<B: BufRead> XmlBytesReader<B> {
         match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
             TagState::Closed => self.read_until_open(buf),
-//             TagState::Empty => self.close_expanded_empty(buf),
+            TagState::Empty => self.close_expanded_empty(),
         }
     }
 }

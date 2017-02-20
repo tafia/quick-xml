@@ -44,7 +44,7 @@ impl<'a> Attributes<'a> {
     }
 
     /// check if attributes are distincts
-    pub fn with_checks(mut self, val: bool) -> Attributes<'a> {
+    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.with_checks = val;
         self
     }
