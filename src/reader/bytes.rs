@@ -1,6 +1,5 @@
 //! A module to handle `XmlBytesReader`
 
-use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
@@ -18,53 +17,32 @@ enum TagState {
     Empty,
 }
 
-/// General content of an event (aka node)
+/// A struct to manage `BytesEvent::Start` events
 ///
-/// BytesElement is a wrapper over the bytes representing the node:
-///
-/// E.g. given a node `<name att1="a", att2="b">`, the corresponding `BytesEvent` will be
-///
-/// ```ignore
-/// BytesEvent::Start(BytesElement {
-///     buf: Cow::Borrowed(b"name att1=\"a\", att2=\"b\""),
-///     name_end: b"name".len()
-/// })
-/// ```
-///
-/// For performance reasons, most of the time, no character searches but
-/// `b'<'` and `b'>'` are performed:
-///
-/// - no attribute parsing: use lazy `Attributes` iterator only when needed
-/// - no namespace awareness as it requires parsing all `Start` element attributes
-/// - no utf8 conversion: prefer searching statically binary comparisons
-/// then use the `as_str` or `into_string` methods
-#[derive(Clone)]
-pub struct BytesElement<'a> {
+/// Provides in particular an iterator over attributes
+#[derive(Clone, Debug)]
+pub struct XmlBytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
-    name_end: usize
+    name_len: usize
 }
 
-impl<'a> BytesElement<'a> {
+impl<'a> XmlBytesStart<'a> {
 
-    /// Creates a new `BytesElement` from the given name.
-    /// name is a reference that can be converted to a byte slice,
-    /// such as &[u8] or &str
-    pub fn new(name: &'a [u8]) -> BytesElement<'a> {
-        let bytes = Cow::Borrowed(name);
-        let end = bytes.len();
-        BytesElement::from_buffer(bytes, end)
+    /// Creates a new `XmlBytesStart` from the given name.
+    pub fn borrowed(content: &'a[u8], name_len: usize) -> XmlBytesStart<'a> {
+        XmlBytesStart {
+            buf: Cow::Borrowed(content),
+            name_len: name_len,
+        }
     }
 
-    /// private function to create a new element from a buffer.
-    #[inline]
-    fn from_buffer(buf: Cow<'a,[u8]>, name_end: usize)
-        -> BytesElement
-    {
-        BytesElement {
-            buf: buf,
-            name_end: name_end,
+    /// Creates a new `XmlBytesStart` from the given name. Owns its content
+    pub fn owned(content: Vec<u8>, name_len: usize) -> XmlBytesStart<'static> {
+        XmlBytesStart {
+            buf: Cow::Owned(content),
+            name_len: name_len,
         }
     }
 
@@ -83,7 +61,7 @@ impl<'a> BytesElement<'a> {
 
     /// name as &[u8] (without eventual attributes)
     pub fn name(&self) -> &[u8] {
-        &self.buf[..self.name_end]
+        &self.buf[..self.name_len]
     }
 
     /// whole content as &[u8] (including eventual attributes)
@@ -101,7 +79,7 @@ impl<'a> BytesElement<'a> {
 
     /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self.content(), self.name_end)
+        Attributes::new(self.content(), self.name_len)
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
@@ -113,7 +91,7 @@ impl<'a> BytesElement<'a> {
     /// extend the attributes of this element from an iterator over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn extend_attributes<K, V, I>(&mut self, attributes: I) -> &mut BytesElement<'a>
+    pub fn extend_attributes<K, V, I>(&mut self, attributes: I) -> &mut XmlBytesStart<'a>
         where K: AsRef<[u8]>,
               V: AsRef<[u8]>,
               I: IntoIterator<Item = (K, V)>
@@ -158,15 +136,6 @@ impl<'a> BytesElement<'a> {
     }
 }
 
-impl<'a> fmt::Debug for BytesElement<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
-        write!(f,
-               "BytesElement {{ buf: {:?}, name_end: {} }}",
-               self.content().as_str(),
-               self.name_end)
-    }
-}
-
 /// Wrapper around `BytesElement` to parse/write `XmlDecl`
 ///
 /// Postpone element parsing only when needed.
@@ -174,7 +143,7 @@ impl<'a> fmt::Debug for BytesElement<'a> {
 /// [W3C XML 1.1 Prolog and Document Type Delcaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug)]
 pub struct XmlBytesDecl<'a> {
-    element: BytesElement<'a>,
+    element: XmlBytesStart<'a>,
 }
 
 impl<'a> XmlBytesDecl<'a> {
@@ -250,48 +219,107 @@ impl<'a> XmlBytesDecl<'a> {
         }
         buf.push(b'"');
 
-        XmlBytesDecl { element: BytesElement::from_buffer(Cow::Owned(buf), 3) }
+        XmlBytesDecl { element: XmlBytesStart::owned(buf, 3) }
     }
 }
+
+/// A struct to manage `BytesEvent::End` events
+#[derive(Clone, Debug)]
+pub struct XmlBytesEnd<'a> {
+    name: Cow<'a, [u8]>
+}
+
+impl<'a> XmlBytesEnd<'a> {
+
+    /// Creates a new `XmlBytesEnd` borrowing a slice
+    pub fn borrowed(name: &'a [u8]) -> XmlBytesEnd<'a> {
+        XmlBytesEnd { name: Cow::Borrowed(name) }
+    }
+
+    /// Creates a new `XmlBytesEnd` owning its name
+    pub fn owned(name: Vec<u8>) -> XmlBytesEnd<'static> {
+        XmlBytesEnd { name: Cow::Owned(name) }
+    }
+
+    /// Gets `XmlBytesEnd` event name
+    pub fn name(&self) -> &[u8] {
+        &*self.name
+    }
+}
+
+/// A struct to manage `BytesEvent::End` events
+#[derive(Clone, Debug)]
+pub struct XmlBytesText<'a> {
+    content: Cow<'a, [u8]>
+}
+
+impl<'a> XmlBytesText<'a> {
+
+    /// Creates a new `XmlBytesEnd` borrowing a slice
+    pub fn borrowed(content: &'a [u8]) -> XmlBytesText<'a> {
+        XmlBytesText { content: Cow::Borrowed(content) }
+    }
+
+    /// Creates a new `XmlBytesEnd` owning its name
+    pub fn owned(content: Vec<u8>) -> XmlBytesText<'static> {
+        XmlBytesText { content: Cow::Owned(content) }
+    }
+
+    /// Gets `XmlBytesEnd` event name
+    pub fn content(&self) -> &[u8] {
+        &*self.content
+    }
+
+    /// gets escaped content
+    ///
+    /// Searches for '&' into content and try to escape the coded character if possible
+    /// returns Malformed error with index within element if '&' is not followed by ';'
+    pub fn unescaped_content(&self) -> ResultPos<Cow<[u8]>> {
+        unescape(&*self.content)
+    }
+
+    /// consumes entire self (including eventual attributes!) and returns `String`
+    ///
+    /// useful when we need to get Text event value (which don't have attributes)
+    pub fn into_string(self) -> Result<String> {
+        ::std::string::String::from_utf8(self.content.into_owned())
+            .map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+    
+    /// consumes entire self (including eventual attributes!) and returns `String`
+    ///
+    /// useful when we need to get Text event value (which don't have attributes)
+    /// and unescape XML entities
+    pub fn into_unescaped_string(self) -> Result<String> {
+        ::std::string::String::from_utf8(
+            try!(self.unescaped_content().map_err(|(e, _)| e)).into_owned())
+            .map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+}
+
+
 
 /// BytesEvent to interprete node as they are parsed
 #[derive(Clone, Debug)]
 pub enum BytesEvent<'a> {
     /// Start tag (with attributes) <...>
-    Start(BytesElement<'a>),
+    Start(XmlBytesStart<'a>),
     /// End tag </...>
-    End(BytesElement<'a>),
+    End(XmlBytesEnd<'a>),
     /// Empty element tag (with attributes) <.../>
-    Empty(BytesElement<'a>),
+    Empty(XmlBytesStart<'a>),
     /// Data between Start and End element
-    Text(BytesElement<'a>),
+    Text(XmlBytesText<'a>),
     /// Comment <!-- ... -->
-    Comment(BytesElement<'a>),
+    Comment(XmlBytesText<'a>),
     /// CData <![CDATA[...]]>
-    CData(BytesElement<'a>),
+    CData(XmlBytesText<'a>),
     /// Xml declaration <?xml ...?>
     Decl(XmlBytesDecl<'a>),
     /// Processing instruction <?...?>
-    PI(BytesElement<'a>),
+    PI(XmlBytesText<'a>),
     /// Doctype <!DOCTYPE...>
-    DocType(BytesElement<'a>),
-}
-
-impl<'a> BytesEvent<'a> {
-    /// returns inner BytesElement for the event
-    pub fn element(&self) -> &BytesElement<'a> {
-        match *self {
-            BytesEvent::Start(ref e) |
-            BytesEvent::End(ref e) |
-            BytesEvent::Empty(ref e) |
-            BytesEvent::Text(ref e) |
-            BytesEvent::Comment(ref e) |
-            BytesEvent::CData(ref e) |
-            BytesEvent::PI(ref e) |
-            BytesEvent::DocType(ref e) => e,
-            BytesEvent::Decl(ref e) => &e.element,
-        }
-    }
+    DocType(XmlBytesText<'a>),
 }
 
 /// A low level Xml bytes reader
@@ -447,7 +475,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                 } else {
                     (buf_start, buf.len())
                 };
-                Some(Ok(BytesEvent::Text(BytesElement::from_buffer(Cow::Borrowed(&buf[start..len]), len - start))))
+                Some(Ok(BytesEvent::Text(XmlBytesText::borrowed(&buf[start..len]))))
             }
             Err(e) => Some(self.error(e, 0)),
         }
@@ -535,7 +563,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                                              buf[1..].as_str())), len),
             }
         }
-        Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Borrowed(&buf[1..]), len - 1)))
+        Ok(BytesEvent::End(XmlBytesEnd::borrowed(&buf[1..])))
     }
 
     /// reads `BytesElement` starting with a `!`,
@@ -564,7 +592,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                     offset -= 1;
                 }
             }
-            Ok(BytesEvent::Comment(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 3..len - 2]), len - buf_start - 5)))
+            Ok(BytesEvent::Comment(XmlBytesText::borrowed(&buf[buf_start + 3..len - 2])))
         } else if len >= 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
@@ -579,7 +607,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                         }
                         len = buf.len();
                     }
-                    Ok(BytesEvent::CData(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 8..len - 2]), len - buf_start - 10)))
+                    Ok(BytesEvent::CData(XmlBytesText::borrowed(&buf[buf_start + 8..len - 2])))
                 }
                 b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
@@ -597,7 +625,7 @@ impl<B: BufRead> XmlBytesReader<B> {
                         }
                     }
                     let len = buf.len();
-                    Ok(BytesEvent::DocType(BytesElement::from_buffer(Cow::Borrowed(&buf[buf_start + 1..len]), 7)))
+                    Ok(BytesEvent::DocType(XmlBytesText::borrowed(&buf[buf_start + 8..len])))
                 }
                 _ => self.error(Error::Malformed("Only Comment, CDATA and DOCTYPE nodes \
                                                  can start with a '!'".to_string()), 0),
@@ -614,9 +642,9 @@ impl<B: BufRead> XmlBytesReader<B> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                Ok(BytesEvent::Decl(XmlBytesDecl { element: BytesElement::from_buffer(Cow::Borrowed(&buf[1..len - 1]), 3) }))
+                Ok(BytesEvent::Decl(XmlBytesDecl { element: XmlBytesStart::borrowed(&buf[1..len - 1], 3) }))
             } else {
-                Ok(BytesEvent::PI(BytesElement::from_buffer(Cow::Borrowed(&buf[1..len - 1]), 3)))
+                Ok(BytesEvent::PI(XmlBytesText::borrowed(&buf[1..len - 1])))
             }
         } else {
             self.error(Error::Malformed("Unescaped XmlDecl event".to_string()), len)
@@ -626,8 +654,7 @@ impl<B: BufRead> XmlBytesReader<B> {
     fn close_expanded_empty(&mut self) -> Option<ResultPos<BytesEvent<'static>>> {
         self.tag_state = TagState::Closed;
         let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
-        let len = name.len();
-        Some(Ok(BytesEvent::End(BytesElement::from_buffer(Cow::Owned(name), len))))
+        Some(Ok(BytesEvent::End(XmlBytesEnd::owned(name))))
     }
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
@@ -643,15 +670,13 @@ impl<B: BufRead> XmlBytesReader<B> {
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..end - 1]);
             }
-            let element = BytesElement::from_buffer(Cow::Borrowed(&buf[..len - 1]), end - 1);
-            Ok(BytesEvent::Start(element))
+            Ok(BytesEvent::Start(XmlBytesStart::borrowed(&buf[..len - 1], end - 1)))
         } else {
             if self.with_check { 
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
-            let element = BytesElement::from_buffer(Cow::Borrowed(buf), name_end);
-            Ok(BytesEvent::Start(element))
+            Ok(BytesEvent::Start(XmlBytesStart::borrowed(&buf, name_end)))
         }
     }
 
