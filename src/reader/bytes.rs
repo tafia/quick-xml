@@ -305,7 +305,8 @@ impl<'a> BytesEvent<'a> {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///             </tag1>"#;
-/// let mut reader = XmlBytesReader::from(xml).trim_text(true);
+/// let mut reader = XmlBytesReader::from(xml);
+/// reader.trim_text(true);
 /// let mut count = 0;
 /// let mut txt = Vec::new();
 /// let mut buf = Vec::new();
@@ -385,7 +386,7 @@ impl<B: BufRead> XmlBytesReader<B> {
     ///
     /// When set to true, all `Empty` events are expanded into an `Open` event
     /// followed by a `Close` BytesEvent.
-    pub fn expand_empty_elements(mut self, val: bool) -> XmlBytesReader<B> {
+    pub fn expand_empty_elements(&mut self, val: bool) -> &mut XmlBytesReader<B> {
         self.expand_empty_elements = val;
         self
     }
@@ -394,7 +395,7 @@ impl<B: BufRead> XmlBytesReader<B> {
     ///
     /// When set to true, all Text events are trimed.
     /// If they are empty, no event if pushed
-    pub fn trim_text(mut self, val: bool) -> XmlBytesReader<B> {
+    pub fn trim_text(&mut self, val: bool) -> &mut XmlBytesReader<B> {
         self.trim_text = val;
         self
     }
@@ -404,7 +405,7 @@ impl<B: BufRead> XmlBytesReader<B> {
     /// When set to true, it won't check if End node match last Start node.
     /// If the xml is known to be sane (already processed etc ...)
     /// this saves extra time
-    pub fn with_check(mut self, val: bool) -> XmlBytesReader<B> {
+    pub fn with_check(&mut self, val: bool) -> &mut XmlBytesReader<B> {
         self.with_check = val;
         self
     }
@@ -414,7 +415,7 @@ impl<B: BufRead> XmlBytesReader<B> {
     /// When set to true, every Comment event will be checked for not containing `--`
     /// Most of the time we don't want comments at all so we don't really care about
     /// comment correctness, thus default value is false for performance reason
-    pub fn check_comments(mut self, val: bool) -> XmlBytesReader<B> {
+    pub fn check_comments(&mut self, val: bool) -> &mut XmlBytesReader<B> {
         self.check_comments = val;
         self
     }
@@ -437,8 +438,8 @@ impl<B: BufRead> XmlBytesReader<B> {
                 let (start, len) = if self.trim_text {
                     match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
                         Some(start) => {
-                            (start, buf.iter().skip(buf_start)
-                             .rposition(|&b| !is_whitespace(b))
+                            (start, buf.iter()
+                             .rposition(|&b| !is_whitespace(b)).map(|p| p + 1)
                              .unwrap_or(buf.len()))
                         }
                         None => return self.next_event(buf),
@@ -679,12 +680,11 @@ impl<B: BufRead> XmlBytesReader<B> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<()> {
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<()> {
         let mut depth = 0;
         let end = end.as_ref();
-        let mut buf = Vec::new();
         loop {
-            match self.next_event(&mut buf) {
+            match self.next_event(buf) {
                 Some(Ok(BytesEvent::End(ref e))) if e.name() == end => {
                     if depth == 0 { return Ok(()); }
                     depth -= 1;
@@ -704,26 +704,27 @@ impl<B: BufRead> XmlBytesReader<B> {
 
     /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
     /// then returns a `String`, else returns an error
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
-        let mut buf = Vec::new();
-        match self.next_event(&mut buf) {
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
+        let (read_end, s) = match self.next_event(buf) {
             Some(Ok(BytesEvent::Text(e))) => {
-                self.read_to_end(end)
-                    .and_then(|_| e.into_string().map_err(|e| (e, self.buf_position)))
+                let s = e.into_string().map_err(|e| (e, self.buf_position))?;
+                (true, s)
             }
             Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
-                Ok("".to_string())
+                (false, "".to_string())
             },
-            Some(Err(e)) => Err(e),
+            Some(Err(e)) => return Err(e),
             None => {
-                Err((Error::Unexpected("Reached EOF while reading text".to_string()),
+                return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
                      self.buf_position))
             }
             _ => {
-                Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                return Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
                      self.buf_position))
             }
-        }
+        };
+        if read_end { self.read_to_end(end, buf)?; }
+        Ok(s)
     }
 
     /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
@@ -732,39 +733,43 @@ impl<B: BufRead> XmlBytesReader<B> {
     /// # Examples
     /// 
     /// ```
-    /// use quick_xml::{XmlBytesReader, BytesEvent};
+    /// use quick_xml::reader::bytes::{XmlBytesReader, BytesEvent};
     ///
-    /// let mut xml = XmlBytesReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]).trim_text(true);
-    /// match xml.next() {
+    /// let mut xml = XmlBytesReader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]);
+    /// 
+    /// xml.trim_text(true);
+    /// let mut buf = Vec::new();
+    /// 
+    /// match xml.next_event(&mut buf) {
     ///     Some(Ok(BytesEvent::Start(ref e))) => {
-    ///         assert_eq!(&xml.read_text_unescaped(e.name()).unwrap(), "<b>");
+    ///         assert_eq!(&xml.read_text_unescaped(e.name(), &mut Vec::new()).unwrap(), "<b>");
     ///     },
     ///     e => panic!("Expecting Start(a), found {:?}", e),
     /// }
     /// ```
-    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K) -> ResultPos<String> {
-        let mut buf = Vec::new();
-        match self.next_event(&mut buf) {
+    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
+        let (read_end, s) = match self.next_event(buf) {
             Some(Ok(BytesEvent::Text(e))) => {
-                self.read_to_end(end)
-                    .and_then(|_| e.unescaped_content())
-                    .and_then(|c| c.as_str()
-                              .map_err(|e| (e, self.buf_position))
-                              .map(|s| s.to_string()))
+                assert_eq!(b"&lt;b&gt;", e.content());
+                (true, e.unescaped_content().and_then(|c| c.as_str()
+                                                      .map_err(|e| (e, self.buf_position))
+                                                      .map(|s| s.to_string())))
             }
             Some(Ok(BytesEvent::End(ref e))) if e.name() == end.as_ref() => {
-                Ok("".to_string())
+                (false, Ok("".to_string()))
             },
-            Some(Err(e)) => Err(e),
+            Some(Err(e)) => return Err(e),
             None => {
-                Err((Error::Unexpected("Reached EOF while reading text".to_string()),
+                return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
                      self.buf_position))
             }
             _ => {
-                Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                return Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
                      self.buf_position))
             }
-        }
+        };
+        if read_end { self.read_to_end(end, buf)? }
+        s
     }
 }
 
