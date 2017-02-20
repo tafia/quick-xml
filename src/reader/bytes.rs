@@ -48,6 +48,14 @@ impl<'a> BytesStart<'a> {
         }
     }
 
+    /// Converts the event into an Owned event
+    pub fn into_owned(self) -> BytesStart<'static> {
+        BytesStart {
+            buf: Cow::Owned(self.buf.into_owned()),
+            name_len: self.name_len,
+        }
+    }
+
     /// Consumes self and adds attributes to this element from an iterator
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
@@ -690,10 +698,10 @@ impl<B: BufRead> BytesReader<B> {
             if self.expand_empty_elements {
                 self.tag_state = TagState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&buf[..end - 1]);
-                Ok(BytesEvent::Start(BytesStart::borrowed(&buf[..len - 1], end - 1)))
+                self.opened_buffer.extend(&buf[..end]);
+                Ok(BytesEvent::Start(BytesStart::borrowed(&buf[..len - 1], end)))
             } else {
-                Ok(BytesEvent::Empty(BytesStart::borrowed(&buf[..len - 1], end - 1)))
+                Ok(BytesEvent::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
             }
         } else {
             if self.check_end_names { 
@@ -781,6 +789,7 @@ impl<B: BufRead> BytesReader<B> {
     }
 
     fn pop_empty_namespaces(&mut self) {
+        self.ns_nesting_level -= 1;
         let current_level = self.ns_nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
         match self.ns_slices.iter().rposition(|n| n.level <= current_level) {
@@ -791,6 +800,8 @@ impl<B: BufRead> BytesReader<B> {
             }
             // drop all namespaces past the last valid namespace
             Some(last_valid_pos) => {
+                println!("all ns: {:?}", self.ns_slices);
+                println!("dropping after {:?}", self.ns_slices[last_valid_pos]);
                 self.ns_buffer.truncate(self.ns_slices[last_valid_pos].ns_buffer_end);
                 self.ns_slices.truncate(last_valid_pos + 1);
             }
@@ -837,7 +848,6 @@ impl<B: BufRead> BytesReader<B> {
     {
         if self.ns_pending_pop {
             self.ns_pending_pop = false;
-            self.ns_nesting_level -= 1;
             self.pop_empty_namespaces();
         }
         match self.read_event(buf) {
@@ -867,20 +877,14 @@ impl<B: BufRead> BytesReader<B> {
                 }
             }
             Ok(BytesEvent::End(e)) => {
-                // need to determine namespace of end element *before* we pop the current
-                // namespace scope. If namespace prefixes are shadowed or if default namespaces are
-                // defined, it is vital that we resolve the namespace of the end tag in the scope
-                // of that tag (not in the outer scope).
                 let ns = self.find_namespace_value(e.name());
-                self.ns_nesting_level -= 1;
-                self.pop_empty_namespaces();
+                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // namespace scope
+                self.ns_pending_pop = true;
                 match ns {
                     Some(ns) => Ok((Some(ns.get(&self.ns_buffer)), BytesEvent::End(e))),
                     None => Ok((None, BytesEvent::End(e))),
                 }
-                // It could be argued that the 'End' event should also defer the 'pop' operation to
-                // the next `next()` call. The end tag still technically belongs to the
-                // 'tag scope'. Not sure if that behaviour is intuitive, though.
             }
             Ok(e) => Ok((None, e)),
             Err(e) => Err(e),
@@ -1125,7 +1129,7 @@ fn is_whitespace(b: u8) -> bool {
 
 
 /// Start and end index into a vector with prefixes and namespaces
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct NamespaceSlice {
     start: usize,
     end: usize,
@@ -1144,7 +1148,7 @@ impl NamespaceSlice {
 
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default
 /// namespace.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Namespace {
     /// * `Some(prefix)` binds this namespace to `prefix`.
     /// * `None` defines the current default namespace.
