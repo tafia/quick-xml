@@ -397,18 +397,8 @@ pub struct BytesReader<B: BufRead> {
     opened_buffer: Vec<u8>,
     /// opened name start indexes
     opened_starts: Vec<usize>,
-
-    /// a buffer of namespace ranges
-    ns_slices: Vec<Namespace>,
-    /// a buffer of existing namespaces
-    ns_buffer: Vec<u8>,
-    /// The number of open tags at the moment. We need to keep track of this to know which namespace
-    /// declarations to remove when we encounter an `End` event.
-    ns_nesting_level: i32,
-    /// For `Empty` events keep the 'scope' of the element on the stack artificially. That way, the
-    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
-    /// pop as the first operation in the next `next()` call.
-    ns_pending_pop: bool,
+    /// a buffer to manage namespaces
+    ns_buffer: NamespaceBuffer,
 }
 
 impl<'a> ::std::convert::From<&'a str> for BytesReader<&'a [u8]> {
@@ -432,11 +422,7 @@ impl<B: BufRead> BytesReader<B> {
             buf_position: 0,
             check_comments: false,
 
-            ns_slices: Vec::new(),
-            ns_buffer: Vec::new(),
-            ns_nesting_level: 0,
-            ns_pending_pop: false,
-
+            ns_buffer: NamespaceBuffer::default(),
         }
     }
 
@@ -750,113 +736,19 @@ impl<B: BufRead> BytesReader<B> {
     pub fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) 
         -> (Option<&'a [u8]>, &'b [u8]) 
     {
-        // Unqualified attributes don't inherit the default namespace. We don't need to search the
-        // namespace declaration stack for those.
-        if !qname.contains(&b':') {
-            return (None, qname)
-        }
-
-        match self.ns_slices.iter().rev().find(|ref n| n.matches_qualified(&self.ns_buffer, qname)) {
-            // Found closest matching namespace declaration `n`. The `unwrap` is fine because
-            // `is_match_attr` doesn't return default namespace declarations.
-            Some(&Namespace { ref prefix, value: Some(ref value), .. }) =>
-                (Some(value.get(&self.ns_buffer)),
-                 &qname[prefix.as_ref().unwrap().len() + 1..]),
-            Some(&Namespace { ref prefix, value: None, .. }) =>
-                (None, &qname[prefix.as_ref().unwrap().len() + 1..]),
-            None => (None, qname),
-        }
-    }
-
-    fn find_namespace_value(&self, element_name: &[u8]) -> Option<NamespaceSlice> {
-        // We pulled the qualified-vs-unqualified check out here so that it doesn't happen for each
-        // namespace we are comparing against.
-        if element_name.contains(&b':') {
-            // qualified name
-            self.ns_slices
-                .iter()
-                .rev() // iterate in reverse order to find the most recent one
-                .find(|ref n| n.matches_qualified(&self.ns_buffer, element_name))
-                .and_then(|ref n| n.value.clone())
-        } else {
-            // unqualified name (inherits current default namespace)
-            self.ns_slices
-                .iter()
-                .rev() // iterate in reverse order to find the most recent one
-                .find(|ref n| n.matches_unqualified_elem())
-                .and_then(|ref n| n.value.clone())
-        }
-    }
-
-    fn pop_empty_namespaces(&mut self) {
-        self.ns_nesting_level -= 1;
-        let current_level = self.ns_nesting_level;
-        // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.ns_slices.iter().rposition(|n| n.level <= current_level) {
-            // none of the namespaces are valid, remove all of them
-            None => {
-                self.ns_buffer.clear();
-                self.ns_slices.clear();
-            }
-            // drop all namespaces past the last valid namespace
-            Some(last_valid_pos) => {
-                self.ns_buffer.truncate(self.ns_slices[last_valid_pos].ns_buffer_end);
-                self.ns_slices.truncate(last_valid_pos + 1);
-            }
-        }
-    }
-
-    /// add a slice to ns_buffer and return a NamespaceSlice
-    fn add_namespace_slice(&mut self, name: &[u8]) -> NamespaceSlice {
-        let start = self.ns_buffer.len();
-        self.ns_buffer.extend_from_slice(name);
-        NamespaceSlice {
-            start: start,
-            end: self.ns_buffer.len()
-        }
-    }
-
-    fn push_new_namespaces(&mut self, e: &BytesStart) {
-        // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
-        // (default namespace) attribute.
-        for a in e.attributes().with_checks(false) {
-            if let Ok((k, v)) = a {
-                // Check for 'xmlns:any-prefix' and 'xmlns' at the same time:
-                if k.len() >= 5 && &k[..5] == b"xmlns" && (k.len() == 5 || k[5] == b':') {
-                    // We use an None prefix as the 'name' for the default namespace.
-                    // That saves an allocation compared to an empty namespace name.
-                    let prefix = if k.len() == 5 { None } else { Some(self.add_namespace_slice(&k[6..])) };
-                    let ns_value = if v.len() == 0 { None } else { Some(self.add_namespace_slice(v)) };
-                    self.ns_slices.push(Namespace {
-                        prefix: prefix,
-                        value: ns_value,
-                        level: self.ns_nesting_level,
-                        ns_buffer_end: self.ns_buffer.len(),
-                    });
-                }
-            } else {
-                break;
-            }
-        }
+        self.ns_buffer.resolve_namespace(qname)
     }
 
     /// Reads the next event and resolve its namespace
     pub fn read_namespaced_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) 
         -> ResultPos<(Option<&'a[u8]>, BytesEvent<'b>)>
     {
-        if self.ns_pending_pop {
-            self.ns_pending_pop = false;
-            self.pop_empty_namespaces();
-        }
+        self.ns_buffer.pop_empty_namespaces();
         match self.read_event(buf) {
             Ok(BytesEvent::Eof) => Ok((None, BytesEvent::Eof)),
             Ok(BytesEvent::Start(e)) => {
-                self.ns_nesting_level += 1;
-                self.push_new_namespaces(&e);
-                match self.find_namespace_value(e.name()) {
-                    Some(ns) => Ok((Some(ns.get(&self.ns_buffer)), BytesEvent::Start(e))),
-                    None => Ok((None, BytesEvent::Start(e))),
-                }
+                self.ns_buffer.push_new_namespaces(&e);
+                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::Start(e)))
             }
             Ok(BytesEvent::Empty(e)) => {
                 // For empty elements we need to 'artificially' keep the namespace scope on the
@@ -864,25 +756,17 @@ impl<B: BufRead> BytesReader<B> {
                 // Otherwise the caller has no chance to use `resolve` in the context of the
                 // namespace declarations that are 'in scope' for the empty element alone.
                 // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
-                self.ns_nesting_level += 1;
-                self.push_new_namespaces(&e);
+                self.ns_buffer.push_new_namespaces(&e);
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_pending_pop = true;
-                match self.find_namespace_value(e.name()) {
-                    Some(ns) => Ok((Some(ns.get(&self.ns_buffer)), BytesEvent::Empty(e))),
-                    None => Ok((None, BytesEvent::Empty(e))),
-                }
+                self.ns_buffer.pending_pop = true;
+                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::Empty(e)))
             }
             Ok(BytesEvent::End(e)) => {
-                let ns = self.find_namespace_value(e.name());
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_pending_pop = true;
-                match ns {
-                    Some(ns) => Ok((Some(ns.get(&self.ns_buffer)), BytesEvent::End(e))),
-                    None => Ok((None, BytesEvent::End(e))),
-                }
+                self.ns_buffer.pending_pop = true;
+                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::End(e)))
             }
             Ok(e) => Ok((None, e)),
             Err(e) => Err(e),
@@ -996,6 +880,14 @@ impl BytesReader<BufReader<File>> {
         Ok(BytesReader::from_reader(reader))
     }
 }
+
+impl<'a> BytesReader<&'a[u8]> {
+    /// Creates a xml reader from a file path
+    pub fn from_str(s: &'a str) -> BytesReader<&'a[u8]> {
+        BytesReader::from_reader(s.as_bytes())
+    }
+}
+
 
 /// `read_until` slightly modified from rust std library
 ///
@@ -1125,69 +1017,158 @@ fn is_whitespace(b: u8) -> bool {
     }
 }
 
-
-/// Start and end index into a vector with prefixes and namespaces
-#[derive(Clone, Debug)]
-struct NamespaceSlice {
-    start: usize,
-    end: usize,
-}
-
-impl NamespaceSlice {
-    /// The length of this slice.
-    fn len(&self) -> usize {
-        self.end - self.start
-    }
-    /// Get the concrete u8 slice that this object points to.
-    fn get<'a>(&self, buffer: &'a [u8]) -> &'a [u8] {
-        &buffer[self.start..self.end]
-    }
-}
-
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default
 /// namespace.
 #[derive(Clone, Debug)]
 struct Namespace {
-    /// * `Some(prefix)` binds this namespace to `prefix`.
-    /// * `None` defines the current default namespace.
-    prefix: Option<NamespaceSlice>,
+    /// Index of the namespace in the buffer
+    start: usize,
+    /// Length of the prefix
+    /// * if bigger than start, then binds this namespace to the corresponding slice.
+    /// * else defines the current default namespace.
+    prefix_len: usize,
     /// The namespace name (the URI) of this namespace declaration.
     ///
     /// The XML standard specifies that an empty namespace value 'removes' a namespace declaration
     /// for the extent of its scope. For prefix declarations that's not very interesting, but it is
     /// vital for default namespace declarations. With `xmlns=""` you can revert back to the default
     /// behaviour of leaving unqualified element names unqualified.
-    value: Option<NamespaceSlice>,
+    value_len: usize,
     /// Level of nesting at which this namespace was declared. The declaring element is included,
     /// i.e., a declaration on the document root has `level = 1`.
     /// This is used to pop the namespace when the element gets closed.
     level: i32,
-    /// Position at which this namespace ends in the namespace buffer.
-    ns_buffer_end: usize,
 }
 
 impl Namespace {
-    /// Check whether this namespace declaration matches the **qualified element name** name.
-    /// Does not take default namespaces into account. The `matches_unqualified_elem` method is
-    /// responsible for unqualified element names.
-    ///
-    /// [W3C Namespaces in XML 1.1 (2006)](http://w3.org/TR/xml-names11/#scoping-defaulting)
+    /// Gets the prefix slice out of namespace buffer
     #[inline]
-    fn matches_qualified(&self, ns_buffer: &[u8], name: &[u8]) -> bool {
-        if let Some(ref prefix) = self.prefix {
-            let len = prefix.len();
-            name.len() > len && name[len] == b':' && &name[..len] == prefix.get(&ns_buffer)
+    fn prefix<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> &'b [u8] {
+        &ns_buffer[self.start..self.start + self.prefix_len]
+    }
+
+    /// Gets the value slice out of namespace buffer
+    ///
+    /// Returns `None` if `value_len == 0`
+    #[inline]
+    fn opt_value<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> Option<&'b [u8]> {
+        if self.value_len == 0 {
+            None
         } else {
-            false
+            Some(&ns_buffer[self.start + self.prefix_len..self.start + self.prefix_len + self.value_len])
+        }
+    }
+}
+
+/// A namespace management buffer.
+///
+/// Holds all internal logic to push/pop namespaces with their levels.
+#[derive(Debug, Default, Clone)]
+struct NamespaceBuffer {
+    /// a buffer of namespace ranges
+    slices: Vec<Namespace>,
+    /// a buffer of existing namespaces
+    buffer: Vec<u8>,
+    /// The number of open tags at the moment. We need to keep track of this to know which namespace
+    /// declarations to remove when we encounter an `End` event.
+    nesting_level: i32,
+    /// For `Empty` events keep the 'scope' of the element on the stack artificially. That way, the
+    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
+    /// pop as the first operation in the next `next()` call.
+    pending_pop: bool,
+}
+
+impl NamespaceBuffer {
+
+    fn find_namespace_value(&self, element_name: &[u8]) -> Option<&[u8]> {
+        let ns = match element_name.iter().position(|b| *b == b':') {
+            None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
+            Some(len) => self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == &element_name[..len]),
+        };
+        ns.and_then(|ref n| n.opt_value(&self.buffer))
+    }
+
+    fn pop_empty_namespaces(&mut self) {
+        if !self.pending_pop {
+            return;
+        }
+        self.pending_pop = false;
+        self.nesting_level -= 1;
+        let current_level = self.nesting_level;
+        // from the back (most deeply nested scope), look for the first scope that is still valid
+        match self.slices.iter().rposition(|n| n.level <= current_level) {
+            // none of the namespaces are valid, remove all of them
+            None => {
+                self.buffer.clear();
+                self.slices.clear();
+            }
+            // drop all namespaces past the last valid namespace
+            Some(last_valid_pos) => {
+                if let Some(len) = self.slices.get(last_valid_pos + 1).map(|n| n.start) {
+                    self.buffer.truncate(len);
+                    self.slices.truncate(last_valid_pos + 1);
+                }
+            }
         }
     }
 
-    /// A namespace declaration matches unqualified elements if and only if it is a default
-    /// namespace declaration (no prefix).
-    ///
-    /// [W3C Namespaces in XML 1.1 (2006)](http://w3.org/TR/xml-names11/#scoping-defaulting)
-    #[inline]
-    fn matches_unqualified_elem(&self) -> bool {
-        self.prefix.is_none()
+    fn push_new_namespaces(&mut self, e: &BytesStart) {
+        self.nesting_level += 1;
+        let level = self.nesting_level;
+        // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
+        // (default namespace) attribute.
+        for a in e.attributes().with_checks(false) {
+            if let Ok((k, v)) = a {
+                if k.starts_with(b"xmlns") {
+                    match k.get(5) {
+                        None => {
+                            let start = self.buffer.len();
+                            self.buffer.extend_from_slice(v);
+                            self.slices.push(Namespace {
+                                start: start,
+                                prefix_len: 0,
+                                value_len: v.len(),
+                                level: level,
+                            });
+                        },
+                        Some(&b':') => {
+                            let start = self.buffer.len();
+                            self.buffer.extend_from_slice(&k[6..]);
+                            self.buffer.extend_from_slice(v);
+                            self.slices.push(Namespace {
+                                start: start,
+                                prefix_len: k.len() - 6,
+                                value_len: v.len(),
+                                level: level,
+                            });
+                        },
+                        _ => break,
+                    }
+                }
+            } else {
+                break;
+            }
+        }
     }
+
+    /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
+    ///
+    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
+    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
+    /// can be defined on the same element as the attribute in question.
+    ///
+    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) 
+        -> (Option<&'a [u8]>, &'b [u8]) 
+    {
+        match qname.iter().position(|b| *b == b':') {
+            None => (None, qname),
+            Some(len) => {
+                let (prefix, value) = qname.split_at(len);
+                self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == prefix)
+                    .map_or((None, qname), |ns| (ns.opt_value(&self.buffer), &value[1..]))
+            }
+        }
+    }
+
 }
