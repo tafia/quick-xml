@@ -144,6 +144,7 @@ impl<'a> BytesStart<'a> {
         bytes.extend_from_slice(value.as_ref());
         bytes.push(b'"');
     }
+
 }
 
 /// Wrapper around `BytesElement` to parse/write `XmlDecl`
@@ -230,6 +231,11 @@ impl<'a> BytesDecl<'a> {
         buf.push(b'"');
 
         BytesDecl { element: BytesStart::owned(buf, 3) }
+    }
+
+    /// whole content as &[u8]
+    pub fn content(&self) -> &[u8] {
+        self.element.content()
     }
 }
 
@@ -888,7 +894,6 @@ impl<'a> BytesReader<&'a[u8]> {
     }
 }
 
-
 /// `read_until` slightly modified from rust std library
 ///
 /// only change is that we do not write the matching character
@@ -1161,14 +1166,11 @@ impl NamespaceBuffer {
     fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) 
         -> (Option<&'a [u8]>, &'b [u8]) 
     {
-        match qname.iter().position(|b| *b == b':') {
-            None => (None, qname),
-            Some(len) => {
-                let (prefix, value) = qname.split_at(len);
-                self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == prefix)
-                    .map_or((None, qname), |ns| (ns.opt_value(&self.buffer), &value[1..]))
-            }
-        }
+        qname.iter().position(|b| *b == b':').and_then(|len| {
+            let (prefix, value) = qname.split_at(len);
+            self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == prefix)
+                .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
+        }).unwrap_or((None, qname))
     }
 
 }

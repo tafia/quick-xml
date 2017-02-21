@@ -3,41 +3,49 @@
 use std::io::Write;
 
 use error::Result;
-use super::{Event, Element};
+// use super::{Event, Element};
+use reader::bytes::BytesEvent;
 
 /// Xml writer
 ///
 /// Consumes a `Write` and writes xml Events
 ///
-/// ```
-/// use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
-/// use quick_xml::Event::*;
+/// ```rust
+/// use quick_xml::{AsStr, XmlWriter};
+/// use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesEnd, BytesStart};
 /// use std::io::Cursor;
 /// use std::iter;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-/// let reader = XmlReader::from(xml).trim_text(true);
+/// let mut reader = BytesReader::from_str(xml);
+/// reader.trim_text(true);
 /// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
-/// for r in reader {
-///     match r {
-///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+/// let mut buf = Vec::new();
+/// loop {
+///     match reader.read_event(&mut buf) {
+///         Ok(BytesEvent::Start(ref e)) if e.name() == b"this_tag" => {
+///
+///             // crates a new element ... alternatively we could reuse `e` by calling
+///             // `e.into_owned()`
+///             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
+///
 ///             // collect existing attributes
-///             let mut attrs = e.attributes()
-///                              .map(|attr| attr.unwrap()).collect::<Vec<_>>();
+///             elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
 ///
 ///             // copy existing attributes, adds a new my-key="some value" attribute
-///             let mut elem = Element::new("my_elem").with_attributes(attrs);
 ///             elem.push_attribute(b"my-key", "some value");
 ///
 ///             // writes the event to the writer
-///             assert!(writer.write(Start(elem)).is_ok());
+///             assert!(writer.write(BytesEvent::Start(elem)).is_ok());
 ///         },
-///         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
-///             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
+///         Ok(BytesEvent::End(ref e)) if e.name() == b"this_tag" => {
+///             assert!(writer.write(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 ///         },
+///         Ok(BytesEvent::Eof) => break,
 ///         Ok(e) => assert!(writer.write(e).is_ok()),
 ///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 ///     }
+///     buf.clear();
 /// }
 ///
 /// let result = writer.into_inner().into_inner();
@@ -62,17 +70,18 @@ impl<W: Write> XmlWriter<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write(&mut self, event: Event) -> Result<()> {
+    pub fn write(&mut self, event: BytesEvent) -> Result<()> {
         match event {
-            Event::Start(ref e) => self.write_wrapped_element(b"<", e, b">"),
-            Event::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
-            Event::Empty(ref e) => self.write_wrapped_element(b"<", e, b"/>"),
-            Event::Text(ref e) => self.write_bytes(e.content()),
-            Event::Comment(ref e) => self.write_wrapped_element(b"<!--", e, b"-->"),
-            Event::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e, b"]]>"),
-            Event::Decl(ref e) => self.write_wrapped_element(b"<?", &e.element, b"?>"),
-            Event::PI(ref e) => self.write_wrapped_element(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped_element(b"<!DOCTYPE", e, b">"),
+            BytesEvent::Start(ref e) => self.write_wrapped_element(b"<", e.content(), b">"),
+            BytesEvent::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
+            BytesEvent::Empty(ref e) => self.write_wrapped_element(b"<", e.content(), b"/>"),
+            BytesEvent::Text(ref e) => self.write_bytes(e.content()),
+            BytesEvent::Comment(ref e) => self.write_wrapped_element(b"<!--", e.content(), b"-->"),
+            BytesEvent::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e.content(), b"]]>"),
+            BytesEvent::Decl(ref e) => self.write_wrapped_element(b"<?", &e.content(), b"?>"),
+            BytesEvent::PI(ref e) => self.write_wrapped_element(b"<?", e.content(), b"?>"),
+            BytesEvent::DocType(ref e) => self.write_wrapped_element(b"<!DOCTYPE", e.content(), b">"),
+            BytesEvent::Eof => Ok(()),
         }
     }
 
@@ -92,9 +101,9 @@ impl<W: Write> XmlWriter<W> {
     }
 
     #[inline]
-    fn write_wrapped_element(&mut self, before: &[u8], element: &Element, after: &[u8])
+    fn write_wrapped_element(&mut self, before: &[u8], element: &[u8], after: &[u8])
         -> Result<()>
     {
-        self.write_wrapped_bytes(before, &element.content(), after)
+        self.write_wrapped_bytes(before, element, after)
     }
 }

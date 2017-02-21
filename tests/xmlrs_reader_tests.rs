@@ -4,9 +4,7 @@ use std::io::{BufRead};
 
 use quick_xml::{AsStr};
 use quick_xml::error::ResultPos;
-use quick_xml::reader::bytes::BytesReader;
-use quick_xml::reader::bytes::BytesEvent;
-use quick_xml::reader::bytes::BytesStart;
+use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesStart};
 
 use std::fmt;
 

@@ -56,37 +56,45 @@
 //! ```
 //! 
 //! ### Writer
-//! 
+//!
 //! ```rust
-//! use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
-//! use quick_xml::Event::*;
+//! use quick_xml::{AsStr, XmlWriter};
+//! use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesEnd, BytesStart};
 //! use std::io::Cursor;
 //! use std::iter;
-//! 
+//!
 //! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-//! let reader = XmlReader::from(xml).trim_text(true);
+//! let mut reader = BytesReader::from_str(xml);
+//! reader.trim_text(true);
 //! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
-//! for r in reader {
-//!     match r {
-//!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+//! let mut buf = Vec::new();
+//! loop {
+//!     match reader.read_event(&mut buf) {
+//!         Ok(BytesEvent::Start(ref e)) if e.name() == b"this_tag" => {
+//!
+//!             // crates a new element ... alternatively we could reuse `e` by calling
+//!             // `e.into_owned()`
+//!             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
+//!
 //!             // collect existing attributes
-//!             let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
-//! 
+//!             elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
+//!
 //!             // copy existing attributes, adds a new my-key="some value" attribute
-//!             let mut elem = Element::new("my_elem").with_attributes(attrs);
 //!             elem.push_attribute(b"my-key", "some value");
-//! 
+//!
 //!             // writes the event to the writer
-//!             assert!(writer.write(Start(elem)).is_ok());
+//!             assert!(writer.write(BytesEvent::Start(elem)).is_ok());
 //!         },
-//!         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
-//!             assert!(writer.write(End(Element::new("my_elem"))).is_ok());
+//!         Ok(BytesEvent::End(ref e)) if e.name() == b"this_tag" => {
+//!             assert!(writer.write(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 //!         },
+//!         Ok(BytesEvent::Eof) => break,
 //!         Ok(e) => assert!(writer.write(e).is_ok()),
 //!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!     }
+//!     buf.clear();
 //! }
-//! 
+//!
 //! let result = writer.into_inner().into_inner();
 //! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 //! assert_eq!(result, expected.as_bytes());
