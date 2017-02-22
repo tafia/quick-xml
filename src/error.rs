@@ -17,6 +17,8 @@ pub enum Error {
     Malformed(String),
     /// Unexpected
     Unexpected(String),
+    /// Error while escaping character
+    Escape(::std::ops::Range<usize>),
 }
 
 /// Result type
@@ -38,6 +40,7 @@ impl fmt::Display for Error {
             Error::EOL => write!(f, "Trying to access column but found End Of Line"),
             Error::Malformed(ref err) => write!(f, "Malformed xml: {}", err),
             Error::Unexpected(ref err) => write!(f, "Unexpected error: {}", err),
+            Error::Escape(ref r) => write!(f, "Error while escaping character at range {:?}", r),
         }
     }
 }
@@ -50,6 +53,7 @@ impl ::std::error::Error for Error {
             Error::EOL => "Trying to access column but found End Of Line",
             Error::Malformed(..) => "Xml is malformed",
             Error::Unexpected(..) => "An unexpected error has occured",
+            Error::Escape(..) => "Error while escaping character",
         }
     }
 

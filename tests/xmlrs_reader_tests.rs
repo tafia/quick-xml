@@ -163,7 +163,7 @@ fn issue_93_large_characters_in_entity_references() {
         r#"<hello>&𤶼;</hello>"#.as_bytes(),
         r#"
             |StartElement(hello)
-            |1:10 Malformed xml: Unexpected entity: 𤶼
+            |1:10 Error while escaping character at range 0..5
             |EndElement(hello)
         "#.as_bytes(),
         true

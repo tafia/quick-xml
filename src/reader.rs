@@ -3,11 +3,11 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
+use std::str::from_utf8;
 
 use error::{Error, Result, ResultPos};
-use events::{AsStr, Event, BytesStart, BytesEnd, BytesText, BytesDecl};
+use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 
-#[derive(Clone)]
 enum TagState {
     Opened,
     Closed,
@@ -26,7 +26,7 @@ enum TagState {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///             </tag1>"#;
-/// let mut reader = Reader::from(xml);
+/// let mut reader = Reader::from_str(xml);
 /// reader.trim_text(true);
 /// let mut count = 0;
 /// let mut txt = Vec::new();
@@ -50,9 +50,7 @@ enum TagState {
 ///     }
 /// }
 /// ```
-#[derive(Clone)]
 pub struct Reader<B: BufRead> {
-
     /// reader
     reader: B,
     /// if was error, exit next
@@ -76,12 +74,6 @@ pub struct Reader<B: BufRead> {
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
     ns_buffer: NamespaceBuffer,
-}
-
-impl<'a> ::std::convert::From<&'a str> for Reader<&'a [u8]> {
-    fn from(reader: &'a str) -> Reader<&'a [u8]> {
-        Reader::from_reader(reader.as_bytes())
-    }
 }
 
 impl<B: BufRead> Reader<B> {
@@ -245,7 +237,7 @@ impl<B: BufRead> Reader<B> {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
                         let m = format!("End event name '{:?}' doesn't match last opened element name '{:?}'",
-                                        &buf[1..].as_str(), self.opened_buffer[start..].as_str());
+                                        from_utf8(&buf[1..]), from_utf8(&self.opened_buffer[start..]));
                         return self.error(Error::Malformed(m), len);
                     }
                     self.opened_buffer.truncate(start);
@@ -253,7 +245,7 @@ impl<B: BufRead> Reader<B> {
                 None => return self.error(
                     Error::Malformed(format!("Cannot close {:?} element, \
                                              there is no opened element",
-                                             buf[1..].as_str())), len),
+                                             from_utf8(&buf[1..]))), len),
             }
         }
         Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
@@ -469,9 +461,9 @@ impl<B: BufRead> Reader<B> {
                 Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    warn!("EOF instead of {:?}", end.as_str());
+                    warn!("EOF instead of {:?}", from_utf8(end));
                     return Err((Error::Unexpected(format!("Reached EOF, expecting {:?} end tag", 
-                                                          end.as_str())), self.buf_position));
+                                                          from_utf8(end))), self.buf_position));
                 }
                 _ => (),
             }
@@ -529,8 +521,8 @@ impl<B: BufRead> Reader<B> {
         let (read_end, s) = match self.read_event(buf) {
             Ok(Event::Text(e)) => {
                 assert_eq!(b"&lt;b&gt;", e.as_ref());
-                (true, e.unescaped().and_then(|c| c.as_str()
-                                              .map_err(|e| (e, self.buf_position))
+                (true, e.unescaped().and_then(|c| from_utf8(&*c)
+                                              .map_err(|e| (e.into(), self.buf_position))
                                               .map(|s| s.to_string())))
             }
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
@@ -696,7 +688,7 @@ fn is_whitespace(b: u8) -> bool {
 
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default
 /// namespace.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Namespace {
     /// Index of the namespace in the buffer
     start: usize,
@@ -740,7 +732,7 @@ impl Namespace {
 /// A namespace management buffer.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 struct NamespaceBuffer {
     /// a buffer of namespace ranges
     slices: Vec<Namespace>,

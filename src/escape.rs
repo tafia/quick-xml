@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use error::{Error, ResultPos};
-use events::AsStr;
+use from_ascii::FromAsciiRadix;
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -41,36 +41,14 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                                     "Null character entity is not allowed".to_string()), i))
                     }
                     bytes if bytes.len() > 1 && bytes[0] == b'#' => {
-                        if bytes[1] == b'x' {
-                            let name = try!(bytes[2..].as_str()
-                                            .map_err(|e| (Error::from(e), i)));
-                            match u32::from_str_radix(name, 16).ok() {
-                                Some(c) => escapes.push((i..j, ByteOrChar::Char(c))),
-                                None => {
-                                    return Err((Error::Malformed(
-                                                format!("Invalid hexadecimal character number \
-                                                        in an entity: {}", name)), i))
-                                }
-                            }
+                        let code = if bytes[1] == b'x' {
+                            u32::from_ascii_radix(&bytes[2..], 16)
                         } else {
-                            let name = try!(bytes[1..].as_str()
-                                            .map_err(|e| (Error::from(e), i)));
-                            match u32::from_str_radix(name, 10).ok() {
-                                Some(c) => escapes.push((i..j, ByteOrChar::Char(c))),
-                                None => {
-                                    return Err((Error::Malformed(
-                                                format!("Invalid decimal character number \
-                                                        in an entity: {}", name)), i))
-                                }
-                            }
-                        }
+                            u32::from_ascii_radix(&bytes[1..], 10)
+                        };
+                        escapes.push((i..j, ByteOrChar::Char(code.map_err(|_| (Error::Escape(i..j), i))?)));
                     },
-                    bytes => match bytes.as_str() {
-                        Ok(s) => return Err((Error::Malformed(format!(
-                                    "Unexpected entity: {}", s)), i)),
-                        Err(e) => return Err((Error::Malformed(format!(
-                                    "Unexpected entity and utf8 error: {:?}", e)), i)),
-                    },
+                    _ => return Err((Error::Escape(i..j), i)),
                 }
             } else {
                 return Err((Error::Malformed("Cannot find ';' after '&'".to_string()), i));
@@ -122,7 +100,7 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
 fn test_escape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    println!("{}", &*unescape(b"&#xa9;").unwrap().as_str().unwrap());
+    println!("{}", ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
 }

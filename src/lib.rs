@@ -111,6 +111,7 @@
 
 #[macro_use]
 extern crate log;
+extern crate from_ascii;
 
 pub mod error;
 pub mod reader;
