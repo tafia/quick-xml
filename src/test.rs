@@ -239,7 +239,7 @@ fn test_writer() {
     loop {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
-            Ok(e) => assert!(writer.write(e).is_ok()),
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
         }
     }
@@ -259,7 +259,7 @@ fn test_write_empty_element_attrs() {
     loop {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
-            Ok(e) => assert!(writer.write(e).is_ok()),
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
         }
     }
@@ -292,7 +292,7 @@ fn test_write_attrs() {
             Ok(e) => e,
             Err(e) => panic!(e),
         };
-        assert!(writer.write(event).is_ok());
+        assert!(writer.write_event(event).is_ok());
     }
 
     let result = writer.into_inner().into_inner();
@@ -302,7 +302,7 @@ fn test_write_attrs() {
 #[test]
 fn test_new_xml_decl_full() {
     let mut writer = Writer::new(Vec::new());
-    writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
+    writer.write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -314,7 +314,7 @@ fn test_new_xml_decl_full() {
 #[test]
 fn test_new_xml_decl_standalone() {
     let mut writer = Writer::new(Vec::new());
-    writer.write(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
+    writer.write_event(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -326,7 +326,7 @@ fn test_new_xml_decl_standalone() {
 #[test]
 fn test_new_xml_decl_encoding() {
     let mut writer = Writer::new(Vec::new());
-    writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
+    writer.write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -338,7 +338,7 @@ fn test_new_xml_decl_encoding() {
 #[test]
 fn test_new_xml_decl_version() {
     let mut writer = Writer::new(Vec::new());
-    writer.write(Decl(BytesDecl::new(b"1.2", None, None)))
+    writer.write_event(Decl(BytesDecl::new(b"1.2", None, None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -353,7 +353,7 @@ fn test_new_xml_decl_empty() {
     let mut writer = Writer::new(Vec::new());
     // An empty version should arguably be an error, but we don't expect anyone to actually supply
     // an empty version.
-    writer.write(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
+    writer.write_event(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -528,7 +528,7 @@ fn test_read_write_roundtrip_results_in_identity() {
     loop {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
-            Ok(e) => assert!(writer.write(e).is_ok()),
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
         }
     }

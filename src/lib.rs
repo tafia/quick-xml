@@ -88,13 +88,15 @@
 //!             elem.push_attribute(b"my-key", "some value");
 //!
 //!             // writes the event to the writer
-//!             assert!(writer.write(BytesEvent::Start(elem)).is_ok());
+//!             assert!(writer.write_event(BytesEvent::Start(elem)).is_ok());
 //!         },
 //!         Ok(BytesEvent::End(ref e)) if e.name() == b"this_tag" => {
-//!             assert!(writer.write(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
+//!             assert!(writer.write_event(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 //!         },
 //!         Ok(BytesEvent::Eof) => break,
-//!         Ok(e) => assert!(writer.write(e).is_ok()),
+//!         Ok(e) => assert!(writer.write_event(e).is_ok()),
+//!         // or using the buffer
+//!         // Ok(e) => assert!(writer.write(&buf).is_ok()),
 //!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!     }
 //!     buf.clear();
