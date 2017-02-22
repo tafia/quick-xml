@@ -1,9 +1,10 @@
 use std::str::from_utf8;
 use std::io::Cursor;
 
-use reader::bytes::{BytesReader, BytesStart, BytesEnd};
-use reader::bytes::BytesEvent::*;
-use super::{AsStr, XmlWriter};
+use reader::Reader;
+use writer::XmlWriter;
+use events::{AsStr, BytesStart, BytesEnd, BytesDecl};
+use events::BytesEvent::*;
 use super::error::ResultPos;
 
 macro_rules! next_eq_name {
@@ -53,49 +54,49 @@ macro_rules! next_eq {
 
 #[test]
 fn test_start() {
-    let mut r = BytesReader::from_str("<a>");
+    let mut r = Reader::from_str("<a>");
     r.trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_start_end() {
-    let mut r = BytesReader::from_str("<a></a>");
+    let mut r = Reader::from_str("<a></a>");
 	r.trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_attr() {
-    let mut r = BytesReader::from_str("<a b=\"test\"></a>");
+    let mut r = Reader::from_str("<a b=\"test\"></a>");
 	r.trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_empty() {
-    let mut r = BytesReader::from_str("<a />");
+    let mut r = Reader::from_str("<a />");
     r.trim_text(true).expand_empty_elements(false);
     next_eq!(r, Empty, b"a");
 }
 
 #[test]
 fn test_empty_can_be_expanded() {
-    let mut r = BytesReader::from_str("<a />");
+    let mut r = Reader::from_str("<a />");
     r.trim_text(true).expand_empty_elements(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_empty_attr() {
-    let mut r = BytesReader::from_str("<a b=\"test\" />");
+    let mut r = Reader::from_str("<a b=\"test\" />");
     r.trim_text(true).expand_empty_elements(false);
     next_eq!(r, Empty, b"a");
 }
 
 #[test]
 fn test_start_end_comment() {
-    let mut r = BytesReader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
+    let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
     r.trim_text(true).expand_empty_elements(false);
     next_eq!(r,
              Start,
@@ -112,21 +113,21 @@ fn test_start_end_comment() {
 
 #[test]
 fn test_start_txt_end() {
-    let mut r = BytesReader::from_str("<a>test</a>");
+    let mut r = Reader::from_str("<a>test</a>");
 	r.trim_text(true);
     next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
-    let mut r = BytesReader::from_str("<!--test-->");
+    let mut r = Reader::from_str("<!--test-->");
 	r.trim_text(true);
     next_eq!(r, Comment, b"test");
 }
 
 #[test]
 fn test_xml_decl() {
-    let mut r = BytesReader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
+    let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
@@ -163,11 +164,11 @@ fn test_xml_decl() {
 #[test]
 fn test_trim_test() {
     let txt = "<a><b>  </b></a>";
-    let mut r = BytesReader::from_str(txt);
+    let mut r = Reader::from_str(txt);
 	r.trim_text(true);
     next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
 
-    let mut r = BytesReader::from_str(txt);
+    let mut r = Reader::from_str(txt);
 	r.trim_text(false);
     next_eq!(r,
              Text,
@@ -190,28 +191,28 @@ fn test_trim_test() {
 
 #[test]
 fn test_cdata() {
-    let mut r = BytesReader::from_str("<![CDATA[test]]>");
+    let mut r = Reader::from_str("<![CDATA[test]]>");
 	r.trim_text(true);
     next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
-    let mut r = BytesReader::from_str("<![CDATA[test <> test]]>");
+    let mut r = Reader::from_str("<![CDATA[test <> test]]>");
 	r.trim_text(true);
     next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
-    let mut r = BytesReader::from_str("<a b=\"c\">");
+    let mut r = Reader::from_str("<a b=\"c\">");
 	r.trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_nested() {
-    let mut r = BytesReader::from_str("<a><b>test</b><c/></a>");
+    let mut r = Reader::from_str("<a><b>test</b><c/></a>");
     r.trim_text(true).expand_empty_elements(false);
     next_eq!(r,
              Start,
@@ -231,7 +232,7 @@ fn test_nested() {
 #[test]
 fn test_writer() {
     let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
-    let mut reader = BytesReader::from_str(txt);
+    let mut reader = Reader::from_str(txt);
 	reader.trim_text(true);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
@@ -251,7 +252,7 @@ fn test_writer() {
 fn test_write_empty_element_attrs() {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;
-    let mut reader = BytesReader::from_str(str_from);
+    let mut reader = Reader::from_str(str_from);
     reader.expand_empty_elements(false);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
@@ -271,7 +272,7 @@ fn test_write_empty_element_attrs() {
 fn test_write_attrs() {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
-    let mut reader = BytesReader::from_str(str_from);
+    let mut reader = Reader::from_str(str_from);
 	reader.trim_text(true);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
@@ -301,7 +302,7 @@ fn test_write_attrs() {
 #[test]
 fn test_new_xml_decl_full() {
     let mut writer = XmlWriter::new(Vec::new());
-    writer.write(Decl(::reader::bytes::BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
+    writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -313,7 +314,7 @@ fn test_new_xml_decl_full() {
 #[test]
 fn test_new_xml_decl_standalone() {
     let mut writer = XmlWriter::new(Vec::new());
-    writer.write(Decl(::reader::bytes::BytesDecl::new(b"1.2", None, Some(b"yo"))))
+    writer.write(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -325,7 +326,7 @@ fn test_new_xml_decl_standalone() {
 #[test]
 fn test_new_xml_decl_encoding() {
     let mut writer = XmlWriter::new(Vec::new());
-    writer.write(Decl(::reader::bytes::BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
+    writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -337,7 +338,7 @@ fn test_new_xml_decl_encoding() {
 #[test]
 fn test_new_xml_decl_version() {
     let mut writer = XmlWriter::new(Vec::new());
-    writer.write(Decl(::reader::bytes::BytesDecl::new(b"1.2", None, None)))
+    writer.write(Decl(BytesDecl::new(b"1.2", None, None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -352,7 +353,7 @@ fn test_new_xml_decl_empty() {
     let mut writer = XmlWriter::new(Vec::new());
     // An empty version should arguably be an error, but we don't expect anyone to actually supply
     // an empty version.
-    writer.write(Decl(::reader::bytes::BytesDecl::new(b"", Some(b""), Some(b""))))
+    writer.write(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -363,7 +364,7 @@ fn test_new_xml_decl_empty() {
 
 #[test]
 fn test_buf_position() {
-    let mut r = BytesReader::from_str("</a>");
+    let mut r = Reader::from_str("</a>");
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
@@ -374,7 +375,7 @@ fn test_buf_position() {
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
-    r = BytesReader::from_str("<a><!--b>");
+    r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
     next_eq!(r, Start, b"a");
@@ -391,7 +392,7 @@ fn test_buf_position() {
 
 #[test]
 fn test_namespace() {
-    let mut r = BytesReader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>");
+    let mut r = Reader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>");
     r.trim_text(true);;
 
     let mut buf = Vec::new();
@@ -413,7 +414,7 @@ fn test_namespace() {
 
 #[test]
 fn test_default_namespace() {
-    let mut r = BytesReader::from_str("<a ><b xmlns=\"www1\"></b></a>");
+    let mut r = Reader::from_str("<a ><b xmlns=\"www1\"></b></a>");
     r.trim_text(true);;
 
     // <a>
@@ -455,7 +456,7 @@ fn test_default_namespace() {
 
 #[test]
 fn test_default_namespace_reset() {
-    let mut r = BytesReader::from_str("<a xmlns=\"www1\"><b xmlns=\"\"></b></a>");
+    let mut r = Reader::from_str("<a xmlns=\"www1\"><b xmlns=\"\"></b></a>");
     r.trim_text(true);;
 
     let mut buf = Vec::new();
@@ -483,7 +484,7 @@ fn test_default_namespace_reset() {
 
 #[test]
 fn test_escaped_content() {
-    let mut r = BytesReader::from_str("<a>&lt;test&gt;</a>");
+    let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
 	r.trim_text(true);
     next_eq!(r, Start, b"a");
     let mut buf = Vec::new();
@@ -520,7 +521,7 @@ fn test_read_write_roundtrip_results_in_identity() {
             </section>
     "#;
 
-    let mut reader = BytesReader::from_str(input);
+    let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
@@ -538,7 +539,7 @@ fn test_read_write_roundtrip_results_in_identity() {
 
 #[test]
 fn test_closing_bracket_in_single_quote_attr() {
-    let mut r = BytesReader::from_str("<a attr='>' check='2'></a>");
+    let mut r = Reader::from_str("<a attr='>' check='2'></a>");
 	r.trim_text(true);
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
@@ -561,7 +562,7 @@ fn test_closing_bracket_in_single_quote_attr() {
 
 #[test]
 fn test_closing_bracket_in_double_quote_attr() {
-    let mut r = BytesReader::from_str("<a attr=\">\" check=\"2\"></a>");
+    let mut r = Reader::from_str("<a attr=\">\" check=\"2\"></a>");
 	r.trim_text(true);
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
@@ -584,7 +585,7 @@ fn test_closing_bracket_in_double_quote_attr() {
 
 #[test]
 fn test_closing_bracket_in_double_quote_mixed() {
-    let mut r = BytesReader::from_str("<a attr=\"'>'\" check=\"'2'\"></a>");
+    let mut r = Reader::from_str("<a attr=\"'>'\" check=\"'2'\"></a>");
 	r.trim_text(true);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
@@ -607,7 +608,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
 
 #[test]
 fn test_closing_bracket_in_single_quote_mixed() {
-    let mut r = BytesReader::from_str("<a attr='\">\"' check='\"2\"'></a>");
+    let mut r = Reader::from_str("<a attr='\">\"' check='\"2\"'></a>");
 	r.trim_text(true);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {

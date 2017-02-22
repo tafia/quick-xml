@@ -3,21 +3,21 @@
 use std::io::Write;
 
 use error::Result;
-// use super::{Event, Element};
-use reader::bytes::BytesEvent;
+use events::BytesEvent;
 
 /// Xml writer
 ///
 /// Consumes a `Write` and writes xml Events
 ///
 /// ```rust
-/// use quick_xml::{AsStr, XmlWriter};
-/// use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesEnd, BytesStart};
+/// use quick_xml::writer::XmlWriter;
+/// use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
+/// use quick_xml::reader::Reader;
 /// use std::io::Cursor;
 /// use std::iter;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-/// let mut reader = BytesReader::from_str(xml);
+/// let mut reader = Reader::from_str(xml);
 /// reader.trim_text(true);
 /// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 /// let mut buf = Vec::new();

@@ -4,8 +4,8 @@
 //!
 //! Depending on your needs, you can use:
 //!
-//! - `BytesReader`: for best performance, user need to take care about buffer allocation/clearing
-//! - `Reader`: a wrapper over `BytesReader` which owns its buffer
+//! - `Reader`: for best performance, user need to take care about buffer allocation/clearing
+//! - `Reader`: a wrapper over `Reader` which owns its buffer
 //!
 //! ## Writer
 //!
@@ -16,7 +16,8 @@
 //! ### Reader
 //! 
 //! ```rust
-//! use quick_xml::reader::bytes::{BytesReader, BytesEvent};
+//! use quick_xml::reader::Reader;
+//! use quick_xml::events::BytesEvent;
 //! 
 //! let xml = r#"<tag1 att1 = "test">
 //!                 <tag2><!--Test comment-->Test</tag2>
@@ -25,14 +26,14 @@
 //!                 </tag2>
 //!             </tag1>"#;
 //!
-//! let mut reader = BytesReader::from_str(xml);
+//! let mut reader = Reader::from_str(xml);
 //! reader.trim_text(true);
 //!
 //! let mut count = 0;
 //! let mut txt = Vec::new();
 //! let mut buf = Vec::new();
 //!
-//! // The `BytesReader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
+//! // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 //! loop {
 //!     match reader.read_event(&mut buf) {
 //!     // for triggering namespaced events, use this instead:
@@ -61,13 +62,14 @@
 //! ### Writer
 //!
 //! ```rust
-//! use quick_xml::{AsStr, XmlWriter};
-//! use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesEnd, BytesStart};
+//! use quick_xml::writer::XmlWriter;
+//! use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
+//! use quick_xml::reader::Reader;
 //! use std::io::Cursor;
 //! use std::iter;
 //!
 //! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-//! let mut reader = BytesReader::from_str(xml);
+//! let mut reader = Reader::from_str(xml);
 //! reader.trim_text(true);
 //! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 //! let mut buf = Vec::new();
@@ -111,27 +113,11 @@ extern crate log;
 pub mod error;
 pub mod reader;
 pub mod writer;
+pub mod events;
 mod escape;
 
 #[cfg(test)]
 mod test;
 
-use std::str::from_utf8;
-use error::{Error, Result};
-
 // reexports
 pub use writer::XmlWriter;
-pub use reader::bytes::{BytesReader, BytesEvent};
-
-/// A trait to support on-demand conversion from UTF-8
-pub trait AsStr {
-    /// Converts this to an `&str`
-    fn as_str(&self) -> Result<&str>;
-}
-
-/// Implements `AsStr` for a byte slice
-impl AsStr for [u8] {
-    fn as_str(&self) -> Result<&str> {
-        from_utf8(self).map_err(Error::Utf8)
-    }
-}

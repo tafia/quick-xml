@@ -2,7 +2,6 @@
 
 [![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/tafia/quick-xml)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
-[![Clippy Linting Result](https://clippy.bashy.io/github/tafia/quick-xml/master/badge.svg)](https://clippy.bashy.io/github/tafia/quick-xml/master/log)
 
 High performance xml pull reader/writer.
 
@@ -14,7 +13,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.5.0"
+quick-xml = "0.6.0"
 ```
 ``` rust
 extern crate quick_xml;
@@ -25,7 +24,8 @@ extern crate quick_xml;
 ### Reader
 
 ```rust
-use quick_xml::reader::bytes::{BytesReader, BytesEvent};
+use quick_xml::reader::Reader
+use quick_xml::events::BytesEvent;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -34,14 +34,14 @@ let xml = r#"<tag1 att1 = "test">
                 </tag2>
             </tag1>"#;
 
-let mut reader = BytesReader::from_str(xml);
+let mut reader = Reader::from_str(xml);
 reader.trim_text(true);
 
 let mut count = 0;
 let mut txt = Vec::new();
 let mut buf = Vec::new();
 
-// The `BytesReader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
+// The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
     match reader.read_event(&mut buf) {
     // for triggering namespaced events, use this instead:
@@ -70,13 +70,14 @@ loop {
 ### Writer
 
 ```rust
-use quick_xml::{AsStr, XmlWriter};
-use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesEnd, BytesStart};
+use quick_xml::writer::XmlWriter;
+use quick_xml::reader::Reader;
+use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
 use std::io::Cursor;
 use std::iter;
 
 let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-let mut reader = BytesReader::from_str(xml);
+let mut reader = Reader::from_str(xml);
 reader.trim_text(true);
 let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
 let mut buf = Vec::new();

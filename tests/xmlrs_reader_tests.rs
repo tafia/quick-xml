@@ -2,9 +2,9 @@ extern crate quick_xml;
 
 use std::io::{BufRead};
 
-use quick_xml::{AsStr};
 use quick_xml::error::ResultPos;
-use quick_xml::reader::bytes::{BytesReader, BytesEvent, BytesStart};
+use quick_xml::reader::Reader;
+use quick_xml::events::{AsStr, BytesEvent, BytesStart};
 
 use std::fmt;
 
@@ -300,7 +300,7 @@ fn convert_to_quick_xml(s: &str) -> String {
 
 fn test(input: &[u8], output: &[u8], is_short: bool) {
 
-    let mut reader = BytesReader::from_reader(input);
+    let mut reader = Reader::from_reader(input);
     reader.trim_text(is_short)
         .check_comments(true)
         .expand_empty_elements(false);
@@ -345,10 +345,10 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                         b' ' | b'\r' | b'\n' | b'\t' => false,
                         _ => true,
                     }) {
-                        panic!("BytesReader expects empty Text event after a StartDocument");
+                        panic!("Reader expects empty Text event after a StartDocument");
                     }
                 } else {
-                    panic!("BytesReader expects empty Text event after a StartDocument");
+                    panic!("Reader expects empty Text event after a StartDocument");
                 }
             }
         }

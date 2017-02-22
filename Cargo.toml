@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
@@ -8,14 +8,14 @@ documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
 
 readme = "README.md"
-keywords = ["xml", "reader", "parser", "writer"]
+keywords = ["xml", "reader", "parser", "writer", "html"]
 license = "MIT"
 
 [dependencies]
 log = "0.3.6"
 
 [dev-dependencies]
-xml-rs = "0.3.4"
+xml-rs = "0.3.8"
 
 [lib]
 bench = false

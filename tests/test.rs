@@ -1,13 +1,13 @@
 extern crate quick_xml;
 
-use quick_xml::reader::bytes::BytesReader;
-use quick_xml::reader::bytes::BytesEvent::*;
+use quick_xml::reader::Reader;
+use quick_xml::events::BytesEvent::*;
 
 #[test]
 fn test_sample() {
     let src: &[u8] = include_bytes!("sample_rss.xml");
     let mut buf = Vec::new();
-    let mut r = BytesReader::from_reader(src);
+    let mut r = Reader::from_reader(src);
     let mut count = 0;
     loop {
         match r.read_event(&mut buf).unwrap() {
@@ -24,7 +24,7 @@ fn test_sample() {
 #[test]
 fn test_attributes_empty() {
     let src = b"<a att1='a' att2='b'/>";
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
@@ -50,7 +50,7 @@ fn test_attributes_empty() {
 #[test]
 fn test_attribute_equal() {
     let src = b"<a att1=\"a=b\"/>";
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
@@ -76,7 +76,7 @@ fn test_attribute_equal() {
 fn test_attributes_empty_ns() {
     let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false); 
     let mut buf = Vec::new();
 
@@ -117,7 +117,7 @@ fn test_attributes_empty_ns() {
 fn test_attributes_empty_ns_expanded() {
     let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(true); 
     let mut buf = Vec::new();
     {
@@ -161,7 +161,7 @@ fn test_attributes_empty_ns_expanded() {
 fn test_default_ns_shadowing_empty() {
     let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false); 
     let mut buf = Vec::new();
 
@@ -222,7 +222,7 @@ fn test_default_ns_shadowing_empty() {
 fn test_default_ns_shadowing_expanded() {
     let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
-    let mut r = BytesReader::from_reader(src as &[u8]);
+    let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(true); 
     let mut buf = Vec::new();
 
