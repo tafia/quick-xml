@@ -2,7 +2,7 @@ use std::str::from_utf8;
 use std::io::Cursor;
 
 use reader::Reader;
-use writer::XmlWriter;
+use writer::Writer;
 use events::{AsStr, BytesStart, BytesEnd, BytesDecl};
 use events::BytesEvent::*;
 use super::error::ResultPos;
@@ -234,7 +234,7 @@ fn test_writer() {
     let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
     let mut reader = Reader::from_str(txt);
 	reader.trim_text(true);
-    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
         match reader.read_event(&mut buf) {
@@ -254,7 +254,7 @@ fn test_write_empty_element_attrs() {
     let expected = r#"<source attr="val"/>"#;
     let mut reader = Reader::from_str(str_from);
     reader.expand_empty_elements(false);
-    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
         match reader.read_event(&mut buf) {
@@ -274,7 +274,7 @@ fn test_write_attrs() {
     let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
     let mut reader = Reader::from_str(str_from);
 	reader.trim_text(true);
-    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
         let event = match reader.read_event(&mut buf) {
@@ -301,7 +301,7 @@ fn test_write_attrs() {
 
 #[test]
 fn test_new_xml_decl_full() {
-    let mut writer = XmlWriter::new(Vec::new());
+    let mut writer = Writer::new(Vec::new());
     writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
@@ -313,7 +313,7 @@ fn test_new_xml_decl_full() {
 
 #[test]
 fn test_new_xml_decl_standalone() {
-    let mut writer = XmlWriter::new(Vec::new());
+    let mut writer = Writer::new(Vec::new());
     writer.write(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
@@ -325,7 +325,7 @@ fn test_new_xml_decl_standalone() {
 
 #[test]
 fn test_new_xml_decl_encoding() {
-    let mut writer = XmlWriter::new(Vec::new());
+    let mut writer = Writer::new(Vec::new());
     writer.write(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
         .expect("writing xml decl should succeed");
 
@@ -337,7 +337,7 @@ fn test_new_xml_decl_encoding() {
 
 #[test]
 fn test_new_xml_decl_version() {
-    let mut writer = XmlWriter::new(Vec::new());
+    let mut writer = Writer::new(Vec::new());
     writer.write(Decl(BytesDecl::new(b"1.2", None, None)))
         .expect("writing xml decl should succeed");
 
@@ -350,7 +350,7 @@ fn test_new_xml_decl_version() {
 /// This test ensures that empty XML declaration attribute values are not a problem.
 #[test]
 fn test_new_xml_decl_empty() {
-    let mut writer = XmlWriter::new(Vec::new());
+    let mut writer = Writer::new(Vec::new());
     // An empty version should arguably be an error, but we don't expect anyone to actually supply
     // an empty version.
     writer.write(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
@@ -523,7 +523,7 @@ fn test_read_write_roundtrip_results_in_identity() {
 
     let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
-    let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
         match reader.read_event(&mut buf) {

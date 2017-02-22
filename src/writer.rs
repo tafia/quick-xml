@@ -1,4 +1,4 @@
-//! A module to handle `XmlWriter`
+//! A module to handle `Writer`
 
 use std::io::Write;
 
@@ -10,7 +10,7 @@ use events::BytesEvent;
 /// Consumes a `Write` and writes xml Events
 ///
 /// ```rust
-/// use quick_xml::writer::XmlWriter;
+/// use quick_xml::writer::Writer;
 /// use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
 /// use quick_xml::reader::Reader;
 /// use std::io::Cursor;
@@ -19,7 +19,7 @@ use events::BytesEvent;
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 /// let mut reader = Reader::from_str(xml);
 /// reader.trim_text(true);
-/// let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+/// let mut writer = Writer::new(Cursor::new(Vec::new()));
 /// let mut buf = Vec::new();
 /// loop {
 ///     match reader.read_event(&mut buf) {
@@ -53,18 +53,18 @@ use events::BytesEvent;
 /// assert_eq!(result, expected.as_bytes());
 /// ```
 #[derive(Clone)]
-pub struct XmlWriter<W: Write> {
+pub struct Writer<W: Write> {
     /// underlying writer
     writer: W,
 }
 
-impl<W: Write> XmlWriter<W> {
-    /// Creates a XmlWriter from a generic Write
-    pub fn new(inner: W) -> XmlWriter<W> {
-        XmlWriter { writer: inner }
+impl<W: Write> Writer<W> {
+    /// Creates a Writer from a generic Write
+    pub fn new(inner: W) -> Writer<W> {
+        Writer { writer: inner }
     }
 
-    /// Consumes this `XmlWriter`, returning the underlying writer.
+    /// Consumes this `Writer`, returning the underlying writer.
     pub fn into_inner(self) -> W {
         self.writer
     }

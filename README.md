@@ -70,7 +70,7 @@ loop {
 ### Writer
 
 ```rust
-use quick_xml::writer::XmlWriter;
+use quick_xml::writer::Writer;
 use quick_xml::reader::Reader;
 use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
 use std::io::Cursor;
@@ -79,7 +79,7 @@ use std::iter;
 let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 let mut reader = Reader::from_str(xml);
 reader.trim_text(true);
-let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+let mut writer = Writer::new(Cursor::new(Vec::new()));
 let mut buf = Vec::new();
 loop {
     match reader.read_event(&mut buf) {

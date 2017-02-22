@@ -9,7 +9,7 @@
 //!
 //! ## Writer
 //!
-//! `XmlWriter`: to write xmls. Can be nested with readers if you want to transform xmls
+//! `Writer`: to write xmls. Can be nested with readers if you want to transform xmls
 //! 
 //! ## Examples
 //! 
@@ -62,7 +62,7 @@
 //! ### Writer
 //!
 //! ```rust
-//! use quick_xml::writer::XmlWriter;
+//! use quick_xml::writer::Writer;
 //! use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
 //! use quick_xml::reader::Reader;
 //! use std::io::Cursor;
@@ -71,7 +71,7 @@
 //! let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 //! let mut reader = Reader::from_str(xml);
 //! reader.trim_text(true);
-//! let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
+//! let mut writer = Writer::new(Cursor::new(Vec::new()));
 //! let mut buf = Vec::new();
 //! loop {
 //!     match reader.read_event(&mut buf) {
@@ -120,4 +120,4 @@ mod escape;
 mod test;
 
 // reexports
-pub use writer::XmlWriter;
+pub use writer::Writer;
