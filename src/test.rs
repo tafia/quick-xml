@@ -27,7 +27,7 @@ macro_rules! next_eq_content {
     ($r: expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
         match $r.read_event(&mut buf) {
-            Ok($t(ref e)) if e.content() == $bytes => (),
+            Ok($t(ref e)) if &**e == $bytes => (),
             Ok(e) => {
                 panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e);
             },
@@ -489,12 +489,12 @@ fn test_escaped_content() {
     next_eq!(r, Start, b"a");
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
-        Ok(Text(ref e)) => {
-            if e.content() != b"&lt;test&gt;" {
+        Ok(Text(e)) => {
+            if &*e != b"&lt;test&gt;" {
                 panic!("content unexpected: expecting '&lt;test&gt;', got '{:?}'",
-                       e.content().as_str());
+                       e.as_str());
             }
-            match e.unescaped_content() {
+            match e.unescaped() {
                 Ok(ref c) => {
                     if &**c != b"<test>" {
                         panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
@@ -504,7 +504,7 @@ fn test_escaped_content() {
                 Err((e, i)) => panic!("cannot escape content at position {}: {:?}", i, e),
             }
         }
-        Ok(ref e) => panic!("Expecting text event, got {:?}", e),
+        Ok(e) => panic!("Expecting text event, got {:?}", e),
         Err((e, i)) => panic!("Cannot get next event at position {}: {:?}", i, e),
     }
     next_eq!(r, End, b"a");

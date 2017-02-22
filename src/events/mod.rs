@@ -4,6 +4,8 @@ pub mod attributes;
 
 use std::borrow::Cow;
 use std::str::from_utf8;
+use std::ops::Deref;
+
 use escape::unescape;
 use self::attributes::{Attributes, UnescapedAttributes};
 use error::{Result, ResultPos, Error};
@@ -65,22 +67,17 @@ impl<'a> BytesStart<'a> {
         &self.buf[..self.name_len]
     }
 
-    /// whole content as &[u8] (including eventual attributes)
-    pub fn content(&self) -> &[u8] {
-        &*self.buf
-    }
-
-    /// gets escaped content
+    /// gets unescaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
-    pub fn unescaped_content(&self) -> ResultPos<Cow<[u8]>> {
-        unescape(self.content())
+    pub fn unescaped(&self) -> ResultPos<Cow<[u8]>> {
+        unescape(&self)
     }
 
     /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self.content(), self.name_len)
+        Attributes::new(&self, self.name_len)
     }
 
     /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
@@ -117,7 +114,7 @@ impl<'a> BytesStart<'a> {
     /// and unescape XML entities
     pub fn into_unescaped_string(self) -> Result<String> {
         ::std::string::String::from_utf8(
-            try!(self.unescaped_content().map_err(|(e, _)| e)).into_owned())
+            try!(self.unescaped().map_err(|(e, _)| e)).into_owned())
             .map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -149,7 +146,6 @@ pub struct BytesDecl<'a> {
 }
 
 impl<'a> BytesDecl<'a> {
-
     /// Creates a `BytesDecl` from a `BytesStart`
     pub fn from_start(start: BytesStart<'a>) -> BytesDecl<'a> {
         BytesDecl { element: start }
@@ -228,11 +224,6 @@ impl<'a> BytesDecl<'a> {
 
         BytesDecl { element: BytesStart::owned(buf, 3) }
     }
-
-    /// whole content as &[u8]
-    pub fn content(&self) -> &[u8] {
-        self.element.content()
-    }
 }
 
 /// A struct to manage `BytesEvent::End` events
@@ -242,7 +233,6 @@ pub struct BytesEnd<'a> {
 }
 
 impl<'a> BytesEnd<'a> {
-
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
     pub fn borrowed(name: &'a [u8]) -> BytesEnd<'a> {
@@ -269,7 +259,6 @@ pub struct BytesText<'a> {
 }
 
 impl<'a> BytesText<'a> {
-
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
     pub fn borrowed(content: &'a [u8]) -> BytesText<'a> {
@@ -282,18 +271,12 @@ impl<'a> BytesText<'a> {
         BytesText { content: Cow::Owned(content) }
     }
 
-    /// Gets `BytesEnd` event name
-    #[inline]
-    pub fn content(&self) -> &[u8] {
-        &*self.content
-    }
-
     /// gets escaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
-    pub fn unescaped_content(&self) -> ResultPos<Cow<[u8]>> {
-        unescape(&*self.content)
+    pub fn unescaped(&self) -> ResultPos<Cow<[u8]>> {
+        unescape(&self)
     }
 
     /// consumes entire self (including eventual attributes!) and returns `String`
@@ -310,7 +293,7 @@ impl<'a> BytesText<'a> {
     /// and unescape XML entities
     pub fn into_unescaped_string(self) -> Result<String> {
         ::std::string::String::from_utf8(
-            try!(self.unescaped_content().map_err(|(e, _)| e)).into_owned())
+            try!(self.unescaped().map_err(|(e, _)| e)).into_owned())
             .map_err(|e| Error::Utf8(e.utf8_error()))
     }
 }
@@ -350,5 +333,51 @@ pub trait AsStr {
 impl AsStr for [u8] {
     fn as_str(&self) -> Result<&str> {
         from_utf8(self).map_err(Error::Utf8)
+    }
+}
+
+impl<'a> Deref for BytesStart<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &*self.buf
+    }
+}
+
+impl<'a> Deref for BytesDecl<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &*self.element
+    }
+}
+
+impl<'a> Deref for BytesEnd<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &*self.name
+    }
+}
+
+impl<'a> Deref for BytesText<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
+impl<'a> Deref for BytesEvent<'a> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match *self {
+            BytesEvent::Start(ref e) => &*e,
+            BytesEvent::End(ref e) => &*e,
+            BytesEvent::Text(ref e) => &*e,
+            BytesEvent::Empty(ref e) => &*e,
+            BytesEvent::Decl(ref e) => &*e,
+            BytesEvent::PI(ref e) => &*e,
+            BytesEvent::CData(ref e) => &*e,
+            BytesEvent::Comment(ref e) => &*e,
+            BytesEvent::DocType(ref e) => &*e,
+            BytesEvent::Eof => &[],
+        }
     }
 }

@@ -341,7 +341,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
             if !is_short && line.starts_with("StartDocument") {
                 // advance next Characters(empty space) ...
                 if let Ok(BytesEvent::Text(ref e)) = reader.read_event(&mut buf) {
-                    if e.content().iter().any(|b| match *b {
+                    if e.iter().any(|b| match *b {
                         b' ' | b'\r' | b'\n' | b'\t' => false,
                         _ => true,
                     }) {
@@ -401,11 +401,11 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             Ok((ref n, BytesEvent::End(ref e))) =>
                 write!(f, "EndElement({})", namespace_name(n, e.name())),
             Ok((_, BytesEvent::Comment(ref e))) =>
-                write!(f, "Comment({:?})", e.content().as_str().unwrap()),
+                write!(f, "Comment({:?})", e.as_str().unwrap()),
             Ok((_, BytesEvent::CData(ref e))) =>
-                write!(f, "CData({:?})", e.content().as_str().unwrap()),
+                write!(f, "CData({:?})", e.as_str().unwrap()),
             Ok((_, BytesEvent::Text(ref e))) => {
-                match e.unescaped_content() {
+                match e.unescaped() {
                     Ok(c) => {
                         if c.is_empty() {
                             write!(f, "Characters()")
@@ -423,12 +423,10 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             },
             Ok((_, BytesEvent::Eof)) => write!(f, "EndDocument"),
             Ok((_, BytesEvent::PI(ref e))) =>
-                write!(f, "ProcessingInstruction(PI={:?})", e.content().as_str().unwrap()),
-//                 write!(f, "ProcessingInstruction({}={:?})", 
-//                     e.name().as_str().unwrap(), e.content().as_str().unwrap()),
+                write!(f, "ProcessingInstruction(PI={:?})", e.as_str().unwrap()),
             Err((ref e, _)) => write!(f, "{}", e),
             Ok((_, BytesEvent::DocType(ref e))) => 
-                write!(f, "DocType({})", e.content().as_str().unwrap()),
+                write!(f, "DocType({})", e.as_str().unwrap()),
         }
     }
 }

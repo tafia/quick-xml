@@ -72,15 +72,15 @@ impl<W: Write> Writer<W> {
     /// Writes the given event to the underlying writer.
     pub fn write(&mut self, event: BytesEvent) -> Result<()> {
         match event {
-            BytesEvent::Start(ref e) => self.write_wrapped_element(b"<", e.content(), b">"),
-            BytesEvent::End(ref e) => self.write_wrapped_bytes(b"</", &e.name(), b">"),
-            BytesEvent::Empty(ref e) => self.write_wrapped_element(b"<", e.content(), b"/>"),
-            BytesEvent::Text(ref e) => self.write_bytes(e.content()),
-            BytesEvent::Comment(ref e) => self.write_wrapped_element(b"<!--", e.content(), b"-->"),
-            BytesEvent::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", e.content(), b"]]>"),
-            BytesEvent::Decl(ref e) => self.write_wrapped_element(b"<?", &e.content(), b"?>"),
-            BytesEvent::PI(ref e) => self.write_wrapped_element(b"<?", e.content(), b"?>"),
-            BytesEvent::DocType(ref e) => self.write_wrapped_element(b"<!DOCTYPE", e.content(), b">"),
+            BytesEvent::Start(ref e) => self.write_wrapped_element(b"<", &e, b">"),
+            BytesEvent::End(ref e) => self.write_wrapped_bytes(b"</", &e, b">"),
+            BytesEvent::Empty(ref e) => self.write_wrapped_element(b"<", &e, b"/>"),
+            BytesEvent::Text(ref e) => self.write_bytes(&e),
+            BytesEvent::Comment(ref e) => self.write_wrapped_element(b"<!--", &e, b"-->"),
+            BytesEvent::CData(ref e) => self.write_wrapped_element(b"<![CDATA[", &e, b"]]>"),
+            BytesEvent::Decl(ref e) => self.write_wrapped_element(b"<?", &e, b"?>"),
+            BytesEvent::PI(ref e) => self.write_wrapped_element(b"<?", &e, b"?>"),
+            BytesEvent::DocType(ref e) => self.write_wrapped_element(b"<!DOCTYPE", &e, b">"),
             BytesEvent::Eof => Ok(()),
         }
     }

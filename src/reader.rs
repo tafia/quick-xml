@@ -528,10 +528,10 @@ impl<B: BufRead> Reader<B> {
     pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
         let (read_end, s) = match self.read_event(buf) {
             Ok(BytesEvent::Text(e)) => {
-                assert_eq!(b"&lt;b&gt;", e.content());
-                (true, e.unescaped_content().and_then(|c| c.as_str()
-                                                      .map_err(|e| (e, self.buf_position))
-                                                      .map(|s| s.to_string())))
+                assert_eq!(b"&lt;b&gt;", e.as_ref());
+                (true, e.unescaped().and_then(|c| c.as_str()
+                                              .map_err(|e| (e, self.buf_position))
+                                              .map(|s| s.to_string())))
             }
             Ok(BytesEvent::End(ref e)) if e.name() == end.as_ref() => {
                 (false, Ok("".to_string()))
