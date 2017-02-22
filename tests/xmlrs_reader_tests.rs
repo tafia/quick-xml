@@ -345,10 +345,10 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                         b' ' | b'\r' | b'\n' | b'\t' => false,
                         _ => true,
                     }) {
-                        panic!("XmlReader expects empty Text event after a StartDocument");
+                        panic!("BytesReader expects empty Text event after a StartDocument");
                     }
                 } else {
-                    panic!("XmlReader expects empty Text event after a StartDocument");
+                    panic!("BytesReader expects empty Text event after a StartDocument");
                 }
             }
         }

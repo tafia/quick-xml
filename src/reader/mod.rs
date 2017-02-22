@@ -1,15 +1,11 @@
 //! A module to handle `Reader`
 
 pub mod attributes;
-pub mod namespace;
 pub mod bytes;
-pub mod old;
 
 use std::io::BufRead;
 use error::ResultPos;
 use reader::bytes::{BytesReader, BytesEvent};
-
-pub use reader::old::XmlReader;
 
 /// A wrapper over `BytesReader` with its own buffer
 pub struct Reader<'a, B: BufRead> {
@@ -25,11 +21,6 @@ impl<'a, B: BufRead> Reader<'a, B> {
             inner: BytesReader::from_reader(reader),
         }
     }
-
-//     /// Converts into a `XmlnsReader` iterator
-//     pub fn namespaced(self) -> XmlnsReader<B> {
-//         XmlnsReader::new(self)
-//     }
 
     /// Change expand_empty_elements default behaviour (true per default)
     ///
@@ -120,13 +111,3 @@ impl<'a, B: BufRead> Reader<'a, B> {
         self.inner.read_event(self.buffer)
     }
 }
-
-// /// Iterator on xml returning `Event`s
-// impl<'a, B: BufRead> Iterator for Reader<'a, B> {
-//     type Item = ResultPos<BytesEvent<'a>>;
-// 
-//     fn next<'b>(&'b mut self) -> Option<Self::Item> {
-//         self.buffer.clear();
-//         self.inner.next_event(self.buffer)
-//     }
-// }
