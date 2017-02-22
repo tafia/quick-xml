@@ -1,12 +1,16 @@
 //! A module to handle `Reader`
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::from_utf8;
 
+use encoding_rs::Encoding;
+
 use error::{Error, Result, ResultPos};
 use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
+use events::attributes::Attribute;
 
 enum TagState {
     Opened,
@@ -32,20 +36,18 @@ enum TagState {
 /// let mut txt = Vec::new();
 /// let mut buf = Vec::new();
 /// loop {
-///     match reader.next_event(&mut buf) {
-///         Some(Ok(Event::Start(ref e))) => {
+///     match reader.read_event(&mut buf) {
+///         Ok(Event::Start(ref e)) => {
 ///             match e.name() {
 ///                 b"tag1" => println!("attributes values: {:?}",
-///                                     e.attributes()
-///                                     .map(|a| a.unwrap().1)
-///                                     .collect::<Vec<_>>()),
+///                                     e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
 ///                 b"tag2" => count += 1,
 ///                 _ => (),
 ///             }
 ///         },
-///         Some(Ok(Event::Text(e))) => txt.push(e.into_string()),
-///         Some(Err((e, pos))) => panic!("{:?} at position {}", e, pos),
-///         None => break,
+///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+///         Ok(Event::Eof) => break,
 ///         _ => (),
 ///     }
 /// }
@@ -74,9 +76,12 @@ pub struct Reader<B: BufRead> {
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
     ns_buffer: NamespaceBuffer,
+    /// the encoding specified in the xml, defaults to utf8
+    encoding: &'static Encoding,
 }
 
 impl<B: BufRead> Reader<B> {
+
     /// Creates a Reader from a generic BufReader
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
@@ -90,8 +95,8 @@ impl<B: BufRead> Reader<B> {
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
-
             ns_buffer: NamespaceBuffer::default(),
+            encoding: ::encoding_rs::UTF_8,
         }
     }
 
@@ -327,7 +332,12 @@ impl<B: BufRead> Reader<B> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                Ok(Event::Decl(BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3))))
+                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+                // Try getting encoding from the declaration event
+                if let Some(enc) = event.encoder() {
+                    self.encoding = enc;
+                }
+                Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::borrowed(&buf[1..len - 1])))
             }
@@ -386,15 +396,6 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// reads the next `Event` and converts `Event::Eof` by `None` else `Some(event)`
-    pub fn next_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Option<ResultPos<Event<'b>>> {
-        match self.read_event(buf) {
-            Ok(Event::Eof) => None,
-            Ok(e) => Some(Ok(e)),
-            Err(e) => Some(Err(e)),
-        }
-    }
-
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
     ///
     /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
@@ -442,6 +443,15 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
+    /// Decodes a slice using the xml specified encoding
+    ///
+    /// Decode complete input to Cow<'a, str> with BOM sniffing and with malformed sequences
+    /// replaced with the REPLACEMENT CHARACTER
+    ///
+    /// If no encoding is specified, then defaults to UTF_8
+    pub fn decode<'b, 'c>(&'b self, bytes: &'c[u8]) -> Cow<'c, str> {
+        self.encoding.decode(bytes).0
+    }
 }
 
 impl<B: BufRead> Reader<B> {
@@ -476,7 +486,7 @@ impl<B: BufRead> Reader<B> {
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
         let (read_end, s) = match self.read_event(buf) {
             Ok(Event::Text(e)) => {
-                let s = e.into_string().map_err(|e| (e, self.buf_position))?;
+                let s = e.unescape_and_decode(self).map_err(|(e, i)| (e, i + self.buf_position))?;
                 (true, s)
             }
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
@@ -510,8 +520,8 @@ impl<B: BufRead> Reader<B> {
     /// xml.trim_text(true);
     /// let mut buf = Vec::new();
     /// 
-    /// match xml.next_event(&mut buf) {
-    ///     Some(Ok(Event::Start(ref e))) => {
+    /// match xml.read_event(&mut buf) {
+    ///     Ok(Event::Start(ref e)) => {
     ///         assert_eq!(&xml.read_text_unescaped(e.name(), &mut Vec::new()).unwrap(), "<b>");
     ///     },
     ///     e => panic!("Expecting Start(a), found {:?}", e),
@@ -787,7 +797,7 @@ impl NamespaceBuffer {
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
         for a in e.attributes().with_checks(false) {
-            if let Ok((k, v)) = a {
+            if let Ok(Attribute {key: k, value: v}) = a {
                 if k.starts_with(b"xmlns") {
                     match k.get(5) {
                         None => {

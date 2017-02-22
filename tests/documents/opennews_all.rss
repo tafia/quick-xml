@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="koi8-r"?>
+<rss version="2.0">
+<channel>
+    <title>OpenNews.opennet.ru: Общая лента новостей</title>
+    <description>OpenNews - Новости мира открытых систем (Общая лента новостей)</description>
+    <link>http://www.opennet.ru/opennews/</link>
+<item>
+    <title>Выпуск Python 2.7.13</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45712</link>
+    <pubDate>Sun, 18 Dec 2016 21:08:16 +0600</pubDate>
+    <description>Доступен корректирующий выпуск Python 2.7.13, в котором отражены внесённые за последние полгода исправления ошибок. Поддержка ветки Python 2.7 будет осуществляться до 2020 года. Следующий выпуск Python 2.7.14 запланирован на середину 2017 года. Выпуск следующей значительной ветки Python 3.6 ожидается 23 декабря.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45712</guid>
+</item>
+<item>
+    <title>Выпуск СУБД PouchDB 6.1, реализации CouchDB  на JavaScript</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45710</link>
+    <pubDate>Sun, 18 Dec 2016 11:41:17 +0600</pubDate>
+    <description>Представлен релиз  документ-ориентированной БД PouchDB 6.1, представляющей собой расширенный вариант СУБД Apache CouchDB, написанный на языке JavaScript и работающий внутри браузера. Модель хранения  повторяет CouchDB и обеспечивает средства разрешения конфликтов. PouchDB совместим с CouchDB на уровне API для хранения и выборки данных. Код распространяется под лицензией Apache 2.0. Размер сжатого архива с PouchDB занимает всего 45 Кб.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45710</guid>
+</item>
+<item>
+    <title>Доступна открытая СУБД CrateDB 1.0</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45707</link>
+    <pubDate>Sat, 17 Dec 2016 23:09:55 +0600</pubDate>
+    <description>После трёх лет разработки состоялся релиз проекта CrateDB 1.0, в рамках которого развивается открытая, быстрая и масштабируемая СУБД с поддержкой выполнения SQL-запросов и встроенными возможностями полнотекстового поиска. Версия 1.0 позиционируется как первый выпуск, достигший должного уровня стабильности и пригодный для промышленного использования. Исходные тексты CrateDB написаны на языке Java и.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45707</guid>
+</item>
+<item>
+    <title>Выпуск дистрибутива MX-16 Linux</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45705</link>
+    <pubDate>Sat, 17 Dec 2016 08:37:10 +0600</pubDate>
+    <description>Опубликован релиз легковесного дистрибутива MX-16 Linux, созданного в результате совместной работы сообществ, образовавшихся вокруг проектов antiX и MEPIS. Выпуск основан пакетной базе на Debian Jessie (8.6) с улучшениями от проекта antiX и многочисленными собственными приложениями, облегчающими настройку и установку ПО. По умолчанию предлагается рабочий стол Xfce 4.12.2. Для загрузки доступны 32- и 64-разрядные сборки, размером 1.2 GB.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45705</guid>
+</item>
+<item>
+    <title>Выпуск дистрибутива GoboLinux 016 с самобытной иерархией файловой системы</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45704</link>
+    <pubDate>Fri, 16 Dec 2016 22:10:38 +0600</pubDate>
+    <description>После двух с половиной лет с момента прошлого выпуска  сформирован релиз дистрибутива GoboLinux 016. В GoboLinux вместо традиционной для Unix-систем иерархии файлов используется стековая модель формирования дерева каталогов, при которой каждая программа устанавливается в отдельную директорию. Размер установочного образа 950 Мб, который также может применяться для ознакомления с возможностями дистрибутива в Live-режиме.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45704</guid>
+</item>
+<item>
+    <title>Ubuntu переходит на использование файла подкачки вместо раздела подкачки</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45703</link>
+    <pubDate>Fri, 16 Dec 2016 19:30:42 +0600</pubDate>
+    <description>Разработчики Ubuntu Linux приняли решение отказаться от использования отдельных разделов подкачки для установок дистрибутива, не использующих систему логических томов LVM, в пользу размещения SWAP в файле. Изменение будет применено в ближайшем выпуске Ubuntu 17.04. Размер файла подкачки по умолчанию будет устанавливаться в 5% от свободного места в ФС, но не больше, чем 2 Гб. Использование файла в существующей ФС для хранения данных подкачки существенно увеличивает гибкость и позволяет в любое время изменить размер подкачки.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45703</guid>
+</item>
+<item>
+    <title>Выпуск рабочего стола Budgie 10.2.9</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45702</link>
+    <pubDate>Fri, 16 Dec 2016 19:19:08 +0600</pubDate>
+    <description>Разработчики дистрибутива Solus представили релиз рабочего стола Budgie Desktop 10.2.9.  Budgie основан на технологиях GNOME, но использует собственные реализации оболочки GNOME Shell, панели, апплетов и системы вывода уведомлений. Budgie не является форком GNOME и работает поверх штатных низкоуровневых компонентов и библиотек GNOME. Код проекта написан на языках Си и Vala и  распространяется под лицензией GPLv2.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45702</guid>
+</item>
+<item>
+    <title>Выпуск дистрибутива Linux Mint 18.1</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45701</link>
+    <pubDate>Fri, 16 Dec 2016 17:11:05 +0600</pubDate>
+    <description>Представлен релиз дистрибутива Linux Mint 18.1, первого обновления ветки Linux Mint 18.x, формируемой на  пакетной базе Ubuntu 16.04 LTS и поддерживаемой до 2021 года. Дистрибутив полностью совместим с Ubuntu, но существенно отличается подходом к организации интерфейса пользователя и подбором используемых по умолчанию приложений. Разработчики Linux Mint предоставляют десктоп-окружение, соответствующее классическим канонам организации рабочего стола, которое является более привычным для пользователей, не принимающих новые методы построения интерфейса Unity и GNOME 3. Для загрузки доступны DVD-сборки на базе оболочек MATE 1.16 (1.7 Гб) и Cinnamon 3.2 (1.7 Гб).</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45701</guid>
+</item>
+<item>
+    <title>Уязвимость, позволяющая запустить код при копировании файла на рабочий стол</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45700</link>
+    <pubDate>Fri, 16 Dec 2016 09:45:21 +0600</pubDate>
+    <description>Крис Эванс (Chris Evans), известный эксперт по компьютерной безопасности и автор защищенного FTP-сервера vsftpd, продолжил демонстрацию незащищённости мультимедийного фреймворка Gstreamer и представил новую 0-day уязвимость, позволяющую организовать выполнение кода при попытке обработки специальным образом оформленного мультимедийного контента. В момент публикации эксплоиты позволяют организовать стабильно повторяемую атаку против Ubuntu 16.04 LTS и Fedora 25 с самыми свежими обновлениями.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45700</guid>
+</item>
+<item>
+    <title>Выпуск KDE Applications 16.12</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45699</link>
+    <pubDate>Thu, 15 Dec 2016 23:33:27 +0600</pubDate>
+    <description>Состоялся релиз набора KDE Applications 16.12, включающего подборку пользовательских приложений, адаптированных для работы с KDE Frameworks 5. Набор KDE Applications пришёл на смену приложениям из состава KDE SC, которые теперь развиваются в рамках отдельного цикла разработки, не привязанного к веткам KDE, и выпускаются по новой схеме нумерации версий. Информацию о наличии Live-сборок с новым выпуском можно получить данной странице.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45699</guid>
+</item>
+<item>
+    <title>LibreOffice тестирует альтернативную панель в стиле Ribbon</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45698</link>
+    <pubDate>Thu, 15 Dec 2016 21:02:59 +0600</pubDate>
+    <description>В бета-версии LibreOffice 5.3 доступна для ознакомления новая  панель инструментов NotebookBar, оформленная в стиле Ribbon. Панель позиционируется как альтернатива для пользователей, привыкших к панели Microsoft Office.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45698</guid>
+</item>
+<item>
+    <title>Red Hat Enterprise Linux 7 получил сертификат безопасности FIPS 140-2 </title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45696</link>
+    <pubDate>Thu, 15 Dec 2016 19:14:58 +0600</pubDate>
+    <description>Компания Red Hat сообщила о сертификации криптографических модулей дистрибутива  Red Hat Enterprise Linux 7 (RHEL) на предмет соответствия стандарту безопасности FIPS 140-2. Ранее сертификация FIPS 140-2  была пройдена в 2013 году для ветки RHEL 6.x, но компоненты из ветки RHEL 7 оставалась несертифицированы. Получение сертификата FIPS 140-2 является обязательным требованием к продуктам при их использовании в обеспечении защиты конфиденциальных данных государственных учреждений США и Канады. Сертификат подтверждает соблюдение требований к криптографическим модулям и выдаётся Американским институтом стандартов и технологий (NIST) совместно с Канадским  Центром безопасности коммуникаций после досконального тестирования компонентов дистрибутива независимой тестовой лабораторией.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45696</guid>
+</item>
+<item>
+    <title>Выпуск web-браузера Vivaldi 1.6</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45695</link>
+    <pubDate>Thu, 15 Dec 2016 17:45:47 +0600</pubDate>
+    <description>Представлен выпуск проприетарного web-браузера Vivaldi 1.6, разрабатываемого на базе движка Chromium и продолжающего развитие идей классического браузера Opera, предоставляя широкий спектр возможностей, включая удобную систему группировки вкладок, боковую панель, конфигуратор с большим числом настроек, режим блокировки изображений и нежелательного контента, систему ведения заметок, режим горизонтального отображения вкладок. Интерфейс браузера написан на языке JavaScript с использованием библиотеки React, платформы Node.js, Browserify и различных готовых NPM-модулей. Сборки Vivaldi подготовлены для Linux, Windows и macOS. Проект распространяет под открытой лицензией исходные тексты изменений к Chromium (публикуются для прошлых выпусков). Реализация интерфейса Vivaldi написана на JavaScript, доступна в исходных текстах, но под проприетарной лицензией.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45695</guid>
+</item>
+<item>
+    <title>Выпуск дистрибутива GeckoLinux Static</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45692</link>
+    <pubDate>Thu, 15 Dec 2016 11:49:26 +0600</pubDate>
+    <description>Представлена новая версия дистрибутива GeckoLinux Static, в рамках которого подготовлена специализированная редакция openSUSE Leap 42.2. Кроме  GeckoLinux Static также доступны Rolling редакции, основанные на пакетах из openSUSE Tumbleweed. Размер iso-образа около 1 Гб.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45692</guid>
+</item>
+<item>
+    <title>Yahoo сообщил об утечке более миллиарда учётных записей</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45691</link>
+    <pubDate>Thu, 15 Dec 2016 10:52:24 +0600</pubDate>
+    <description>Компания Yahoo раскрыла сведения о произошедшей в августе 2013 года утечке более миллиарда учётных записей, в результате которой в руки злоумышленников попали личные сведения о пользователях, в том числе хэши паролей, реальные имена пользователей и телефонные номера.  Факт взлома был выявлен после попадания в руки правоохранительных органов копии базы пользователей, которая после проверки оказалась связана с Yahoo. Утверждается, что скорее всего  нынешняя утечка не имеет связи с обнародованными в сентября сведениями о другой утечке базы Yahoo в 500 млн пользователей, которая произошла в 2014 году в результате другого инцидента.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45691</guid>
+</item>
+<item>
+    <title>Релиз системы обнаружения атак Snort 2.9.9.0 </title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45693</link>
+    <pubDate>Thu, 15 Dec 2016 10:50:28 +0600</pubDate>
+    <description>Компания Cisco опубликовала новый значительный релиз Snort 2.9.9.0,  свободной системы обнаружения и предотвращения атак, комбинирующей в себе методы сопоставления по сигнатурам, средства для инспекции протоколов и механизмы для выявления аномалий.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45693</guid>
+</item>
+<item>
+    <title>Проект LLVM переходит на новую схему нумерации выпусков</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45690</link>
+    <pubDate>Thu, 15 Dec 2016 10:16:57 +0600</pubDate>
+    <description>Разработчики проекта LLVM объявили об изменении подхода к присвоению номеров версий. Если раньше применялась десятичная нумерация с увеличением первой цифры для значительных выпусков, второй для функциональных обновлений (3.8.0, 3.9.0) и третьей для корректирующих выпусков (3.8.1, 3.8.2), то теперь решено стереть грань между значительными и функциональными выпусками, меняя только первую цифру (5.0.0, 6.0.0, 7.0.0). Новая схема будет применена начиная с мартовского выпуска 4.0.0, после чего в сентябре ожидается релиз LLVM 5.0.0.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45690</guid>
+</item>
+<item>
+    <title>Выпуск strace 4.15 с функцией подмены системных вызовов</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45689</link>
+    <pubDate>Thu, 15 Dec 2016 08:50:57 +0600</pubDate>
+    <description>Доступна новая версия утилиты strace 4.15, предназначенной для диагностики и отладки программ в ОС на базе ядра Linux. Утилита позволяет отслеживать и (начиная с данной версии) вмешиваться в процесс взаимодействия программы и ядра, включая происходящие системные вызовы, возникающие сигналы и изменения состояния процесса. Для своей работы strace использует механизм ptrace. Код проекта распространяется под лицензией BSD. Начиная с версии 4.13, формирование выпусков strace синхронизировано с выходом очередных версий Linux.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45689</guid>
+</item>
+<item>
+    <title>Релиз CentOS 7.1611 для архитектуры ARM</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45687</link>
+    <pubDate>Wed, 14 Dec 2016 23:46:16 +0600</pubDate>
+    <description>Следом за сборкой для архитектуры x86_64 проект CentOS объявил о доступности редакции дистрибутива CentOS Linux 7.1611 для 32-разрядной архитектуры Armhfp. Сборка может использоваться на платах Raspberry Pi 3, Raspberry Pi 2, СubieTruck, Cubieboard и Bananapi. В дальнейшем ожидаются выпуски для архитектур i386, ARM64, PowerPC64 и PowerPC8 LE.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45687</guid>
+</item>
+<item>
+    <title>Выпуск Qt 5.7.1 и интегрированной среды разработки Qt Creator 4.2</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45686</link>
+    <pubDate>Wed, 14 Dec 2016 23:00:41 +0600</pubDate>
+    <description>Доступен выпуск интегрированной среды разработки Qt Creator 4.2.0, предназначенной для создания кроссплатформенных приложений с использованием библиотеки Qt. Поддерживается разработка как классических программ на языке C++, так и использование языка QML, в котором для определения сценариев используется JavaScript, а структура и параметры элементов интерфейса задаются CSS-подобными блоками.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45686</guid>
+</item>
+<item>
+    <title>Релиз растрового графического редактора Krita 3.1</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45683</link>
+    <pubDate>Wed, 14 Dec 2016 16:28:59 +0600</pubDate>
+    <description>Увидел свет релиз растрового графического редактора Krita 3.1, развиваемого для художников и иллюстраторов. Редактор поддерживает многослойную обработку изображений, предоставляет средства для работы с различными цветовыми моделями и обладает большим набором средств для цифровой живописи, создания скетчей и формирования текстур. Для установки подготовлены самодостаточные образы в форматах AppImage и Snap для Linux (для Ubuntu дополнительно подготовлен PPA), а также бинарные сборки для macOS и Windows.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45683</guid>
+</item>
+<item>
+    <title>Выпуск облачного хранилища Nextcloud 11, форка ownCloud</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45682</link>
+    <pubDate>Wed, 14 Dec 2016 11:44:59 +0600</pubDate>
+    <description>После четырёх месяцев разработки представлен  выпуск облачной платформы Nextcloud 11, развивающейся как форк проекта ownCloud, созданный основными разработчиками данной системы. Nextcloud и ownCloud позволяют на своих серверных системах развернуть полноценное облачное хранилище с поддержкой синхронизации и обмена данными.  Ключевым отличием Nextcloud от ownCloud является намерение предоставить в едином открытом продукте все расширенные возможности, ранее поставляемые только в коммерческой версии ownCloud. Исходные тексты Nextcloud, как и ownCloud, распространяются под лицензией AGPL.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45682</guid>
+</item>
+<item>
+    <title>Новая версия Tor Browser 6.0.8</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45681</link>
+    <pubDate>Wed, 14 Dec 2016 10:04:23 +0600</pubDate>
+    <description>Разработчики анонимной сети Tor представили новый выпуск развиваемого проектом web-браузера Tor Browser 6.0.8, ориентированного на обеспечение анонимности, безопасности и приватности. В новой версии устранены 18 уязвимостей, исправленные в кодовой базе Firefox 45.6.0esr.  11 уязвимостей помечены как критические, т.е. могут привести к выполнению кода злоумышленника при открытии специально оформленных страниц.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45681</guid>
+</item>
+<item>
+    <title>Выпуск nginx 1.11.7</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45680</link>
+    <pubDate>Wed, 14 Dec 2016 08:18:23 +0600</pubDate>
+    <description>Доступен новый выпуск основной ветки высокопроизводительного HTTP-сервера nginx 1.11.7, в котором реализованы следующие изменения.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45680</guid>
+</item>
+<item>
+    <title>Google представил Android Things, ОС для интернета вещей</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45679</link>
+    <pubDate>Tue, 13 Dec 2016 23:45:55 +0600</pubDate>
+    <description>Компания Google начала тестирование Android Things, новой редакции платформы Android, предназначенной для использования в потребительских интернет-устройствах, относящихся к категории интернет вещей (IoT). Android Things даёт возможность быстро создавать умные устройства, используя API платформы Android и сервисы Google.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45679</guid>
+</item>
+<item>
+    <title>Релиз Proxmox VE 4.4, дистрибутива для организации работы виртуальных серверов</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45676</link>
+    <pubDate>Tue, 13 Dec 2016 21:25:18 +0600</pubDate>
+    <description>Доступен релиз Proxmox Virtual Environment 4.4, специализированного Linux-дистрибутива на базе Debian GNU/Linux, нацеленного на развертывание и обслуживание виртуальных серверов с использованием LXC и KVM, и способного выступить в роли замены таких продуктов, как VMware vSphere, Microsoft Hyper-V и Citrix XenServer. Размер установочного iso-образа 521 Мб.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45676</guid>
+</item>
+<item>
+    <title>Релиз CrossOver 16 для Linux и macOS</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45675</link>
+    <pubDate>Tue, 13 Dec 2016 20:09:38 +0600</pubDate>
+    <description>Компания CodeWeavers выпустила релиз пакета Crossover 16, основанного на коде Wine  2.0-rc и предназначенного для выполнения программ и игр, написанных для платформы Windows. CodeWeavers входит в число ключевых участников проекта Wine, спонсирует его разработку и возвращает в проект все новшества, реализованные для своих коммерческих продуктов. Исходные тексты открытых компонентов CrossOver 16.0 можно  загрузить на данной странице.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45675</guid>
+</item>
+<item>
+    <title>Промежуточный выпуск Firefox 50.1.0</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45674</link>
+    <pubDate>Tue, 13 Dec 2016 19:44:49 +0600</pubDate>
+    <description>Доступен промежуточный выпуск Firefox 50.1.0, вобравший в себя накопившиеся исправления. Одновременно сформировано обновление для ESR-ветки - Firefox 45.6.  В примечании к выпускам упомянуто только исправление уязвимостей, но конкретные сведения об устранённых проблемах с безопасностью пока не опубликованы.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45674</guid>
+</item>
+<item>
+    <title>В антивирусе McAfee для Linux выявлена удалённая root-уязвимость</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45672</link>
+    <pubDate>Tue, 13 Dec 2016 16:17:29 +0600</pubDate>
+    <description>В проприетарном антивирусном пакете McAfee VirusScan Enterprise для платформы Linux выявлено 10 уязвимостей, сочетание которых даёт возможность организовать удалённую атаку, которая позволяет неаутентифицированному стороннему злоумышленнику выполнить свой код на сервере с правами пользователя root. Производителю было сообщено о проблеме ещё в июне, но обновление с устранением уязвимости было выпущено только вчера. Так как исправление уже доступно, обнаружившие уязвимости исследователи безопасности опубликовали рабочий прототип эксплоита.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45672</guid>
+</item>
+<item>
+    <title>Выпуск web-браузера Opera 42</title>
+    <link>http://www.opennet.ru/opennews/art.shtml?num=45671</link>
+    <pubDate>Tue, 13 Dec 2016 12:57:09 +0600</pubDate>
+    <description>Подготовлен выпуск проприетарного браузера Opera 42, основанного на кодовой базе Chromium. Сборки сформированы для платформ Linux, macOS и Windows.  Выпуск приурочен к 20-летию с момента основания браузера.</description>
+    <guid>http://www.opennet.ru/opennews/art.shtml?num=45671</guid>
+</item>
+</channel>
+</rss>

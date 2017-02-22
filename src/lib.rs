@@ -43,12 +43,13 @@
 //!         // Ok((ref namespace_value, Event::Start(ref e)))
 //!             match e.name() {
 //!                 b"tag1" => println!("attributes values: {:?}",
-//!                                     e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
+//!                                     e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
 //!                 b"tag2" => count += 1,
 //!                 _ => (),
 //!             }
 //!         },
-//!         Ok(Event::Text(e)) => txt.push(e.into_string()),
+//!         // unescape and decode the text event using the reader encoding
+//!         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
 //!         Ok(Event::Eof) => break, // exits the loop when reaching end of file
 //!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
 //!         _ => (), // There are several other `Event`s we do not consider here
@@ -85,7 +86,7 @@
 //!             elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
 //!
 //!             // copy existing attributes, adds a new my-key="some value" attribute
-//!             elem.push_attribute(b"my-key", "some value");
+//!             elem.push_attribute(("my-key", "some value"));
 //!
 //!             // writes the event to the writer
 //!             assert!(writer.write_event(Event::Start(elem)).is_ok());
@@ -112,6 +113,7 @@
 #[macro_use]
 extern crate log;
 extern crate from_ascii;
+extern crate encoding_rs;
 
 pub mod error;
 pub mod reader;

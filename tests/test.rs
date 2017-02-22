@@ -2,6 +2,7 @@ extern crate quick_xml;
 
 use quick_xml::reader::Reader;
 use quick_xml::events::Event::*;
+use quick_xml::events::attributes::Attribute;
 
 #[test]
 fn test_sample() {
@@ -31,11 +32,11 @@ fn test_attributes_empty() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok((b"att1", b"a"))) => (),
+                Some(Ok(Attribute { key: b"att1", value: b"a" })) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
             }
             match atts.next() {
-                Some(Ok((b"att2", b"b"))) => (),
+                Some(Ok(Attribute { key: b"att2", value: b"b" })) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
             }
             match atts.next() {
@@ -57,7 +58,7 @@ fn test_attribute_equal() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok((b"att1", b"a=b"))) => (),
+                Some(Ok(Attribute { key:b"att1", value:b"a=b" })) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
             }
             match atts.next() {
@@ -88,9 +89,8 @@ fn test_attributes_empty_ns() {
     let mut atts = e.attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.0.starts_with(b"xmlns"))
-            .map(|kv| {
-                let (name,value) = kv;
+            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.resolve_namespace(name);
                 (opt_ns, local_name, value)
             });
@@ -129,9 +129,8 @@ fn test_attributes_empty_ns_expanded() {
         let mut atts = e.attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.0.starts_with(b"xmlns"))
-            .map(|kv| {
-                let (name,value) = kv;
+            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.resolve_namespace(name);
                 (opt_ns, local_name, value)
             });
@@ -190,9 +189,8 @@ fn test_default_ns_shadowing_empty() {
         let mut atts = e.attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.0.starts_with(b"xmlns"))
-            .map(|kv| {
-                let (name,value) = kv;
+            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.resolve_namespace(name);
                 (opt_ns, local_name, value)
             });
@@ -251,9 +249,8 @@ fn test_default_ns_shadowing_expanded() {
         let mut atts = e.attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.0.starts_with(b"xmlns"))
-            .map(|kv| {
-                let (name,value) = kv;
+            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.resolve_namespace(name);
                 (opt_ns, local_name, value)
             });
@@ -284,5 +281,20 @@ fn test_default_ns_shadowing_expanded() {
             assert_eq!(e.name(), b"e");
         },
         e => panic!("Expected End event (</outer>), got {:?}", e),
+    }
+}
+
+#[test]
+fn test_koi8_r_encoding() {
+    let src: &[u8] = include_bytes!("documents/opennews_all.rss");
+    let mut r = Reader::from_reader(src as &[u8]);
+    r.trim_text(true).expand_empty_elements(false);
+    let mut buf = Vec::new();
+    loop {
+        match r.read_event(&mut buf) {
+            Ok(Text(e)) => { e.unescape_and_decode(&r).unwrap(); },
+            Ok(Eof) => break,
+            _ => (),
+        }
     }
 }

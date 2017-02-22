@@ -282,10 +282,10 @@ fn test_write_attrs() {
             Ok(Start(elem)) => {
                 let mut attrs = elem.attributes()
                     .collect::<ResultPos<Vec<_>>>().unwrap();
-                attrs.extend_from_slice(&[(b"a", b"b"), (b"c", b"d")]);
+                attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.with_attributes(attrs);
-                elem.push_attribute("x", "y");
+                elem.push_attribute(("x", "y"));
                 Start(elem)
             }
             Ok(End(_)) => End(BytesEnd::borrowed(b"copy")),
@@ -546,11 +546,11 @@ fn test_closing_bracket_in_single_quote_attr() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b">"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
                 x => panic!("expected attribute 'attr', got {:?}", x)
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"2"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
                 x => panic!("expected attribute 'check', got {:?}", x)
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -569,11 +569,11 @@ fn test_closing_bracket_in_double_quote_attr() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b">"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
                 x => panic!("expected attribute 'attr', got {:?}", x)
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"2"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
                 x => panic!("expected attribute 'check', got {:?}", x)
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -592,11 +592,11 @@ fn test_closing_bracket_in_double_quote_mixed() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b"'>'"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr", "'>'").into()),
                 x => panic!("expected attribute 'attr', got {:?}", x)
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"'2'"[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("check", "'2'").into()),
                 x => panic!("expected attribute 'check', got {:?}", x)
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -615,11 +615,11 @@ fn test_closing_bracket_in_single_quote_mixed() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"attr"[..], &b"\">\""[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr", "\">\"").into()),
                 x => panic!("expected attribute 'attr', got {:?}", x)
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!((&b"check"[..], &b"\"2\""[..]), attr),
+                Some(Ok(attr)) => assert_eq!(attr, ("check", "\"2\"").into()),
                 x => panic!("expected attribute 'check', got {:?}", x)
             }
             assert!(attrs.next().is_none(), "expected only two attributes");

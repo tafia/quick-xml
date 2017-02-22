@@ -366,10 +366,10 @@ fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
 
 fn make_attrs(e: &BytesStart) -> Result<String, String> {
     let mut atts = Vec::new();
-    for a in e.attributes().unescaped() {
+    for a in e.attributes() {
         match a {
-            Ok((k, v)) => if k.len() < 5 || &k[..5] != b"xmlns" {
-                atts.push(format!("{}={:?}", from_utf8(k).unwrap(), from_utf8(&*v).unwrap()));
+            Ok(a) => if a.key.len() < 5 || !a.key.starts_with(b"xmlns") {
+                atts.push(format!("{}={:?}", from_utf8(a.key).unwrap(), from_utf8(&*a.unescaped_value().unwrap()).unwrap()));
             },
             Err((e, _)) => return Err(e.to_string()),
         }

@@ -33,7 +33,7 @@ use events::Event;
 ///             elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
 ///
 ///             // copy existing attributes, adds a new my-key="some value" attribute
-///             elem.push_attribute(b"my-key", "some value");
+///             elem.push_attribute(("my-key", "some value"));
 ///
 ///             // writes the event to the writer
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());

@@ -5,10 +5,13 @@ pub mod attributes;
 use std::borrow::Cow;
 use std::str::from_utf8;
 use std::ops::Deref;
+use encoding_rs::Encoding;
+use std::io::BufRead;
 
 use escape::unescape;
-use self::attributes::{Attributes, UnescapedAttributes};
-use error::{Result, ResultPos, Error};
+use self::attributes::{Attributes, Attribute};
+use error::{ResultPos, Error};
+use reader::Reader;
 
 /// A struct to manage `Event::Start` events
 ///
@@ -53,10 +56,10 @@ impl<'a> BytesStart<'a> {
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn with_attributes<K, V, I>(&mut self, attributes: I) -> &mut Self
-        where K: AsRef<[u8]>,
-              V: AsRef<[u8]>,
-              I: IntoIterator<Item = (K, V)>
+    pub fn with_attributes<'b, I>(&mut self, attributes: I) -> &mut Self
+        where I: IntoIterator,
+              I::Item: Into<Attribute<'b>>,
+
     {
         self.extend_attributes(attributes);
         self
@@ -72,7 +75,7 @@ impl<'a> BytesStart<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     pub fn unescaped(&self) -> ResultPos<Cow<[u8]>> {
-        unescape(&self)
+        unescape(&*self.buf)
     }
 
     /// gets attributes iterator
@@ -80,56 +83,39 @@ impl<'a> BytesStart<'a> {
         Attributes::new(&self, self.name_len)
     }
 
-    /// gets attributes iterator whose attribute values are unescaped ('&...;' replaced
-    /// by their corresponding character)
-    pub fn unescaped_attributes(&self) -> UnescapedAttributes {
-        self.attributes().unescaped()
-    }
-
     /// extend the attributes of this element from an iterator over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn extend_attributes<K, V, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
-        where K: AsRef<[u8]>,
-              V: AsRef<[u8]>,
-              I: IntoIterator<Item = (K, V)>
+    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
+        where I: IntoIterator,
+              I::Item: Into<Attribute<'b>>,
     {
         for attr in attributes {
-            self.push_attribute(attr.0, attr.1);
+            self.push_attribute(attr);
         }
         self
     }
 
-    /// consumes entire self (including eventual attributes!) and returns `String`
+    /// helper method to unescape then decode self using the reader encoding (utf8 per default)
     ///
-    /// useful when we need to get Text event value (which don't have attributes)
-    pub fn into_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(self.buf.into_owned())
-            .map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-    
-    /// consumes entire self (including eventual attributes!) and returns `String`
-    ///
-    /// useful when we need to get Text event value (which don't have attributes)
-    /// and unescape XML entities
-    pub fn into_unescaped_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(
-            try!(self.unescaped().map_err(|(e, _)| e)).into_owned())
-            .map_err(|e| Error::Utf8(e.utf8_error()))
+    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// 1. BytesStart::unescaped()
+    /// 2. Reader::decode(...)
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> ResultPos<String> {
+        self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 
     /// Adds an attribute to this element from the given key and value.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn push_attribute<K, V>(&mut self, key: K, value: V)
-        where K: AsRef<[u8]>,
-              V: AsRef<[u8]>
+    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A)
     {
+        let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
-        bytes.extend_from_slice(key.as_ref());
+        bytes.extend_from_slice(a.key);
         bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(value.as_ref());
+        bytes.extend_from_slice(a.value);
         bytes.push(b'"');
     }
 
@@ -155,10 +141,10 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> ResultPos<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok((b"version", v))) => Ok(v),
-            Some(Ok((k, _))) => {
+            Some(Ok(Attribute { key: b"version", value: v})) => Ok(v),
+            Some(Ok(a)) => {
                 let m = format!("XmlDecl must start with 'version' attribute, found {:?}",
-                                from_utf8(k));
+                                from_utf8(a.key));
                 Err((Error::Malformed(m), 0))
             }
             None => {
@@ -173,7 +159,7 @@ impl<'a> BytesDecl<'a> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok((b"encoding", v)) => return Some(Ok(v)),
+                Ok(Attribute { key: b"encoding", value: v}) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -185,7 +171,7 @@ impl<'a> BytesDecl<'a> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok((b"standalone", v)) => return Some(Ok(v)),
+                Ok(Attribute { key: b"standalone", value: v }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -223,6 +209,13 @@ impl<'a> BytesDecl<'a> {
         buf.push(b'"');
 
         BytesDecl { element: BytesStart::owned(buf, 3) }
+    }
+
+    /// Gets the decoder struct
+    pub fn encoder(&self) -> Option<&'static Encoding> {
+        self.encoding()
+            .and_then(|e| e.ok())
+            .and_then(|e| Encoding::for_label(e))
     }
 }
 
@@ -279,22 +272,13 @@ impl<'a> BytesText<'a> {
         unescape(&self)
     }
 
-    /// consumes entire self (including eventual attributes!) and returns `String`
+    /// helper method to unescape then decode self using the reader encoding (utf8 per default)
     ///
-    /// useful when we need to get Text event value (which don't have attributes)
-    pub fn into_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(self.content.into_owned())
-            .map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-    
-    /// consumes entire self (including eventual attributes!) and returns `String`
-    ///
-    /// useful when we need to get Text event value (which don't have attributes)
-    /// and unescape XML entities
-    pub fn into_unescaped_string(self) -> Result<String> {
-        ::std::string::String::from_utf8(
-            try!(self.unescaped().map_err(|(e, _)| e)).into_owned())
-            .map_err(|e| Error::Utf8(e.utf8_error()))
+    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> ResultPos<String> {
+        self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 }
 
