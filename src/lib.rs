@@ -63,7 +63,7 @@
 //!
 //! ```rust
 //! use quick_xml::writer::Writer;
-//! use quick_xml::events::{AsStr, Event, BytesEnd, BytesStart};
+//! use quick_xml::events::{Event, BytesEnd, BytesStart};
 //! use quick_xml::reader::Reader;
 //! use std::io::Cursor;
 //! use std::iter;

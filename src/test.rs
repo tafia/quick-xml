@@ -3,7 +3,7 @@ use std::io::Cursor;
 
 use reader::Reader;
 use writer::Writer;
-use events::{AsStr, BytesStart, BytesEnd, BytesDecl};
+use events::{BytesStart, BytesEnd, BytesDecl};
 use events::Event::*;
 use super::error::ResultPos;
 
@@ -136,7 +136,7 @@ fn test_xml_decl() {
                 Ok(v) => {
                     assert!(v == b"1.0",
                             "expecting version '1.0', got '{:?}",
-                            v.as_str())
+                            from_utf8(v))
                 }
                 Err(e) => assert!(false, "{:?}", e),
             }
@@ -144,7 +144,7 @@ fn test_xml_decl() {
                 Some(Ok(v)) => {
                     assert!(v == b"utf-8",
                             "expecting encoding 'utf-8', got '{:?}",
-                            v.as_str())
+                            from_utf8(v))
                 }
                 Some(Err(e)) => assert!(false, "{:?}", e),
                 None => assert!(false, "cannot find encoding"),
@@ -492,13 +492,13 @@ fn test_escaped_content() {
         Ok(Text(e)) => {
             if &*e != b"&lt;test&gt;" {
                 panic!("content unexpected: expecting '&lt;test&gt;', got '{:?}'",
-                       e.as_str());
+                       from_utf8(&*e));
             }
             match e.unescaped() {
                 Ok(ref c) => {
                     if &**c != b"<test>" {
                         panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
-                               c.as_str())
+                               from_utf8(c))
                     }
                 }
                 Err((e, i)) => panic!("cannot escape content at position {}: {:?}", i, e),

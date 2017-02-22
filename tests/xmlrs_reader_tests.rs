@@ -1,10 +1,11 @@
 extern crate quick_xml;
 
 use std::io::{BufRead};
+use std::str::from_utf8;
 
 use quick_xml::error::ResultPos;
 use quick_xml::reader::Reader;
-use quick_xml::events::{AsStr, Event, BytesStart};
+use quick_xml::events::{Event, BytesStart};
 
 use std::fmt;
 
@@ -80,7 +81,6 @@ fn sample_2_full() {
 //     );
 // 
 // }
-//
 
 #[test]
 fn sample_ns_short() {
@@ -359,8 +359,8 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
     match n {
         &Some(ref n) => 
-            format!("{{{}}}{}", n.as_str().unwrap(), name.as_str().unwrap()),
-        &None => name.as_str().unwrap().to_owned(),
+            format!("{{{}}}{}", from_utf8(n).unwrap(), from_utf8(name).unwrap()),
+        &None => from_utf8(name).unwrap().to_owned(),
     }
 }
 
@@ -369,7 +369,7 @@ fn make_attrs(e: &BytesStart) -> Result<String, String> {
     for a in e.attributes().unescaped() {
         match a {
             Ok((k, v)) => if k.len() < 5 || &k[..5] != b"xmlns" {
-                atts.push(format!("{}={:?}", k.as_str().unwrap(), v.as_str().unwrap()));
+                atts.push(format!("{}={:?}", from_utf8(k).unwrap(), from_utf8(&*v).unwrap()));
             },
             Err((e, _)) => return Err(e.to_string()),
         }
@@ -401,32 +401,32 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             Ok((ref n, Event::End(ref e))) =>
                 write!(f, "EndElement({})", namespace_name(n, e.name())),
             Ok((_, Event::Comment(ref e))) =>
-                write!(f, "Comment({:?})", e.as_str().unwrap()),
+                write!(f, "Comment({:?})", from_utf8(e).unwrap()),
             Ok((_, Event::CData(ref e))) =>
-                write!(f, "CData({:?})", e.as_str().unwrap()),
+                write!(f, "CData({:?})", from_utf8(e).unwrap()),
             Ok((_, Event::Text(ref e))) => {
                 match e.unescaped() {
                     Ok(c) => {
                         if c.is_empty() {
                             write!(f, "Characters()")
                         } else {
-                            write!(f, "Characters({:?})", c.as_str().unwrap())
+                            write!(f, "Characters({:?})", from_utf8(&*c).unwrap())
                         }
                     },
                     Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
             Ok((_, Event::Decl(ref e))) => {
-                let version = e.version().unwrap().as_str().unwrap();
-                let encoding = e.encoding().unwrap().unwrap().as_str().unwrap();
+                let version = from_utf8(e.version().unwrap()).unwrap();
+                let encoding = from_utf8(e.encoding().unwrap().unwrap()).unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             },
             Ok((_, Event::Eof)) => write!(f, "EndDocument"),
             Ok((_, Event::PI(ref e))) =>
-                write!(f, "ProcessingInstruction(PI={:?})", e.as_str().unwrap()),
+                write!(f, "ProcessingInstruction(PI={:?})", from_utf8(e).unwrap()),
             Err((ref e, _)) => write!(f, "{}", e),
             Ok((_, Event::DocType(ref e))) => 
-                write!(f, "DocType({})", e.as_str().unwrap()),
+                write!(f, "DocType({})", from_utf8(e).unwrap()),
         }
     }
 }

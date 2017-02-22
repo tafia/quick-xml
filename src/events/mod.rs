@@ -158,7 +158,7 @@ impl<'a> BytesDecl<'a> {
             Some(Ok((b"version", v))) => Ok(v),
             Some(Ok((k, _))) => {
                 let m = format!("XmlDecl must start with 'version' attribute, found {:?}",
-                                k.as_str());
+                                from_utf8(k));
                 Err((Error::Malformed(m), 0))
             }
             None => {
@@ -321,19 +321,6 @@ pub enum Event<'a> {
     DocType(BytesText<'a>),
     /// Eof of file event
     Eof,
-}
-
-/// A trait to support on-demand conversion from UTF-8
-pub trait AsStr {
-    /// Converts this to an `&str`
-    fn as_str(&self) -> Result<&str>;
-}
-
-/// Implements `AsStr` for a byte slice
-impl AsStr for [u8] {
-    fn as_str(&self) -> Result<&str> {
-        from_utf8(self).map_err(Error::Utf8)
-    }
 }
 
 impl<'a> Deref for BytesStart<'a> {
