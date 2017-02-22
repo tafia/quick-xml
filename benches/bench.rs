@@ -4,7 +4,7 @@ extern crate quick_xml;
 extern crate test;
 
 use test::Bencher;
-use quick_xml::events::BytesEvent;
+use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 
 #[bench]
@@ -17,8 +17,8 @@ fn bench_quick_xml(b: &mut Bencher) {
         let mut buf = Vec::new();
         loop {
             match r.read_event(&mut buf) {
-                Ok(BytesEvent::Start(_)) | Ok(BytesEvent::Empty(_)) => count += 1,
-                Ok(BytesEvent::Eof) => break,
+                Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
+                Ok(Event::Eof) => break,
                 _ => (),
             }
             buf.clear();
@@ -37,8 +37,8 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
         let mut buf = Vec::new();
         loop {
             match r.read_namespaced_event(&mut buf) {
-                Ok((_, BytesEvent::Start(_))) | Ok((_, BytesEvent::Empty(_))) => count += 1,
-                Ok((_, BytesEvent::Eof)) => break,
+                Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
+                Ok((_, Event::Eof)) => break,
                 _ => ()
             }
             buf.clear();
@@ -58,9 +58,9 @@ fn bench_quick_xml_escaped(b: &mut Bencher) {
         let mut nbtxt = test::black_box(0);
         loop {
             match r.read_event(&mut buf) {
-                Ok(BytesEvent::Start(_)) | Ok(BytesEvent::Empty(_)) => count += 1,
-                Ok(BytesEvent::Text(ref e)) => nbtxt += e.unescaped_content().unwrap().len(),
-                Ok(BytesEvent::Eof) => break,
+                Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
+                Ok(Event::Text(ref e)) => nbtxt += e.unescaped().unwrap().len(),
+                Ok(Event::Eof) => break,
                 _ => (),
             }
             buf.clear();

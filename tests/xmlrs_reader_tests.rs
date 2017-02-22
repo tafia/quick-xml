@@ -4,7 +4,7 @@ use std::io::{BufRead};
 
 use quick_xml::error::ResultPos;
 use quick_xml::reader::Reader;
-use quick_xml::events::{AsStr, BytesEvent, BytesStart};
+use quick_xml::events::{AsStr, Event, BytesStart};
 
 use std::fmt;
 
@@ -340,7 +340,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
             if !is_short && line.starts_with("StartDocument") {
                 // advance next Characters(empty space) ...
-                if let Ok(BytesEvent::Text(ref e)) = reader.read_event(&mut buf) {
+                if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf) {
                     if e.iter().any(|b| match *b {
                         b' ' | b'\r' | b'\n' | b'\t' => false,
                         _ => true,
@@ -377,12 +377,12 @@ fn make_attrs(e: &BytesStart) -> Result<String, String> {
     Ok(atts.join(", "))
 }
 
-struct OptEvent<'a, 'b>(ResultPos<(Option<&'a [u8]>, BytesEvent<'b>)>);
+struct OptEvent<'a, 'b>(ResultPos<(Option<&'a [u8]>, Event<'b>)>);
 
 impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
-            Ok((ref n, BytesEvent::Start(ref e))) => {
+            Ok((ref n, Event::Start(ref e))) => {
                 let name = namespace_name(n, e.name());
                 match make_attrs(e) {
                     Ok(ref attrs) if attrs.is_empty() => write!(f, "StartElement({})", &name),
@@ -390,7 +390,7 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
                     Err(e) => write!(f, "StartElement({}, attr-error: {})", &name, &e),
                 }
             },
-            Ok((ref n, BytesEvent::Empty(ref e))) => {
+            Ok((ref n, Event::Empty(ref e))) => {
                 let name = namespace_name(n, e.name());
                 match make_attrs(e) {
                     Ok(ref attrs) if attrs.is_empty() => write!(f, "EmptyElement({})", &name),
@@ -398,13 +398,13 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
                     Err(e) => write!(f, "EmptyElement({}, attr-error: {})", &name, &e),
                 }
             }
-            Ok((ref n, BytesEvent::End(ref e))) =>
+            Ok((ref n, Event::End(ref e))) =>
                 write!(f, "EndElement({})", namespace_name(n, e.name())),
-            Ok((_, BytesEvent::Comment(ref e))) =>
+            Ok((_, Event::Comment(ref e))) =>
                 write!(f, "Comment({:?})", e.as_str().unwrap()),
-            Ok((_, BytesEvent::CData(ref e))) =>
+            Ok((_, Event::CData(ref e))) =>
                 write!(f, "CData({:?})", e.as_str().unwrap()),
-            Ok((_, BytesEvent::Text(ref e))) => {
+            Ok((_, Event::Text(ref e))) => {
                 match e.unescaped() {
                     Ok(c) => {
                         if c.is_empty() {
@@ -416,16 +416,16 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
                     Err((ref e, _)) => write!(f, "{}", e),
                 }
             },
-            Ok((_, BytesEvent::Decl(ref e))) => {
+            Ok((_, Event::Decl(ref e))) => {
                 let version = e.version().unwrap().as_str().unwrap();
                 let encoding = e.encoding().unwrap().unwrap().as_str().unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             },
-            Ok((_, BytesEvent::Eof)) => write!(f, "EndDocument"),
-            Ok((_, BytesEvent::PI(ref e))) =>
+            Ok((_, Event::Eof)) => write!(f, "EndDocument"),
+            Ok((_, Event::PI(ref e))) =>
                 write!(f, "ProcessingInstruction(PI={:?})", e.as_str().unwrap()),
             Err((ref e, _)) => write!(f, "{}", e),
-            Ok((_, BytesEvent::DocType(ref e))) => 
+            Ok((_, Event::DocType(ref e))) => 
                 write!(f, "DocType({})", e.as_str().unwrap()),
         }
     }

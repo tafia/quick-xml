@@ -25,7 +25,7 @@ extern crate quick_xml;
 
 ```rust
 use quick_xml::reader::Reader
-use quick_xml::events::BytesEvent;
+use quick_xml::events::Event;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -46,9 +46,9 @@ loop {
     match reader.read_event(&mut buf) {
     // for triggering namespaced events, use this instead:
     // match reader.read_namespaced_event(&mut buf) {
-        Ok(BytesEvent::Start(ref e)) => {
+        Ok(Event::Start(ref e)) => {
         // for namespaced:
-        // Ok((ref namespace_value, BytesEvent::Start(ref e)))
+        // Ok((ref namespace_value, Event::Start(ref e)))
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}",
                                     e.attributes().map(|a| a.unwrap().1).collect::<Vec<_>>()),
@@ -56,10 +56,10 @@ loop {
                 _ => (),
             }
         },
-        Ok(BytesEvent::Text(e)) => txt.push(e.into_string()),
-        Ok(BytesEvent::Eof) => break, // exits the loop when reaching end of file
+        Ok(Event::Text(e)) => txt.push(e.into_string()),
+        Ok(Event::Eof) => break, // exits the loop when reaching end of file
         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
-        _ => (), // There are several other `BytesEvent`s we do not consider here
+        _ => (), // There are several other `Event`s we do not consider here
     }
 
     // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
@@ -72,7 +72,7 @@ loop {
 ```rust
 use quick_xml::writer::Writer;
 use quick_xml::reader::Reader;
-use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
+use quick_xml::events::{AsStr, Event, BytesEnd, BytesStart};
 use std::io::Cursor;
 use std::iter;
 
@@ -83,7 +83,7 @@ let mut writer = Writer::new(Cursor::new(Vec::new()));
 let mut buf = Vec::new();
 loop {
     match reader.read_event(&mut buf) {
-        Ok(BytesEvent::Start(ref e)) if e.name() == b"this_tag" => {
+        Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 
             // crates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
@@ -96,12 +96,12 @@ loop {
             elem.push_attribute(b"my-key", "some value");
 
             // writes the event to the writer
-            assert!(writer.write_event(BytesEvent::Start(elem)).is_ok());
+            assert!(writer.write_event(Event::Start(elem)).is_ok());
         },
-        Ok(BytesEvent::End(ref e)) if e.name() == b"this_tag" => {
-            assert!(writer.write_event(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
+        Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+            assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
         },
-        Ok(BytesEvent::Eof) => break,
+        Ok(Event::Eof) => break,
         Ok(e) => assert!(writer.write_event(e).is_ok()),
         // or using the buffer
         // Ok(e) => assert!(writer.write(&buf).is_ok()),

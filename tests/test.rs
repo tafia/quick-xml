@@ -1,7 +1,7 @@
 extern crate quick_xml;
 
 use quick_xml::reader::Reader;
-use quick_xml::events::BytesEvent::*;
+use quick_xml::events::Event::*;
 
 #[test]
 fn test_sample() {

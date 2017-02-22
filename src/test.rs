@@ -4,7 +4,7 @@ use std::io::Cursor;
 use reader::Reader;
 use writer::Writer;
 use events::{AsStr, BytesStart, BytesEnd, BytesDecl};
-use events::BytesEvent::*;
+use events::Event::*;
 use super::error::ResultPos;
 
 macro_rules! next_eq_name {

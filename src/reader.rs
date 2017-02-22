@@ -5,7 +5,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
 use error::{Error, Result, ResultPos};
-use events::{AsStr, BytesEvent, BytesStart, BytesEnd, BytesText, BytesDecl};
+use events::{AsStr, Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 
 #[derive(Clone)]
 enum TagState {
@@ -16,11 +16,11 @@ enum TagState {
 
 /// A low level Xml bytes reader
 ///
-/// Consumes a `BufRead` and streams xml `BytesEvent`s
+/// Consumes a `BufRead` and streams xml `Event`s
 ///
 /// ```
 /// use quick_xml::reader::Reader;
-/// use quick_xml::events::BytesEvent;
+/// use quick_xml::events::Event;
 ///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
@@ -33,7 +33,7 @@ enum TagState {
 /// let mut buf = Vec::new();
 /// loop {
 ///     match reader.next_event(&mut buf) {
-///         Some(Ok(BytesEvent::Start(ref e))) => {
+///         Some(Ok(Event::Start(ref e))) => {
 ///             match e.name() {
 ///                 b"tag1" => println!("attributes values: {:?}",
 ///                                     e.attributes()
@@ -43,7 +43,7 @@ enum TagState {
 ///                 _ => (),
 ///             }
 ///         },
-///         Some(Ok(BytesEvent::Text(e))) => txt.push(e.into_string()),
+///         Some(Ok(Event::Text(e))) => txt.push(e.into_string()),
 ///         Some(Err((e, pos))) => panic!("{:?} at position {}", e, pos),
 ///         None => break,
 ///         _ => (),
@@ -106,7 +106,7 @@ impl<B: BufRead> Reader<B> {
     /// Change expand_empty_elements default behaviour (true per default)
     ///
     /// When set to true, all `Empty` events are expanded into an `Open` event
-    /// followed by a `Close` BytesEvent.
+    /// followed by a `Close` Event.
     pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<B> {
         self.expand_empty_elements = val;
         self
@@ -149,11 +149,11 @@ impl<B: BufRead> Reader<B> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<BytesEvent<'b>> {
+    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
         self.tag_state = TagState::Opened;
         let buf_start = buf.len();
         match read_until(&mut self.reader, b'<', buf) {
-            Ok(0) => Ok(BytesEvent::Eof),
+            Ok(0) => Ok(Event::Eof),
             Ok(n) => {
                 self.buf_position += n;
                 let (start, len) = if self.trim_text {
@@ -168,14 +168,14 @@ impl<B: BufRead> Reader<B> {
                 } else {
                     (buf_start, buf.len())
                 };
-                Ok(BytesEvent::Text(BytesText::borrowed(&buf[start..len])))
+                Ok(Event::Text(BytesText::borrowed(&buf[start..len])))
             }
             Err(e) => self.error(e, 0),
         }
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<BytesEvent<'b>> {
+    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
         self.tag_state = TagState::Closed;
 
         // need to read 1 character to decide whether pay special attention to attribute values
@@ -186,7 +186,7 @@ impl<B: BufRead> Reader<B> {
             // `self.error()` call because both require `&mut self`.
             let start_result = {
                 let available = match self.reader.fill_buf() {
-                    Ok(n) if n.is_empty() => return Ok(BytesEvent::Eof),
+                    Ok(n) if n.is_empty() => return Ok(Event::Eof),
                     Ok(n) => Ok(n),
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => Err(e),
@@ -208,7 +208,7 @@ impl<B: BufRead> Reader<B> {
 
         if start != b'/' && start != b'!' && start != b'?' {
             match read_elem_until(&mut self.reader, b'>', buf) {
-                Ok(0) => Ok(BytesEvent::Eof),
+                Ok(0) => Ok(Event::Eof),
                 Ok(n) => {
                     self.buf_position += n;
                     // we already *know* that we are in this case
@@ -218,7 +218,7 @@ impl<B: BufRead> Reader<B> {
             }
         } else {
             match read_until(&mut self.reader, b'>', buf) {
-                Ok(0) => Ok(BytesEvent::Eof),
+                Ok(0) => Ok(Event::Eof),
                 Ok(n) => {
                     self.buf_position += n;
                     match start {
@@ -238,7 +238,7 @@ impl<B: BufRead> Reader<B> {
     /// reads `BytesElement` starting with a `/`,
     /// if `self.check_end_names`, checks that element matches last opened element
     /// return `End` event
-    fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> ResultPos<BytesEvent<'b>> {
+    fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> ResultPos<Event<'b>> {
         let len = buf.len();
         if self.check_end_names {
             match self.opened_starts.pop() {
@@ -256,12 +256,12 @@ impl<B: BufRead> Reader<B> {
                                              buf[1..].as_str())), len),
             }
         }
-        Ok(BytesEvent::End(BytesEnd::borrowed(&buf[1..])))
+        Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
     }
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    fn read_bang<'a, 'b>(&'a mut self, buf_start: usize, buf: &'b mut Vec<u8>) -> ResultPos<BytesEvent<'b>> {
+    fn read_bang<'a, 'b>(&'a mut self, buf_start: usize, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
         let len = buf.len();
         if len >= 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
             let mut len = buf.len();
@@ -285,7 +285,7 @@ impl<B: BufRead> Reader<B> {
                     offset -= 1;
                 }
             }
-            Ok(BytesEvent::Comment(BytesText::borrowed(&buf[buf_start + 3..len - 2])))
+            Ok(Event::Comment(BytesText::borrowed(&buf[buf_start + 3..len - 2])))
         } else if len >= 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
@@ -300,7 +300,7 @@ impl<B: BufRead> Reader<B> {
                         }
                         len = buf.len();
                     }
-                    Ok(BytesEvent::CData(BytesText::borrowed(&buf[buf_start + 8..len - 2])))
+                    Ok(Event::CData(BytesText::borrowed(&buf[buf_start + 8..len - 2])))
                 }
                 b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
@@ -318,7 +318,7 @@ impl<B: BufRead> Reader<B> {
                         }
                     }
                     let len = buf.len();
-                    Ok(BytesEvent::DocType(BytesText::borrowed(&buf[buf_start + 8..len])))
+                    Ok(Event::DocType(BytesText::borrowed(&buf[buf_start + 8..len])))
                 }
                 _ => self.error(Error::Malformed("Only Comment, CDATA and DOCTYPE nodes \
                                                  can start with a '!'".to_string()), 0),
@@ -331,28 +331,28 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<BytesEvent<'b>> {
+    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                Ok(BytesEvent::Decl(BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3))))
+                Ok(Event::Decl(BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3))))
             } else {
-                Ok(BytesEvent::PI(BytesText::borrowed(&buf[1..len - 1])))
+                Ok(Event::PI(BytesText::borrowed(&buf[1..len - 1])))
             }
         } else {
             self.error(Error::Malformed("Unescaped XmlDecl event".to_string()), len)
         }
     }
 
-    fn close_expanded_empty(&mut self) -> ResultPos<BytesEvent<'static>> {
+    fn close_expanded_empty(&mut self) -> ResultPos<Event<'static>> {
         self.tag_state = TagState::Closed;
         let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
-        Ok(BytesEvent::End(BytesEnd::owned(name)))
+        Ok(Event::End(BytesEnd::owned(name)))
     }
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
-    fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<BytesEvent<'b>> {
+    fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<Event<'b>> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
@@ -362,30 +362,30 @@ impl<B: BufRead> Reader<B> {
                 self.tag_state = TagState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..end]);
-                Ok(BytesEvent::Start(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Start(BytesStart::borrowed(&buf[..len - 1], end)))
             } else {
-                Ok(BytesEvent::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
             }
         } else {
             if self.check_end_names { 
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
-            Ok(BytesEvent::Start(BytesStart::borrowed(&buf, name_end)))
+            Ok(Event::Start(BytesStart::borrowed(&buf, name_end)))
         }
     }
 
     /// returns `Err(Error, buf_position - offset)`
     /// sets `self.exit = true` so next call will terminate the iterator
-    fn error(&mut self, e: Error, offset: usize) -> ResultPos<BytesEvent<'static>> {
+    fn error(&mut self, e: Error, offset: usize) -> ResultPos<Event<'static>> {
         self.exit = true;
         Err((e, self.buf_position - offset))
     }
 
-    /// reads the next `BytesEvent`
-    pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<BytesEvent<'b>> {
+    /// reads the next `Event`
+    pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
         if self.exit {
-            return Ok(BytesEvent::Eof);
+            return Ok(Event::Eof);
         }
         match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -394,10 +394,10 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// reads the next `BytesEvent` and converts `BytesEvent::Eof` by `None` else `Some(event)`
-    pub fn next_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Option<ResultPos<BytesEvent<'b>>> {
+    /// reads the next `Event` and converts `Event::Eof` by `None` else `Some(event)`
+    pub fn next_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Option<ResultPos<Event<'b>>> {
         match self.read_event(buf) {
-            Ok(BytesEvent::Eof) => None,
+            Ok(Event::Eof) => None,
             Ok(e) => Some(Ok(e)),
             Err(e) => Some(Err(e)),
         }
@@ -418,16 +418,16 @@ impl<B: BufRead> Reader<B> {
 
     /// Reads the next event and resolve its namespace
     pub fn read_namespaced_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) 
-        -> ResultPos<(Option<&'a[u8]>, BytesEvent<'b>)>
+        -> ResultPos<(Option<&'a[u8]>, Event<'b>)>
     {
         self.ns_buffer.pop_empty_namespaces();
         match self.read_event(buf) {
-            Ok(BytesEvent::Eof) => Ok((None, BytesEvent::Eof)),
-            Ok(BytesEvent::Start(e)) => {
+            Ok(Event::Eof) => Ok((None, Event::Eof)),
+            Ok(Event::Start(e)) => {
                 self.ns_buffer.push_new_namespaces(&e);
-                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::Start(e)))
+                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::Start(e)))
             }
-            Ok(BytesEvent::Empty(e)) => {
+            Ok(Event::Empty(e)) => {
                 // For empty elements we need to 'artificially' keep the namespace scope on the
                 // stack until the next `next()` call occurs.
                 // Otherwise the caller has no chance to use `resolve` in the context of the
@@ -437,13 +437,13 @@ impl<B: BufRead> Reader<B> {
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
                 self.ns_buffer.pending_pop = true;
-                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::Empty(e)))
+                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::Empty(e)))
             }
-            Ok(BytesEvent::End(e)) => {
+            Ok(Event::End(e)) => {
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
                 self.ns_buffer.pending_pop = true;
-                Ok((self.ns_buffer.find_namespace_value(e.name()), BytesEvent::End(e)))
+                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::End(e)))
             }
             Ok(e) => Ok((None, e)),
             Err(e) => Err(e),
@@ -462,13 +462,13 @@ impl<B: BufRead> Reader<B> {
         let end = end.as_ref();
         loop {
             match self.read_event(buf) {
-                Ok(BytesEvent::End(ref e)) if e.name() == end => {
+                Ok(Event::End(ref e)) if e.name() == end => {
                     if depth == 0 { return Ok(()); }
                     depth -= 1;
                 }
-                Ok(BytesEvent::Start(ref e)) if e.name() == end => depth += 1,
+                Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
-                Ok(BytesEvent::Eof) => {
+                Ok(Event::Eof) => {
                     warn!("EOF instead of {:?}", end.as_str());
                     return Err((Error::Unexpected(format!("Reached EOF, expecting {:?} end tag", 
                                                           end.as_str())), self.buf_position));
@@ -479,24 +479,24 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
+    /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns a `String`, else returns an error
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
         let (read_end, s) = match self.read_event(buf) {
-            Ok(BytesEvent::Text(e)) => {
+            Ok(Event::Text(e)) => {
                 let s = e.into_string().map_err(|e| (e, self.buf_position))?;
                 (true, s)
             }
-            Ok(BytesEvent::End(ref e)) if e.name() == end.as_ref() => {
+            Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
                 (false, "".to_string())
             },
             Err(e) => return Err(e),
-            Ok(BytesEvent::Eof) => {
+            Ok(Event::Eof) => {
                 return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
                      self.buf_position))
             }
             _ => {
-                return Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                return Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_string()),
                      self.buf_position))
             }
         };
@@ -504,14 +504,14 @@ impl<B: BufRead> Reader<B> {
         Ok(s)
     }
 
-    /// Reads next event, if `BytesEvent::Text` or `BytesEvent::End`,
+    /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns an unescaped `String`, else returns an error
     ///
     /// # Examples
     /// 
     /// ```
     /// use quick_xml::reader::Reader;
-    /// use quick_xml::events::BytesEvent;
+    /// use quick_xml::events::Event;
     ///
     /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]);
     /// 
@@ -519,7 +519,7 @@ impl<B: BufRead> Reader<B> {
     /// let mut buf = Vec::new();
     /// 
     /// match xml.next_event(&mut buf) {
-    ///     Some(Ok(BytesEvent::Start(ref e))) => {
+    ///     Some(Ok(Event::Start(ref e))) => {
     ///         assert_eq!(&xml.read_text_unescaped(e.name(), &mut Vec::new()).unwrap(), "<b>");
     ///     },
     ///     e => panic!("Expecting Start(a), found {:?}", e),
@@ -527,22 +527,22 @@ impl<B: BufRead> Reader<B> {
     /// ```
     pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
         let (read_end, s) = match self.read_event(buf) {
-            Ok(BytesEvent::Text(e)) => {
+            Ok(Event::Text(e)) => {
                 assert_eq!(b"&lt;b&gt;", e.as_ref());
                 (true, e.unescaped().and_then(|c| c.as_str()
                                               .map_err(|e| (e, self.buf_position))
                                               .map(|s| s.to_string())))
             }
-            Ok(BytesEvent::End(ref e)) if e.name() == end.as_ref() => {
+            Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
                 (false, Ok("".to_string()))
             },
             Err(e) => return Err(e),
-            Ok(BytesEvent::Eof) => {
+            Ok(Event::Eof) => {
                 return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
                      self.buf_position))
             }
             _ => {
-                return Err((Error::Unexpected("Cannot read text, expecting BytesEvent::Text".to_string()),
+                return Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_string()),
                      self.buf_position))
             }
         };

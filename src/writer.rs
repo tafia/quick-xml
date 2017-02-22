@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use error::Result;
-use events::BytesEvent;
+use events::Event;
 
 /// Xml writer
 ///
@@ -11,7 +11,7 @@ use events::BytesEvent;
 ///
 /// ```rust
 /// use quick_xml::writer::Writer;
-/// use quick_xml::events::{AsStr, BytesEvent, BytesEnd, BytesStart};
+/// use quick_xml::events::{AsStr, Event, BytesEnd, BytesStart};
 /// use quick_xml::reader::Reader;
 /// use std::io::Cursor;
 /// use std::iter;
@@ -23,7 +23,7 @@ use events::BytesEvent;
 /// let mut buf = Vec::new();
 /// loop {
 ///     match reader.read_event(&mut buf) {
-///         Ok(BytesEvent::Start(ref e)) if e.name() == b"this_tag" => {
+///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
@@ -36,12 +36,12 @@ use events::BytesEvent;
 ///             elem.push_attribute(b"my-key", "some value");
 ///
 ///             // writes the event to the writer
-///             assert!(writer.write_event(BytesEvent::Start(elem)).is_ok());
+///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
-///         Ok(BytesEvent::End(ref e)) if e.name() == b"this_tag" => {
-///             assert!(writer.write_event(BytesEvent::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
+///         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+///             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 ///         },
-///         Ok(BytesEvent::Eof) => break,
+///         Ok(Event::Eof) => break,
 ///         Ok(e) => assert!(writer.write_event(e).is_ok()),
 ///         // or using the buffer
 ///         // Ok(e) => assert!(writer.write(&buf).is_ok()),
@@ -72,18 +72,18 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event(&mut self, event: BytesEvent) -> Result<usize> {
+    pub fn write_event(&mut self, event: Event) -> Result<usize> {
         match event {
-            BytesEvent::Start(ref e) => self.write_wrapped(b"<", &e, b">"),
-            BytesEvent::End(ref e) => self.write_wrapped(b"</", &e, b">"),
-            BytesEvent::Empty(ref e) => self.write_wrapped(b"<", &e, b"/>"),
-            BytesEvent::Text(ref e) => self.write(&e),
-            BytesEvent::Comment(ref e) => self.write_wrapped(b"<!--", &e, b"-->"),
-            BytesEvent::CData(ref e) => self.write_wrapped(b"<![CDATA[", &e, b"]]>"),
-            BytesEvent::Decl(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
-            BytesEvent::PI(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
-            BytesEvent::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", &e, b">"),
-            BytesEvent::Eof => Ok(0),
+            Event::Start(ref e) => self.write_wrapped(b"<", &e, b">"),
+            Event::End(ref e) => self.write_wrapped(b"</", &e, b">"),
+            Event::Empty(ref e) => self.write_wrapped(b"<", &e, b"/>"),
+            Event::Text(ref e) => self.write(&e),
+            Event::Comment(ref e) => self.write_wrapped(b"<!--", &e, b"-->"),
+            Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", &e, b"]]>"),
+            Event::Decl(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
+            Event::PI(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
+            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", &e, b">"),
+            Event::Eof => Ok(0),
         }
     }
 

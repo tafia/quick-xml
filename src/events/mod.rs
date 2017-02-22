@@ -1,4 +1,4 @@
-//! A module to handle `BytesEvent` enumerator
+//! A module to handle `Event` enumerator
 
 pub mod attributes;
 
@@ -10,7 +10,7 @@ use escape::unescape;
 use self::attributes::{Attributes, UnescapedAttributes};
 use error::{Result, ResultPos, Error};
 
-/// A struct to manage `BytesEvent::Start` events
+/// A struct to manage `Event::Start` events
 ///
 /// Provides in particular an iterator over attributes
 #[derive(Clone, Debug)]
@@ -226,7 +226,7 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
-/// A struct to manage `BytesEvent::End` events
+/// A struct to manage `Event::End` events
 #[derive(Clone, Debug)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>
@@ -252,7 +252,7 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-/// A struct to manage `BytesEvent::End` events
+/// A struct to manage `Event::End` events
 #[derive(Clone, Debug)]
 pub struct BytesText<'a> {
     content: Cow<'a, [u8]>
@@ -298,9 +298,9 @@ impl<'a> BytesText<'a> {
     }
 }
 
-/// BytesEvent to interprete node as they are parsed
+/// Event to interprete node as they are parsed
 #[derive(Clone, Debug)]
-pub enum BytesEvent<'a> {
+pub enum Event<'a> {
     /// Start tag (with attributes) <...>
     Start(BytesStart<'a>),
     /// End tag </...>
@@ -364,20 +364,20 @@ impl<'a> Deref for BytesText<'a> {
     }
 }
 
-impl<'a> Deref for BytesEvent<'a> {
+impl<'a> Deref for Event<'a> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         match *self {
-            BytesEvent::Start(ref e) => &*e,
-            BytesEvent::End(ref e) => &*e,
-            BytesEvent::Text(ref e) => &*e,
-            BytesEvent::Empty(ref e) => &*e,
-            BytesEvent::Decl(ref e) => &*e,
-            BytesEvent::PI(ref e) => &*e,
-            BytesEvent::CData(ref e) => &*e,
-            BytesEvent::Comment(ref e) => &*e,
-            BytesEvent::DocType(ref e) => &*e,
-            BytesEvent::Eof => &[],
+            Event::Start(ref e) => &*e,
+            Event::End(ref e) => &*e,
+            Event::Text(ref e) => &*e,
+            Event::Empty(ref e) => &*e,
+            Event::Decl(ref e) => &*e,
+            Event::PI(ref e) => &*e,
+            Event::CData(ref e) => &*e,
+            Event::Comment(ref e) => &*e,
+            Event::DocType(ref e) => &*e,
+            Event::Eof => &[],
         }
     }
 }
