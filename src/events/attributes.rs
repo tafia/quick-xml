@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 use std::ops::Range;
 use std::io::BufRead;
-use error::{Error, ResultPos};
+use errors::Result;
 use escape::unescape;
 use reader::Reader;
 
@@ -43,11 +43,10 @@ impl<'a> Attributes<'a> {
         self
     }
 
-    /// return Err((e, p))
     /// sets `self.exit = true` to terminate the iterator
-    fn error(&mut self, e: Error, p: usize) -> ResultPos<Attribute<'a>> {
+    fn error<S: Into<String>>(&mut self, msg: S, p: usize) -> Result<Attribute<'a>> {
         self.exit = true;
-        Err((e, p))
+        Err(::errors::ErrorKind::Attribute(msg.into(), p).into())
     }
 }
 
@@ -65,7 +64,7 @@ pub struct Attribute<'a> {
 impl<'a> Attribute<'a> {
 
     /// unescapes the value
-    pub fn unescaped_value(&self) -> ResultPos<Cow<[u8]>> {
+    pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
         unescape(self.value)
     }
 
@@ -75,7 +74,7 @@ impl<'a> Attribute<'a> {
     /// 1. Attributes::unescaped_value()
     /// 2. Reader::decode(...)
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>)
-        -> ResultPos<String> {
+        -> Result<String> {
         self.unescaped_value().map(|e| reader.decode(&*e).into_owned())
     }
 }
@@ -93,7 +92,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
 }
 
 impl<'a> Iterator for Attributes<'a> {
-    type Item = ResultPos<Attribute<'a>>;
+    type Item = Result<Attribute<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
 
         if self.exit {
@@ -150,8 +149,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, b'=')) => {
                     if start_val.is_none() {
                         if has_equal {
-                            return Some(self.error(Error::Malformed(
-                                        "Got 2 '=' tokens".to_string()), p + i));
+                            return Some(self.error("Got 2 '=' tokens", p + i));
                         }
                         has_equal = true;
                         if end_key.is_none() {
@@ -162,8 +160,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, q @ b'"')) |
                 Some((i, q @ b'\'')) => {
                     if !has_equal {
-                        return Some(self.error(Error::Malformed(
-                                    "Unexpected quote before '='".to_string()), p + i));
+                        return Some(self.error("Unexpected quote before '='", p + i));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);
@@ -189,9 +186,8 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .cloned()
                 .find(|r2| &self.bytes[r2.clone()] == name) {
-                    return Some(self.error(Error::Malformed(
-                            format!("Duplicate attribute at position {} and {}", 
-                                    r2.start, r.start)), r.start));
+                    return Some(self.error(format!("Duplicate attribute at position {} and {}", 
+                                    r2.start, r.start), r.start));
             }
             self.consumed.push(r.clone());
         }

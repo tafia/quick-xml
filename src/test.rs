@@ -5,19 +5,14 @@ use reader::Reader;
 use writer::Writer;
 use events::{BytesStart, BytesEnd, BytesDecl};
 use events::Event::*;
-use super::error::ResultPos;
+use super::errors::Result;
 
 macro_rules! next_eq_name {
     ($r: expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf) {
-            Ok($t(ref e)) if e.name() == $bytes => (),
-            Ok(e) => {
-                panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e);
-            },
-            Err((e, pos)) => {
-                panic!("{:?} at buffer position {}", e, pos);
-            },
+        match $r.read_event(&mut buf).unwrap() {
+            $t(ref e) if e.name() == $bytes => (),
+            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e),
         }
         buf.clear();
     }
@@ -26,14 +21,9 @@ macro_rules! next_eq_name {
 macro_rules! next_eq_content {
     ($r: expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf) {
-            Ok($t(ref e)) if &**e == $bytes => (),
-            Ok(e) => {
-                panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e);
-            },
-            Err((e, pos)) => {
-                panic!("{:?} at buffer position {}", e, pos);
-            },
+        match $r.read_event(&mut buf).unwrap() {
+            $t(ref e) if &**e == $bytes => (),
+            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e),
         }
         buf.clear();
     }
@@ -130,8 +120,8 @@ fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
-        Ok(Decl(ref e)) => {
+	match r.read_event(&mut buf).unwrap() {
+        Decl(ref e) => {
             match e.version() {
                 Ok(v) => {
                     assert!(v == b"1.0",
@@ -153,9 +143,6 @@ fn test_xml_decl() {
                 None => assert!(true),
                 e => assert!(false, "doesn't expect standalone, got {:?}", e),
             }
-        }
-        Err((e, pos)) => {
-            assert!(false, "{:?} at buffer position {}", e, pos);
         }
         _ => assert!(false, "unable to parse XmlDecl"),
     }
@@ -281,7 +268,7 @@ fn test_write_attrs() {
             Ok(Eof) => break,
             Ok(Start(elem)) => {
                 let mut attrs = elem.attributes()
-                    .collect::<ResultPos<Vec<_>>>().unwrap();
+                    .collect::<Result<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.with_attributes(attrs);
@@ -369,10 +356,9 @@ fn test_buf_position() {
 
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
-        Err((_, 2)) => assert!(true), // error at char 2: no opening tag
-        Err((e, n)) => assert!(false, 
-                                     "expecting buf_pos = 2, found {}, err: {:?}", n, e),
-        e => assert!(false, "expecting error, found {:?}", e),
+        Err(_) if r.buffer_position() == 2 => assert!(true), // error at char 2: no opening tag
+        Err(e) => panic!("expecting buf_pos = 2, found {}, err: {:?}", r.buffer_position(), e),
+        e => panic!("expecting error, found {:?}", e),
     }
 
     r = Reader::from_str("<a><!--b>");
@@ -382,9 +368,8 @@ fn test_buf_position() {
 
     let mut buf = Vec::new();
 	match r.read_event(&mut buf) {
-        Err((_, 5)) => assert!(true), // error at char 5: no closing --> tag found
-        Err((e, n)) => assert!(false, 
-                                     "expecting buf_pos = 2, found {}, err: {:?}", n, e),
+        Err(_) if r.buffer_position() == 5 => assert!(true), // error at char 5: no closing --> tag found
+        Err(e) => panic!("expecting buf_pos = 5, found {}, err: {:?}", r.buffer_position(), e),
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
@@ -501,11 +486,12 @@ fn test_escaped_content() {
                                from_utf8(c))
                     }
                 }
-                Err((e, i)) => panic!("cannot escape content at position {}: {:?}", i, e),
+                Err(e) => panic!("cannot escape content at position {}: {:?}",
+                                 r.buffer_position(), e),
             }
         }
         Ok(e) => panic!("Expecting text event, got {:?}", e),
-        Err((e, i)) => panic!("Cannot get next event at position {}: {:?}", i, e),
+        Err(e) => panic!("Cannot get next event at position {}: {:?}", r.buffer_position(), e),
     }
     next_eq!(r, End, b"a");
 }

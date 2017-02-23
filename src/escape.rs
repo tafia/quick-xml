@@ -1,7 +1,8 @@
 //! Manage xml character escapes
 
 use std::borrow::Cow;
-use error::{Error, ResultPos};
+use errors::Result;
+use errors::ErrorKind::Escape;
 use from_ascii::FromAsciiRadix;
 
 // UTF-8 ranges and tags for encoding characters
@@ -20,7 +21,7 @@ enum ByteOrChar {
 
 /// helper function to unescape a `&[u8]` and replace all
 /// xml escaped characters ('&...;') into their corresponding value
-pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
+pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
     let mut bytes = raw.iter().enumerate();
     while let Some((i, &b)) = bytes.next() {
@@ -34,11 +35,9 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                     b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
                     b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
                     b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
-                    b"" => return Err((Error::Malformed(
-                                "Encountered empty entity".to_string()), i)),
+                    b"" => return Err(Escape("Encountered empty entity".to_string(), i..j).into()),
                     b"#x0" | b"#0" => {
-                        return Err((Error::Malformed(
-                                    "Null character entity is not allowed".to_string()), i))
+                        return Err(Escape("Null character entity is not allowed".to_string(), i..j).into())
                     }
                     bytes if bytes.len() > 1 && bytes[0] == b'#' => {
                         let code = if bytes[1] == b'x' {
@@ -46,12 +45,13 @@ pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
                         } else {
                             u32::from_ascii_radix(&bytes[1..], 10)
                         };
-                        escapes.push((i..j, ByteOrChar::Char(code.map_err(|_| (Error::Escape(i..j), i))?)));
+                        escapes.push((i..j, ByteOrChar::Char(
+                                    code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
                     },
-                    _ => return Err((Error::Escape(i..j), i)),
+                    _ => return Err(Escape("".to_owned(), i..j).into()),
                 }
             } else {
-                return Err((Error::Malformed("Cannot find ';' after '&'".to_string()), i));
+                return Err(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()).into());
             }
         }
     }

@@ -58,7 +58,7 @@ loop {
         },
         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
         Ok(Event::Eof) => break, // exits the loop when reaching end of file
-        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+        Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
         _ => (), // There are several other `Event`s we do not consider here
     }
 
@@ -105,7 +105,7 @@ loop {
         Ok(e) => assert!(writer.write_event(e).is_ok()),
         // or using the buffer
         // Ok(e) => assert!(writer.write(&buf).is_ok()),
-        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+        Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     }
     buf.clear();
 }

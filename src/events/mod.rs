@@ -10,7 +10,7 @@ use std::io::BufRead;
 
 use escape::unescape;
 use self::attributes::{Attributes, Attribute};
-use error::{ResultPos, Error};
+use errors::Result;
 use reader::Reader;
 
 /// A struct to manage `Event::Start` events
@@ -74,7 +74,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
-    pub fn unescaped(&self) -> ResultPos<Cow<[u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         unescape(&*self.buf)
     }
 
@@ -101,7 +101,7 @@ impl<'a> BytesStart<'a> {
     /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
     /// 1. BytesStart::unescaped()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> ResultPos<String> {
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 
@@ -138,24 +138,18 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets xml version, including quotes (' or ")
-    pub fn version(&self) -> ResultPos<&[u8]> {
+    pub fn version(&self) -> Result<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(Ok(Attribute { key: b"version", value: v})) => Ok(v),
-            Some(Ok(a)) => {
-                let m = format!("XmlDecl must start with 'version' attribute, found {:?}",
-                                from_utf8(a.key));
-                Err((Error::Malformed(m), 0))
-            }
-            None => {
-                let m = "XmlDecl must start with 'version' attribute, found none".to_string();
-                Err((Error::Malformed(m), 0))
-            }
+            Some(Ok(a)) => Err(format!("XmlDecl must start with 'version' attribute, \
+                                        found {:?}", from_utf8(a.key)).into()),
+            None => Err("XmlDecl must start with 'version' attribute, found none".into()),
         }
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<ResultPos<&[u8]>> {
+    pub fn encoding(&self) -> Option<Result<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -167,7 +161,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets xml standalone, including quotes (' or ")
-    pub fn standalone(&self) -> Option<ResultPos<&[u8]>> {
+    pub fn standalone(&self) -> Option<Result<&[u8]>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -268,7 +262,7 @@ impl<'a> BytesText<'a> {
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
-    pub fn unescaped(&self) -> ResultPos<Cow<[u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         unescape(&self)
     }
 
@@ -277,7 +271,7 @@ impl<'a> BytesText<'a> {
     /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> ResultPos<String> {
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 }

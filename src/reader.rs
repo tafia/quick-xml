@@ -8,7 +8,7 @@ use std::str::from_utf8;
 
 use encoding_rs::Encoding;
 
-use error::{Error, Result, ResultPos};
+use errors::{Error, Result, ErrorKind};
 use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 use events::attributes::Attribute;
 
@@ -46,7 +46,7 @@ enum TagState {
 ///             }
 ///         },
 ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
-///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 ///         Ok(Event::Eof) => break,
 ///         _ => (),
 ///     }
@@ -146,7 +146,7 @@ impl<B: BufRead> Reader<B> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
+    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Opened;
         let buf_start = buf.len();
         match read_until(&mut self.reader, b'<', buf) {
@@ -167,12 +167,12 @@ impl<B: BufRead> Reader<B> {
                 };
                 Ok(Event::Text(BytesText::borrowed(&buf[start..len])))
             }
-            Err(e) => self.error(e, 0),
+            Err(e) => return Err(e),
         }
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
+    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Closed;
 
         // need to read 1 character to decide whether pay special attention to attribute values
@@ -193,10 +193,7 @@ impl<B: BufRead> Reader<B> {
             };
 
             // throw the error we couldn't throw in the block above because `self` was sill borrowed
-            start = match start_result {
-                Ok(s) => s,
-                Err(e) => return self.error(Error::Io(e), 0)
-            };
+            start = start_result?;
 
             // We intentionally don't `consume()` the byte, otherwise we would have to handle things
             // like '<>' here already.
@@ -211,7 +208,7 @@ impl<B: BufRead> Reader<B> {
                     // we already *know* that we are in this case
                     self.read_start(&buf[buf_start..])
                 }
-                Err(e) => self.error(e, 0),
+                Err(e) => return Err(e),
             }
         } else {
             match read_until(&mut self.reader, b'>', buf) {
@@ -226,7 +223,7 @@ impl<B: BufRead> Reader<B> {
                                             was {:?} instead.", start),
                     }
                 }
-                Err(e) => self.error(e, 0),
+                Err(e) => return Err(e),
             }
         }
 
@@ -235,22 +232,25 @@ impl<B: BufRead> Reader<B> {
     /// reads `BytesElement` starting with a `/`,
     /// if `self.check_end_names`, checks that element matches last opened element
     /// return `End` event
-    fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> ResultPos<Event<'b>> {
+    fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if self.check_end_names {
             match self.opened_starts.pop() {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
-                        let m = format!("End event name '{:?}' doesn't match last opened element name '{:?}'",
-                                        from_utf8(&buf[1..]), from_utf8(&self.opened_buffer[start..]));
-                        return self.error(Error::Malformed(m), len);
+                        self.buf_position -= len;
+                        bail!(ErrorKind::EndEventMismatch(
+                                from_utf8(&self.opened_buffer[start..]).unwrap_or("").to_owned(),
+                                from_utf8(&buf[1..]).unwrap_or("").to_owned()));
                     }
                     self.opened_buffer.truncate(start);
                 },
-                None => return self.error(
-                    Error::Malformed(format!("Cannot close {:?} element, \
-                                             there is no opened element",
-                                             from_utf8(&buf[1..]))), len),
+                None => {
+                    self.buf_position -= len;
+                    bail!(ErrorKind::EndEventMismatch(
+                            "".to_owned(),
+                            from_utf8(&buf[1..]).unwrap_or("").to_owned()));
+                }
             }
         }
         Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
@@ -258,17 +258,19 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    fn read_bang<'a, 'b>(&'a mut self, buf_start: usize, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
+    fn read_bang<'a, 'b>(&'a mut self, buf_start: usize, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         let len = buf.len();
         if len >= 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
             let mut len = buf.len();
             while len < 5 || &buf[len - 2..] != b"--" {
                 buf.push(b'>');
                 match read_until(&mut self.reader, b'>', buf) {
-                    Ok(0) => return self.error(
-                        Error::Malformed("Unescaped Comment event".to_string()), len),
+                    Ok(0) => {
+                        self.buf_position -= len;
+                        bail!(io_eof("Comment"))
+                    },
                     Ok(n) => self.buf_position += n,
-                    Err(e) => return self.error(e, 0),
+                    Err(e) => return Err(e.into()),
                 }
                 len = buf.len();
             }
@@ -276,8 +278,8 @@ impl<B: BufRead> Reader<B> {
                 let mut offset = len - 3;
                 for w in buf[buf_start + 3..len - 1].windows(2) {
                     if &*w == b"--" {
-                        return self.error(
-                            Error::Malformed("Unexpected token '--'".to_string()), offset);
+                        self.buf_position -= offset;
+                        bail!("Unexpected token '--'");
                     }
                     offset -= 1;
                 }
@@ -290,10 +292,12 @@ impl<B: BufRead> Reader<B> {
                     while len < 10 || &buf[len - 2..] != b"]]" {
                         buf.push(b'>');
                         match read_until(&mut self.reader, b'>', buf) {
-                            Ok(0) => return self.error(
-                                Error::Malformed("Unescaped CDATA event".to_string()), len),
+                            Ok(0) => {
+                                self.buf_position -= len;
+                                bail!(io_eof("CData"));
+                            }
                             Ok(n) => self.buf_position += n,
-                            Err(e) => return self.error(e, 0),
+                            Err(e) => return Err(e.into()),
                         }
                         len = buf.len();
                     }
@@ -304,31 +308,32 @@ impl<B: BufRead> Reader<B> {
                     while count > 0 {
                         buf.push(b'>');
                         match read_until(&mut self.reader, b'>', buf) {
-                            Ok(0) => return self.error(
-                                Error::Malformed("Unescaped DOCTYPE node".to_string()), buf.len()),
+                            Ok(0) => {
+                                self.buf_position -= buf.len();
+                                bail!(io_eof("DOCTYPE"));
+                            }
                             Ok(n) => {
                                 self.buf_position += n;
                                 let start = buf.len() - n;
                                 count += buf.iter().skip(start).filter(|&&b| b == b'<').count() - 1;
                             }
-                            Err(e) => return self.error(e, 0),
+                            Err(e) => return Err(e.into()),
                         }
                     }
                     let len = buf.len();
                     Ok(Event::DocType(BytesText::borrowed(&buf[buf_start + 8..len])))
                 }
-                _ => self.error(Error::Malformed("Only Comment, CDATA and DOCTYPE nodes \
-                                                 can start with a '!'".to_string()), 0),
+                _ => bail!("Only Comment, CDATA and DOCTYPE nodes can start with a '!'"),
             }
         } else {
-            self.error(Error::Malformed("Only Comment, CDATA and DOCTYPE nodes can start \
-                                        with a '!'".to_string()), buf.len())
+            self.buf_position -= buf.len();
+            bail!("Only Comment, CDATA and DOCTYPE nodes can start with a '!'");
         }
     }
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<Event<'b>> {
+    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
@@ -342,11 +347,12 @@ impl<B: BufRead> Reader<B> {
                 Ok(Event::PI(BytesText::borrowed(&buf[1..len - 1])))
             }
         } else {
-            self.error(Error::Malformed("Unescaped XmlDecl event".to_string()), len)
+            self.buf_position -= len;
+            bail!(io_eof("XmlDecl"));
         }
     }
 
-    fn close_expanded_empty(&mut self) -> ResultPos<Event<'static>> {
+    fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
         self.tag_state = TagState::Closed;
         let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::owned(name)))
@@ -354,7 +360,7 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
-    fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> ResultPos<Event<'b>> {
+    fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
@@ -377,23 +383,20 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// returns `Err(Error, buf_position - offset)`
-    /// sets `self.exit = true` so next call will terminate the iterator
-    fn error(&mut self, e: Error, offset: usize) -> ResultPos<Event<'static>> {
-        self.exit = true;
-        Err((e, self.buf_position - offset))
-    }
-
     /// reads the next `Event`
-    pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> ResultPos<Event<'b>> {
+    pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         if self.exit {
             return Ok(Event::Eof);
         }
-        match self.tag_state {
+        let r = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
             TagState::Closed => self.read_until_open(buf),
             TagState::Empty => self.close_expanded_empty(),
+        };
+        if r.is_err() {
+            self.exit = true;
         }
+        r
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
@@ -411,7 +414,7 @@ impl<B: BufRead> Reader<B> {
 
     /// Reads the next event and resolve its namespace
     pub fn read_namespaced_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) 
-        -> ResultPos<(Option<&'a[u8]>, Event<'b>)>
+        -> Result<(Option<&'a[u8]>, Event<'b>)>
     {
         self.ns_buffer.pop_empty_namespaces();
         match self.read_event(buf) {
@@ -459,7 +462,7 @@ impl<B: BufRead> Reader<B> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<()> {
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
         let end = end.as_ref();
         loop {
@@ -470,11 +473,7 @@ impl<B: BufRead> Reader<B> {
                 }
                 Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
-                Ok(Event::Eof) => {
-                    warn!("EOF instead of {:?}", from_utf8(end));
-                    return Err((Error::Unexpected(format!("Reached EOF, expecting {:?} end tag", 
-                                                          from_utf8(end))), self.buf_position));
-                }
+                Ok(Event::Eof) => return Err(io_eof(&format!("Expecting {:?} end", from_utf8(end))).into()),
                 _ => (),
             }
             buf.clear();
@@ -483,24 +482,23 @@ impl<B: BufRead> Reader<B> {
 
     /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns a `String`, else returns an error
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
         let (read_end, s) = match self.read_event(buf) {
             Ok(Event::Text(e)) => {
-                let s = e.unescape_and_decode(self).map_err(|(e, i)| (e, i + self.buf_position))?;
+                let s = e.unescape_and_decode(self).map_err(|e| {
+                    if let Error(ErrorKind::Escape(_, ref r), _) = e {
+                        self.buf_position += r.start;
+                    }
+                    e
+                })?;
                 (true, s)
             }
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
                 (false, "".to_string())
             },
             Err(e) => return Err(e),
-            Ok(Event::Eof) => {
-                return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
-                     self.buf_position))
-            }
-            _ => {
-                return Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_string()),
-                     self.buf_position))
-            }
+            Ok(Event::Eof) => bail!(io_eof("Text")),
+            _ => return Err("Cannot read text, expecting Event::Text".into()),
         };
         if read_end { self.read_to_end(end, buf)?; }
         Ok(s)
@@ -527,26 +525,18 @@ impl<B: BufRead> Reader<B> {
     ///     e => panic!("Expecting Start(a), found {:?}", e),
     /// }
     /// ```
-    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> ResultPos<String> {
+    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
         let (read_end, s) = match self.read_event(buf) {
             Ok(Event::Text(e)) => {
                 assert_eq!(b"&lt;b&gt;", e.as_ref());
-                (true, e.unescaped().and_then(|c| from_utf8(&*c)
-                                              .map_err(|e| (e.into(), self.buf_position))
-                                              .map(|s| s.to_string())))
+                (true, e.unescape_and_decode(self))
             }
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
                 (false, Ok("".to_string()))
             },
             Err(e) => return Err(e),
-            Ok(Event::Eof) => {
-                return Err((Error::Unexpected("Reached EOF while reading text".to_string()),
-                     self.buf_position))
-            }
-            _ => {
-                return Err((Error::Unexpected("Cannot read text, expecting Event::Text".to_string()),
-                     self.buf_position))
-            }
+            Ok(Event::Eof) => return Err(io_eof("Text").into()),
+            _ => return Err("Cannot read text, expecting Event::Text".into()),
         };
         if read_end { self.read_to_end(end, buf)? }
         s
@@ -581,7 +571,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
+                Err(e) => bail!(e),
             };
 
             let mut bytes = available.iter().enumerate();
@@ -643,7 +633,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>)
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
+                Err(e) => bail!(e),
             };
 
             let mut bytes = available.iter().enumerate();
@@ -847,4 +837,8 @@ impl NamespaceBuffer {
         }).unwrap_or((None, qname))
     }
 
+}
+
+fn io_eof(msg: &str) -> ::std::io::Error {
+    ::std::io::Error::new(::std::io::ErrorKind::UnexpectedEof, msg.to_string())
 }

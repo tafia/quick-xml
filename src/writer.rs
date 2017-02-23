@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use error::Result;
+use errors::Result;
 use events::Event;
 
 /// Xml writer
@@ -45,7 +45,10 @@ use events::Event;
 ///         Ok(e) => assert!(writer.write_event(e).is_ok()),
 ///         // or using the buffer
 ///         // Ok(e) => assert!(writer.write(&buf).is_ok()),
-///         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+///
+///         // error are chained, the last one usually being the 
+///         // position where the error has happened
+///         Err(e) => panic!("{:?}", e.iter().map(|e| format!("{:?} -", e)).collect::<String>()),
 ///     }
 ///     buf.clear();
 /// }
@@ -90,7 +93,7 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub fn write(&mut self, value: &[u8]) -> Result<usize> {
-        self.writer.write(value).map_err(::error::Error::Io)
+        self.writer.write(value).map_err(|e| e.into())
     }
 
     #[inline]

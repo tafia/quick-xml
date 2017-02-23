@@ -3,7 +3,7 @@ extern crate quick_xml;
 use std::io::{BufRead};
 use std::str::from_utf8;
 
-use quick_xml::error::ResultPos;
+use quick_xml::errors::Result;
 use quick_xml::reader::Reader;
 use quick_xml::events::{Event, BytesStart};
 
@@ -95,7 +95,7 @@ fn sample_ns_short() {
 fn eof_1() {
     test(
         br#"<?xml"#,
-        br#"Malformed xml: Unescaped XmlDecl event"#,
+        br#"Error: XmlDecl"#,
         true
     );
 }
@@ -104,7 +104,7 @@ fn eof_1() {
 fn bad_1() {
     test(
         br#"<?xml&.,"#,
-        br#"1:6 Malformed xml: Unescaped XmlDecl event"#,
+        br#"1:6 Error: XmlDecl"#,
         true
     );
 }
@@ -114,15 +114,15 @@ fn dashes_in_comments() {
     test(
         br#"<!-- comment -- --><hello/>"#,
         br#"
-            |1:14 Malformed xml: Unexpected token '--'
+        |Error: Unexpected token '--'
         "#,
-        false
+        true
     );
 
     test(
         br#"<!-- comment ---><hello/>"#,
         br#"
-            |1:14 Malformed xml: Unexpected token '--'
+        |Error: Unexpected token '--'
         "#,
         true
     );
@@ -150,7 +150,7 @@ fn issue_83_duplicate_attributes() {
         br#"<hello><some-tag a='10' a="20"/></hello>"#,
         br#"
             |StartElement(hello)
-            |1:30 EmptyElement(some-tag, attr-error: Malformed xml: Duplicate attribute at position 9 and 16)
+            |1:30 EmptyElement(some-tag, attr-error: error while parsing attribute at position 16: Duplicate attribute at position 9 and 16)
             |EndElement(hello)
         "#,
         true
@@ -163,7 +163,7 @@ fn issue_93_large_characters_in_entity_references() {
         r#"<hello>&𤶼;</hello>"#.as_bytes(),
         r#"
             |StartElement(hello)
-            |1:10 Error while escaping character at range 0..5
+            |1:10 Error while escaping character at range 0..5:
             |EndElement(hello)
         "#.as_bytes(),
         true
@@ -326,7 +326,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                 if spec == "EndDocument" {
                     break;
                 }
-                if line != spec {
+                if line.trim() != spec.trim() {
                     const SPLITTER: &'static str = "-------------------";
                     panic!("\n{}\nUnexpected event at line {}:\nExpected: {}\nFound: {}\n{}\n",
                            SPLITTER, n + 1, spec, line, SPLITTER);
@@ -364,20 +364,20 @@ fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
     }
 }
 
-fn make_attrs(e: &BytesStart) -> Result<String, String> {
+fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {
             Ok(a) => if a.key.len() < 5 || !a.key.starts_with(b"xmlns") {
                 atts.push(format!("{}={:?}", from_utf8(a.key).unwrap(), from_utf8(&*a.unescaped_value().unwrap()).unwrap()));
             },
-            Err((e, _)) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string()),
         }
     }
     Ok(atts.join(", "))
 }
 
-struct OptEvent<'a, 'b>(ResultPos<(Option<&'a [u8]>, Event<'b>)>);
+struct OptEvent<'a, 'b>(Result<(Option<&'a [u8]>, Event<'b>)>);
 
 impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -413,7 +413,7 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
                             write!(f, "Characters({:?})", from_utf8(&*c).unwrap())
                         }
                     },
-                    Err((ref e, _)) => write!(f, "{}", e),
+                    Err(ref e) => write!(f, "{}", e),
                 }
             },
             Ok((_, Event::Decl(ref e))) => {
@@ -424,7 +424,11 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             Ok((_, Event::Eof)) => write!(f, "EndDocument"),
             Ok((_, Event::PI(ref e))) =>
                 write!(f, "ProcessingInstruction(PI={:?})", from_utf8(e).unwrap()),
-            Err((ref e, _)) => write!(f, "{}", e),
+            Err(ref e) => {
+//                 for e in e.iter() { writeln!(f, "{}", e)?; }
+//                 Ok(())
+                write!(f, "Error: {}", e.iter().last().unwrap())
+            },
             Ok((_, Event::DocType(ref e))) => 
                 write!(f, "DocType({})", from_utf8(e).unwrap()),
         }

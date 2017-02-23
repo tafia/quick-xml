@@ -51,7 +51,7 @@
 //!         // unescape and decode the text event using the reader encoding
 //!         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
 //!         Ok(Event::Eof) => break, // exits the loop when reaching end of file
-//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+//!         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 //!         _ => (), // There are several other `Event`s we do not consider here
 //!     }
 //!
@@ -98,7 +98,7 @@
 //!         Ok(e) => assert!(writer.write_event(e).is_ok()),
 //!         // or using the buffer
 //!         // Ok(e) => assert!(writer.write(&buf).is_ok()),
-//!         Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+//!         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 //!     }
 //!     buf.clear();
 //! }
@@ -109,13 +109,14 @@
 //! ```
 
 #![deny(missing_docs)]
+#![recursion_limit = "1024"]
 
-#[macro_use]
-extern crate log;
 extern crate from_ascii;
 extern crate encoding_rs;
+#[macro_use]
+extern crate error_chain;
 
-pub mod error;
+pub mod errors;
 pub mod reader;
 pub mod writer;
 pub mod events;
