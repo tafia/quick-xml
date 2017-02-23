@@ -424,11 +424,7 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             Ok((_, Event::Eof)) => write!(f, "EndDocument"),
             Ok((_, Event::PI(ref e))) =>
                 write!(f, "ProcessingInstruction(PI={:?})", from_utf8(e).unwrap()),
-            Err(ref e) => {
-//                 for e in e.iter() { writeln!(f, "{}", e)?; }
-//                 Ok(())
-                write!(f, "Error: {}", e.iter().last().unwrap())
-            },
+            Err(ref e) => write!(f, "Error: {}", e.iter().last().unwrap()),
             Ok((_, Event::DocType(ref e))) => 
                 write!(f, "DocType({})", from_utf8(e).unwrap()),
         }

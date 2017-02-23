@@ -7,10 +7,6 @@ error_chain! {
         Io(::std::io::Error);
     }
     errors {
-        At(i: usize, err: Box<Error>) {
-            description("error occured at particular position")
-            display("error occured at reader position: {}: {:?}", i, err)
-        }
         EndEventMismatch(expected: String, found: String) {
             description("end event name mismatch with last start event name")
             display("expecting </{}> found </{}>", expected, found)
