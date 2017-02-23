@@ -122,8 +122,5 @@ pub mod writer;
 pub mod events;
 mod escape;
 
-#[cfg(test)]
-mod test;
-
 // reexports
 pub use writer::Writer;

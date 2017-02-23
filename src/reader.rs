@@ -8,7 +8,7 @@ use std::str::from_utf8;
 
 use encoding_rs::Encoding;
 
-use errors::{Error, Result, ErrorKind};
+use errors::{Result, ErrorKind};
 use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 use events::attributes::Attribute;
 
@@ -352,6 +352,7 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
+    #[inline]
     fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
         self.tag_state = TagState::Closed;
         let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
@@ -406,9 +407,8 @@ impl<B: BufRead> Reader<B> {
     /// can be defined on the same element as the attribute in question.
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
-    pub fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) 
-        -> (Option<&'a [u8]>, &'b [u8]) 
-    {
+    #[inline]
+    pub fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
         self.ns_buffer.resolve_namespace(qname)
     }
 
@@ -452,6 +452,7 @@ impl<B: BufRead> Reader<B> {
     /// replaced with the REPLACEMENT CHARACTER
     ///
     /// If no encoding is specified, then defaults to UTF_8
+    #[inline]
     pub fn decode<'b, 'c>(&'b self, bytes: &'c[u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
@@ -481,30 +482,6 @@ impl<B: BufRead> Reader<B> {
     }
 
     /// Reads next event, if `Event::Text` or `Event::End`,
-    /// then returns a `String`, else returns an error
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
-        let (read_end, s) = match self.read_event(buf) {
-            Ok(Event::Text(e)) => {
-                let s = e.unescape_and_decode(self).map_err(|e| {
-                    if let Error(ErrorKind::Escape(_, ref r), _) = e {
-                        self.buf_position += r.start;
-                    }
-                    e
-                })?;
-                (true, s)
-            }
-            Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
-                (false, "".to_string())
-            },
-            Err(e) => return Err(e),
-            Ok(Event::Eof) => bail!(io_eof("Text")),
-            _ => return Err("Cannot read text, expecting Event::Text".into()),
-        };
-        if read_end { self.read_to_end(end, buf)?; }
-        Ok(s)
-    }
-
-    /// Reads next event, if `Event::Text` or `Event::End`,
     /// then returns an unescaped `String`, else returns an error
     ///
     /// # Examples
@@ -520,25 +497,20 @@ impl<B: BufRead> Reader<B> {
     /// 
     /// match xml.read_event(&mut buf) {
     ///     Ok(Event::Start(ref e)) => {
-    ///         assert_eq!(&xml.read_text_unescaped(e.name(), &mut Vec::new()).unwrap(), "<b>");
+    ///         assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), "<b>");
     ///     },
     ///     e => panic!("Expecting Start(a), found {:?}", e),
     /// }
     /// ```
-    pub fn read_text_unescaped<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
-        let (read_end, s) = match self.read_event(buf) {
-            Ok(Event::Text(e)) => {
-                assert_eq!(b"&lt;b&gt;", e.as_ref());
-                (true, e.unescape_and_decode(self))
-            }
-            Ok(Event::End(ref e)) if e.name() == end.as_ref() => {
-                (false, Ok("".to_string()))
-            },
+    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
+        let s = match self.read_event(buf) {
+            Ok(Event::Text(e)) => e.unescape_and_decode(self),
+            Ok(Event::End(ref e)) if e.name() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
             Ok(Event::Eof) => return Err(io_eof("Text").into()),
             _ => return Err("Cannot read text, expecting Event::Text".into()),
         };
-        if read_end { self.read_to_end(end, buf)? }
+        self.read_to_end(end, buf)?;
         s
     }
 }
@@ -612,9 +584,8 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// ```
 /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
 /// level)
-fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>)
-                          -> Result<usize>
-{
+#[inline]
+fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     #[derive(Debug,Clone,Copy,PartialEq,Eq)]
     enum ElemReadState {
         /// The initial state (inside element, but outside of attribute value)
@@ -749,10 +720,12 @@ struct NamespaceBuffer {
 
 impl NamespaceBuffer {
 
+    #[inline]
     fn find_namespace_value(&self, element_name: &[u8]) -> Option<&[u8]> {
         let ns = match element_name.iter().position(|b| *b == b':') {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
-            Some(len) => self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == &element_name[..len]),
+            Some(len) => self.slices.iter().rev()
+                .find(|n| n.prefix(&self.buffer) == &element_name[..len]),
         };
         ns.and_then(|ref n| n.opt_value(&self.buffer))
     }
@@ -827,9 +800,8 @@ impl NamespaceBuffer {
     /// can be defined on the same element as the attribute in question.
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
-    fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) 
-        -> (Option<&'a [u8]>, &'b [u8]) 
-    {
+    #[inline]
+    fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
         qname.iter().position(|b| *b == b':').and_then(|len| {
             let (prefix, value) = qname.split_at(len);
             self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == prefix)
