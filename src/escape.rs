@@ -23,44 +23,40 @@ enum ByteOrChar {
 /// xml escaped characters ('&...;') into their corresponding value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
+    
     let mut bytes = raw.iter().enumerate();
-    while let Some((i, &b)) = bytes.next() {
-        if b == b'&' {
-            if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
-                // search for character correctness
-                // copied and modified from xml-rs inside_reference.rs
-                match &raw[(i + 1)..j] {
-                    b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
-                    b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
-                    b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
-                    b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
-                    b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
-                    b"" => return Err(Escape("Encountered empty entity".to_string(), i..j).into()),
-                    b"#x0" | b"#0" => {
-                        return Err(Escape("Null character entity is not allowed".to_string(), i..j).into())
-                    }
-                    bytes if bytes.len() > 1 && bytes[0] == b'#' => {
-                        let code = if bytes[1] == b'x' {
-                            u32::from_ascii_radix(&bytes[2..], 16)
-                        } else {
-                            u32::from_ascii_radix(&bytes[1..], 10)
-                        };
-                        escapes.push((i..j, ByteOrChar::Char(
-                                    code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
-                    },
-                    _ => return Err(Escape("".to_owned(), i..j).into()),
+    while let Some((i, _)) = bytes.by_ref().find(|&(_, b)| *b == b'&') {
+        if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
+            // search for character correctness
+            // copied and modified from xml-rs inside_reference.rs
+            match &raw[i + 1..j] {
+                b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
+                b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
+                b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
+                b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
+                b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
+                b"#x0" | b"#0" => {
+                    return Err(Escape("Null character entity is not allowed".to_string(), i..j).into())
                 }
-            } else {
-                return Err(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()).into());
+                bytes if bytes.len() > 1 && bytes[0] == b'#' => {
+                    let code = if bytes[1] == b'x' {
+                        u32::from_ascii_radix(&bytes[2..], 16)
+                    } else {
+                        u32::from_ascii_radix(&bytes[1..], 10)
+                    };
+                    escapes.push((i..j, ByteOrChar::Char(
+                                code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
+                },
+                _ => return Err(Escape("".to_owned(), i..j).into()),
             }
+        } else {
+            return Err(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()).into());
         }
     }
     if escapes.is_empty() {
         Ok(Cow::Borrowed(raw))
     } else {
-        let len = escapes
-            .iter()
-            .fold(raw.len(), |c, &(ref r, _)| c - (r.end - r.start));
+        let len = bytes.len();
         let mut v = Vec::with_capacity(len);
         let mut start = 0;
         for (r, b) in escapes {
