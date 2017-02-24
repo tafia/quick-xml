@@ -9,7 +9,12 @@ repository = "https://github.com/tafia/quick-xml"
 
 readme = "README.md"
 keywords = ["xml", "reader", "parser", "writer", "html"]
+categories = ["encoding", "parsing", "text-processing"]
 license = "MIT"
+license-file = "LICENSE-MIT.md"
+
+[badges]
+travis-ci = { repository = "tafia/quick-xml" }
 
 [dependencies]
 from-ascii = "0.0.1"
