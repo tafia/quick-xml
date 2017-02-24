@@ -2,7 +2,6 @@
 
 [![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/tafia/quick-xml)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
-[![Clippy Linting Result](https://clippy.bashy.io/github/tafia/quick-xml/master/badge.svg)](https://clippy.bashy.io/github/tafia/quick-xml/master/log)
 
 High performance xml pull reader/writer.
 
@@ -14,7 +13,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.5.0"
+quick-xml = "0.6.0"
 ```
 ``` rust
 extern crate quick_xml;
@@ -25,7 +24,8 @@ extern crate quick_xml;
 ### Reader
 
 ```rust
-use quick_xml::{XmlReader, Event};
+use quick_xml::reader::Reader
+use quick_xml::events::Event;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -33,67 +33,81 @@ let xml = r#"<tag1 att1 = "test">
                     Test 2
                 </tag2>
             </tag1>"#;
-let reader = XmlReader::from(xml).trim_text(true);
-// if you want to use namespaces, you just need to convert the `XmlReader`
-// to an `XmlnsReader`:
-// let reader_ns = reader.namespaced();
+
+let mut reader = Reader::from_str(xml);
+reader.trim_text(true);
+
 let mut count = 0;
 let mut txt = Vec::new();
-for r in reader {
-// namespaced: the `for` loop moves the reader
-// => use `while let` so you can have access to `reader_ns.resolve` for attributes
-// while let Some(r) = reader.next() {
-    match r {
+let mut buf = Vec::new();
+
+// The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
+loop {
+    match reader.read_event(&mut buf) {
+    // for triggering namespaced events, use this instead:
+    // match reader.read_namespaced_event(&mut buf) {
         Ok(Event::Start(ref e)) => {
         // for namespaced:
         // Ok((ref namespace_value, Event::Start(ref e)))
             match e.name() {
-                b"tag1" => println!("attributes values: {:?}", 
-                                 e.attributes().map(|a| a.unwrap().1)
-                                 // namespaced: use `reader_ns.resolve`
-                                 // e.attributes().map(|a| a.map(|(k, _)| reader_ns.resolve(k))) ...
-                                 .collect::<Vec<_>>()),
+                b"tag1" => println!("attributes values: {:?}",
+                                    e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
                 b"tag2" => count += 1,
                 _ => (),
             }
         },
-        Ok(Event::Text(e)) => txt.push(e.into_string()),
-        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
-        _ => (),
+        Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+        Ok(Event::Eof) => break, // exits the loop when reaching end of file
+        Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+        _ => (), // There are several other `Event`s we do not consider here
     }
+
+    // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
+    buf.clear();
 }
 ```
 
 ### Writer
 
 ```rust
-use quick_xml::{AsStr, Element, Event, XmlReader, XmlWriter};
-use quick_xml::Event::*;
+use quick_xml::writer::Writer;
+use quick_xml::reader::Reader;
+use quick_xml::events::{Event, BytesEnd, BytesStart};
 use std::io::Cursor;
 use std::iter;
 
 let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
-let reader = XmlReader::from(xml).trim_text(true);
-let mut writer = XmlWriter::new(Cursor::new(Vec::new()));
-for r in reader {
-    match r {
+let mut reader = Reader::from_str(xml);
+reader.trim_text(true);
+let mut writer = Writer::new(Cursor::new(Vec::new()));
+let mut buf = Vec::new();
+loop {
+    match reader.read_event(&mut buf) {
         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+
+            // crates a new element ... alternatively we could reuse `e` by calling
+            // `e.into_owned()`
+            let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
+
             // collect existing attributes
-            let mut attrs = e.attributes().map(|attr| attr.unwrap()).collect::<Vec<_>>();
+            elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
 
             // copy existing attributes, adds a new my-key="some value" attribute
-            let mut elem = Element::new("my_elem").with_attributes(attrs);
-            elem.push_attribute(b"my-key", "some value");
+            elem.push_attribute(("my-key", "some value"));
 
             // writes the event to the writer
-            assert!(writer.write(Start(elem)).is_ok());
+            assert!(writer.write_event(Event::Start(elem)).is_ok());
         },
         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
-            assert!(writer.write(End(Element::new("my_elem"))).is_ok());
+            assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
         },
-        Ok(e) => assert!(writer.write(e).is_ok()),
-        Err((e, pos)) => panic!("{:?} at position {}", e, pos),
+        Ok(Event::Eof) => break,
+        Ok(e) => assert!(writer.write_event(e).is_ok()),
+        // or using the buffer
+        // Ok(e) => assert!(writer.write(&buf).is_ok()),
+        Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     }
+    buf.clear();
 }
 
 let result = writer.into_inner().into_inner();
@@ -103,14 +117,17 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
+quick-xml is 40+ times faster than the widely used [xml-rs](https://crates.io/crates/xml-rs) crate.
+
 ```
 // quick-xml benches
-test bench_quick_xml            ... bench:   1,772,803 ns/iter (+/- 21,071)
-test bench_quick_xml_escaped    ... bench:   2,048,106 ns/iter (+/- 20,597)
-test bench_quick_xml_namespaced ... bench:   2,585,081 ns/iter (+/- 28,941)
+test bench_quick_xml            ... bench:     316,915 ns/iter (+/- 59,750)
+test bench_quick_xml_escaped    ... bench:     430,226 ns/iter (+/- 19,036)
+test bench_quick_xml_namespaced ... bench:     452,997 ns/iter (+/- 30,077)
+test bench_quick_xml_wrapper    ... bench:     313,846 ns/iter (+/- 93,794)
 
 // same bench with xml-rs
-test bench_xml_rs 		... bench:  39,683,007 ns/iter (+/- 533,863)
+test bench_xml_rs               ... bench:  15,329,068 ns/iter (+/- 3,966,413)
 ```
 
 ## Contribute

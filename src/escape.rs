@@ -1,8 +1,9 @@
 //! Manage xml character escapes
 
 use std::borrow::Cow;
-use error::{Error, ResultPos};
-use AsStr;
+use errors::Result;
+use errors::ErrorKind::Escape;
+use from_ascii::FromAsciiRadix;
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -20,69 +21,42 @@ enum ByteOrChar {
 
 /// helper function to unescape a `&[u8]` and replace all
 /// xml escaped characters ('&...;') into their corresponding value
-pub fn unescape(raw: &[u8]) -> ResultPos<Cow<[u8]>> {
+pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
+    
     let mut bytes = raw.iter().enumerate();
-    while let Some((i, &b)) = bytes.next() {
-        if b == b'&' {
-            if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
-                // search for character correctness
-                // copied and modified from xml-rs inside_reference.rs
-                match &raw[(i + 1)..j] {
-                    b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
-                    b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
-                    b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
-                    b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
-                    b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
-                    b"" => return Err((Error::Malformed(
-                                "Encountered empty entity".to_string()), i)),
-                    b"#x0" | b"#0" => {
-                        return Err((Error::Malformed(
-                                    "Null character entity is not allowed".to_string()), i))
-                    }
-                    bytes if bytes.len() > 1 && bytes[0] == b'#' => {
-                        if bytes[1] == b'x' {
-                            let name = try!(bytes[2..].as_str()
-                                            .map_err(|e| (Error::from(e), i)));
-                            match u32::from_str_radix(name, 16).ok() {
-                                Some(c) => escapes.push((i..j, ByteOrChar::Char(c))),
-                                None => {
-                                    return Err((Error::Malformed(
-                                                format!("Invalid hexadecimal character number \
-                                                        in an entity: {}", name)), i))
-                                }
-                            }
-                        } else {
-                            let name = try!(bytes[1..].as_str()
-                                            .map_err(|e| (Error::from(e), i)));
-                            match u32::from_str_radix(name, 10).ok() {
-                                Some(c) => escapes.push((i..j, ByteOrChar::Char(c))),
-                                None => {
-                                    return Err((Error::Malformed(
-                                                format!("Invalid decimal character number \
-                                                        in an entity: {}", name)), i))
-                                }
-                            }
-                        }
-                    },
-                    bytes => match bytes.as_str() {
-                        Ok(s) => return Err((Error::Malformed(format!(
-                                    "Unexpected entity: {}", s)), i)),
-                        Err(e) => return Err((Error::Malformed(format!(
-                                    "Unexpected entity and utf8 error: {:?}", e)), i)),
-                    },
+    while let Some((i, _)) = bytes.by_ref().find(|&(_, b)| *b == b'&') {
+        if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
+            // search for character correctness
+            // copied and modified from xml-rs inside_reference.rs
+            match &raw[i + 1..j] {
+                b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
+                b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
+                b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
+                b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
+                b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
+                b"#x0" | b"#0" => {
+                    return Err(Escape("Null character entity is not allowed".to_string(), i..j).into())
                 }
-            } else {
-                return Err((Error::Malformed("Cannot find ';' after '&'".to_string()), i));
+                bytes if bytes.len() > 1 && bytes[0] == b'#' => {
+                    let code = if bytes[1] == b'x' {
+                        u32::from_ascii_radix(&bytes[2..], 16)
+                    } else {
+                        u32::from_ascii_radix(&bytes[1..], 10)
+                    };
+                    escapes.push((i..j, ByteOrChar::Char(
+                                code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
+                },
+                _ => return Err(Escape("".to_owned(), i..j).into()),
             }
+        } else {
+            return Err(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()).into());
         }
     }
     if escapes.is_empty() {
         Ok(Cow::Borrowed(raw))
     } else {
-        let len = escapes
-            .iter()
-            .fold(raw.len(), |c, &(ref r, _)| c - (r.end - r.start));
+        let len = bytes.len();
         let mut v = Vec::with_capacity(len);
         let mut start = 0;
         for (r, b) in escapes {
@@ -122,7 +96,7 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
 fn test_escape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    println!("{}", &*unescape(b"&#xa9;").unwrap().as_str().unwrap());
+    println!("{}", ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
 }

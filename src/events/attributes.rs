@@ -3,8 +3,10 @@
 //! Provides an iterator over attributes key/value pairs
 use std::borrow::Cow;
 use std::ops::Range;
-use error::{Error, ResultPos};
+use std::io::BufRead;
+use errors::Result;
 use escape::unescape;
+use reader::Reader;
 
 /// Iterator over attributes key/value pairs
 #[derive(Clone)]
@@ -35,30 +37,62 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    /// gets unescaped variant
-    ///
-    /// all escaped characters ('&...;') in attribute values are replaced
-    /// with their corresponding character
-    pub fn unescaped(self) -> UnescapedAttributes<'a> {
-        UnescapedAttributes { inner: self }
-    }
-
     /// check if attributes are distincts
-    pub fn with_checks(mut self, val: bool) -> Attributes<'a> {
+    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.with_checks = val;
         self
     }
 
-    /// return Err((e, p))
     /// sets `self.exit = true` to terminate the iterator
-    fn error(&mut self, e: Error, p: usize) -> ResultPos<(&'a [u8], &'a [u8])> {
+    fn error<S: Into<String>>(&mut self, msg: S, p: usize) -> Result<Attribute<'a>> {
         self.exit = true;
-        Err((e, p))
+        Err(::errors::ErrorKind::Attribute(msg.into(), p).into())
+    }
+}
+
+/// A struct representing a key/value for a xml attribute
+///
+/// Parses either `key="value"` or `key='value'`
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attribute<'a> {
+    /// the key to uniquely define the attribute
+    pub key: &'a [u8],
+    /// the value
+    pub value: &'a [u8],
+}
+
+impl<'a> Attribute<'a> {
+
+    /// unescapes the value
+    pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
+        unescape(self.value)
+    }
+
+    /// unescapes then decode the value
+    ///
+    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// 1. Attributes::unescaped_value()
+    /// 2. Reader::decode(...)
+    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>)
+        -> Result<String> {
+        self.unescaped_value().map(|e| reader.decode(&*e).into_owned())
+    }
+}
+
+impl<'a> From<(&'a[u8], &'a[u8])> for Attribute<'a> {
+    fn from(val:(&'a[u8], &'a[u8])) -> Attribute<'a> {
+        Attribute { key: val.0, value: val.1 }
+    }
+}
+
+impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
+    fn from(val:(&'a str, &'a str)) -> Attribute<'a> {
+        Attribute { key: val.0.as_bytes(), value: val.1.as_bytes() }
     }
 }
 
 impl<'a> Iterator for Attributes<'a> {
-    type Item = ResultPos<(&'a [u8], &'a [u8])>;
+    type Item = Result<Attribute<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
 
         if self.exit {
@@ -115,8 +149,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, b'=')) => {
                     if start_val.is_none() {
                         if has_equal {
-                            return Some(self.error(Error::Malformed(
-                                        "Got 2 '=' tokens".to_string()), p + i));
+                            return Some(self.error("Got 2 '=' tokens", p + i));
                         }
                         has_equal = true;
                         if end_key.is_none() {
@@ -127,8 +160,7 @@ impl<'a> Iterator for Attributes<'a> {
                 Some((i, q @ b'"')) |
                 Some((i, q @ b'\'')) => {
                     if !has_equal {
-                        return Some(self.error(Error::Malformed(
-                                    "Unexpected quote before '='".to_string()), p + i));
+                        return Some(self.error("Unexpected quote before '='", p + i));
                     }
                     if start_val.is_none() {
                         start_val = Some(i + 1);
@@ -154,30 +186,15 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .cloned()
                 .find(|r2| &self.bytes[r2.clone()] == name) {
-                    return Some(self.error(Error::Malformed(
-                            format!("Duplicate attribute at position {} and {}", 
-                                    r2.start, r.start)), r.start));
+                    return Some(self.error(format!("Duplicate attribute at position {} and {}", 
+                                    r2.start, r.start), r.start));
             }
             self.consumed.push(r.clone());
         }
 
-        Some(Ok((&self.bytes[r], 
-                 &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())])))
-    }
-}
-
-/// Escaped attributes
-///
-/// Iterate over all attributes and unescapes attribute values
-pub struct UnescapedAttributes<'a> {
-    inner: Attributes<'a>,
-}
-
-impl<'a> Iterator for UnescapedAttributes<'a> {
-    type Item = ResultPos<(&'a [u8], Cow<'a, [u8]>)>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .next()
-            .map(|a| a.and_then(|(k, v)| unescape(v).map(|v| (k, v))))
+        Some(Ok(Attribute {
+            key: &self.bytes[r],
+            value: &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())],
+        }))
     }
 }

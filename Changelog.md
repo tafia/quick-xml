@@ -8,8 +8,20 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## master
-- feat: constructor for `XmlDecl`
+## 0.6.0
+Major refactoring. Breaks most of existing functionalities
+- refactor: replace `XmlReader` with a non allocating `Reader` (uses an external buffer)
+- refactor: replace `XmlnsReader` iterator by a simpler `Reader::read_namespaced_event` function
+- refactor: replace `UnescapedAttribute` with a new `Attribute` struct with `unescape` functions
+- feat: support xml decodings
+- refactor: remove the `AsStr` trait: user must use `unescape_and_decode` fns when necessary
+  (alternatively, run `unescape` and/or `Reader::decode`)
+- refactor: module hierarchies
+- refactor: replace `Element`s with several per event structs `BytesStart`
+- perf: unescape: use from-ascii crate instead to get ascii codes without string validation
+- refactor: rename `XmlWriter` to `Writer` and provide a way to write `&[u8]` directly
+- refactor: adds @vandenoever changes to save some namespaces allocations
+- refactor: adds error-chain and remove `ResultPos` (user can still use `Reader::buffer_position` if needed)
 
 ## 0.5.0
 - feat: apply default namespaces (`xmlns="..."`) to unqualified elements
