@@ -365,7 +365,7 @@ impl<B: BufRead> Reader<B> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
-        if buf[len - 1] == b'/' {
+        if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
                 self.tag_state = TagState::Empty;
