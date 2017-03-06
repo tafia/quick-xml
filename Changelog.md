@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.6.2
+- fix: another overflow bug found with cargo-fuzz
+- refactor: update dependencies
+
 ## 0.6.1
 - fix: fix an overflow found with cargo-fuzz
 

@@ -315,7 +315,8 @@ impl<B: BufRead> Reader<B> {
                             Ok(n) => {
                                 self.buf_position += n;
                                 let start = buf.len() - n;
-                                count += buf.iter().skip(start).filter(|&&b| b == b'<').count() - 1;
+                                count += buf.iter().skip(start).filter(|&&b| b == b'<').count();
+                                count -= 1;
                             }
                             Err(e) => return Err(e.into()),
                         }
