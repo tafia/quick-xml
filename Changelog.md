@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.6.1
+- fix: fix an overflow found with cargo-fuzz
+
 ## 0.6.0
 Major refactoring. Breaks most of existing functionalities
 - refactor: replace `XmlReader` with a non allocating `Reader` (uses an external buffer)
