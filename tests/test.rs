@@ -3,6 +3,7 @@ extern crate quick_xml;
 use quick_xml::reader::Reader;
 use quick_xml::events::Event::*;
 use quick_xml::events::attributes::Attribute;
+use std::io::Cursor;
 
 #[test]
 fn test_sample() {
@@ -295,6 +296,20 @@ fn test_koi8_r_encoding() {
             Ok(Text(e)) => { e.unescape_and_decode(&r).unwrap(); },
             Ok(Eof) => break,
             _ => (),
+        }
+    }
+}
+
+#[test]
+fn fuzz_53() {
+    let data : &[u8] = b"\xe9\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\n(\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00<>\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00<<\x00\x00\x00";
+    let cursor = Cursor::new(data);
+    let mut reader = Reader::from_reader(cursor);
+    let mut buf = vec![];
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            _ => buf.clear(),
         }
     }
 }
