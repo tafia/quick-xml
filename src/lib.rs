@@ -121,6 +121,7 @@ pub mod reader;
 pub mod writer;
 pub mod events;
 mod escape;
+pub mod dom;
 
 // reexports
 pub use writer::Writer;
