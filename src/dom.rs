@@ -69,6 +69,10 @@ impl Node {
     /// Consumes a reader and returns the root `Node`
     pub fn root<R: BufRead>(read: R) -> Result<Node> {
         let mut reader = Reader::from_reader(read);
+        reader.check_end_names(false)
+            .check_comments(false)
+            .expand_empty_elements(false)
+            .trim_text(true);
         let mut buffer = Vec::new();
         let mut parents = Vec::new();
         let mut node = None;
