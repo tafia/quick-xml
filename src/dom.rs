@@ -245,11 +245,14 @@ impl Node {
         self.write(&mut writer)
     }
 
-    fn write<W: ::std::io::Write>(&self, writer: &mut ::writer::Writer<W>) -> Result<()> {
+    /// Writes the node and its descendants into the `Writer`
+    pub fn write<W: ::std::io::Write>(&self, writer: &mut ::writer::Writer<W>) -> Result<()> {
         let mut start = BytesStart::borrowed(self.name.as_bytes(), self.name.len());
         start.with_attributes(self.attributes.iter().map(|&(ref k, ref v)| (&**k, &**v)));
         writer.write_event(Event::Start(start))?;
-        writer.write_event(Event::Text(BytesText::borrowed(self.text.as_bytes())))?;
+        if !self.text.is_empty() { 
+            writer.write_event(Event::Text(BytesText::borrowed(self.text.as_bytes())))?;
+        }
         for ch in &self.children {
             ch.write(writer)?;
         }
