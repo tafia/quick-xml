@@ -1,9 +1,40 @@
 //! A module to manage DOM documents
+//!
+//! This is a very simple/experimental wrapper over the pull based `Reader`
+//! The idea is to provide very basic mechanism to get a particular data out of an xml file
+//!
+//! # Examples
+//!
+//! ```rust
+//! use quick_xml::dom::Node;
+//!
+//! // loads the entire file in memory and converts it into a `Node`
+//! let path = "/path/to/my/file.xml";
+//! # let path = "tests/sample_rss.xml";
+//! let mut root = Node::open(path).expect("cannot read file");
+//!
+//! // gets specific nodes following a particular path
+//! {
+//!     let nodes = root.select("a/b/c");
+//!     for n in nodes {
+//!         println!("node: name: {}, attributes count: {}, children count: {}",
+//!             n.name(), n.attributes().len(), n.children().len());
+//!     }
+//! }
+//!
+//! // Now let's say we want to modify the document
+//! if let Some(child) = root.children_mut().get_mut(0) {
+//!     child.attributes_mut().push(("My new key".to_string(), "My new value".to_string()));
+//! }
+//!
+//! // we're done, we can save it back to a new file
+//! root.save("/dev/null").expect("cannot save file");
+//! ```
 
 use std::io::{self, BufRead};
 
 use escape::unescape;
-use events::{Event, BytesStart};
+use events::{Event, BytesStart, BytesEnd, BytesText};
 use errors::{Result, ErrorKind};
 use reader::Reader;
 
@@ -92,6 +123,12 @@ impl Node {
         }
     }
 
+    /// Converts a file into a `Node`
+    pub fn open<P: AsRef<::std::path::Path>>(path: P) -> Result<Node> {
+        let file = ::std::fs::File::open(path)?;
+        Node::root(::std::io::BufReader::new(file))
+    }
+
     /// Creates a simple `Node` from its name
     pub fn new<S: Into<String>>(name: S) -> Node {
         Node {
@@ -166,12 +203,12 @@ impl Node {
     ///
     /// let root = Node::root(::std::io::Cursor::new(data)).unwrap();
     /// let search_path = "b/c";
-    /// let select_texts = root.select_all(search_path).iter()
+    /// let select_texts = root.select(search_path).iter()
     ///     .map(|n| n.text()).collect::<Vec<_>>();
     ///
     /// assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
     /// ```
-    pub fn select_all<'a, 'b, X: Into<XPath<'b>>>(&'a self, path: X) -> Vec<&'a Node>
+    pub fn select<'a, 'b, X: Into<XPath<'b>>>(&'a self, path: X) -> Vec<&'a Node>
     {
         // TODO: use impl Trait once stabilized
         // TODO: implement more XPath syntaxes
@@ -196,6 +233,28 @@ impl Node {
                 ch.extend_select_all(vec, idx + 1, paths);
             }
         }
+    }
+
+    /// Saves the content of the xml into a new file
+    ///
+    /// Due to technical issues, the output file will be different than the input file.
+    /// As a result it might be a good idea to save them in different paths
+    pub fn save<P: AsRef<::std::path::Path>>(&self, dest: P) -> Result<()> {
+        let file = ::std::fs::File::create(dest)?;
+        let mut writer = ::writer::Writer::new(::std::io::BufWriter::new(file));
+        self.write(&mut writer)
+    }
+
+    fn write<W: ::std::io::Write>(&self, writer: &mut ::writer::Writer<W>) -> Result<()> {
+        let mut start = BytesStart::borrowed(self.name.as_bytes(), self.name.len());
+        start.with_attributes(self.attributes.iter().map(|&(ref k, ref v)| (&**k, &**v)));
+        writer.write_event(Event::Start(start))?;
+        writer.write_event(Event::Text(BytesText::borrowed(self.text.as_bytes())))?;
+        for ch in &self.children {
+            ch.write(writer)?;
+        }
+        writer.write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;
+        Ok(())
     }
 }
 
@@ -229,7 +288,7 @@ fn test_select_all() {
     "#;
 
     let root = Node::root(::std::io::Cursor::new(data)).unwrap();
-    let select_texts = root.select_all("b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
+    let select_texts = root.select("b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
 
     assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
 }
