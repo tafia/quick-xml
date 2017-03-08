@@ -115,6 +115,38 @@ let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</chil
 assert_eq!(result, expected.as_bytes());
 ```
 
+### Experimental DOM like interface
+
+```rust
+use quick_xml::dom::Node;
+
+// loads the entire file in memory and converts it into a `Node`
+let path = "/path/to/my/file.xml";
+let mut root = Node::open(path).expect("cannot read file");
+
+// gets specific nodes following a particular path
+{
+    let nodes = root.select("a/b/c");
+    for n in nodes {
+        println!("node: name: {}, attributes count: {}, children count: {}",
+            n.name(), n.attributes().len(), n.children().len());
+    }
+
+    // alternatively, in we only need these nodes, there is a faster version
+    // which performs less allocation:
+    //
+    // let nodes = Node::open_xpath(path, "a/b/c").unwrap();
+}
+
+// Now let's say we want to modify the document
+if let Some(child) = root.children_mut().get_mut(0) {
+    child.attributes_mut().push(("My new key".to_string(), "My new value".to_string()));
+}
+
+// we're done, we can save it back to a new file
+root.save("/dev/null").expect("cannot save file");
+```
+
 ## Performance
 
 quick-xml is 40+ times faster than the widely used [xml-rs](https://crates.io/crates/xml-rs) crate.

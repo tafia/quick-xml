@@ -59,7 +59,6 @@ impl<'a> BytesStart<'a> {
     pub fn with_attributes<'b, I>(&mut self, attributes: I) -> &mut Self
         where I: IntoIterator,
               I::Item: Into<Attribute<'b>>,
-
     {
         self.extend_attributes(attributes);
         self

@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.7.0
+- feat: add dom module to have a DOM like interface wrapper
+
 ## 0.6.2
 - fix: another overflow bug found with cargo-fuzz
 - refactor: update dependencies
