@@ -215,26 +215,37 @@ impl Node {
     pub fn select<'a, 'b, X: Into<XPath<'b>>>(&'a self, path: X) -> Vec<&'a Node>
     {
         // TODO: use impl Trait once stabilized
-        // TODO: implement more XPath syntaxes
 
         let xpath = path.into();
-        if xpath.inner.is_empty() {
+        if xpath.is_empty() {
             Vec::new()
         } else {
-            let paths = xpath.inner.split('/').collect::<Vec<_>>();
             let mut vec = Vec::new();
-            self.extend_select_all(&mut vec, 0, &paths);
+            self.extend_select_all(&mut vec, 0, &xpath.inner);
             vec
         }
     }
 
     fn extend_select_all<'a>(&'a self, vec: &mut Vec<&'a Node>, idx: usize, paths: &[&str]) {
-        let iter = self.children.iter().filter(|c| c.name == paths[idx]);
+
+        // TODO: implement more XPath syntaxes
+
+        let n = paths[idx];
         if idx == paths.len() - 1 {
-            vec.extend(iter);
+            if n.is_empty() || n == "." {
+                vec.extend(&self.children);
+            } else {
+                vec.extend(self.children.iter().filter(|c| c.name == n));
+            }
         } else {
-            for ch in iter {
-                ch.extend_select_all(vec, idx + 1, paths);
+            if n.is_empty() || n == "." {
+                for ch in self.children.iter() {
+                    ch.extend_select_all(vec, idx + 1, paths);
+                }
+            } else {
+                for ch in self.children.iter().filter(|c| c.name == n) {
+                    ch.extend_select_all(vec, idx + 1, paths);
+                }
             }
         }
     }
@@ -270,12 +281,19 @@ impl Node {
 /// For the moment it is just a wrapper over `&str`
 /// Used to enable future improvements
 pub struct XPath<'a> {
-    inner: &'a str
+    inner: Vec<&'a str>,
+}
+
+impl<'a> XPath<'a> {
+    /// Is XPath empty
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 impl<'a> From<&'a str> for XPath<'a> {
     fn from(s: &'a str) -> XPath<'a> {
-        XPath { inner: s }
+        XPath { inner: s.split('/').map(|s| s.trim()).collect() }
     }
 }
 
