@@ -31,7 +31,7 @@
 //! root.save("/dev/null").expect("cannot save file");
 //! ```
 
-use std::io::{self, BufRead};
+use std::io::BufRead;
 
 use escape::unescape;
 use events::{Event, BytesStart, BytesEnd, BytesText};
@@ -75,50 +75,34 @@ impl Node {
             .trim_text(true);
         let mut buffer = Vec::new();
         let mut parents = Vec::new();
-        let mut node = None;
+        let mut node = Node::new("/"); // starts with the root node
         loop {
             match reader.read_event(&mut buffer)? {
-                Event::Eof => bail!(ErrorKind::Io(io::Error::new(io::ErrorKind::UnexpectedEof,
-                                                                 "EOF before closing event"))),
+                Event::Eof => return Ok(node),
                 Event::Start(start) => {
-                    if let Some(e) = node {
-                        parents.push(e);
-                    }
-                    node = Some(Node::from_start(start, &reader)?);
+                    parents.push(node);
+                    node = Node::from_start(start, &reader)?;
                 }
                 Event::Empty(start) => {
-                    if let Some(ref mut e) = node {
-                        e.children.push(Node::from_start(start, &reader)?);
-                    } else {
-                        return Ok(Node::from_start(start, &reader)?);
-                    }
+                    node.children.push(Node::from_start(start, &reader)?);
                 }
                 Event::Text(t) => { 
-                    if let Some(ref mut e) = node {
-                        e.text = t.unescape_and_decode(&reader)?;
-                    }
+                    node.text = t.unescape_and_decode(&reader)?;
                 }
                 Event::End(ref end) => {
-                    match (parents.pop(), node) {
-                        (Some(mut p), Some(e)) => {
-                            if e.name.as_bytes() == end.name() {
-                                p.children.push(e);
-                                node = Some(p);
-                            } else {
-                                bail!(ErrorKind::EndEventMismatch(
-                                        e.name, reader.decode(end.name()).into_owned()));
-                            }
+                    if node.name.as_bytes() != end.name() {
+                        bail!(ErrorKind::EndEventMismatch(
+                                node.name, reader.decode(end.name()).into_owned()));
+                    }
+                    match parents.pop() {
+                        Some(mut p) => {
+                            p.children.push(node);
+                            node = p;
                         },
-                        (None, Some(e)) => {
-                            if e.name.as_bytes() == end.name() {
-                                return Ok(e);
-                            } else {
-                                bail!(ErrorKind::EndEventMismatch(
-                                        e.name, reader.decode(end.name()).into_owned()));
-                            }
-                        },
-                        (_, None) => bail!(ErrorKind::EndEventMismatch(
-                                "".to_string(), reader.decode(end.name()).into_owned())),
+                        None => {
+                            bail!(ErrorKind::EndEventMismatch(
+                                    node.name, reader.decode(end.name()).into_owned()));
+                        }
                     }
                 }
                 _ => (), // ignore other events
@@ -206,7 +190,7 @@ impl Node {
     /// "#;
     ///
     /// let root = Node::root(::std::io::Cursor::new(data)).unwrap();
-    /// let search_path = "b/c";
+    /// let search_path = "a/b/c";
     /// let select_texts = root.select(search_path).iter()
     ///     .map(|n| n.text()).collect::<Vec<_>>();
     ///
@@ -220,8 +204,18 @@ impl Node {
         if xpath.is_empty() {
             Vec::new()
         } else {
+            let idx_start = if xpath.inner[0] == "/" {
+                if self.name != "/" {
+                    // only the root node can return something
+                    return Vec::new();
+                } else {
+                    1
+                }
+            } else {
+                0
+            };
             let mut vec = Vec::new();
-            self.extend_select_all(&mut vec, 0, &xpath.inner);
+            self.extend_select_all(&mut vec, idx_start, &xpath.inner);
             vec
         }
     }
@@ -293,7 +287,14 @@ impl<'a> XPath<'a> {
 
 impl<'a> From<&'a str> for XPath<'a> {
     fn from(s: &'a str) -> XPath<'a> {
-        XPath { inner: s.split('/').map(|s| s.trim()).collect() }
+        let s = s.trim();
+        let (mut inner, s) = if s.starts_with('/') {
+            (vec!["/"], &s[1..])
+        } else {
+            (vec![], s)
+        };
+        inner.extend(s.split('/').map(|s| s.trim()));
+        XPath { inner: inner }
     }
 }
 
@@ -313,7 +314,8 @@ fn test_select_all() {
     "#;
 
     let root = Node::root(::std::io::Cursor::new(data)).unwrap();
-    let select_texts = root.select("b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
-
+    let select_texts = root.select("a/b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
+    assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
+    let select_texts = root.select("/a/b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
     assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
 }
