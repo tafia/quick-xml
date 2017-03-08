@@ -131,6 +131,11 @@ let mut root = Node::open(path).expect("cannot read file");
         println!("node: name: {}, attributes count: {}, children count: {}",
             n.name(), n.attributes().len(), n.children().len());
     }
+
+    // alternatively, in we only need these nodes, there is a faster version
+    // which performs less allocation:
+    //
+    // let nodes = Node::open_xpath(path, "a/b/c").unwrap();
 }
 
 // Now let's say we want to modify the document
