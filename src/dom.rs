@@ -30,8 +30,21 @@
 //! // we're done, we can save it back to a new file
 //! root.save("/dev/null").expect("cannot save file");
 //! ```
+//!
+//! Alternatively, if you want just to get the xpath filtered nodes and ditch the rest, you 
+//! can directly call the `open_xpath` method, which is faster
+//!
+//! ```rust
+//! use quick_xml::dom::Node;
+//!
+//! // loads the entire file in memory and converts it into a `Node`
+//! let path = "/path/to/my/file.xml";
+//! # let path = "tests/sample_rss.xml";
+//! let nodes = Node::open_xpath(path, "a/b/c").expect("cannot read file");
+//! ```
 
-use std::io::BufRead;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 use escape::unescape;
 use events::{Event, BytesStart, BytesEnd, BytesText};
@@ -74,10 +87,16 @@ impl Node {
             .expand_empty_elements(false)
             .trim_text(true);
         let mut buffer = Vec::new();
+        let node = Node::new("/"); // starts with the root node
+        Node::from_reader(&mut reader, &mut buffer, node)
+    }
+
+    fn from_reader<R: BufRead>(reader: &mut Reader<R>, 
+                               buffer: &mut Vec<u8>,
+                               mut node: Node) -> Result<Node> {
         let mut parents = Vec::new();
-        let mut node = Node::new("/"); // starts with the root node
         loop {
-            match reader.read_event(&mut buffer)? {
+            match reader.read_event(buffer)? {
                 Event::Eof => return Ok(node),
                 Event::Start(start) => {
                     parents.push(node);
@@ -99,10 +118,7 @@ impl Node {
                             p.children.push(node);
                             node = p;
                         },
-                        None => {
-                            bail!(ErrorKind::EndEventMismatch(
-                                    node.name, reader.decode(end.name()).into_owned()));
-                        }
+                        None => return Ok(node),
                     }
                 }
                 _ => (), // ignore other events
@@ -114,7 +130,69 @@ impl Node {
     /// Converts a file into a `Node`
     pub fn open<P: AsRef<::std::path::Path>>(path: P) -> Result<Node> {
         let file = ::std::fs::File::open(path)?;
-        Node::root(::std::io::BufReader::new(file))
+        Node::root(BufReader::new(file))
+    }
+
+    /// Opens a file, then outputs ONLY the nodes matching an XPath (and its descendants)
+    ///
+    /// This is faster than resolving the entire xml but you only have a subset of the data
+    pub fn open_xpath<'a, P, X>(path: P, xpath: X) -> Result<Vec<Node>>
+        where P: AsRef<Path>,
+              X: Into<XPath<'a>>,
+    {
+        let file = ::std::fs::File::open(path)?;
+        Node::from_xpath(BufReader::new(file), xpath)
+    }
+
+    /// Consumes a reader until the end and outputs ONLY the nodes matching an XPath (and its descendants)
+    ///
+    /// This is faster than resolving the entire xml but you only have a subset of the data
+    pub fn from_xpath<'a, R, X>(read: R, xpath: X) -> Result<Vec<Node>>
+        where R: BufRead,
+              X: Into<XPath<'a>>,
+    {
+        let mut nodes = Vec::new();
+        let xpath = xpath.into();
+
+        // discard the root node if asked
+        let mut idx = if let Some(&"/") = xpath.inner.first() { 1 } else { 0 };
+
+        let mut reader = Reader::from_reader(read);
+        reader.check_end_names(false)
+            .check_comments(false)
+            .expand_empty_elements(false)
+            .trim_text(true);
+        let mut buffer = Vec::new();
+        loop {
+            match reader.read_event(&mut buffer)? {
+                Event::Eof => return Ok(nodes),
+                Event::Start(start) => {
+                    if start.name() == xpath.inner[idx].as_bytes() {
+                        if idx == xpath.inner.len() - 1 {
+                            let node = Node::from_start(start, &reader)?;
+                            nodes.push(Node::from_reader(&mut reader, &mut Vec::new(), node)?);
+                        } else {
+                            idx += 1;
+                        }
+                    }
+                }
+                Event::Empty(start) => {
+                    if start.name() == xpath.inner[idx].as_bytes() {
+                        if idx == xpath.inner.len() - 1 {
+                            let node = Node::from_start(start, &reader)?;
+                            nodes.push(node);
+                        }
+                    }
+                }
+                Event::End(ref end) => {
+                    if end.name() == xpath.inner[idx].as_bytes() {
+                        idx -= 1;
+                    }
+                }
+                _ => (), // ignore other events
+            }
+            buffer.clear();
+        }
     }
 
     /// Creates a simple `Node` from its name
@@ -307,6 +385,8 @@ fn test_select_all() {
             <c att1='test att'/>
             <c>test 2</c>
         </b>
+        <ignore> test </ignore>
+        <ignore><this><too /></this></ignore>
         <b>
             <c>test 3</c>
         </b>
@@ -317,5 +397,31 @@ fn test_select_all() {
     let select_texts = root.select("a/b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
     assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
     let select_texts = root.select("/a/b/c").iter().map(|n| n.text()).collect::<Vec<_>>();
+    assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
+}
+
+#[test]
+fn test_from_xpath() {
+    let data = r#"
+    <a>
+        <b>
+            <c>test 1</c>
+            <c att1='test att'/>
+            <c>test 2</c>
+        </b>
+        <ignore> test </ignore>
+        <ignore><this><too /></this></ignore>
+        <b>
+            <c>test 3</c>
+        </b>
+    </a>
+    "#;
+
+    let select_nodes = Node::from_xpath(::std::io::Cursor::new(data), "a/b/c").unwrap();
+    let select_texts = select_nodes.iter().map(|n| n.text()).collect::<Vec<_>>();
+    assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
+
+    let select_nodes = Node::from_xpath(::std::io::Cursor::new(data), "/a/b/c").unwrap();
+    let select_texts = select_nodes.iter().map(|n| n.text()).collect::<Vec<_>>();
     assert_eq!(vec!["test 1", "", "test 2", "test 3"], select_texts);
 }
