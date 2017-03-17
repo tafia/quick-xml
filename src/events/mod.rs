@@ -68,6 +68,12 @@ impl<'a> BytesStart<'a> {
         &self.buf[..self.name_len]
     }
 
+    /// local name (excluding namespace) as &[u8] (without evental attributes)
+    #[inline]
+    pub fn local_name<B: BufRead>(&self, rdr: &Reader<B>) -> &[u8] {
+        rdr.resolve_namespace(self.name()).1
+    }
+
     /// gets unescaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
@@ -246,6 +252,12 @@ impl<'a> BytesEnd<'a> {
     #[inline]
     pub fn name(&self) -> &[u8] {
         &*self.name
+    }
+
+    /// local name (excluding namespace) as &[u8] (without evental attributes)
+    #[inline]
+    pub fn local_name<B: BufRead>(&self, rdr: &Reader<B>) -> &[u8] {
+        rdr.resolve_namespace(self.name()).1
     }
 }
 
