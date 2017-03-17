@@ -46,7 +46,7 @@ use events::Event;
 ///         // or using the buffer
 ///         // Ok(e) => assert!(writer.write(&buf).is_ok()),
 ///
-///         // error are chained, the last one usually being the 
+///         // error are chained, the last one usually being the
 ///         // position where the error has happened
 ///         Err(e) => panic!("{:?}", e.iter().map(|e| format!("{:?} -", e)).collect::<String>()),
 ///     }
@@ -98,8 +98,6 @@ impl<W: Write> Writer<W> {
 
     #[inline]
     fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<usize> {
-        Ok(self.writer.write(before)?
-           + self.writer.write(value)?
-           + self.writer.write(after)?)
+        Ok(self.writer.write(before)? + self.writer.write(value)? + self.writer.write(after)?)
     }
 }

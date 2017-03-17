@@ -19,13 +19,12 @@ pub struct Attributes<'a> {
     exit: bool,
     /// if true, checks for duplicate names
     with_checks: bool,
-    /// if `with_checks`, contains the ranges corresponding to the 
+    /// if `with_checks`, contains the ranges corresponding to the
     /// attribute names already parsed in this `Element`
     consumed: Vec<Range<usize>>,
 }
 
 impl<'a> Attributes<'a> {
-
     /// creates a new attribute iterator from a buffer
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
@@ -62,7 +61,6 @@ pub struct Attribute<'a> {
 }
 
 impl<'a> Attribute<'a> {
-
     /// unescapes the value
     pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
         unescape(self.value)
@@ -73,21 +71,26 @@ impl<'a> Attribute<'a> {
     /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
     /// 1. Attributes::unescaped_value()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>)
-        -> Result<String> {
+    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped_value().map(|e| reader.decode(&*e).into_owned())
     }
 }
 
-impl<'a> From<(&'a[u8], &'a[u8])> for Attribute<'a> {
-    fn from(val:(&'a[u8], &'a[u8])) -> Attribute<'a> {
-        Attribute { key: val.0, value: val.1 }
+impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
+    fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
+        Attribute {
+            key: val.0,
+            value: val.1,
+        }
     }
 }
 
 impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
-    fn from(val:(&'a str, &'a str)) -> Attribute<'a> {
-        Attribute { key: val.0.as_bytes(), value: val.1.as_bytes() }
+    fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
+        Attribute {
+            key: val.0.as_bytes(),
+            value: val.1.as_bytes(),
+        }
     }
 }
 
@@ -112,8 +115,7 @@ impl<'a> Iterator for Attributes<'a> {
             let start: usize;
             loop {
                 match iter.next() {
-                    Some((_, b' ')) | Some((_, b'\r')) 
-                        | Some((_, b'\n')) | Some((_, b'\t')) => {
+                    Some((_, b' ')) | Some((_, b'\r')) | Some((_, b'\n')) | Some((_, b'\t')) => {
                         if !found_space {
                             found_space = true;
                         }
@@ -140,8 +142,7 @@ impl<'a> Iterator for Attributes<'a> {
         let mut quote = 0;
         loop {
             match iter.next() {
-                Some((i, b' ')) | Some((i, b'\r')) 
-                    | Some((i, b'\n')) | Some((i, b'\t')) => {
+                Some((i, b' ')) | Some((i, b'\r')) | Some((i, b'\n')) | Some((i, b'\t')) => {
                     if end_key.is_none() {
                         end_key = Some(i);
                     }
@@ -186,8 +187,10 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .cloned()
                 .find(|r2| &self.bytes[r2.clone()] == name) {
-                    return Some(self.error(format!("Duplicate attribute at position {} and {}", 
-                                    r2.start, r.start), r.start));
+                return Some(self.error(format!("Duplicate attribute at position {} and {}",
+                                               r2.start,
+                                               r.start),
+                                       r.start));
             }
             self.consumed.push(r.clone());
         }

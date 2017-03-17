@@ -10,15 +10,15 @@
 //! ## Writer
 //!
 //! `Writer`: to write xmls. Can be nested with readers if you want to transform xmls
-//! 
+//!
 //! ## Examples
-//! 
+//!
 //! ### Reader
-//! 
+//!
 //! ```rust
 //! use quick_xml::reader::Reader;
 //! use quick_xml::events::Event;
-//! 
+//!
 //! let xml = r#"<tag1 att1 = "test">
 //!                 <tag2><!--Test comment-->Test</tag2>
 //!                 <tag2>
@@ -59,7 +59,7 @@
 //!     buf.clear();
 //! }
 //! ```
-//! 
+//!
 //! ### Writer
 //!
 //! ```rust

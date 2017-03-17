@@ -21,14 +21,13 @@ pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
-    name_len: usize
+    name_len: usize,
 }
 
 impl<'a> BytesStart<'a> {
-
     /// Creates a new `BytesStart` from the given name.
     #[inline]
-    pub fn borrowed(content: &'a[u8], name_len: usize) -> BytesStart<'a> {
+    pub fn borrowed(content: &'a [u8], name_len: usize) -> BytesStart<'a> {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len: name_len,
@@ -88,7 +87,7 @@ impl<'a> BytesStart<'a> {
     /// like byte slices and strings.
     pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
         where I: IntoIterator,
-              I::Item: Into<Attribute<'b>>,
+              I::Item: Into<Attribute<'b>>
     {
         for attr in attributes {
             self.push_attribute(attr);
@@ -108,8 +107,7 @@ impl<'a> BytesStart<'a> {
     /// Adds an attribute to this element from the given key and value.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A)
-    {
+    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A) {
         let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
@@ -118,7 +116,6 @@ impl<'a> BytesStart<'a> {
         bytes.extend_from_slice(a.value);
         bytes.push(b'"');
     }
-
 }
 
 /// Wrapper around `BytesElement` to parse/write `XmlDecl`
@@ -141,9 +138,12 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok(Attribute { key: b"version", value: v})) => Ok(v),
-            Some(Ok(a)) => Err(format!("XmlDecl must start with 'version' attribute, \
-                                        found {:?}", from_utf8(a.key)).into()),
+            Some(Ok(Attribute { key: b"version", value: v })) => Ok(v),
+            Some(Ok(a)) => {
+                Err(format!("XmlDecl must start with 'version' attribute, found {:?}",
+                            from_utf8(a.key))
+                    .into())
+            }
             None => Err("XmlDecl must start with 'version' attribute, found none".into()),
         }
     }
@@ -153,7 +153,7 @@ impl<'a> BytesDecl<'a> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok(Attribute { key: b"encoding", value: v}) => return Some(Ok(v)),
+                Ok(Attribute { key: b"encoding", value: v }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -179,12 +179,23 @@ impl<'a> BytesDecl<'a> {
     /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
     /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
     /// the double quote character is not allowed in any of the attribute values.
-    pub fn new(version: &[u8], encoding: Option<&[u8]>, standalone: Option<&[u8]>) -> BytesDecl<'static> {
+    pub fn new(version: &[u8],
+               encoding: Option<&[u8]>,
+               standalone: Option<&[u8]>)
+               -> BytesDecl<'static> {
         // Compute length of the buffer based on supplied attributes
         // ' encoding=""'   => 12
-        let encoding_attr_len = if let Some(xs) = encoding { 12 + xs.len() } else { 0 };
+        let encoding_attr_len = if let Some(xs) = encoding {
+            12 + xs.len()
+        } else {
+            0
+        };
         // ' standalone=""' => 14
-        let standalone_attr_len = if let Some(xs) = standalone { 14 + xs.len() } else { 0 };
+        let standalone_attr_len = if let Some(xs) = standalone {
+            14 + xs.len()
+        } else {
+            0
+        };
         // 'xml version=""' => 14
         let mut buf = Vec::with_capacity(14 + encoding_attr_len + standalone_attr_len);
 
@@ -216,7 +227,7 @@ impl<'a> BytesDecl<'a> {
 /// A struct to manage `Event::End` events
 #[derive(Clone, Debug)]
 pub struct BytesEnd<'a> {
-    name: Cow<'a, [u8]>
+    name: Cow<'a, [u8]>,
 }
 
 impl<'a> BytesEnd<'a> {
@@ -242,7 +253,7 @@ impl<'a> BytesEnd<'a> {
 /// A struct to manage `Event::End` events
 #[derive(Clone, Debug)]
 pub struct BytesText<'a> {
-    content: Cow<'a, [u8]>
+    content: Cow<'a, [u8]>,
 }
 
 impl<'a> BytesText<'a> {

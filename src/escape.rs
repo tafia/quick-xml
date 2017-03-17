@@ -23,7 +23,7 @@ enum ByteOrChar {
 /// xml escaped characters ('&...;') into their corresponding value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
-    
+
     let mut bytes = raw.iter().enumerate();
     while let Some((i, _)) = bytes.by_ref().find(|&(_, b)| *b == b'&') {
         if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
@@ -36,7 +36,8 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                 b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
                 b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
                 b"#x0" | b"#0" => {
-                    return Err(Escape("Null character entity is not allowed".to_string(), i..j).into())
+                    return Err(Escape("Null character entity is not allowed".to_string(), i..j)
+                        .into())
                 }
                 bytes if bytes.len() > 1 && bytes[0] == b'#' => {
                     let code = if bytes[1] == b'x' {
@@ -46,7 +47,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                     };
                     escapes.push((i..j, ByteOrChar::Char(
                                 code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
-                },
+                }
                 _ => return Err(Escape("".to_owned(), i..j).into()),
             }
         } else {
@@ -96,7 +97,8 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
 fn test_escape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    println!("{}", ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
+    println!("{}",
+             ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
 }
