@@ -69,6 +69,8 @@ impl<'a> BytesStart<'a> {
     }
 
     /// local name (excluding namespace) as &[u8] (without evental attributes)
+    /// Note: only events produced by `read_namespaced_event()` will have needed
+    /// namespace information to resolve the local name.
     #[inline]
     pub fn local_name<B: BufRead>(&self, rdr: &Reader<B>) -> &[u8] {
         rdr.resolve_namespace(self.name()).1
@@ -255,6 +257,8 @@ impl<'a> BytesEnd<'a> {
     }
 
     /// local name (excluding namespace) as &[u8] (without evental attributes)
+    /// Note: only events produced by `read_namespaced_event()` will have needed
+    /// namespace information to resolve the local name.
     #[inline]
     pub fn local_name<B: BufRead>(&self, rdr: &Reader<B>) -> &[u8] {
         rdr.resolve_namespace(self.name()).1
