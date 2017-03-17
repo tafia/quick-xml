@@ -274,7 +274,7 @@ fn test_write_attrs() {
                     .unwrap();
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
-                elem.with_attributes(attrs);
+                elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y"));
                 Start(elem)
             }

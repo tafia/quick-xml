@@ -55,10 +55,9 @@ impl<'a> BytesStart<'a> {
     /// over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
-    pub fn with_attributes<'b, I>(&mut self, attributes: I) -> &mut Self
+    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
         where I: IntoIterator,
-              I::Item: Into<Attribute<'b>>,
-
+              I::Item: Into<Attribute<'b>>
     {
         self.extend_attributes(attributes);
         self
