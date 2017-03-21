@@ -90,7 +90,7 @@ loop {
             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
 
             // collect existing attributes
-            elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
+            elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
 
             // copy existing attributes, adds a new my-key="some value" attribute
             elem.push_attribute(("my-key", "some value"));

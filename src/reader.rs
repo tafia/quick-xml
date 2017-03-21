@@ -81,7 +81,6 @@ pub struct Reader<B: BufRead> {
 }
 
 impl<B: BufRead> Reader<B> {
-
     /// Creates a Reader from a generic BufReader
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
@@ -156,9 +155,11 @@ impl<B: BufRead> Reader<B> {
                 let (start, len) = if self.trim_text {
                     match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
                         Some(start) => {
-                            (start, buf.iter()
-                             .rposition(|&b| !is_whitespace(b)).map(|p| p + 1)
-                             .unwrap_or(buf.len()))
+                            (start,
+                             buf.iter()
+                                 .rposition(|&b| !is_whitespace(b))
+                                 .map(|p| p + 1)
+                                 .unwrap_or(buf.len()))
                         }
                         None => return self.read_event(buf),
                     }
@@ -219,8 +220,11 @@ impl<B: BufRead> Reader<B> {
                         b'/' => self.read_end(&buf[buf_start..]),
                         b'!' => self.read_bang(buf_start, buf),
                         b'?' => self.read_question_mark(&buf[buf_start..]),
-                        _ => unreachable!("We checked that `start` must be one of [/!?], \
-                                            was {:?} instead.", start),
+                        _ => {
+                            unreachable!("We checked that `start` must be one of [/!?], was {:?} \
+                                          instead.",
+                                         start)
+                        }
                     }
                 }
                 Err(e) => return Err(e),
@@ -232,24 +236,28 @@ impl<B: BufRead> Reader<B> {
     /// reads `BytesElement` starting with a `/`,
     /// if `self.check_end_names`, checks that element matches last opened element
     /// return `End` event
-    fn read_end<'a, 'b>(&'a mut self, buf: &'b[u8]) -> Result<Event<'b>> {
+    fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if self.check_end_names {
             match self.opened_starts.pop() {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
                         self.buf_position -= len;
-                        bail!(ErrorKind::EndEventMismatch(
-                                from_utf8(&self.opened_buffer[start..]).unwrap_or("").to_owned(),
-                                from_utf8(&buf[1..]).unwrap_or("").to_owned()));
+                        bail!(ErrorKind::EndEventMismatch(from_utf8(&self.opened_buffer[start..])
+                                                              .unwrap_or("")
+                                                              .to_owned(),
+                                                          from_utf8(&buf[1..])
+                                                              .unwrap_or("")
+                                                              .to_owned()));
                     }
                     self.opened_buffer.truncate(start);
-                },
+                }
                 None => {
                     self.buf_position -= len;
-                    bail!(ErrorKind::EndEventMismatch(
-                            "".to_owned(),
-                            from_utf8(&buf[1..]).unwrap_or("").to_owned()));
+                    bail!(ErrorKind::EndEventMismatch("".to_owned(),
+                                                      from_utf8(&buf[1..])
+                                                          .unwrap_or("")
+                                                          .to_owned()));
                 }
             }
         }
@@ -258,7 +266,10 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    fn read_bang<'a, 'b>(&'a mut self, buf_start: usize, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    fn read_bang<'a, 'b>(&'a mut self,
+                         buf_start: usize,
+                         buf: &'b mut Vec<u8>)
+                         -> Result<Event<'b>> {
         let len = buf.len();
         if len >= 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
             let mut len = buf.len();
@@ -268,7 +279,7 @@ impl<B: BufRead> Reader<B> {
                     Ok(0) => {
                         self.buf_position -= len;
                         bail!(io_eof("Comment"))
-                    },
+                    }
                     Ok(n) => self.buf_position += n,
                     Err(e) => return Err(e.into()),
                 }
@@ -377,7 +388,7 @@ impl<B: BufRead> Reader<B> {
                 Ok(Event::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
             }
         } else {
-            if self.check_end_names { 
+            if self.check_end_names {
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
@@ -414,9 +425,9 @@ impl<B: BufRead> Reader<B> {
     }
 
     /// Reads the next event and resolve its namespace
-    pub fn read_namespaced_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) 
-        -> Result<(Option<&'a[u8]>, Event<'b>)>
-    {
+    pub fn read_namespaced_event<'a, 'b>(&'a mut self,
+                                         buf: &'b mut Vec<u8>)
+                                         -> Result<(Option<&'a [u8]>, Event<'b>)> {
         self.ns_buffer.pop_empty_namespaces();
         match self.read_event(buf) {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
@@ -454,13 +465,12 @@ impl<B: BufRead> Reader<B> {
     ///
     /// If no encoding is specified, then defaults to UTF_8
     #[inline]
-    pub fn decode<'b, 'c>(&'b self, bytes: &'c[u8]) -> Cow<'c, str> {
+    pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
 }
 
 impl<B: BufRead> Reader<B> {
-
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -470,12 +480,16 @@ impl<B: BufRead> Reader<B> {
         loop {
             match self.read_event(buf) {
                 Ok(Event::End(ref e)) if e.name() == end => {
-                    if depth == 0 { return Ok(()); }
+                    if depth == 0 {
+                        return Ok(());
+                    }
                     depth -= 1;
                 }
                 Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
-                Ok(Event::Eof) => return Err(io_eof(&format!("Expecting {:?} end", from_utf8(end))).into()),
+                Ok(Event::Eof) => {
+                    return Err(io_eof(&format!("Expecting {:?} end", from_utf8(end))).into())
+                }
                 _ => (),
             }
             buf.clear();
@@ -486,16 +500,16 @@ impl<B: BufRead> Reader<B> {
     /// then returns an unescaped `String`, else returns an error
     ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use quick_xml::reader::Reader;
     /// use quick_xml::events::Event;
     ///
     /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]);
-    /// 
+    ///
     /// xml.trim_text(true);
     /// let mut buf = Vec::new();
-    /// 
+    ///
     /// match xml.read_event(&mut buf) {
     ///     Ok(Event::Start(ref e)) => {
     ///         assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), "<b>");
@@ -524,9 +538,9 @@ impl Reader<BufReader<File>> {
     }
 }
 
-impl<'a> Reader<&'a[u8]> {
+impl<'a> Reader<&'a [u8]> {
     /// Creates a xml reader from a file path
-    pub fn from_str(s: &'a str) -> Reader<&'a[u8]> {
+    pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
         Reader::from_reader(s.as_bytes())
     }
 }
@@ -594,7 +608,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
         /// Inside a single-quoted attribute value
         SingleQ,
         /// Inside a double-quoted attribute value
-        DoubleQ
+        DoubleQ,
     }
     let mut state = ElemReadState::Elem;
     let mut read = 0;
@@ -621,8 +635,8 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                                 done = true;
                                 used = i + 1;
                                 break;
-                            },
-                            (ElemReadState::Elem,  b'\'') => ElemReadState::SingleQ,
+                            }
+                            (ElemReadState::Elem, b'\'') => ElemReadState::SingleQ,
                             (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
 
                             // the only end_byte that gets us out of state 'SingleQ' is a single quote
@@ -696,7 +710,8 @@ impl Namespace {
         if self.value_len == 0 {
             None
         } else {
-            Some(&ns_buffer[self.start + self.prefix_len..self.start + self.prefix_len + self.value_len])
+            Some(&ns_buffer[self.start + self.prefix_len..
+                  self.start + self.prefix_len + self.value_len])
         }
     }
 }
@@ -720,13 +735,16 @@ struct NamespaceBuffer {
 }
 
 impl NamespaceBuffer {
-
     #[inline]
     fn find_namespace_value(&self, element_name: &[u8]) -> Option<&[u8]> {
         let ns = match element_name.iter().position(|b| *b == b':') {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
-            Some(len) => self.slices.iter().rev()
-                .find(|n| n.prefix(&self.buffer) == &element_name[..len]),
+            Some(len) => {
+                self.slices
+                    .iter()
+                    .rev()
+                    .find(|n| n.prefix(&self.buffer) == &element_name[..len])
+            }
         };
         ns.and_then(|ref n| n.opt_value(&self.buffer))
     }
@@ -761,7 +779,7 @@ impl NamespaceBuffer {
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
         for a in e.attributes().with_checks(false) {
-            if let Ok(Attribute {key: k, value: v}) = a {
+            if let Ok(Attribute { key: k, value: v }) = a {
                 if k.starts_with(b"xmlns") {
                     match k.get(5) {
                         None => {
@@ -773,7 +791,7 @@ impl NamespaceBuffer {
                                 value_len: v.len(),
                                 level: level,
                             });
-                        },
+                        }
                         Some(&b':') => {
                             let start = self.buffer.len();
                             self.buffer.extend_from_slice(&k[6..]);
@@ -784,7 +802,7 @@ impl NamespaceBuffer {
                                 value_len: v.len(),
                                 level: level,
                             });
-                        },
+                        }
                         _ => break,
                     }
                 }
@@ -803,13 +821,18 @@ impl NamespaceBuffer {
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     #[inline]
     fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
-        qname.iter().position(|b| *b == b':').and_then(|len| {
-            let (prefix, value) = qname.split_at(len);
-            self.slices.iter().rev().find(|n| n.prefix(&self.buffer) == prefix)
-                .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
-        }).unwrap_or((None, qname))
+        qname.iter()
+            .position(|b| *b == b':')
+            .and_then(|len| {
+                let (prefix, value) = qname.split_at(len);
+                self.slices
+                    .iter()
+                    .rev()
+                    .find(|n| n.prefix(&self.buffer) == prefix)
+                    .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
+            })
+            .unwrap_or((None, qname))
     }
-
 }
 
 fn io_eof(msg: &str) -> ::std::io::Error {

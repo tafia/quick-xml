@@ -54,14 +54,14 @@ fn test_start() {
 #[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_attr() {
     let mut r = Reader::from_str("<a b=\"test\"></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
@@ -106,14 +106,14 @@ fn test_start_end_comment() {
 #[test]
 fn test_start_txt_end() {
     let mut r = Reader::from_str("<a>test</a>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
     let mut r = Reader::from_str("<!--test-->");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Comment, b"test");
 }
 
@@ -122,7 +122,7 @@ fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
     let mut buf = Vec::new();
-	match r.read_event(&mut buf).unwrap() {
+    match r.read_event(&mut buf).unwrap() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => {
@@ -154,11 +154,11 @@ fn test_xml_decl() {
 fn test_trim_test() {
     let txt = "<a><b>  </b></a>";
     let mut r = Reader::from_str(txt);
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
 
     let mut r = Reader::from_str(txt);
-	r.trim_text(false);
+    r.trim_text(false);
     next_eq!(r,
              Text,
              b"",
@@ -181,21 +181,21 @@ fn test_trim_test() {
 #[test]
 fn test_cdata() {
     let mut r = Reader::from_str("<![CDATA[test]]>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
     let mut r = Reader::from_str("<![CDATA[test <> test]]>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
     let mut r = Reader::from_str("<a b=\"c\">");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
@@ -222,7 +222,7 @@ fn test_nested() {
 fn test_writer() {
     let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
     let mut reader = Reader::from_str(txt);
-	reader.trim_text(true);
+    reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
@@ -262,7 +262,7 @@ fn test_write_attrs() {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
     let mut reader = Reader::from_str(str_from);
-	reader.trim_text(true);
+    reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
@@ -270,10 +270,11 @@ fn test_write_attrs() {
             Ok(Eof) => break,
             Ok(Start(elem)) => {
                 let mut attrs = elem.attributes()
-                    .collect::<Result<Vec<_>>>().unwrap();
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap();
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
-                elem.with_attributes(attrs);
+                elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y"));
                 Start(elem)
             }
@@ -296,8 +297,8 @@ fn test_new_xml_decl_full() {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
-        "writer output (LHS)");
+               "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
+               "writer output (LHS)");
 }
 
 #[test]
@@ -308,8 +309,8 @@ fn test_new_xml_decl_standalone() {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
-        "writer output (LHS)");
+               "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
+               "writer output (LHS)");
 }
 
 #[test]
@@ -320,8 +321,8 @@ fn test_new_xml_decl_encoding() {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
-        "writer output (LHS)");
+               "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
+               "writer output (LHS)");
 }
 
 #[test]
@@ -332,8 +333,8 @@ fn test_new_xml_decl_version() {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\"?>".to_owned(),
-        "writer output (LHS)");
+               "<?xml version=\"1.2\"?>".to_owned(),
+               "writer output (LHS)");
 }
 
 /// This test ensures that empty XML declaration attribute values are not a problem.
@@ -347,8 +348,8 @@ fn test_new_xml_decl_empty() {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-    "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
-    "writer output (LHS)");
+               "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
+               "writer output (LHS)");
 }
 
 #[test]
@@ -357,9 +358,13 @@ fn test_buf_position() {
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
+    match r.read_event(&mut buf) {
         Err(_) if r.buffer_position() == 2 => assert!(true), // error at char 2: no opening tag
-        Err(e) => panic!("expecting buf_pos = 2, found {}, err: {:?}", r.buffer_position(), e),
+        Err(e) => {
+            panic!("expecting buf_pos = 2, found {}, err: {:?}",
+                   r.buffer_position(),
+                   e)
+        }
         e => panic!("expecting error, found {:?}", e),
     }
 
@@ -369,9 +374,13 @@ fn test_buf_position() {
     next_eq!(r, Start, b"a");
 
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
+    match r.read_event(&mut buf) {
         Err(_) if r.buffer_position() == 5 => assert!(true), // error at char 5: no closing --> tag found
-        Err(e) => panic!("expecting buf_pos = 5, found {}, err: {:?}", r.buffer_position(), e),
+        Err(e) => {
+            panic!("expecting buf_pos = 5, found {}, err: {:?}",
+                   r.buffer_position(),
+                   e)
+        }
         e => assert!(false, "expecting error, found {:?}", e),
     }
 
@@ -448,9 +457,12 @@ fn test_default_namespace_reset() {
 
     let mut buf = Vec::new();
     if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf) {
-        assert_eq!(&a[..], b"www1", "expecting outer start element with to resolve to 'www1'");
+        assert_eq!(&a[..],
+                   b"www1",
+                   "expecting outer start element with to resolve to 'www1'");
     } else {
-        assert!(false, "expecting outer start element with to resolve to 'www1'");
+        assert!(false,
+                "expecting outer start element with to resolve to 'www1'");
     }
 
     if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf) {
@@ -463,19 +475,22 @@ fn test_default_namespace_reset() {
     }
 
     if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf) {
-        assert_eq!(&a[..], b"www1", "expecting outer end element with to resolve to 'www1'");
+        assert_eq!(&a[..],
+                   b"www1",
+                   "expecting outer end element with to resolve to 'www1'");
     } else {
-        assert!(false, "expecting outer end element with to resolve to 'www1'");
+        assert!(false,
+                "expecting outer end element with to resolve to 'www1'");
     }
 }
 
 #[test]
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
-	r.trim_text(true);
+    r.trim_text(true);
     next_eq!(r, Start, b"a");
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
+    match r.read_event(&mut buf) {
         Ok(Text(e)) => {
             if &*e != b"&lt;test&gt;" {
                 panic!("content unexpected: expecting '&lt;test&gt;', got '{:?}'",
@@ -488,12 +503,19 @@ fn test_escaped_content() {
                                from_utf8(c))
                     }
                 }
-                Err(e) => panic!("cannot escape content at position {}: {:?}",
-                                 r.buffer_position(), e),
+                Err(e) => {
+                    panic!("cannot escape content at position {}: {:?}",
+                           r.buffer_position(),
+                           e)
+                }
             }
         }
         Ok(e) => panic!("Expecting text event, got {:?}", e),
-        Err(e) => panic!("Cannot get next event at position {}: {:?}", r.buffer_position(), e),
+        Err(e) => {
+            panic!("Cannot get next event at position {}: {:?}",
+                   r.buffer_position(),
+                   e)
+        }
     }
     next_eq!(r, End, b"a");
 }
@@ -528,22 +550,22 @@ fn test_read_write_roundtrip_results_in_identity() {
 #[test]
 fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
+    match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
-                x => panic!("expected attribute 'attr', got {:?}", x)
+                x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
-                x => panic!("expected attribute 'check', got {:?}", x)
+                x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
-        },
-        x => panic!("expected <a attr='>'>, got {:?}", x)
+        }
+        x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     next_eq!(r, End, b"a");
 }
@@ -551,22 +573,22 @@ fn test_closing_bracket_in_single_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str("<a attr=\">\" check=\"2\"></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     let mut buf = Vec::new();
-	match r.read_event(&mut buf) {
+    match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
-                x => panic!("expected attribute 'attr', got {:?}", x)
+                x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
-                x => panic!("expected attribute 'check', got {:?}", x)
+                x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
-        },
-        x => panic!("expected <a attr='>'>, got {:?}", x)
+        }
+        x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     next_eq!(r, End, b"a");
 }
@@ -574,22 +596,22 @@ fn test_closing_bracket_in_double_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str("<a attr=\"'>'\" check=\"'2'\"></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("attr", "'>'").into()),
-                x => panic!("expected attribute 'attr', got {:?}", x)
+                x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("check", "'2'").into()),
-                x => panic!("expected attribute 'check', got {:?}", x)
+                x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
-        },
-        x => panic!("expected <a attr='>'>, got {:?}", x)
+        }
+        x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     next_eq!(r, End, b"a");
 }
@@ -597,22 +619,22 @@ fn test_closing_bracket_in_double_quote_mixed() {
 #[test]
 fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str("<a attr='\">\"' check='\"2\"'></a>");
-	r.trim_text(true);
+    r.trim_text(true);
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("attr", "\">\"").into()),
-                x => panic!("expected attribute 'attr', got {:?}", x)
+                x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
                 Some(Ok(attr)) => assert_eq!(attr, ("check", "\"2\"").into()),
-                x => panic!("expected attribute 'check', got {:?}", x)
+                x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
-        },
-        x => panic!("expected <a attr='>'>, got {:?}", x)
+        }
+        x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     next_eq!(r, End, b"a");
 }

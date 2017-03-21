@@ -10,15 +10,15 @@
 //! ## Writer
 //!
 //! `Writer`: to write xmls. Can be nested with readers if you want to transform xmls
-//! 
+//!
 //! ## Examples
-//! 
+//!
 //! ### Reader
-//! 
+//!
 //! ```rust
 //! use quick_xml::reader::Reader;
 //! use quick_xml::events::Event;
-//! 
+//!
 //! let xml = r#"<tag1 att1 = "test">
 //!                 <tag2><!--Test comment-->Test</tag2>
 //!                 <tag2>
@@ -59,7 +59,7 @@
 //!     buf.clear();
 //! }
 //! ```
-//! 
+//!
 //! ### Writer
 //!
 //! ```rust
@@ -83,7 +83,7 @@
 //!             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
 //!
 //!             // collect existing attributes
-//!             elem.with_attributes(e.attributes().map(|attr| attr.unwrap()));
+//!             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
 //!
 //!             // copy existing attributes, adds a new my-key="some value" attribute
 //!             elem.push_attribute(("my-key", "some value"));
