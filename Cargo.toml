@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.6.2"
+version = "0.7.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
@@ -10,7 +10,6 @@ repository = "https://github.com/tafia/quick-xml"
 readme = "README.md"
 keywords = ["xml", "reader", "parser", "writer", "html"]
 categories = ["encoding", "parsing", "text-processing"]
-license = "MIT"
 license-file = "LICENSE-MIT.md"
 
 [badges]
