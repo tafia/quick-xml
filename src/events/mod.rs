@@ -68,6 +68,18 @@ impl<'a> BytesStart<'a> {
         &self.buf[..self.name_len]
     }
 
+    /// local name (excluding namespace) as &[u8] (without eventual attributes)
+    /// returns the name() with any leading namespace removed (all content up to
+    /// and including the first ':' character)
+    #[inline]
+    pub fn local_name(&self) -> &[u8] {
+        if let Some(i) = self.name().iter().position(|b| *b == b':') {
+            &self.name()[i + 1..]
+        } else {
+            self.name()
+        }
+    }
+
     /// gets unescaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
@@ -247,6 +259,18 @@ impl<'a> BytesEnd<'a> {
     pub fn name(&self) -> &[u8] {
         &*self.name
     }
+
+    /// local name (excluding namespace) as &[u8] (without eventual attributes)
+    /// returns the name() with any leading namespace removed (all content up to
+    /// and including the first ':' character)
+    #[inline]
+    pub fn local_name(&self) -> &[u8] {
+        if let Some(i) = self.name().iter().position(|b| *b == b':') {
+            &self.name()[i + 1..]
+        } else {
+            self.name()
+        }
+    }
 }
 
 /// A struct to manage `Event::End` events
@@ -355,4 +379,43 @@ impl<'a> Deref for Event<'a> {
             Event::Eof => &[],
         }
     }
+}
+
+#[cfg(test)]
+#[test]
+fn local_name() {
+    use std::str::from_utf8;
+    let xml = r#"
+        <foo:bus attr='bar'>foobusbar</foo:bus>
+        <foo: attr='bar'>foobusbar</foo:>
+        <:foo attr='bar'>foobusbar</:foo>
+        <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
+        "#;
+    let mut rdr = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut parsed_local_names = Vec::new();
+    loop {
+        match rdr.read_event(&mut buf).expect("unable to read xml event") {
+            Event::Start(ref e) => {
+                parsed_local_names.push(from_utf8(e.local_name())
+                    .expect("unable to build str from local_name")
+                    .to_string())
+            }
+            Event::End(ref e) => {
+                parsed_local_names.push(from_utf8(e.local_name())
+                    .expect("unable to build str from local_name")
+                    .to_string())
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    assert_eq!(parsed_local_names[0], "bus".to_string());
+    assert_eq!(parsed_local_names[1], "bus".to_string());
+    assert_eq!(parsed_local_names[2], "".to_string());
+    assert_eq!(parsed_local_names[3], "".to_string());
+    assert_eq!(parsed_local_names[4], "foo".to_string());
+    assert_eq!(parsed_local_names[5], "foo".to_string());
+    assert_eq!(parsed_local_names[6], "bus:baz".to_string());
+    assert_eq!(parsed_local_names[7], "bus:baz".to_string());
 }
