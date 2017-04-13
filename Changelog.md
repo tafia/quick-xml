@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## master
+- style: rustfmt
+
 ## 0.7.0
 - style: rustfmt
 - fix: {with,extend}_attributes usage

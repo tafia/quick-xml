@@ -37,7 +37,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                 b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
                 b"#x0" | b"#0" => {
                     return Err(Escape("Null character entity is not allowed".to_string(), i..j)
-                        .into())
+                                   .into())
                 }
                 bytes if bytes.len() > 1 && bytes[0] == b'#' => {
                     let code = if bytes[1] == b'x' {
@@ -45,8 +45,10 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                     } else {
                         u32::from_ascii_radix(&bytes[1..], 10)
                     };
-                    escapes.push((i..j, ByteOrChar::Char(
-                                code.map_err(|e| Escape(format!("{:?}", e), i..j))?)));
+                    escapes.push((i..j,
+                                  ByteOrChar::Char(code.map_err(|e| {
+                                                                    Escape(format!("{:?}", e), i..j)
+                                                                })?)));
                 }
                 _ => return Err(Escape("".to_owned(), i..j).into()),
             }

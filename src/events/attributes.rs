@@ -68,11 +68,13 @@ impl<'a> Attribute<'a> {
 
     /// unescapes then decode the value
     ///
-    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
     /// 1. Attributes::unescaped_value()
     /// 2. Reader::decode(...)
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped_value().map(|e| reader.decode(&*e).into_owned())
+        self.unescaped_value()
+            .map(|e| reader.decode(&*e).into_owned())
     }
 }
 
@@ -184,9 +186,9 @@ impl<'a> Iterator for Attributes<'a> {
         if self.with_checks {
             let name = &self.bytes[r.clone()];
             if let Some(ref r2) = self.consumed
-                .iter()
-                .cloned()
-                .find(|r2| &self.bytes[r2.clone()] == name) {
+                   .iter()
+                   .cloned()
+                   .find(|r2| &self.bytes[r2.clone()] == name) {
                 return Some(self.error(format!("Duplicate attribute at position {} and {}",
                                                r2.start,
                                                r.start),
@@ -196,8 +198,8 @@ impl<'a> Iterator for Attributes<'a> {
         }
 
         Some(Ok(Attribute {
-            key: &self.bytes[r],
-            value: &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())],
-        }))
+                    key: &self.bytes[r],
+                    value: &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())],
+                }))
     }
 }
