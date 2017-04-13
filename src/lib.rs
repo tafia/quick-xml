@@ -43,7 +43,8 @@
 //!         // Ok((ref namespace_value, Event::Start(ref e)))
 //!             match e.name() {
 //!                 b"tag1" => println!("attributes values: {:?}",
-//!                                     e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
+//!                                     e.attributes().map(|a| a.unwrap().value)
+//!                                     .collect::<Vec<_>>()),
 //!                 b"tag2" => count += 1,
 //!                 _ => (),
 //!             }

@@ -106,9 +106,10 @@ impl<'a> BytesStart<'a> {
         self
     }
 
-    /// helper method to unescape then decode self using the reader encoding (utf8 per default)
+    /// helper method to unescape then decode self using the reader encoding
     ///
-    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
     /// 1. BytesStart::unescaped()
     /// 2. Reader::decode(...)
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
@@ -149,11 +150,14 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok(Attribute { key: b"version", value: v })) => Ok(v),
+            Some(Ok(Attribute {
+                        key: b"version",
+                        value: v,
+                    })) => Ok(v),
             Some(Ok(a)) => {
                 Err(format!("XmlDecl must start with 'version' attribute, found {:?}",
                             from_utf8(a.key))
-                    .into())
+                            .into())
             }
             None => Err("XmlDecl must start with 'version' attribute, found none".into()),
         }
@@ -164,7 +168,10 @@ impl<'a> BytesDecl<'a> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok(Attribute { key: b"encoding", value: v }) => return Some(Ok(v)),
+                Ok(Attribute {
+                       key: b"encoding",
+                       value: v,
+                   }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -176,7 +183,10 @@ impl<'a> BytesDecl<'a> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok(Attribute { key: b"standalone", value: v }) => return Some(Ok(v)),
+                Ok(Attribute {
+                       key: b"standalone",
+                       value: v,
+                   }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -300,9 +310,10 @@ impl<'a> BytesText<'a> {
         unescape(&self)
     }
 
-    /// helper method to unescape then decode self using the reader encoding (utf8 per default)
+    /// helper method to unescape then decode self using the reader encoding
     ///
-    /// for performance reasons (could avoid allocating a `String`), it might be wiser to manually use
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
@@ -395,16 +406,17 @@ fn local_name() {
     let mut buf = Vec::new();
     let mut parsed_local_names = Vec::new();
     loop {
-        match rdr.read_event(&mut buf).expect("unable to read xml event") {
+        match rdr.read_event(&mut buf)
+                  .expect("unable to read xml event") {
             Event::Start(ref e) => {
                 parsed_local_names.push(from_utf8(e.local_name())
-                    .expect("unable to build str from local_name")
-                    .to_string())
+                                            .expect("unable to build str from local_name")
+                                            .to_string())
             }
             Event::End(ref e) => {
                 parsed_local_names.push(from_utf8(e.local_name())
-                    .expect("unable to build str from local_name")
-                    .to_string())
+                                            .expect("unable to build str from local_name")
+                                            .to_string())
             }
             Event::Eof => break,
             _ => {}

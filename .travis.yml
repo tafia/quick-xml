@@ -1,4 +1,17 @@
 language: rust
+cache: cargo
+
 rust:
-    - stable
-    - beta
+  - stable
+  - beta
+sudo: false
+before_script:
+  - export PATH=$PATH:$HOME/.cargo/bin
+  - which rustfmt || cargo install rustfmt
+script:
+  - cargo fmt -- --write-mode=diff
+  - cargo build
+  - cargo test
+  - cargo doc --no-deps
+after_success:
+  - travis-cargo --only stable doc-upload

@@ -40,7 +40,8 @@ enum TagState {
 ///         Ok(Event::Start(ref e)) => {
 ///             match e.name() {
 ///                 b"tag1" => println!("attributes values: {:?}",
-///                                     e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
+///                                     e.attributes().map(|a| a.unwrap().value)
+///                                     .collect::<Vec<_>>()),
 ///                 b"tag2" => count += 1,
 ///                 _ => (),
 ///             }
@@ -153,7 +154,9 @@ impl<B: BufRead> Reader<B> {
             Ok(n) => {
                 self.buf_position += n;
                 let (start, len) = if self.trim_text {
-                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
+                    match buf.iter()
+                              .skip(buf_start)
+                              .position(|&b| !is_whitespace(b)) {
                         Some(start) => {
                             (start,
                              buf.iter()
@@ -315,7 +318,10 @@ impl<B: BufRead> Reader<B> {
                     Ok(Event::CData(BytesText::borrowed(&buf[buf_start + 8..len - 2])))
                 }
                 b"DOCTYPE" => {
-                    let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
+                    let mut count = buf.iter()
+                        .skip(buf_start)
+                        .filter(|&&b| b == b'<')
+                        .count();
                     while count > 0 {
                         buf.push(b'>');
                         match read_until(&mut self.reader, b'>', buf) {
@@ -367,7 +373,8 @@ impl<B: BufRead> Reader<B> {
     #[inline]
     fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
         self.tag_state = TagState::Closed;
-        let name = self.opened_buffer.split_off(self.opened_starts.pop().unwrap());
+        let name = self.opened_buffer
+            .split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::owned(name)))
     }
 
@@ -376,7 +383,9 @@ impl<B: BufRead> Reader<B> {
     fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
-        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+        let name_end = buf.iter()
+            .position(|&b| is_whitespace(b))
+            .unwrap_or(len);
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
@@ -639,10 +648,10 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                             (ElemReadState::Elem, b'\'') => ElemReadState::SingleQ,
                             (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
 
-                            // the only end_byte that gets us out of state 'SingleQ' is a single quote
+                            // the only end_byte that gets us out of 'SingleQ' is a single quote
                             (ElemReadState::SingleQ, b'\'') => ElemReadState::Elem,
 
-                            // the only end_byte that gets us out of state 'DoubleQ' is a double quote
+                            // the only end_byte that gets us out of 'DoubleQ' is a double quote
                             (ElemReadState::DoubleQ, b'\"') => ElemReadState::Elem,
 
                             // all other bytes: no state change
@@ -757,7 +766,9 @@ impl NamespaceBuffer {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices.iter().rposition(|n| n.level <= current_level) {
+        match self.slices
+                  .iter()
+                  .rposition(|n| n.level <= current_level) {
             // none of the namespaces are valid, remove all of them
             None => {
                 self.buffer.clear();
@@ -785,23 +796,25 @@ impl NamespaceBuffer {
                         None => {
                             let start = self.buffer.len();
                             self.buffer.extend_from_slice(v);
-                            self.slices.push(Namespace {
-                                start: start,
-                                prefix_len: 0,
-                                value_len: v.len(),
-                                level: level,
-                            });
+                            self.slices
+                                .push(Namespace {
+                                          start: start,
+                                          prefix_len: 0,
+                                          value_len: v.len(),
+                                          level: level,
+                                      });
                         }
                         Some(&b':') => {
                             let start = self.buffer.len();
                             self.buffer.extend_from_slice(&k[6..]);
                             self.buffer.extend_from_slice(v);
-                            self.slices.push(Namespace {
-                                start: start,
-                                prefix_len: k.len() - 6,
-                                value_len: v.len(),
-                                level: level,
-                            });
+                            self.slices
+                                .push(Namespace {
+                                          start: start,
+                                          prefix_len: k.len() - 6,
+                                          value_len: v.len(),
+                                          level: level,
+                                      });
                         }
                         _ => break,
                     }
@@ -821,16 +834,17 @@ impl NamespaceBuffer {
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     #[inline]
     fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
-        qname.iter()
+        qname
+            .iter()
             .position(|b| *b == b':')
             .and_then(|len| {
-                let (prefix, value) = qname.split_at(len);
-                self.slices
-                    .iter()
-                    .rev()
-                    .find(|n| n.prefix(&self.buffer) == prefix)
-                    .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
-            })
+                          let (prefix, value) = qname.split_at(len);
+                          self.slices
+                              .iter()
+                              .rev()
+                              .find(|n| n.prefix(&self.buffer) == prefix)
+                              .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
+                      })
             .unwrap_or((None, qname))
     }
 }

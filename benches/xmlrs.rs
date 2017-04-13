@@ -3,7 +3,7 @@
 extern crate xml;
 extern crate test;
 
-use test::{Bencher};
+use test::Bencher;
 use xml::reader::{EventReader, XmlEvent};
 
 #[bench]

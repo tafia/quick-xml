@@ -33,18 +33,24 @@ fn test_attributes_empty() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok(Attribute { key: b"att1", value: b"a" })) => (),
+                Some(Ok(Attribute {
+                            key: b"att1",
+                            value: b"a",
+                        })) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
             }
             match atts.next() {
-                Some(Ok(Attribute { key: b"att2", value: b"b" })) => (),
+                Some(Ok(Attribute {
+                            key: b"att2",
+                            value: b"b",
+                        })) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
             }
             match atts.next() {
                 None => (),
                 e => panic!("Expecting None, found {:?}", e),
             }
-        },
+        }
         e => panic!("Expecting Empty event, got {:?}", e),
     }
 }
@@ -59,14 +65,17 @@ fn test_attribute_equal() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok(Attribute { key:b"att1", value:b"a=b" })) => (),
+                Some(Ok(Attribute {
+                            key: b"att1",
+                            value: b"a=b",
+                        })) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
             }
             match atts.next() {
                 None => (),
                 e => panic!("Expecting None, found {:?}", e),
             }
-        },
+        }
         e => panic!("Expecting Empty event, got {:?}", e),
     }
 }
@@ -79,7 +88,7 @@ fn test_attributes_empty_ns() {
     let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
     let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(false); 
+    r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
 
     let e = match r.read_namespaced_event(&mut buf) {
@@ -102,8 +111,11 @@ fn test_attributes_empty_ns() {
     match atts.next() {
         Some((Some(ns), b"att2", b"b")) => {
             assert_eq!(&ns[..], b"urn:example:r");
-        },
-        e => panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}", e),
+        }
+        e => {
+            panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
+                   e)
+        }
     }
     match atts.next() {
         None => (),
@@ -119,7 +131,7 @@ fn test_attributes_empty_ns_expanded() {
     let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
     let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(true); 
+    r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
     {
         let e = match r.read_namespaced_event(&mut buf) {
@@ -142,8 +154,11 @@ fn test_attributes_empty_ns_expanded() {
         match atts.next() {
             Some((Some(ns), b"att2", b"b")) => {
                 assert_eq!(&ns[..], b"urn:example:r");
-            },
-            e => panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}", e),
+            }
+            e => {
+                panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
+                       e)
+            }
         }
         match atts.next() {
             None => (),
@@ -162,7 +177,7 @@ fn test_default_ns_shadowing_empty() {
     let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
     let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(false); 
+    r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
@@ -171,7 +186,7 @@ fn test_default_ns_shadowing_empty() {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
-            },
+            }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
     }
@@ -183,7 +198,7 @@ fn test_default_ns_shadowing_empty() {
                 assert_eq!(::std::str::from_utf8(ns).unwrap(), "urn:example:i");
                 assert_eq!(e.name(), b"e");
                 e
-            },
+            }
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
@@ -212,7 +227,7 @@ fn test_default_ns_shadowing_empty() {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
-        },
+        }
         e => panic!("Expected End event (<outer>), got {:?}", e),
     }
 }
@@ -222,7 +237,7 @@ fn test_default_ns_shadowing_expanded() {
     let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
     let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(true); 
+    r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
@@ -231,7 +246,7 @@ fn test_default_ns_shadowing_expanded() {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
-            },
+            }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
     }
@@ -244,7 +259,7 @@ fn test_default_ns_shadowing_expanded() {
                 assert_eq!(&ns[..], b"urn:example:i");
                 assert_eq!(e.name(), b"e");
                 e
-            },
+            }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
         };
         let mut atts = e.attributes()
@@ -272,7 +287,7 @@ fn test_default_ns_shadowing_expanded() {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:i");
             assert_eq!(e.name(), b"e");
-        },
+        }
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
     // </outer>
@@ -280,7 +295,7 @@ fn test_default_ns_shadowing_expanded() {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
-        },
+        }
         e => panic!("Expected End event (</outer>), got {:?}", e),
     }
 }
@@ -293,7 +308,9 @@ fn test_koi8_r_encoding() {
     let mut buf = Vec::new();
     loop {
         match r.read_event(&mut buf) {
-            Ok(Text(e)) => { e.unescape_and_decode(&r).unwrap(); },
+            Ok(Text(e)) => {
+                e.unescape_and_decode(&r).unwrap();
+            }
             Ok(Eof) => break,
             _ => (),
         }
@@ -302,13 +319,16 @@ fn test_koi8_r_encoding() {
 
 #[test]
 fn fuzz_53() {
-    let data : &[u8] = b"\xe9\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\n(\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00<>\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00<<\x00\x00\x00";
+    let data: &[u8] = b"\xe9\x00\x00\x00\x00\x00\x00\x00\x00\
+\x00\x00\x00\x00\n(\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\
+\x00<>\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00<<\x00\x00\x00";
     let cursor = Cursor::new(data);
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
     loop {
         match reader.read_event(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            Ok(quick_xml::events::Event::Eof) |
+            Err(..) => break,
             _ => buf.clear(),
         }
     }

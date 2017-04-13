@@ -220,7 +220,7 @@ fn test_nested() {
 
 #[test]
 fn test_writer() {
-    let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
+    let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
@@ -269,9 +269,7 @@ fn test_write_attrs() {
         let event = match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(Start(elem)) => {
-                let mut attrs = elem.attributes()
-                    .collect::<Result<Vec<_>>>()
-                    .unwrap();
+                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.extend_attributes(attrs);
@@ -292,7 +290,8 @@ fn test_write_attrs() {
 #[test]
 fn test_new_xml_decl_full() {
     let mut writer = Writer::new(Vec::new());
-    writer.write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
+    writer
+        .write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -304,7 +303,8 @@ fn test_new_xml_decl_full() {
 #[test]
 fn test_new_xml_decl_standalone() {
     let mut writer = Writer::new(Vec::new());
-    writer.write_event(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
+    writer
+        .write_event(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -316,7 +316,8 @@ fn test_new_xml_decl_standalone() {
 #[test]
 fn test_new_xml_decl_encoding() {
     let mut writer = Writer::new(Vec::new());
-    writer.write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
+    writer
+        .write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -328,7 +329,8 @@ fn test_new_xml_decl_encoding() {
 #[test]
 fn test_new_xml_decl_version() {
     let mut writer = Writer::new(Vec::new());
-    writer.write_event(Decl(BytesDecl::new(b"1.2", None, None)))
+    writer
+        .write_event(Decl(BytesDecl::new(b"1.2", None, None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -343,7 +345,8 @@ fn test_new_xml_decl_empty() {
     let mut writer = Writer::new(Vec::new());
     // An empty version should arguably be an error, but we don't expect anyone to actually supply
     // an empty version.
-    writer.write_event(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
+    writer
+        .write_event(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -375,7 +378,10 @@ fn test_buf_position() {
 
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
-        Err(_) if r.buffer_position() == 5 => assert!(true), // error at char 5: no closing --> tag found
+        Err(_) if r.buffer_position() == 5 => {
+            // error at char 5: no closing --> tag found
+            assert!(true);
+        }
         Err(e) => {
             panic!("expecting buf_pos = 5, found {}, err: {:?}",
                    r.buffer_position(),
