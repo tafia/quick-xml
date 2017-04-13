@@ -119,19 +119,17 @@ fn tabs_1() {
 }
 
 #[test]
-#[cfg_attr(rustfmt, rustfmt_skip)]
 fn issue_83_duplicate_attributes() {
     // Error when parsing attributes won't stop main event reader
     // as it is a lazy operation => add ending events
-    test(
-        br#"<hello><some-tag a='10' a="20"/></hello>"#,
-        br#"
+    test(br#"<hello><some-tag a='10' a="20"/></hello>"#,
+         b"
             |StartElement(hello)
-            |1:30 EmptyElement(some-tag, attr-error: error while parsing attribute at position 16: Duplicate attribute at position 9 and 16)
+            |1:30 EmptyElement(some-tag, attr-error: error while parsing \
+                  attribute at position 16: Duplicate attribute at position 9 and 16)
             |EndElement(hello)
-        "#,
-        true
-    );
+        ",
+         true);
 }
 
 #[test]
