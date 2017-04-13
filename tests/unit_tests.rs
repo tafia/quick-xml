@@ -219,6 +219,7 @@ fn test_nested() {
 }
 
 #[test]
+#[cfg_attr(rustfmt, rustfmt_skip)]
 fn test_writer() {
     let txt = r#"<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.github.sample" android:versionName="Lollipop" android:versionCode="5.1"><application android:label="SampleApplication"></application></manifest>"#;
     let mut reader = Reader::from_str(txt);

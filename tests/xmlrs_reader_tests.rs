@@ -119,6 +119,7 @@ fn tabs_1() {
 }
 
 #[test]
+#[cfg_attr(rustfmt, rustfmt_skip)]
 fn issue_83_duplicate_attributes() {
     // Error when parsing attributes won't stop main event reader
     // as it is a lazy operation => add ending events
