@@ -8,7 +8,7 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## master
+## 0.7.1
 - style: rustfmt
 - refactor: remove from_ascii crate dependency
 
