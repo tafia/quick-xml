@@ -3,7 +3,6 @@
 use std::borrow::Cow;
 use errors::Result;
 use errors::ErrorKind::Escape;
-use from_ascii::FromAsciiRadix;
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -28,7 +27,6 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     while let Some((i, _)) = bytes.by_ref().find(|&(_, b)| *b == b'&') {
         if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
             // search for character correctness
-            // copied and modified from xml-rs inside_reference.rs
             match &raw[i + 1..j] {
                 b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
                 b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
@@ -36,24 +34,20 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                 b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
                 b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
                 b"#x0" | b"#0" => {
-                    return Err(Escape("Null character entity is not allowed".to_string(), i..j)
-                                   .into())
+                    bail!(Escape("Null character entity is not allowed".to_string(), i..j))
                 }
-                bytes if bytes.len() > 1 && bytes[0] == b'#' => {
-                    let code = if bytes[1] == b'x' {
-                        u32::from_ascii_radix(&bytes[2..], 16)
-                    } else {
-                        u32::from_ascii_radix(&bytes[1..], 10)
-                    };
-                    escapes.push((i..j,
-                                  ByteOrChar::Char(code.map_err(|e| {
-                                                                    Escape(format!("{:?}", e), i..j)
-                                                                })?)));
+                bytes if bytes.starts_with(b"#x") => {
+                    let code = parse_hexadecimal(&bytes[2..])?;
+                    escapes.push((i..j, ByteOrChar::Char(code)))
                 }
-                _ => return Err(Escape("".to_owned(), i..j).into()),
+                bytes if bytes.starts_with(b"#") => {
+                    let code = parse_decimal(&bytes[1..])?;
+                    escapes.push((i..j, ByteOrChar::Char(code)))
+                }
+                _ => bail!(Escape("".to_owned(), i..j)),
             }
         } else {
-            return Err(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()).into());
+            bail!(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()));
         }
     }
     if escapes.is_empty() {
@@ -95,6 +89,32 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
     }
 }
 
+fn parse_hexadecimal(bytes: &[u8]) -> Result<u32> {
+    let mut code = 0;
+    for &b in bytes {
+        code <<= 4;
+        code += match b {
+            b'0'...b'9' => b - b'0',
+            b'a'...b'f' => b - b'a' + 10,
+            b'A'...b'F' => b - b'A' + 10,
+            b => bail!("'{}' is not a valid hexadecimal character", b as char),
+        } as u32;
+    }
+    Ok(code)
+}
+
+fn parse_decimal(bytes: &[u8]) -> Result<u32> {
+    let mut code = 0;
+    for &b in bytes {
+        code *= 10;
+        code += match b {
+            b'0'...b'9' => b - b'0',
+            b => bail!("'{}' is not a valid decimal character", b as char),
+        } as u32;
+    }
+    Ok(code)
+}
+
 #[test]
 fn test_escape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
@@ -103,4 +123,5 @@ fn test_escape() {
              ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
+    assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
 }

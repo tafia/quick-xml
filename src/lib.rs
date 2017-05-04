@@ -112,7 +112,6 @@
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 
-extern crate from_ascii;
 extern crate encoding_rs;
 #[macro_use]
 extern crate error_chain;
