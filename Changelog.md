@@ -10,6 +10,7 @@
 
 ## master
 - style: rustfmt
+- refactor: remove from_ascii crate dependency
 
 ## 0.7.0
 - style: rustfmt
