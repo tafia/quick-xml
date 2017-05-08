@@ -8,6 +8,11 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.7.2
+- perf: faster unescape method
+- docs: update readme
+- refactor bump encoding_rs to 0.6.6
+
 ## 0.7.1
 - style: rustfmt
 - refactor: remove from_ascii crate dependency
