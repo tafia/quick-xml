@@ -5,6 +5,11 @@
 
 High performance xml pull reader/writer.
 
+The reader:
+- is almost zero-copy (use of `Cow` whenever possible)
+- is easy on memory allocation (the API provides a way to reuse buffers)
+- support various encoding, namespaces resolution, special characters.
+
 [docs.rs](https://docs.rs/quick-xml)
 
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
@@ -117,17 +122,16 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-quick-xml is 40+ times faster than the widely used [xml-rs](https://crates.io/crates/xml-rs) crate.
+quick-xml is around **40 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
 
 ```
 // quick-xml benches
-test bench_quick_xml            ... bench:     316,915 ns/iter (+/- 59,750)
-test bench_quick_xml_escaped    ... bench:     430,226 ns/iter (+/- 19,036)
-test bench_quick_xml_namespaced ... bench:     452,997 ns/iter (+/- 30,077)
-test bench_quick_xml_wrapper    ... bench:     313,846 ns/iter (+/- 93,794)
+test bench_quick_xml            ... bench:     336,590 ns/iter (+/- 15,800)
+test bench_quick_xml_escaped    ... bench:     433,673 ns/iter (+/- 17,880)
+test bench_quick_xml_namespaced ... bench:     501,155 ns/iter (+/- 107,318)
 
 // same bench with xml-rs
-test bench_xml_rs               ... bench:  15,329,068 ns/iter (+/- 3,966,413)
+test bench_xml_rs               ... bench:  13,022,289 ns/iter (+/- 1,532,129)
 ```
 
 ## Contribute
