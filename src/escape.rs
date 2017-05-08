@@ -23,29 +23,30 @@ enum ByteOrChar {
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
 
-    let mut bytes = raw.iter().enumerate();
-    while let Some((i, _)) = bytes.by_ref().find(|&(_, b)| *b == b'&') {
-        if let Some((j, _)) = bytes.find(|&(_, &b)| b == b';') {
+    let mut start = 0;
+    let mut bytes = raw.iter();
+    while let Some(i) = bytes.by_ref().position(|b| *b == b'&') {
+        start += i;
+        if let Some(j) = bytes.by_ref().position(|b| *b == b';') {
+            let end = start + j + 1;
             // search for character correctness
-            match &raw[i + 1..j] {
-                b"lt" => escapes.push((i..j, ByteOrChar::Byte(b'<'))),
-                b"gt" => escapes.push((i..j, ByteOrChar::Byte(b'>'))),
-                b"amp" => escapes.push((i..j, ByteOrChar::Byte(b'&'))),
-                b"apos" => escapes.push((i..j, ByteOrChar::Byte(b'\''))),
-                b"quot" => escapes.push((i..j, ByteOrChar::Byte(b'\"'))),
+            let b_o_c = match &raw[start + 1..end] {
+                b"lt" => ByteOrChar::Byte(b'<'),
+                b"gt" => ByteOrChar::Byte(b'>'),
+                b"amp" => ByteOrChar::Byte(b'&'),
+                b"apos" => ByteOrChar::Byte(b'\''),
+                b"quot" => ByteOrChar::Byte(b'\"'),
                 b"#x0" | b"#0" => {
-                    bail!(Escape("Null character entity is not allowed".to_string(), i..j))
+                    bail!(Escape("Null character entity not allowed".to_string(), start..end))
                 }
                 bytes if bytes.starts_with(b"#x") => {
-                    let code = parse_hexadecimal(&bytes[2..])?;
-                    escapes.push((i..j, ByteOrChar::Char(code)))
+                    ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
-                bytes if bytes.starts_with(b"#") => {
-                    let code = parse_decimal(&bytes[1..])?;
-                    escapes.push((i..j, ByteOrChar::Char(code)))
-                }
-                _ => bail!(Escape("".to_owned(), i..j)),
-            }
+                bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
+                _ => bail!(Escape("".to_string(), start..end)),
+            };
+            escapes.push((start..end, b_o_c));
+            start = end + 1;
         } else {
             bail!(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()));
         }
@@ -53,7 +54,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     if escapes.is_empty() {
         Ok(Cow::Borrowed(raw))
     } else {
-        let len = bytes.len();
+        let len = raw.len();
         let mut v = Vec::with_capacity(len);
         let mut start = 0;
         for (r, b) in escapes {
