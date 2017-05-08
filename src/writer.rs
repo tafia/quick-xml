@@ -77,15 +77,15 @@ impl<W: Write> Writer<W> {
     /// Writes the given event to the underlying writer.
     pub fn write_event(&mut self, event: Event) -> Result<usize> {
         match event {
-            Event::Start(ref e) => self.write_wrapped(b"<", &e, b">"),
-            Event::End(ref e) => self.write_wrapped(b"</", &e, b">"),
-            Event::Empty(ref e) => self.write_wrapped(b"<", &e, b"/>"),
-            Event::Text(ref e) => self.write(&e),
-            Event::Comment(ref e) => self.write_wrapped(b"<!--", &e, b"-->"),
-            Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", &e, b"]]>"),
-            Event::Decl(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
-            Event::PI(ref e) => self.write_wrapped(b"<?", &e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", &e, b">"),
+            Event::Start(ref e) => self.write_wrapped(b"<", e, b">"),
+            Event::End(ref e) => self.write_wrapped(b"</", e, b">"),
+            Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
+            Event::Text(ref e) => self.write(e),
+            Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
+            Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", e, b"]]>"),
+            Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
+            Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
+            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", e, b">"),
             Event::Eof => Ok(0),
         }
     }

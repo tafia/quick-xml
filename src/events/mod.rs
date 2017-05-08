@@ -90,7 +90,7 @@ impl<'a> BytesStart<'a> {
 
     /// gets attributes iterator
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self, self.name_len)
+        Attributes::new(self, self.name_len)
     }
 
     /// extend the attributes of this element from an iterator over (key, value) tuples.
@@ -307,7 +307,7 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(&self)
+        unescape(self)
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -378,10 +378,10 @@ impl<'a> Deref for Event<'a> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         match *self {
-            Event::Start(ref e) => &*e,
+            Event::Start(ref e) |
+            Event::Empty(ref e) => &*e,
             Event::End(ref e) => &*e,
             Event::Text(ref e) => &*e,
-            Event::Empty(ref e) => &*e,
             Event::Decl(ref e) => &*e,
             Event::PI(ref e) => &*e,
             Event::CData(ref e) => &*e,

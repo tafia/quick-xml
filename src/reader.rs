@@ -162,7 +162,7 @@ impl<B: BufRead> Reader<B> {
                              buf.iter()
                                  .rposition(|&b| !is_whitespace(b))
                                  .map(|p| p + 1)
-                                 .unwrap_or(buf.len()))
+                                 .unwrap_or_else(|| buf.len()))
                         }
                         None => return self.read_event(buf),
                     }
@@ -171,7 +171,7 @@ impl<B: BufRead> Reader<B> {
                 };
                 Ok(Event::Text(BytesText::borrowed(&buf[start..len])))
             }
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 
@@ -212,7 +212,7 @@ impl<B: BufRead> Reader<B> {
                     // we already *know* that we are in this case
                     self.read_start(&buf[buf_start..])
                 }
-                Err(e) => return Err(e),
+                Err(e) => Err(e),
             }
         } else {
             match read_until(&mut self.reader, b'>', buf) {
@@ -230,7 +230,7 @@ impl<B: BufRead> Reader<B> {
                         }
                     }
                 }
-                Err(e) => return Err(e),
+                Err(e) => Err(e),
             }
         }
 
@@ -401,7 +401,7 @@ impl<B: BufRead> Reader<B> {
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
-            Ok(Event::Start(BytesStart::borrowed(&buf, name_end)))
+            Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
         }
     }
 
@@ -648,10 +648,8 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                             (ElemReadState::Elem, b'\'') => ElemReadState::SingleQ,
                             (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
 
-                            // the only end_byte that gets us out of 'SingleQ' is a single quote
-                            (ElemReadState::SingleQ, b'\'') => ElemReadState::Elem,
-
-                            // the only end_byte that gets us out of 'DoubleQ' is a double quote
+                            // the only end_byte that gets us out if the same character
+                            (ElemReadState::SingleQ, b'\'') |
                             (ElemReadState::DoubleQ, b'\"') => ElemReadState::Elem,
 
                             // all other bytes: no state change
@@ -755,7 +753,7 @@ impl NamespaceBuffer {
                     .find(|n| n.prefix(&self.buffer) == &element_name[..len])
             }
         };
-        ns.and_then(|ref n| n.opt_value(&self.buffer))
+        ns.and_then(|n| n.opt_value(&self.buffer))
     }
 
     fn pop_empty_namespaces(&mut self) {

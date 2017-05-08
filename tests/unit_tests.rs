@@ -126,27 +126,29 @@ fn test_xml_decl() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => {
-                    assert!(v == b"1.0",
-                            "expecting version '1.0', got '{:?}",
-                            from_utf8(v))
+                    assert_eq!(v,
+                               b"1.0",
+                               "expecting version '1.0', got '{:?}",
+                               from_utf8(v))
                 }
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
                 Some(Ok(v)) => {
-                    assert!(v == b"utf-8",
-                            "expecting encoding 'utf-8', got '{:?}",
-                            from_utf8(v))
+                    assert_eq!(v,
+                               b"utf-8",
+                               "expecting encoding 'utf-8', got '{:?}",
+                               from_utf8(v))
                 }
-                Some(Err(e)) => assert!(false, "{:?}", e),
-                None => assert!(false, "cannot find encoding"),
+                Some(Err(e)) => panic!("{:?}", e),
+                None => panic!("cannot find encoding"),
             }
             match e.standalone() {
-                None => assert!(true),
-                e => assert!(false, "doesn't expect standalone, got {:?}", e),
+                None => (),
+                e => panic!("doesn't expect standalone, got {:?}", e),
             }
         }
-        _ => assert!(false, "unable to parse XmlDecl"),
+        _ => panic!("unable to parse XmlDecl"),
     }
 }
 

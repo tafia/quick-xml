@@ -135,12 +135,11 @@ fn issue_83_duplicate_attributes() {
 #[test]
 fn issue_93_large_characters_in_entity_references() {
     test(r#"<hello>&𤶼;</hello>"#.as_bytes(),
-         r#"
+         br#"
             |StartElement(hello)
             |1:10 Error while escaping character at range 0..5:
             |EndElement(hello)
-        "#
-                 .as_bytes(),
+        "#,
          true)
 }
 
@@ -252,7 +251,7 @@ fn convert_to_quick_xml(s: &str) -> String {
     if s.starts_with("Whitespace") {
         format!("Characters{}", &s[10..])
     } else {
-        format!("{}", s)
+        s.to_string()
     }
 }
 
@@ -322,9 +321,9 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 }
 
 fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
-    match n {
-        &Some(ref n) => format!("{{{}}}{}", from_utf8(n).unwrap(), from_utf8(name).unwrap()),
-        &None => from_utf8(name).unwrap().to_owned(),
+    match *n {
+        Some(n) => format!("{{{}}}{}", from_utf8(n).unwrap(), from_utf8(name).unwrap()),
+        None => from_utf8(name).unwrap().to_owned(),
     }
 }
 
