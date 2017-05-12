@@ -51,6 +51,7 @@ enum TagState {
 ///         Ok(Event::Eof) => break,
 ///         _ => (),
 ///     }
+///     buf.clear();
 /// }
 /// ```
 pub struct Reader<B: BufRead> {
@@ -158,7 +159,7 @@ impl<B: BufRead> Reader<B> {
                               .skip(buf_start)
                               .position(|&b| !is_whitespace(b)) {
                         Some(start) => {
-                            (start,
+                            (buf_start + start,
                              buf.iter()
                                  .rposition(|&b| !is_whitespace(b))
                                  .map(|p| p + 1)
@@ -406,6 +407,45 @@ impl<B: BufRead> Reader<B> {
     }
 
     /// reads the next `Event`
+    ///
+    /// This is the main entry for reading xml `Event`s.
+    ///
+    /// `Event`s borrow `buf` and can get the ownership if needed (uses `Cow` internally).
+    ///
+    /// Having the possibility to control the internal buffers gives you some additional benefits
+    /// such as:
+    /// - reduce the number of allocations by reusing the same buffer. For contrained systems,
+    ///   you can call `buf.clear()` once you are done with processing the event (typically at the
+    ///   end of your loop)
+    /// - reserve the buffer length if you know the file size (using `Vec::with_capacity`)
+    ///
+    /// # Examples
+    /// ```
+    /// use quick_xml::reader::Reader;
+    /// use quick_xml::events::Event;
+    ///
+    /// let xml = r#"<tag1 att1 = "test">
+    ///                 <tag2><!--Test comment-->Test</tag2>
+    ///                 <tag2>Test 2</tag2>
+    ///             </tag1>"#;
+    /// let mut reader = Reader::from_str(xml);
+    /// reader.trim_text(true);
+    /// let mut count = 0;
+    /// let mut buf = Vec::new();
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_event(&mut buf) {
+    ///         Ok(Event::Start(ref e)) => count += 1,
+    ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
+    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///         Ok(Event::Eof) => break,
+    ///         _ => (),
+    ///     }
+    ///     buf.clear();
+    /// }
+    /// println!("Found {} start events", count);
+    /// println!("Text events: {:?}", txt);
+    /// ```
     pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         if self.exit {
             return Ok(Event::Eof);
