@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.7.3
+- fix: fix Event::Text slice always starting at the beginning of the buffer
+
 ## 0.7.2
 - perf: faster unescape method
 - docs: update readme

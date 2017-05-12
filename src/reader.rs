@@ -158,7 +158,7 @@ impl<B: BufRead> Reader<B> {
                               .skip(buf_start)
                               .position(|&b| !is_whitespace(b)) {
                         Some(start) => {
-                            (start,
+                            (buf_start + start,
                              buf.iter()
                                  .rposition(|&b| !is_whitespace(b))
                                  .map(|p| p + 1)
