@@ -316,7 +316,6 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
                 }
             }
         }
-        buf.clear();
     }
 }
 
