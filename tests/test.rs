@@ -90,8 +90,9 @@ fn test_attributes_empty_ns() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
 
-    let e = match r.read_namespaced_event(&mut buf) {
+    let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((None, Empty(e))) => e,
         e => panic!("Expecting Empty event, got {:?}", e),
     };
@@ -101,7 +102,7 @@ fn test_attributes_empty_ns() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name);
+                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
     match atts.next() {
@@ -133,8 +134,9 @@ fn test_attributes_empty_ns_expanded() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((None, Start(e))) => e,
             e => panic!("Expecting Empty event, got {:?}", e),
         };
@@ -144,7 +146,7 @@ fn test_attributes_empty_ns_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name);
+                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         match atts.next() {
@@ -166,7 +168,7 @@ fn test_attributes_empty_ns_expanded() {
         }
     }
 
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((None, End(e))) => assert_eq!(b"a", e.name()),
         e => panic!("Expecting End event, got {:?}", e),
     }
@@ -179,10 +181,11 @@ fn test_default_ns_shadowing_empty() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
     {
-        match r.read_namespaced_event(&mut buf) {
+        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
@@ -193,7 +196,7 @@ fn test_default_ns_shadowing_empty() {
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Empty(e))) => {
                 assert_eq!(::std::str::from_utf8(ns).unwrap(), "urn:example:i");
                 assert_eq!(e.name(), b"e");
@@ -207,7 +210,7 @@ fn test_default_ns_shadowing_empty() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name);
+                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -223,7 +226,7 @@ fn test_default_ns_shadowing_empty() {
     }
 
     // </outer>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
@@ -239,10 +242,11 @@ fn test_default_ns_shadowing_expanded() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
 
     // <outer xmlns='urn:example:o'>
     {
-        match r.read_namespaced_event(&mut buf) {
+        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
@@ -254,7 +258,7 @@ fn test_default_ns_shadowing_expanded() {
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        let e = match r.read_namespaced_event(&mut buf) {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:i");
                 assert_eq!(e.name(), b"e");
@@ -267,7 +271,7 @@ fn test_default_ns_shadowing_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name);
+                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -283,7 +287,7 @@ fn test_default_ns_shadowing_expanded() {
     }
 
     // virtual </inner>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:i");
             assert_eq!(e.name(), b"e");
@@ -291,7 +295,7 @@ fn test_default_ns_shadowing_expanded() {
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
     // </outer>
-    match r.read_namespaced_event(&mut buf) {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
