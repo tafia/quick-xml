@@ -134,7 +134,7 @@ fn issue_83_duplicate_attributes() {
 
 #[test]
 fn issue_93_large_characters_in_entity_references() {
-    test(r#"<hello>&𤶼;</hello>"#.as_bytes(),
+    test(r#"<hello>&ð¤¶¼;</hello>"#.as_bytes(),
          br#"
             |StartElement(hello)
             |1:10 Error while escaping character at range 0..5:
@@ -270,6 +270,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         .enumerate();
 
     let mut buf = Vec::new();
+    let mut ns_buffer = Vec::new();
 
     if !is_short {
         reader.read_event(&mut buf).unwrap();
@@ -278,7 +279,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
     loop {
         {
             let line = {
-                let e = reader.read_namespaced_event(&mut buf);
+                let e = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
                 format!("{}", OptEvent(e))
             };
             if let Some((n, spec)) = spec_lines.next() {
