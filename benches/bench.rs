@@ -36,8 +36,9 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
         r.check_end_names(false).check_comments(false);
         let mut count = test::black_box(0);
         let mut buf = Vec::new();
+        let mut ns_buf = Vec::new();
         loop {
-            match r.read_namespaced_event(&mut buf) {
+            match r.read_namespaced_event(&mut buf, &mut ns_buf) {
                 Ok((_, Event::Start(_))) |
                 Ok((_, Event::Empty(_))) => count += 1,
                 Ok((_, Event::Eof)) => break,

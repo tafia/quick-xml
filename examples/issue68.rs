@@ -121,7 +121,7 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
 fn main() {
     let test_data = r#"
 <?xml version="1.0" encoding="UTF-8"?>
-<d:multistatus xmlns:d="dav:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
+<D:multistatus xmlns:D="DAV:" xmlns:caldav="urn:ietf:params:xml:ns:caldav"
     xmlns:cs="http://calendarserver.org/ns/" xmlns:ical="http://apple.com/ns/ical/">
  <D:response xmlns:carddav="urn:ietf:params:xml:ns:carddav"
     xmlns:cm="http://cal.me.com/_namespace/" xmlns:md="urn:mobileme:davservices">
