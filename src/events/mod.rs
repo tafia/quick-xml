@@ -406,8 +406,7 @@ fn local_name() {
     let mut buf = Vec::new();
     let mut parsed_local_names = Vec::new();
     loop {
-        match rdr.read_event(&mut buf)
-                  .expect("unable to read xml event") {
+        match rdr.read_event(&mut buf).expect("unable to read xml event") {
             Event::Start(ref e) => {
                 parsed_local_names.push(from_utf8(e.local_name())
                                             .expect("unable to build str from local_name")

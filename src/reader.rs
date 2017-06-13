@@ -155,9 +155,7 @@ impl<B: BufRead> Reader<B> {
             Ok(n) => {
                 self.buf_position += n;
                 let (start, len) = if self.trim_text {
-                    match buf.iter()
-                              .skip(buf_start)
-                              .position(|&b| !is_whitespace(b)) {
+                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
                         Some(start) => {
                             (buf_start + start,
                              buf.iter()
@@ -319,10 +317,7 @@ impl<B: BufRead> Reader<B> {
                     Ok(Event::CData(BytesText::borrowed(&buf[buf_start + 8..len - 2])))
                 }
                 b"DOCTYPE" => {
-                    let mut count = buf.iter()
-                        .skip(buf_start)
-                        .filter(|&&b| b == b'<')
-                        .count();
+                    let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
                         match read_until(&mut self.reader, b'>', buf) {
@@ -384,9 +379,7 @@ impl<B: BufRead> Reader<B> {
     fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
-        let name_end = buf.iter()
-            .position(|&b| is_whitespace(b))
-            .unwrap_or(len);
+        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
@@ -527,7 +520,7 @@ impl<B: BufRead> Reader<B> {
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
-    
+
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -813,9 +806,7 @@ impl NamespaceBufferIndex {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices
-                  .iter()
-                  .rposition(|n| n.level <= current_level) {
+        match self.slices.iter().rposition(|n| n.level <= current_level) {
             // none of the namespaces are valid, remove all of them
             None => {
                 buffer.clear();

@@ -134,7 +134,7 @@ fn issue_83_duplicate_attributes() {
 
 #[test]
 fn issue_93_large_characters_in_entity_references() {
-    test(r#"<hello>&ð¤¶¼;</hello>"#.as_bytes(),
+    test(r#"<hello>&𤶼;</hello>"#.as_bytes(),
          br#"
             |StartElement(hello)
             |1:10 Error while escaping character at range 0..5:
