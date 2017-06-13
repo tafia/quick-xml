@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.8.0
+- fix: make the reader borrow the namespace buffer so it can be used repetitively
+
 ## 0.7.3
 - fix: fix Event::Text slice always starting at the beginning of the buffer
 
