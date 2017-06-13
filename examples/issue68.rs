@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 extern crate quick_xml;
 
 use quick_xml::reader::Reader;
@@ -74,7 +76,6 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
 
     let mut responses = Vec::<Response>::new();
     let mut current_response = Response::new();
-    let mut current_prop_stat = PropStat::new();
     let mut current_prop = Prop::new();
 
     let mut depth = 0;
