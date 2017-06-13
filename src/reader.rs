@@ -77,7 +77,7 @@ pub struct Reader<B: BufRead> {
     /// opened name start indexes
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
-    ns_buffer: NamespaceBuffer,
+    ns_buffer: NamespaceBufferIndex,
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
 }
@@ -96,7 +96,7 @@ impl<B: BufRead> Reader<B> {
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
-            ns_buffer: NamespaceBuffer::default(),
+            ns_buffer: NamespaceBufferIndex::default(),
             encoding: ::encoding_rs::UTF_8,
         }
     }
@@ -155,9 +155,7 @@ impl<B: BufRead> Reader<B> {
             Ok(n) => {
                 self.buf_position += n;
                 let (start, len) = if self.trim_text {
-                    match buf.iter()
-                              .skip(buf_start)
-                              .position(|&b| !is_whitespace(b)) {
+                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
                         Some(start) => {
                             (buf_start + start,
                              buf.iter()
@@ -319,10 +317,7 @@ impl<B: BufRead> Reader<B> {
                     Ok(Event::CData(BytesText::borrowed(&buf[buf_start + 8..len - 2])))
                 }
                 b"DOCTYPE" => {
-                    let mut count = buf.iter()
-                        .skip(buf_start)
-                        .filter(|&&b| b == b'<')
-                        .count();
+                    let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
                         match read_until(&mut self.reader, b'>', buf) {
@@ -384,9 +379,7 @@ impl<B: BufRead> Reader<B> {
     fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
-        let name_end = buf.iter()
-            .position(|&b| is_whitespace(b))
-            .unwrap_or(len);
+        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
@@ -469,20 +462,66 @@ impl<B: BufRead> Reader<B> {
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     #[inline]
-    pub fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
-        self.ns_buffer.resolve_namespace(qname)
+    pub fn resolve_namespace<'a, 'b, 'c>(&'a self,
+                                         qname: &'b [u8],
+                                         namespace_buffer: &'c [u8])
+                                         -> (Option<&'c [u8]>, &'b [u8]) {
+        self.ns_buffer.resolve_namespace(qname, namespace_buffer)
     }
 
     /// Reads the next event and resolve its namespace
-    pub fn read_namespaced_event<'a, 'b>(&'a mut self,
-                                         buf: &'b mut Vec<u8>)
-                                         -> Result<(Option<&'a [u8]>, Event<'b>)> {
-        self.ns_buffer.pop_empty_namespaces();
+    ///
+    /// # Examples
+    /// ```
+    /// use std::str::from_utf8;
+    /// use quick_xml::reader::Reader;
+    /// use quick_xml::events::Event;
+    ///
+    /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///                 <y:tag2><!--Test comment-->Test</y:tag2>
+    ///                 <y:tag2>Test 2</y:tag2>
+    ///             </x:tag1>"#;
+    /// let mut reader = Reader::from_str(xml);
+    /// reader.trim_text(true);
+    /// let mut count = 0;
+    /// let mut buf = Vec::new();
+    /// let mut ns_buf = Vec::new();
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
+    ///         Ok((ref ns, Event::Start(ref e))) => {
+    ///             count += 1;
+    ///             match (*ns, e.local_name()) {
+    ///                 (Some(b"www.xxxx"), b"tag1") => (),
+    ///                 (Some(b"www.yyyy"), b"tag2") => (),
+    ///                 (ns, n) => panic!("Namespace and local name mismatch"),
+    ///             }
+    ///             println!("Resolved namespace: {:?}", ns.and_then(|ns| from_utf8(ns).ok()));
+    ///         }
+    ///         Ok((_, Event::Text(e))) => {
+    ///             txt.push(e.unescape_and_decode(&reader).expect("Error!"))
+    ///         },
+    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///         Ok((_, Event::Eof)) => break,
+    ///         _ => (),
+    ///     }
+    ///     buf.clear();
+    /// }
+    /// println!("Found {} start events", count);
+    /// println!("Text events: {:?}", txt);
+    /// ```
+    pub fn read_namespaced_event<'a, 'b, 'c>(&'a mut self,
+                                             buf: &'b mut Vec<u8>,
+                                             namespace_buffer: &'c mut Vec<u8>)
+                                             -> Result<(Option<&'c [u8]>, Event<'b>)> {
+        self.ns_buffer.pop_empty_namespaces(namespace_buffer);
         match self.read_event(buf) {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
             Ok(Event::Start(e)) => {
-                self.ns_buffer.push_new_namespaces(&e);
-                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::Start(e)))
+                self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
+                Ok((self.ns_buffer
+                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    Event::Start(e)))
             }
             Ok(Event::Empty(e)) => {
                 // For empty elements we need to 'artificially' keep the namespace scope on the
@@ -490,17 +529,21 @@ impl<B: BufRead> Reader<B> {
                 // Otherwise the caller has no chance to use `resolve` in the context of the
                 // namespace declarations that are 'in scope' for the empty element alone.
                 // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
-                self.ns_buffer.push_new_namespaces(&e);
+                self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
                 self.ns_buffer.pending_pop = true;
-                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::Empty(e)))
+                Ok((self.ns_buffer
+                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    Event::Empty(e)))
             }
             Ok(Event::End(e)) => {
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
                 self.ns_buffer.pending_pop = true;
-                Ok((self.ns_buffer.find_namespace_value(e.name()), Event::End(e)))
+                Ok((self.ns_buffer
+                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    Event::End(e)))
             }
             Ok(e) => Ok((None, e)),
             Err(e) => Err(e),
@@ -517,9 +560,7 @@ impl<B: BufRead> Reader<B> {
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
-}
 
-impl<B: BufRead> Reader<B> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -650,7 +691,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// level)
 #[inline]
 fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
-    #[derive(Debug,Clone,Copy,PartialEq,Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum ElemReadState {
         /// The initial state (inside element, but outside of attribute value)
         Elem,
@@ -758,7 +799,7 @@ impl Namespace {
             None
         } else {
             Some(&ns_buffer[self.start + self.prefix_len..
-                  self.start + self.prefix_len + self.value_len])
+                            self.start + self.prefix_len + self.value_len])
         }
     }
 }
@@ -767,11 +808,9 @@ impl Namespace {
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Default)]
-struct NamespaceBuffer {
+struct NamespaceBufferIndex {
     /// a buffer of namespace ranges
     slices: Vec<Namespace>,
-    /// a buffer of existing namespaces
-    buffer: Vec<u8>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: i32,
@@ -781,22 +820,25 @@ struct NamespaceBuffer {
     pending_pop: bool,
 }
 
-impl NamespaceBuffer {
+impl NamespaceBufferIndex {
     #[inline]
-    fn find_namespace_value(&self, element_name: &[u8]) -> Option<&[u8]> {
+    fn find_namespace_value<'a, 'b, 'c>(&'a self,
+                                        element_name: &'b [u8],
+                                        buffer: &'c [u8])
+                                        -> Option<&'c [u8]> {
         let ns = match element_name.iter().position(|b| *b == b':') {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
             Some(len) => {
                 self.slices
                     .iter()
                     .rev()
-                    .find(|n| n.prefix(&self.buffer) == &element_name[..len])
+                    .find(|n| n.prefix(buffer) == &element_name[..len])
             }
         };
-        ns.and_then(|n| n.opt_value(&self.buffer))
+        ns.and_then(|n| n.opt_value(buffer))
     }
 
-    fn pop_empty_namespaces(&mut self) {
+    fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
         if !self.pending_pop {
             return;
         }
@@ -804,25 +846,23 @@ impl NamespaceBuffer {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices
-                  .iter()
-                  .rposition(|n| n.level <= current_level) {
+        match self.slices.iter().rposition(|n| n.level <= current_level) {
             // none of the namespaces are valid, remove all of them
             None => {
-                self.buffer.clear();
+                buffer.clear();
                 self.slices.clear();
             }
             // drop all namespaces past the last valid namespace
             Some(last_valid_pos) => {
                 if let Some(len) = self.slices.get(last_valid_pos + 1).map(|n| n.start) {
-                    self.buffer.truncate(len);
+                    buffer.truncate(len);
                     self.slices.truncate(last_valid_pos + 1);
                 }
             }
         }
     }
 
-    fn push_new_namespaces(&mut self, e: &BytesStart) {
+    fn push_new_namespaces(&mut self, e: &BytesStart, buffer: &mut Vec<u8>) {
         self.nesting_level += 1;
         let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
@@ -832,27 +872,25 @@ impl NamespaceBuffer {
                 if k.starts_with(b"xmlns") {
                     match k.get(5) {
                         None => {
-                            let start = self.buffer.len();
-                            self.buffer.extend_from_slice(v);
-                            self.slices
-                                .push(Namespace {
-                                          start: start,
-                                          prefix_len: 0,
-                                          value_len: v.len(),
-                                          level: level,
-                                      });
+                            let start = buffer.len();
+                            buffer.extend_from_slice(v);
+                            self.slices.push(Namespace {
+                                                 start: start,
+                                                 prefix_len: 0,
+                                                 value_len: v.len(),
+                                                 level: level,
+                                             });
                         }
                         Some(&b':') => {
-                            let start = self.buffer.len();
-                            self.buffer.extend_from_slice(&k[6..]);
-                            self.buffer.extend_from_slice(v);
-                            self.slices
-                                .push(Namespace {
-                                          start: start,
-                                          prefix_len: k.len() - 6,
-                                          value_len: v.len(),
-                                          level: level,
-                                      });
+                            let start = buffer.len();
+                            buffer.extend_from_slice(&k[6..]);
+                            buffer.extend_from_slice(v);
+                            self.slices.push(Namespace {
+                                                 start: start,
+                                                 prefix_len: k.len() - 6,
+                                                 value_len: v.len(),
+                                                 level: level,
+                                             });
                         }
                         _ => break,
                     }
@@ -871,7 +909,10 @@ impl NamespaceBuffer {
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     #[inline]
-    fn resolve_namespace<'a, 'b>(&'a self, qname: &'b [u8]) -> (Option<&'a [u8]>, &'b [u8]) {
+    fn resolve_namespace<'a, 'b, 'c>(&'a self,
+                                     qname: &'b [u8],
+                                     buffer: &'c [u8])
+                                     -> (Option<&'c [u8]>, &'b [u8]) {
         qname
             .iter()
             .position(|b| *b == b':')
@@ -880,8 +921,8 @@ impl NamespaceBuffer {
                           self.slices
                               .iter()
                               .rev()
-                              .find(|n| n.prefix(&self.buffer) == prefix)
-                              .map(|ns| (ns.opt_value(&self.buffer), &value[1..]))
+                              .find(|n| n.prefix(buffer) == prefix)
+                              .map(|ns| (ns.opt_value(buffer), &value[1..]))
                       })
             .unwrap_or((None, qname))
     }

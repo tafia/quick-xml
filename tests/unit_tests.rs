@@ -400,12 +400,13 @@ fn test_namespace() {
     r.trim_text(true);;
 
     let mut buf = Vec::new();
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf) {
+    let mut ns_buf = Vec::new();
+    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         assert!(false, "expecting start element with no namespace");
     }
 
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -423,13 +424,14 @@ fn test_default_namespace() {
 
     // <a>
     let mut buf = Vec::new();
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf) {
+    let mut ns_buf = Vec::new();
+    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         assert!(false, "expecting outer start element with no namespace");
     }
 
     // <b>
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -440,7 +442,7 @@ fn test_default_namespace() {
     }
 
     // </b>
-    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -452,7 +454,7 @@ fn test_default_namespace() {
 
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
-    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         assert!(false, "expecting outer end element with no namespace");
     }
@@ -464,7 +466,8 @@ fn test_default_namespace_reset() {
     r.trim_text(true);;
 
     let mut buf = Vec::new();
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf) {
+    let mut ns_buf = Vec::new();
+    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
         assert_eq!(&a[..],
                    b"www1",
                    "expecting outer start element with to resolve to 'www1'");
@@ -473,16 +476,16 @@ fn test_default_namespace_reset() {
                 "expecting outer start element with to resolve to 'www1'");
     }
 
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         assert!(false, "expecting inner start element");
     }
-    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         assert!(false, "expecting inner end element");
     }
 
-    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf) {
+    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
         assert_eq!(&a[..],
                    b"www1",
                    "expecting outer end element with to resolve to 'www1'");

@@ -270,6 +270,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         .enumerate();
 
     let mut buf = Vec::new();
+    let mut ns_buffer = Vec::new();
 
     if !is_short {
         reader.read_event(&mut buf).unwrap();
@@ -278,7 +279,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
     loop {
         {
             let line = {
-                let e = reader.read_namespaced_event(&mut buf);
+                let e = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
                 format!("{}", OptEvent(e))
             };
             if let Some((n, spec)) = spec_lines.next() {
@@ -304,11 +305,10 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
             if !is_short && line.starts_with("StartDocument") {
                 // advance next Characters(empty space) ...
                 if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf) {
-                    if e.iter()
-                           .any(|b| match *b {
-                                    b' ' | b'\r' | b'\n' | b'\t' => false,
-                                    _ => true,
-                                }) {
+                    if e.iter().any(|b| match *b {
+                                        b' ' | b'\r' | b'\n' | b'\t' => false,
+                                        _ => true,
+                                    }) {
                         panic!("Reader expects empty Text event after a StartDocument");
                     }
                 } else {

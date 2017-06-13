@@ -18,7 +18,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.7.0"
+quick-xml = "0.8.0"
 ```
 ``` rust
 extern crate quick_xml;
@@ -49,11 +49,7 @@ let mut buf = Vec::new();
 // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
     match reader.read_event(&mut buf) {
-    // for triggering namespaced events, use this instead:
-    // match reader.read_namespaced_event(&mut buf) {
         Ok(Event::Start(ref e)) => {
-        // for namespaced:
-        // Ok((ref namespace_value, Event::Start(ref e)))
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}",
                                     e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>()),
