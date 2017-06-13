@@ -305,11 +305,10 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
             if !is_short && line.starts_with("StartDocument") {
                 // advance next Characters(empty space) ...
                 if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf) {
-                    if e.iter()
-                           .any(|b| match *b {
-                                    b' ' | b'\r' | b'\n' | b'\t' => false,
-                                    _ => true,
-                                }) {
+                    if e.iter().any(|b| match *b {
+                                        b' ' | b'\r' | b'\n' | b'\t' => false,
+                                        _ => true,
+                                    }) {
                         panic!("Reader expects empty Text event after a StartDocument");
                     }
                 } else {

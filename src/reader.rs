@@ -651,7 +651,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// level)
 #[inline]
 fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
-    #[derive(Debug,Clone,Copy,PartialEq,Eq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum ElemReadState {
         /// The initial state (inside element, but outside of attribute value)
         Elem,
@@ -759,7 +759,7 @@ impl Namespace {
             None
         } else {
             Some(&ns_buffer[self.start + self.prefix_len..
-                  self.start + self.prefix_len + self.value_len])
+                            self.start + self.prefix_len + self.value_len])
         }
     }
 }
@@ -834,25 +834,23 @@ impl NamespaceBufferIndex {
                         None => {
                             let start = buffer.len();
                             buffer.extend_from_slice(v);
-                            self.slices
-                                .push(Namespace {
-                                          start: start,
-                                          prefix_len: 0,
-                                          value_len: v.len(),
-                                          level: level,
-                                      });
+                            self.slices.push(Namespace {
+                                                 start: start,
+                                                 prefix_len: 0,
+                                                 value_len: v.len(),
+                                                 level: level,
+                                             });
                         }
                         Some(&b':') => {
                             let start = buffer.len();
                             buffer.extend_from_slice(&k[6..]);
                             buffer.extend_from_slice(v);
-                            self.slices
-                                .push(Namespace {
-                                          start: start,
-                                          prefix_len: k.len() - 6,
-                                          value_len: v.len(),
-                                          level: level,
-                                      });
+                            self.slices.push(Namespace {
+                                                 start: start,
+                                                 prefix_len: k.len() - 6,
+                                                 value_len: v.len(),
+                                                 level: level,
+                                             });
                         }
                         _ => break,
                     }
