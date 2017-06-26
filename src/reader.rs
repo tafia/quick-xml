@@ -121,7 +121,7 @@ impl<B: BufRead> Reader<B> {
 
     /// Change default check_end_names (true per default)
     ///
-    /// When set to true, it won't check if End node match last Start node.
+    /// When set to false, it won't check if End node match last Start node.
     /// If the xml is known to be sane (already processed etc ...)
     /// this saves extra time
     pub fn check_end_names(&mut self, val: bool) -> &mut Reader<B> {
