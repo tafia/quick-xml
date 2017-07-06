@@ -74,7 +74,7 @@ impl<W: Write> Writer<W> {
 
     /// Writes the given event to the underlying writer.
     pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<usize> {
-        match *event {
+        match *event.as_ref() {
             Event::Start(ref e) => self.write_wrapped(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped(b"</", e, b">"),
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
