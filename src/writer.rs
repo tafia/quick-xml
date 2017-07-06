@@ -4,6 +4,7 @@ use std::io::Write;
 
 use errors::Result;
 use events::Event;
+use std::ops::Deref;
 
 /// Xml writer
 ///
@@ -75,8 +76,10 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event(&mut self, event: Event) -> Result<usize> {
-        match event {
+    pub fn write_event<'a, E>(&mut self, event: E) -> Result<usize>
+        where E: Deref<Target = Event<'a>>
+    {
+        match *event {
             Event::Start(ref e) => self.write_wrapped(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped(b"</", e, b">"),
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
