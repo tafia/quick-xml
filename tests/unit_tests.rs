@@ -240,6 +240,25 @@ fn test_writer() {
 }
 
 #[test]
+fn test_writer_borrow() {
+    let txt = include_str!("../tests/documents/test_writer.xml").trim();
+    let mut reader = Reader::from_str(txt);
+    reader.trim_text(true);
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Eof) => break,
+            Ok(e) => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
+            Err(e) => panic!(e),
+        }
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(result, txt.as_bytes());
+}
+
+#[test]
 fn test_write_empty_element_attrs() {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;

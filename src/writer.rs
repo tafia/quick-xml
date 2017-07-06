@@ -42,10 +42,8 @@ use events::Event;
 ///             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
-///         Ok(e) => assert!(writer.write_event(e).is_ok()),
-///         // or using the buffer
-///         // Ok(e) => assert!(writer.write(&buf).is_ok()),
-///
+///         // we can either move or borrow the event to write, depending on your use-case
+///         Ok(e) => assert!(writer.write_event(&e).is_ok()),
 ///         // error are chained, the last one usually being the
 ///         // position where the error has happened
 ///         Err(e) => panic!("{:?}", e.iter().map(|e| format!("{:?} -", e)).collect::<String>()),
@@ -75,8 +73,8 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event(&mut self, event: Event) -> Result<usize> {
-        match event {
+    pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<usize> {
+        match *event.as_ref() {
             Event::Start(ref e) => self.write_wrapped(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped(b"</", e, b">"),
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
