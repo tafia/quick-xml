@@ -18,7 +18,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.8.0"
+quick-xml = "0.8.1"
 ```
 ``` rust
 extern crate quick_xml;
@@ -103,9 +103,8 @@ loop {
             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
         },
         Ok(Event::Eof) => break,
-        Ok(e) => assert!(writer.write_event(e).is_ok()),
-        // or using the buffer
-        // Ok(e) => assert!(writer.write(&buf).is_ok()),
+	// you can use either `e` or `&e` if you don't want to move the event
+        Ok(e) => assert!(writer.write_event(&e).is_ok()),
         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     }
     buf.clear();

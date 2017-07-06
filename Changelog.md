@@ -8,7 +8,7 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## master
+## 0.8.1
 - feat: allow `Writer` to borrow `Event` (using `AsRef<Event>`)
 
 ## 0.8.0
