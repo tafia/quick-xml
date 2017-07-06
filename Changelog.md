@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## master
+- feat: allow `Writer` to borrow `Event` (using `AsRef<Event>`)
+
 ## 0.8.0
 - fix: make the reader borrow the namespace buffer so it can be used repetitively
 - refactor: bump dependencies
