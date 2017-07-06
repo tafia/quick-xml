@@ -392,6 +392,12 @@ impl<'a> Deref for Event<'a> {
     }
 }
 
+impl<'a> AsRef<Event<'a>> for Event<'a> {
+    fn as_ref(&self) -> &Event<'a> {
+        self
+    }
+}
+
 #[cfg(test)]
 #[test]
 fn local_name() {
