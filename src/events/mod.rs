@@ -8,7 +8,7 @@ use std::ops::Deref;
 use encoding_rs::Encoding;
 use std::io::BufRead;
 
-use escape::unescape;
+use escape::{escape, unescape};
 use self::attributes::{Attributes, Attribute};
 use errors::Result;
 use reader::Reader;
@@ -318,6 +318,13 @@ impl<'a> BytesText<'a> {
     /// 2. Reader::decode(...)
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
+    }
+
+    /// Gets escaped content
+    ///
+    /// Searches for any of `<, >, &, ', "` and xml escapes them.
+    pub fn escaped(&self) -> Vec<u8> {
+        escape(self)
     }
 }
 

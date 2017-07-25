@@ -18,6 +18,24 @@ enum ByteOrChar {
     Char(u32),
 }
 
+/// helper function to escape a `&[u8]` and replace all
+/// xml special characters (<, >, &, ', ") with their corresponding
+/// xml escaped value.
+pub fn escape(raw: &[u8]) -> Vec<u8> {
+    let mut escaped = Vec::with_capacity(raw.len());
+    for b in raw {
+        match *b {
+            b'<' => escaped.extend_from_slice(b"&lt;"),
+            b'>' => escaped.extend_from_slice(b"&gt;"),
+            b'\'' => escaped.extend_from_slice(b"&apos;"),
+            b'&' => escaped.extend_from_slice(b"&amp;"),
+            b'"' => escaped.extend_from_slice(b"&quot;"),
+            _ => escaped.push(*b),
+        }
+    }
+    escaped
+}
+
 /// helper function to unescape a `&[u8]` and replace all
 /// xml escaped characters ('&...;') into their corresponding value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
