@@ -568,6 +568,13 @@ impl<B: BufRead> Reader<B> {
         self.encoding.decode(bytes).0
     }
 
+    /// Returns the `Reader`s encoding
+    ///
+    /// The used encoding may change after parsing the xml declaration
+    pub fn encoding(&self) -> &'static Encoding {
+        self.encoding
+    }
+
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -806,7 +813,7 @@ impl Namespace {
             None
         } else {
             Some(&ns_buffer[self.start + self.prefix_len..
-                            self.start + self.prefix_len + self.value_len])
+                  self.start + self.prefix_len + self.value_len])
         }
     }
 }
@@ -882,22 +889,22 @@ impl NamespaceBufferIndex {
                             let start = buffer.len();
                             buffer.extend_from_slice(v);
                             self.slices.push(Namespace {
-                                                 start: start,
-                                                 prefix_len: 0,
-                                                 value_len: v.len(),
-                                                 level: level,
-                                             });
+                                start: start,
+                                prefix_len: 0,
+                                value_len: v.len(),
+                                level: level,
+                            });
                         }
                         Some(&b':') => {
                             let start = buffer.len();
                             buffer.extend_from_slice(&k[6..]);
                             buffer.extend_from_slice(v);
                             self.slices.push(Namespace {
-                                                 start: start,
-                                                 prefix_len: k.len() - 6,
-                                                 value_len: v.len(),
-                                                 level: level,
-                                             });
+                                start: start,
+                                prefix_len: k.len() - 6,
+                                value_len: v.len(),
+                                level: level,
+                            });
                         }
                         _ => break,
                     }
@@ -920,17 +927,16 @@ impl NamespaceBufferIndex {
                                      qname: &'b [u8],
                                      buffer: &'c [u8])
                                      -> (Option<&'c [u8]>, &'b [u8]) {
-        qname
-            .iter()
+        qname.iter()
             .position(|b| *b == b':')
             .and_then(|len| {
-                          let (prefix, value) = qname.split_at(len);
-                          self.slices
-                              .iter()
-                              .rev()
-                              .find(|n| n.prefix(buffer) == prefix)
-                              .map(|ns| (ns.opt_value(buffer), &value[1..]))
-                      })
+                let (prefix, value) = qname.split_at(len);
+                self.slices
+                    .iter()
+                    .rev()
+                    .find(|n| n.prefix(buffer) == prefix)
+                    .map(|ns| (ns.opt_value(buffer), &value[1..]))
+            })
             .unwrap_or((None, qname))
     }
 }
