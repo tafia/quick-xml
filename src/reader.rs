@@ -550,6 +550,13 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
+    /// Returns the `Reader`s encoding
+    ///
+    /// The used encoding may change after parsing the xml declaration
+    pub fn encoding(&self) -> &'static Encoding {
+        self.encoding
+    }
+
     /// Decodes a slice using the xml specified encoding
     ///
     /// Decode complete input to Cow<'a, str> with BOM sniffing and with malformed sequences
