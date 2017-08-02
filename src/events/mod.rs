@@ -323,7 +323,7 @@ impl<'a> BytesText<'a> {
     /// Gets escaped content
     ///
     /// Searches for any of `<, >, &, ', "` and xml escapes them.
-    pub fn escaped(&self) -> Vec<u8> {
+    pub fn escaped(&self) -> Cow<[u8]> {
         escape(self)
     }
 }

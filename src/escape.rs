@@ -21,19 +21,48 @@ enum ByteOrChar {
 /// helper function to escape a `&[u8]` and replace all
 /// xml special characters (<, >, &, ', ") with their corresponding
 /// xml escaped value.
-pub fn escape(raw: &[u8]) -> Vec<u8> {
-    let mut escaped = Vec::with_capacity(raw.len());
-    for b in raw {
-        match *b {
-            b'<' => escaped.extend_from_slice(b"&lt;"),
-            b'>' => escaped.extend_from_slice(b"&gt;"),
-            b'\'' => escaped.extend_from_slice(b"&apos;"),
-            b'&' => escaped.extend_from_slice(b"&amp;"),
-            b'"' => escaped.extend_from_slice(b"&quot;"),
-            _ => escaped.push(*b),
+pub fn escape(raw: &[u8]) -> Cow<[u8]> {
+    let mut escapes: Vec<(usize, &'static [u8])> = Vec::new();
+    let mut bytes = raw.iter();
+    fn to_escape(b: u8) -> bool {
+        match b {
+            b'<' | b'>' | b'\'' | b'&' | b'"' => true,
+            _ => false,
         }
     }
-    escaped
+
+    let mut loc = 0;
+    while let Some(i) = bytes.position(|&b| to_escape(b)) {
+        loc += i;
+        match raw[loc] {
+            b'<' => escapes.push((loc, b"&lt;")),
+            b'>' => escapes.push((loc, b"&gt;")),
+            b'\'' => escapes.push((loc, b"&apos;")),
+            b'&' => escapes.push((loc, b"&amp;")),
+            b'"' => escapes.push((loc, b"&quot;")),
+            _ => unreachable!(),
+        }
+        loc += 1;
+    }
+
+    if escapes.is_empty() {
+        Cow::Borrowed(raw)
+    } else {
+        let len = raw.len();
+        let mut v = Vec::with_capacity(len);
+        let mut start = 0;
+
+        for (i, r) in escapes {
+            v.extend_from_slice(&raw[start..i]);
+            start += i + 1;
+            v.extend_from_slice(r);
+        }
+
+        if start < len {
+            v.extend_from_slice(&raw[start..]);
+        }
+        Cow::Owned(v)
+    }
 }
 
 /// helper function to unescape a `&[u8]` and replace all
