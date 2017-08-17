@@ -597,7 +597,9 @@ fn test_read_write_roundtrip_escape() {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.unescaped().unwrap();
-                assert!(writer.write_event(Event::Text(BytesText::borrowed(&t))).is_ok());
+                assert!(writer
+                            .write_event(Event::Text(BytesText::borrowed(&t)))
+                            .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
