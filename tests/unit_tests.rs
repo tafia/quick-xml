@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-use quick_xml::events::{BytesStart, BytesEnd, BytesDecl};
+use quick_xml::events::{BytesStart, BytesEnd, BytesDecl, BytesText, Event};
 use quick_xml::events::Event::*;
 use quick_xml::errors::Result;
 
@@ -575,6 +575,37 @@ fn test_read_write_roundtrip_results_in_identity() {
 
     let result = writer.into_inner().into_inner();
     assert_eq!(result, input.as_bytes());
+}
+
+#[test]
+fn test_read_write_roundtrip_escape() {
+    let input = r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <section ns:label="header">
+            <section ns:label="empty element section" />
+            <section ns:label="start/end section"></section>
+            <section ns:label="with text">data &lt;escaped&gt;</section>
+            </section>
+    "#;
+
+    let mut reader = Reader::from_str(input);
+    reader.trim_text(false).expand_empty_elements(false);
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Eof) => break,
+            Ok(Text(e)) => {
+                let t = e.unescaped().unwrap();
+                assert!(writer.write_event(Event::Text(BytesText::borrowed(&t))).is_ok());
+            }
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
+            Err(e) => panic!(e),
+        }
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
 }
 
 #[test]
