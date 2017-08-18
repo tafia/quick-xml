@@ -78,7 +78,7 @@ impl<W: Write> Writer<W> {
             Event::Start(ref e) => self.write_wrapped(b"<", e, b">"),
             Event::End(ref e) => self.write_wrapped(b"</", e, b">"),
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
-            Event::Text(ref e) => self.write(e),
+            Event::Text(ref e) => self.write(&e.escaped()),
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
