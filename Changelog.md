@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.9.0
+- feat: add getter for encoding to reader
+- feat: escape Text events on write (breaking change)
+
 ## 0.8.1
 - feat: allow `Writer` to borrow `Event` (using `AsRef<Event>`)
 
