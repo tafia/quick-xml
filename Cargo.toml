@@ -18,6 +18,7 @@ travis-ci = { repository = "tafia/quick-xml" }
 [dependencies]
 encoding_rs = "0.6.11"
 error-chain = "0.10.0"
+memchr = "1.0.1"
 
 [dev-dependencies]
 xml-rs = "0.6.0"

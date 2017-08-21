@@ -12,6 +12,8 @@ use errors::{Result, ErrorKind};
 use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 use events::attributes::Attribute;
 
+use memchr;
+
 enum TagState {
     Opened,
     Closed,
@@ -160,8 +162,7 @@ impl<B: BufRead> Reader<B> {
                             (buf_start + start,
                              buf.iter()
                                  .rposition(|&b| !is_whitespace(b))
-                                 .map(|p| p + 1)
-                                 .unwrap_or_else(|| buf.len()))
+                                 .map_or_else(|| buf.len(), |p| p + 1))
                         }
                         None => return self.read_event(buf),
                     }
@@ -657,7 +658,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Err(e) => bail!(e),
             };
 
-            match available.iter().position(|&b| b == byte) {
+            match memchr::memchr(byte, available) {
                 Some(i) => {
                     buf.extend_from_slice(&available[..i]);
                     done = true;
@@ -822,7 +823,7 @@ impl NamespaceBufferIndex {
                                         element_name: &'b [u8],
                                         buffer: &'c [u8])
                                         -> Option<&'c [u8]> {
-        let ns = match element_name.iter().position(|b| *b == b':') {
+        let ns = match memchr::memchr(b':', element_name) {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
             Some(len) => {
                 self.slices
@@ -909,9 +910,7 @@ impl NamespaceBufferIndex {
                                      qname: &'b [u8],
                                      buffer: &'c [u8])
                                      -> (Option<&'c [u8]>, &'b [u8]) {
-        qname
-            .iter()
-            .position(|b| *b == b':')
+        memchr::memchr(b':', qname)
             .and_then(|len| {
                           let (prefix, value) = qname.split_at(len);
                           self.slices
