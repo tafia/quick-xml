@@ -13,6 +13,8 @@ use self::attributes::{Attributes, Attribute};
 use errors::Result;
 use reader::Reader;
 
+use memchr;
+
 /// A struct to manage `Event::Start` events
 ///
 /// Provides in particular an iterator over attributes
@@ -73,11 +75,8 @@ impl<'a> BytesStart<'a> {
     /// and including the first ':' character)
     #[inline]
     pub fn local_name(&self) -> &[u8] {
-        if let Some(i) = self.name().iter().position(|b| *b == b':') {
-            &self.name()[i + 1..]
-        } else {
-            self.name()
-        }
+        let name = self.name();
+        memchr::memchr(b':', name).map_or(name, |i| &name[i + 1..])
     }
 
     /// gets unescaped content
