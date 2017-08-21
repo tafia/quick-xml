@@ -1,15 +1,9 @@
 //! High performance xml reader/writer.
 //!
-//! ## Reader
+//! ## Description
 //!
-//! Depending on your needs, you can use:
-//!
-//! - `Reader`: for best performance, user need to take care about buffer allocation/clearing
-//! - `Reader`: a wrapper over `Reader` which owns its buffer
-//!
-//! ## Writer
-//!
-//! `Writer`: to write xmls. Can be nested with readers if you want to transform xmls
+//! - `Reader`: a low leve xml pull-reader where buffer allocation/clearing is left to user
+//! - `Writer`: a xml writer. Can be nested with readers if you want to transform xmls
 //!
 //! ## Examples
 //!
