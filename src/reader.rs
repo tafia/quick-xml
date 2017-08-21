@@ -642,9 +642,8 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
-/// `read_until` slightly modified from rust std library
-///
-/// only change is that we do not write the matching character
+/// read until `byte` is found or end of file
+/// return the position of byte
 #[inline]
 fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     let mut read = 0;
@@ -658,27 +657,17 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Err(e) => bail!(e),
             };
 
-            let mut bytes = available.iter().enumerate();
-
-            let used: usize;
-            loop {
-                match bytes.next() {
-                    Some((i, &b)) => {
-                        if b == byte {
-                            buf.extend_from_slice(&available[..i]);
-                            done = true;
-                            used = i + 1;
-                            break;
-                        }
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-                        used = available.len();
-                        break;
-                    }
+            match available.iter().position(|&b| b == byte) {
+                Some(i) => {
+                    buf.extend_from_slice(&available[..i]);
+                    done = true;
+                    i + 1
+                }
+                None => {
+                    buf.extend_from_slice(available);
+                    available.len()
                 }
             }
-            used
         };
         r.consume(used);
         read += used;
