@@ -491,13 +491,12 @@ fn test_default_namespace_reset() {
                    b"www1",
                    "expecting outer start element with to resolve to 'www1'");
     } else {
-        assert!(false,
-                "expecting outer start element with to resolve to 'www1'");
+        panic!("expecting outer start element with to resolve to 'www1'");
     }
 
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
-    } else {
-        assert!(false, "expecting inner start element");
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+        Ok((None, Start(_))) => (),
+        e => panic!("expecting inner start element, got {:?}", e),
     }
     if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
@@ -509,8 +508,7 @@ fn test_default_namespace_reset() {
                    b"www1",
                    "expecting outer end element with to resolve to 'www1'");
     } else {
-        assert!(false,
-                "expecting outer end element with to resolve to 'www1'");
+        panic!("expecting outer end element with to resolve to 'www1'");
     }
 }
 

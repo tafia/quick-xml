@@ -749,8 +749,9 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
     Ok(read)
 }
 
+/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
-fn is_whitespace(b: u8) -> bool {
+pub(crate) fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
         _ => false,
