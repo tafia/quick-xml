@@ -90,8 +90,11 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                     ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
                 bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => bail!(Escape(format!("Unrecognized escape symbol: {:?}",
-                                              ::std::str::from_utf8(bytes)), start..end)),
+                bytes => {
+                    bail!(Escape(format!("Unrecognized escape symbol: {:?}",
+                                         ::std::str::from_utf8(bytes)),
+                                 start..end))
+                }
             };
             escapes.push((start - 1..end, b_o_c));
             start = end + 1;
