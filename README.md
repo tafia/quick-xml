@@ -117,16 +117,16 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-quick-xml is around **40 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
+quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
 
 ```
 // quick-xml benches
-test bench_quick_xml            ... bench:     336,590 ns/iter (+/- 15,800)
-test bench_quick_xml_escaped    ... bench:     433,673 ns/iter (+/- 17,880)
-test bench_quick_xml_namespaced ... bench:     501,155 ns/iter (+/- 107,318)
+test bench_quick_xml            ... bench:     256,921 ns/iter (+/- 18,306)
+test bench_quick_xml_escaped    ... bench:     324,320 ns/iter (+/- 19,968)
+test bench_quick_xml_namespaced ... bench:     396,318 ns/iter (+/- 23,663)
 
 // same bench with xml-rs
-test bench_xml_rs               ... bench:  13,022,289 ns/iter (+/- 1,532,129)
+test bench_xml_rs               ... bench:  14,839,533 ns/iter (+/- 2,377,647)
 ```
 
 ## Contribute
