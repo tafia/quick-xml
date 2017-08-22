@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 use errors::Result;
 use errors::ErrorKind::Escape;
+use memchr;
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -71,13 +72,12 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
     let mut escapes = Vec::new();
 
     let mut start = 0;
-    let mut bytes = raw.iter();
-    while let Some(i) = bytes.by_ref().position(|b| *b == b'&') {
-        start += i;
-        if let Some(j) = bytes.by_ref().position(|b| *b == b';') {
-            let end = start + j + 1;
+    while let Some(i) = memchr::memchr(b'&', &raw[start..]) {
+        start += i + 1;
+        if let Some(j) = memchr::memchr(b';', &raw[start..]) {
+            let end = start + j;
             // search for character correctness
-            let b_o_c = match &raw[start + 1..end] {
+            let b_o_c = match &raw[start..end] {
                 b"lt" => ByteOrChar::Byte(b'<'),
                 b"gt" => ByteOrChar::Byte(b'>'),
                 b"amp" => ByteOrChar::Byte(b'&'),
@@ -90,12 +90,16 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                     ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
                 bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                _ => bail!(Escape("".to_string(), start..end)),
+                bytes => {
+                    bail!(Escape(format!("Unrecognized escape symbol: {:?}",
+                                         ::std::str::from_utf8(bytes)),
+                                 start..end))
+                }
             };
-            escapes.push((start..end, b_o_c));
+            escapes.push((start - 1..end, b_o_c));
             start = end + 1;
         } else {
-            bail!(Escape("Cannot find ';' after '&'".to_string(), i..bytes.len()));
+            bail!(Escape("Cannot find ';' after '&'".to_string(), start..raw.len()));
         }
     }
     if escapes.is_empty() {

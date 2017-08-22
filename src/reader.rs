@@ -12,6 +12,8 @@ use errors::{Result, ErrorKind};
 use events::{Event, BytesStart, BytesEnd, BytesText, BytesDecl};
 use events::attributes::Attribute;
 
+use memchr;
+
 enum TagState {
     Opened,
     Closed,
@@ -160,8 +162,7 @@ impl<B: BufRead> Reader<B> {
                             (buf_start + start,
                              buf.iter()
                                  .rposition(|&b| !is_whitespace(b))
-                                 .map(|p| p + 1)
-                                 .unwrap_or_else(|| buf.len()))
+                                 .map_or_else(|| buf.len(), |p| p + 1))
                         }
                         None => return self.read_event(buf),
                     }
@@ -642,9 +643,8 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
-/// `read_until` slightly modified from rust std library
-///
-/// only change is that we do not write the matching character
+/// read until `byte` is found or end of file
+/// return the position of byte
 #[inline]
 fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     let mut read = 0;
@@ -658,27 +658,17 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Err(e) => bail!(e),
             };
 
-            let mut bytes = available.iter().enumerate();
-
-            let used: usize;
-            loop {
-                match bytes.next() {
-                    Some((i, &b)) => {
-                        if b == byte {
-                            buf.extend_from_slice(&available[..i]);
-                            done = true;
-                            used = i + 1;
-                            break;
-                        }
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-                        used = available.len();
-                        break;
-                    }
+            match memchr::memchr(byte, available) {
+                Some(i) => {
+                    buf.extend_from_slice(&available[..i]);
+                    done = true;
+                    i + 1
+                }
+                None => {
+                    buf.extend_from_slice(available);
+                    available.len()
                 }
             }
-            used
         };
         r.consume(used);
         read += used;
@@ -759,8 +749,9 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
     Ok(read)
 }
 
+/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
-fn is_whitespace(b: u8) -> bool {
+pub(crate) fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
         _ => false,
@@ -833,7 +824,7 @@ impl NamespaceBufferIndex {
                                         element_name: &'b [u8],
                                         buffer: &'c [u8])
                                         -> Option<&'c [u8]> {
-        let ns = match element_name.iter().position(|b| *b == b':') {
+        let ns = match memchr::memchr(b':', element_name) {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
             Some(len) => {
                 self.slices
@@ -920,9 +911,7 @@ impl NamespaceBufferIndex {
                                      qname: &'b [u8],
                                      buffer: &'c [u8])
                                      -> (Option<&'c [u8]>, &'b [u8]) {
-        qname
-            .iter()
-            .position(|b| *b == b':')
+        memchr::memchr(b':', qname)
             .and_then(|len| {
                           let (prefix, value) = qname.split_at(len);
                           self.slices

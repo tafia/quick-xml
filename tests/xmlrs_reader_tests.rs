@@ -135,11 +135,11 @@ fn issue_83_duplicate_attributes() {
 #[test]
 fn issue_93_large_characters_in_entity_references() {
     test(r#"<hello>&𤶼;</hello>"#.as_bytes(),
-         br#"
+         r#"
             |StartElement(hello)
-            |1:10 Error while escaping character at range 0..5:
+            |1:10 Error while escaping character at range 1..5: Unrecognized escape symbol: Ok("𤶼")
             |EndElement(hello)
-        "#,
+        "#.as_bytes(),
          true)
 }
 

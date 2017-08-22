@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## master
+- perf: use memchr crate and rewrite some loops with iterators
+- docs: remove duplicate `Reader` doc in lib.rs
+
 ## 0.9.0
 - feat: add getter for encoding to reader
 - feat: escape Text events on write (breaking change)

@@ -109,6 +109,7 @@
 extern crate encoding_rs;
 #[macro_use]
 extern crate error_chain;
+extern crate memchr;
 
 pub mod errors;
 pub mod reader;

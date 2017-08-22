@@ -6,7 +6,9 @@ use std::ops::Range;
 use std::io::BufRead;
 use errors::Result;
 use escape::unescape;
-use reader::Reader;
+use reader::{Reader, is_whitespace};
+
+use memchr;
 
 /// Iterator over attributes key/value pairs
 #[derive(Clone)]
@@ -110,96 +112,107 @@ impl<'a> Iterator for Attributes<'a> {
             return None;
         }
 
-        let mut iter = self.bytes[p..].iter().cloned().enumerate();
-
-        let start_key = {
-            let mut found_space = false;
-            let start: usize;
-            loop {
-                match iter.next() {
-                    Some((_, b' ')) | Some((_, b'\r')) | Some((_, b'\n')) | Some((_, b'\t')) => {
-                        if !found_space {
-                            found_space = true;
-                        }
-                    }
-                    Some((i, _)) => {
-                        if found_space {
-                            start = i;
-                            break;
-                        }
-                    }
-                    None => {
-                        self.position = len;
-                        return None;
-                    }
-                }
+        // search first space
+        let mut start_key = match self.bytes[p..len - 1]
+                  .iter()
+                  .position(|&b| is_whitespace(b)) {
+            Some(i) => p + i + 1,
+            None => {
+                self.position = len;
+                return None;
             }
-            start
         };
 
-        let mut has_equal = false;
-        let mut end_key = None;
-        let mut start_val = None;
-        let mut end_val = None;
-        let mut quote = 0;
-        loop {
-            match iter.next() {
-                Some((i, b' ')) | Some((i, b'\r')) | Some((i, b'\n')) | Some((i, b'\t')) => {
-                    if end_key.is_none() {
-                        end_key = Some(i);
-                    }
-                }
-                Some((i, b'=')) => {
-                    if start_val.is_none() {
-                        if has_equal {
-                            return Some(self.error("Got 2 '=' tokens", p + i));
-                        }
-                        has_equal = true;
-                        if end_key.is_none() {
-                            end_key = Some(i);
-                        }
-                    }
-                }
-                Some((i, q @ b'"')) |
-                Some((i, q @ b'\'')) => {
-                    if !has_equal {
-                        return Some(self.error("Unexpected quote before '='", p + i));
-                    }
-                    if start_val.is_none() {
-                        start_val = Some(i + 1);
-                        quote = q;
-                    } else if quote == q && end_val.is_none() {
-                        end_val = Some(i);
-                        break;
-                    }
-                }
-                None => {
-                    self.position = len;
-                    return None;
-                }
-                Some((_, _)) => (),
+        // now search first non space
+        start_key += match self.bytes[start_key..len - 1]
+                  .iter()
+                  .position(|&b| !is_whitespace(b)) {
+            Some(i) => i,
+            None => {
+                self.position = len;
+                return None;
             }
-        }
-        self.position += end_val.unwrap() + 1;
+        };
 
-        let r = (p + start_key)..(p + end_key.unwrap());
-        if self.with_checks {
-            let name = &self.bytes[r.clone()];
-            if let Some(ref r2) = self.consumed
-                   .iter()
-                   .cloned()
-                   .find(|r2| &self.bytes[r2.clone()] == name) {
-                return Some(self.error(format!("Duplicate attribute at position {} and {}",
-                                               r2.start,
-                                               r.start),
-                                       r.start));
+        // key end with either whitespace or =
+        let end_key = match self.bytes[start_key + 1..len - 1]
+                  .iter()
+                  .position(|&b| b == b'=' || is_whitespace(b)) {
+            Some(i) => start_key + 1 + i,
+            None => {
+                self.position = len;
+                return None;
             }
-            self.consumed.push(r.clone());
+        };
+
+        if self.with_checks {
+            if let Some(i) = self.bytes[start_key..end_key]
+                   .iter()
+                   .position(|&b| b == b'\'' || b == b'"') {
+                return Some(self.error("Attribute key cannot contain quote", start_key + i));
+            }
+            if let Some(r) =
+                self.consumed
+                    .iter()
+                    .cloned()
+                    .find(|ref r| &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key]) {
+                return Some(self.error(format!("Duplicate attribute at position {} and {}",
+                                               r.start,
+                                               start_key),
+                                       start_key));
+            }
+            self.consumed.push(start_key..end_key);
         }
+
+        // values starts after =
+        let start_val = match memchr::memchr(b'=', &self.bytes[end_key..len - 1]) {
+            Some(i) => end_key + 1 + i,
+            None => {
+                self.position = len;
+                return None;
+            }
+        };
+
+        if self.with_checks {
+            if let Some(i) = self.bytes[end_key..start_val - 1]
+                   .iter()
+                   .position(|&b| !is_whitespace(b)) {
+                return Some(self.error("Attribute key must be directly followed by = or space",
+                                       end_key + i));
+            }
+        }
+
+        // value starts with a quote
+        let (quote, start_val) = match self.bytes[start_val..len - 1]
+                  .iter()
+                  .enumerate()
+                  .filter(|&(_, &b)| !is_whitespace(b))
+                  .next() {
+            Some((i, b @ &b'\'')) |
+            Some((i, b @ &b'"')) => (*b, start_val + i + 1),
+            Some((i, _)) => {
+                return Some(self.error("Attribute value must start with a quote", start_val + i));
+            }
+            None => {
+                self.position = len;
+                return None;
+            }
+        };
+
+        // value ends with the same quote
+        let end_val = match memchr::memchr(quote, &self.bytes[start_val..]) {
+            Some(i) => start_val + i,
+            None => {
+                self.position = len;
+                return None;
+            }
+        };
+
+        self.position = end_val + 1;
 
         Some(Ok(Attribute {
-                    key: &self.bytes[r],
-                    value: &self.bytes[(p + start_val.unwrap())..(p + end_val.unwrap())],
+                    key: &self.bytes[start_key..end_key],
+                    value: &self.bytes[start_val..end_val],
                 }))
     }
 }
