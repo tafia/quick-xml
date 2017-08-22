@@ -18,7 +18,7 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
 ```toml
 [dependencies]
-quick-xml = "0.9.0"
+quick-xml = "0.9.1"
 ```
 ``` rust
 extern crate quick_xml;

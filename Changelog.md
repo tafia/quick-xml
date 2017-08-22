@@ -8,7 +8,7 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## master
+## 0.9.1
 - perf: use memchr crate and rewrite some loops with iterators
 - docs: remove duplicate `Reader` doc in lib.rs
 
