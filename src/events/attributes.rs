@@ -151,7 +151,7 @@ impl<'a> Iterator for Attributes<'a> {
                    .position(|&b| b == b'\'' || b == b'"') {
                 return Some(self.error("Attribute key cannot contain quote", start_key + i));
             }
-            if let Some(r) = 
+            if let Some(r) =
                 self.consumed
                     .iter()
                     .cloned()
