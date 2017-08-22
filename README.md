@@ -117,7 +117,9 @@ assert_eq!(result, expected.as_bytes());
 
 ## Performance
 
-quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
+Benchmarking is hard and the results depend on your input file and your machine.
+
+Here on my particular file, quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
 
 ```
 // quick-xml benches
@@ -128,6 +130,8 @@ test bench_quick_xml_namespaced ... bench:     396,318 ns/iter (+/- 23,663)
 // same bench with xml-rs
 test bench_xml_rs               ... bench:  14,839,533 ns/iter (+/- 2,377,647)
 ```
+
+For a feature and performance comparison, you can also have a look at RazrFalcon's [choose-your-xml-rs](https://github.com/RazrFalcon/choose-your-xml-rs).
 
 ## Contribute
 
