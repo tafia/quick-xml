@@ -33,17 +33,21 @@ fn test_attributes_empty() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok(Attribute {
-                            key: b"att1",
-                            value: b"a",
-                        })) => (),
+                Some(
+                    Ok(Attribute {
+                        key: b"att1",
+                        value: b"a",
+                    }),
+                ) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
             }
             match atts.next() {
-                Some(Ok(Attribute {
-                            key: b"att2",
-                            value: b"b",
-                        })) => (),
+                Some(
+                    Ok(Attribute {
+                        key: b"att2",
+                        value: b"b",
+                    }),
+                ) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
             }
             match atts.next() {
@@ -65,10 +69,12 @@ fn test_attribute_equal() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(Ok(Attribute {
-                            key: b"att1",
-                            value: b"a=b",
-                        })) => (),
+                Some(
+                    Ok(Attribute {
+                        key: b"att1",
+                        value: b"a=b",
+                    }),
+                ) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
             }
             match atts.next() {
@@ -113,10 +119,10 @@ fn test_attributes_empty_ns() {
         Some((Some(ns), b"att2", b"b")) => {
             assert_eq!(&ns[..], b"urn:example:r");
         }
-        e => {
-            panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-                   e)
-        }
+        e => panic!(
+            "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
+            e
+        ),
     }
     match atts.next() {
         None => (),
@@ -157,10 +163,10 @@ fn test_attributes_empty_ns_expanded() {
             Some((Some(ns), b"att2", b"b")) => {
                 assert_eq!(&ns[..], b"urn:example:r");
             }
-            e => {
-                panic!("Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-                       e)
-            }
+            e => panic!(
+                "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
+                e
+            ),
         }
         match atts.next() {
             None => (),
@@ -331,8 +337,7 @@ fn fuzz_53() {
     let mut buf = vec![];
     loop {
         match reader.read_event(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) |
-            Err(..) => break,
+            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
             _ => buf.clear(),
         }
     }

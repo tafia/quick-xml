@@ -102,7 +102,6 @@
 //! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 //! assert_eq!(result, expected.as_bytes());
 //! ```
-
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 

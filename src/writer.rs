@@ -96,6 +96,8 @@ impl<W: Write> Writer<W> {
 
     #[inline]
     fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<usize> {
-        Ok(self.writer.write(before)? + self.writer.write(value)? + self.writer.write(after)?)
+        Ok(
+            self.writer.write(before)? + self.writer.write(value)? + self.writer.write(after)?,
+        )
     }
 }

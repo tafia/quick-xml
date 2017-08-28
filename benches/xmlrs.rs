@@ -1,7 +1,7 @@
 #![feature(test)]
 
-extern crate xml;
 extern crate test;
+extern crate xml;
 
 use test::Bencher;
 use xml::reader::{EventReader, XmlEvent};

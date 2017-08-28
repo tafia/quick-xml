@@ -9,7 +9,7 @@ use encoding_rs::Encoding;
 use std::io::BufRead;
 
 use escape::{escape, unescape};
-use self::attributes::{Attributes, Attribute};
+use self::attributes::{Attribute, Attributes};
 use errors::Result;
 use reader::Reader;
 
@@ -58,8 +58,9 @@ impl<'a> BytesStart<'a> {
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
-        where I: IntoIterator,
-              I::Item: Into<Attribute<'b>>
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
     {
         self.extend_attributes(attributes);
         self
@@ -96,8 +97,9 @@ impl<'a> BytesStart<'a> {
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
     pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
-        where I: IntoIterator,
-              I::Item: Into<Attribute<'b>>
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
     {
         for attr in attributes {
             self.push_attribute(attr);
@@ -149,16 +151,21 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<&[u8]> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok(Attribute {
-                        key: b"version",
-                        value: v,
-                    })) => Ok(v),
-            Some(Ok(a)) => {
-                Err(format!("XmlDecl must start with 'version' attribute, found {:?}",
-                            from_utf8(a.key))
-                        .into())
-            }
-            None => Err("XmlDecl must start with 'version' attribute, found none".into()),
+            Some(
+                Ok(Attribute {
+                    key: b"version",
+                    value: v,
+                }),
+            ) => Ok(v),
+            Some(Ok(a)) => Err(
+                format!(
+                    "XmlDecl must start with 'version' attribute, found {:?}",
+                    from_utf8(a.key)
+                ).into(),
+            ),
+            None => Err(
+                "XmlDecl must start with 'version' attribute, found none".into(),
+            ),
         }
     }
 
@@ -168,9 +175,9 @@ impl<'a> BytesDecl<'a> {
             match a {
                 Err(e) => return Some(Err(e)),
                 Ok(Attribute {
-                       key: b"encoding",
-                       value: v,
-                   }) => return Some(Ok(v)),
+                    key: b"encoding",
+                    value: v,
+                }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -183,9 +190,9 @@ impl<'a> BytesDecl<'a> {
             match a {
                 Err(e) => return Some(Err(e)),
                 Ok(Attribute {
-                       key: b"standalone",
-                       value: v,
-                   }) => return Some(Ok(v)),
+                    key: b"standalone",
+                    value: v,
+                }) => return Some(Ok(v)),
                 _ => (),
             }
         }
@@ -199,10 +206,11 @@ impl<'a> BytesDecl<'a> {
     /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
     /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
     /// the double quote character is not allowed in any of the attribute values.
-    pub fn new(version: &[u8],
-               encoding: Option<&[u8]>,
-               standalone: Option<&[u8]>)
-               -> BytesDecl<'static> {
+    pub fn new(
+        version: &[u8],
+        encoding: Option<&[u8]>,
+        standalone: Option<&[u8]>,
+    ) -> BytesDecl<'static> {
         // Compute length of the buffer based on supplied attributes
         // ' encoding=""'   => 12
         let encoding_attr_len = if let Some(xs) = encoding {
@@ -233,7 +241,9 @@ impl<'a> BytesDecl<'a> {
         }
         buf.push(b'"');
 
-        BytesDecl { element: BytesStart::owned(buf, 3) }
+        BytesDecl {
+            element: BytesStart::owned(buf, 3),
+        }
     }
 
     /// Gets the decoder struct
@@ -254,13 +264,17 @@ impl<'a> BytesEnd<'a> {
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
     pub fn borrowed(name: &'a [u8]) -> BytesEnd<'a> {
-        BytesEnd { name: Cow::Borrowed(name) }
+        BytesEnd {
+            name: Cow::Borrowed(name),
+        }
     }
 
     /// Creates a new `BytesEnd` owning its name
     #[inline]
     pub fn owned(name: Vec<u8>) -> BytesEnd<'static> {
-        BytesEnd { name: Cow::Owned(name) }
+        BytesEnd {
+            name: Cow::Owned(name),
+        }
     }
 
     /// Gets `BytesEnd` event name
@@ -292,13 +306,17 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
     pub fn borrowed(content: &'a [u8]) -> BytesText<'a> {
-        BytesText { content: Cow::Borrowed(content) }
+        BytesText {
+            content: Cow::Borrowed(content),
+        }
     }
 
     /// Creates a new `BytesEnd` owning its name
     #[inline]
     pub fn owned(content: Vec<u8>) -> BytesText<'static> {
-        BytesText { content: Cow::Owned(content) }
+        BytesText {
+            content: Cow::Owned(content),
+        }
     }
 
     /// gets escaped content
@@ -384,8 +402,7 @@ impl<'a> Deref for Event<'a> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         match *self {
-            Event::Start(ref e) |
-            Event::Empty(ref e) => &*e,
+            Event::Start(ref e) | Event::Empty(ref e) => &*e,
             Event::End(ref e) => &*e,
             Event::Text(ref e) => &*e,
             Event::Decl(ref e) => &*e,
@@ -419,16 +436,16 @@ fn local_name() {
     let mut parsed_local_names = Vec::new();
     loop {
         match rdr.read_event(&mut buf).expect("unable to read xml event") {
-            Event::Start(ref e) => {
-                parsed_local_names.push(from_utf8(e.local_name())
-                                            .expect("unable to build str from local_name")
-                                            .to_string())
-            }
-            Event::End(ref e) => {
-                parsed_local_names.push(from_utf8(e.local_name())
-                                            .expect("unable to build str from local_name")
-                                            .to_string())
-            }
+            Event::Start(ref e) => parsed_local_names.push(
+                from_utf8(e.local_name())
+                    .expect("unable to build str from local_name")
+                    .to_string(),
+            ),
+            Event::End(ref e) => parsed_local_names.push(
+                from_utf8(e.local_name())
+                    .expect("unable to build str from local_name")
+                    .to_string(),
+            ),
             Event::Eof => break,
             _ => {}
         }
