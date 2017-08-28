@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::io::BufRead;
 use errors::Result;
 use escape::unescape;
-use reader::{Reader, is_whitespace};
+use reader::{is_whitespace, Reader};
 
 use memchr;
 
@@ -101,7 +101,6 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
 impl<'a> Iterator for Attributes<'a> {
     type Item = Result<Attribute<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
-
         if self.exit {
             return None;
         }
@@ -114,8 +113,9 @@ impl<'a> Iterator for Attributes<'a> {
 
         // search first space
         let mut start_key = match self.bytes[p..len - 1]
-                  .iter()
-                  .position(|&b| is_whitespace(b)) {
+            .iter()
+            .position(|&b| is_whitespace(b))
+        {
             Some(i) => p + i + 1,
             None => {
                 self.position = len;
@@ -125,8 +125,9 @@ impl<'a> Iterator for Attributes<'a> {
 
         // now search first non space
         start_key += match self.bytes[start_key..len - 1]
-                  .iter()
-                  .position(|&b| !is_whitespace(b)) {
+            .iter()
+            .position(|&b| !is_whitespace(b))
+        {
             Some(i) => i,
             None => {
                 self.position = len;
@@ -136,8 +137,9 @@ impl<'a> Iterator for Attributes<'a> {
 
         // key end with either whitespace or =
         let end_key = match self.bytes[start_key + 1..len - 1]
-                  .iter()
-                  .position(|&b| b == b'=' || is_whitespace(b)) {
+            .iter()
+            .position(|&b| b == b'=' || is_whitespace(b))
+        {
             Some(i) => start_key + 1 + i,
             None => {
                 self.position = len;
@@ -147,19 +149,24 @@ impl<'a> Iterator for Attributes<'a> {
 
         if self.with_checks {
             if let Some(i) = self.bytes[start_key..end_key]
-                   .iter()
-                   .position(|&b| b == b'\'' || b == b'"') {
-                return Some(self.error("Attribute key cannot contain quote", start_key + i));
+                .iter()
+                .position(|&b| b == b'\'' || b == b'"')
+            {
+                return Some(
+                    self.error("Attribute key cannot contain quote", start_key + i),
+                );
             }
-            if let Some(r) =
-                self.consumed
-                    .iter()
-                    .cloned()
-                    .find(|ref r| &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key]) {
-                return Some(self.error(format!("Duplicate attribute at position {} and {}",
-                                               r.start,
-                                               start_key),
-                                       start_key));
+            if let Some(r) = self.consumed.iter().cloned().find(|ref r| {
+                &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key]
+            }) {
+                return Some(self.error(
+                    format!(
+                        "Duplicate attribute at position {} and {}",
+                        r.start,
+                        start_key
+                    ),
+                    start_key,
+                ));
             }
             self.consumed.push(start_key..end_key);
         }
@@ -175,23 +182,28 @@ impl<'a> Iterator for Attributes<'a> {
 
         if self.with_checks {
             if let Some(i) = self.bytes[end_key..start_val - 1]
-                   .iter()
-                   .position(|&b| !is_whitespace(b)) {
-                return Some(self.error("Attribute key must be directly followed by = or space",
-                                       end_key + i));
+                .iter()
+                .position(|&b| !is_whitespace(b))
+            {
+                return Some(self.error(
+                    "Attribute key must be directly followed by = or space",
+                    end_key + i,
+                ));
             }
         }
 
         // value starts with a quote
         let (quote, start_val) = match self.bytes[start_val..len - 1]
-                  .iter()
-                  .enumerate()
-                  .filter(|&(_, &b)| !is_whitespace(b))
-                  .next() {
-            Some((i, b @ &b'\'')) |
-            Some((i, b @ &b'"')) => (*b, start_val + i + 1),
+            .iter()
+            .enumerate()
+            .filter(|&(_, &b)| !is_whitespace(b))
+            .next()
+        {
+            Some((i, b @ &b'\'')) | Some((i, b @ &b'"')) => (*b, start_val + i + 1),
             Some((i, _)) => {
-                return Some(self.error("Attribute value must start with a quote", start_val + i));
+                return Some(
+                    self.error("Attribute value must start with a quote", start_val + i),
+                );
             }
             None => {
                 self.position = len;
@@ -211,8 +223,8 @@ impl<'a> Iterator for Attributes<'a> {
         self.position = end_val + 1;
 
         Some(Ok(Attribute {
-                    key: &self.bytes[start_key..end_key],
-                    value: &self.bytes[start_val..end_val],
-                }))
+            key: &self.bytes[start_key..end_key],
+            value: &self.bytes[start_val..end_val],
+        }))
     }
 }

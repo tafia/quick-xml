@@ -83,23 +83,29 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                 b"amp" => ByteOrChar::Byte(b'&'),
                 b"apos" => ByteOrChar::Byte(b'\''),
                 b"quot" => ByteOrChar::Byte(b'\"'),
-                b"#x0" | b"#0" => {
-                    bail!(Escape("Null character entity not allowed".to_string(), start..end))
-                }
+                b"#x0" | b"#0" => bail!(Escape(
+                    "Null character entity not allowed".to_string(),
+                    start..end
+                )),
                 bytes if bytes.starts_with(b"#x") => {
                     ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
                 bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => {
-                    bail!(Escape(format!("Unrecognized escape symbol: {:?}",
-                                         ::std::str::from_utf8(bytes)),
-                                 start..end))
-                }
+                bytes => bail!(Escape(
+                    format!(
+                        "Unrecognized escape symbol: {:?}",
+                        ::std::str::from_utf8(bytes)
+                    ),
+                    start..end
+                )),
             };
             escapes.push((start - 1..end, b_o_c));
             start = end + 1;
         } else {
-            bail!(Escape("Cannot find ';' after '&'".to_string(), start..raw.len()));
+            bail!(Escape(
+                "Cannot find ';' after '&'".to_string(),
+                start..raw.len()
+            ));
         }
     }
     if escapes.is_empty() {
@@ -171,8 +177,10 @@ fn parse_decimal(bytes: &[u8]) -> Result<u32> {
 fn test_escape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    println!("{}",
-             ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap());
+    println!(
+        "{}",
+        ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap()
+    );
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");

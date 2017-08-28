@@ -82,7 +82,6 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
     let mut state = State::MultiStatus;
 
     loop {
-
         match reader.read_namespaced_event(&mut buf, &mut ns_buffer) {
             Ok((namespace_value, Event::Start(e))) => {
                 let namespace_value = namespace_value.unwrap_or_default();
@@ -113,7 +112,6 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
             Err(e) => break,
             _ => (),
         }
-
     }
     result
 }

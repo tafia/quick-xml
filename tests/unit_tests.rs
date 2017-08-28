@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-use quick_xml::events::{BytesStart, BytesEnd, BytesDecl, BytesText, Event};
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::events::Event::*;
 use quick_xml::errors::Result;
 
@@ -90,17 +90,19 @@ fn test_empty_attr() {
 fn test_start_end_comment() {
     let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r,
-             Start,
-             b"b",
-             Empty,
-             b"a",
-             Empty,
-             b"a",
-             Comment,
-             b"t",
-             End,
-             b"b");
+    next_eq!(
+        r,
+        Start,
+        b"b",
+        Empty,
+        b"a",
+        Empty,
+        b"a",
+        Comment,
+        b"t",
+        End,
+        b"b"
+    );
 }
 
 #[test]
@@ -125,21 +127,21 @@ fn test_xml_decl() {
     match r.read_event(&mut buf).unwrap() {
         Decl(ref e) => {
             match e.version() {
-                Ok(v) => {
-                    assert_eq!(v,
-                               b"1.0",
-                               "expecting version '1.0', got '{:?}",
-                               from_utf8(v))
-                }
+                Ok(v) => assert_eq!(
+                    v,
+                    b"1.0",
+                    "expecting version '1.0', got '{:?}",
+                    from_utf8(v)
+                ),
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
-                Some(Ok(v)) => {
-                    assert_eq!(v,
-                               b"utf-8",
-                               "expecting encoding 'utf-8', got '{:?}",
-                               from_utf8(v))
-                }
+                Some(Ok(v)) => assert_eq!(
+                    v,
+                    b"utf-8",
+                    "expecting encoding 'utf-8', got '{:?}",
+                    from_utf8(v)
+                ),
                 Some(Err(e)) => panic!("{:?}", e),
                 None => panic!("cannot find encoding"),
             }
@@ -161,23 +163,25 @@ fn test_trim_test() {
 
     let mut r = Reader::from_str(txt);
     r.trim_text(false);
-    next_eq!(r,
-             Text,
-             b"",
-             Start,
-             b"a",
-             Text,
-             b"",
-             Start,
-             b"b",
-             Text,
-             b"  ",
-             End,
-             b"b",
-             Text,
-             b"",
-             End,
-             b"a");
+    next_eq!(
+        r,
+        Text,
+        b"",
+        Start,
+        b"a",
+        Text,
+        b"",
+        Start,
+        b"b",
+        Text,
+        b"  ",
+        End,
+        b"b",
+        Text,
+        b"",
+        End,
+        b"a"
+    );
 }
 
 #[test]
@@ -205,19 +209,21 @@ fn test_start_attr() {
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r,
-             Start,
-             b"a",
-             Start,
-             b"b",
-             Text,
-             b"test",
-             End,
-             b"b",
-             Empty,
-             b"c",
-             End,
-             b"a");
+    next_eq!(
+        r,
+        Start,
+        b"a",
+        Start,
+        b"b",
+        Text,
+        b"test",
+        End,
+        b"b",
+        Empty,
+        b"c",
+        End,
+        b"a"
+    );
 }
 
 #[test]
@@ -316,9 +322,11 @@ fn test_new_xml_decl_full() {
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-               "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
-               "writer output (LHS)");
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
+        "writer output (LHS)"
+    );
 }
 
 #[test]
@@ -329,9 +337,11 @@ fn test_new_xml_decl_standalone() {
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-               "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
-               "writer output (LHS)");
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
+        "writer output (LHS)"
+    );
 }
 
 #[test]
@@ -342,9 +352,11 @@ fn test_new_xml_decl_encoding() {
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-               "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
-               "writer output (LHS)");
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
+        "writer output (LHS)"
+    );
 }
 
 #[test]
@@ -355,9 +367,11 @@ fn test_new_xml_decl_version() {
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-               "<?xml version=\"1.2\"?>".to_owned(),
-               "writer output (LHS)");
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"1.2\"?>".to_owned(),
+        "writer output (LHS)"
+    );
 }
 
 /// This test ensures that empty XML declaration attribute values are not a problem.
@@ -371,9 +385,11 @@ fn test_new_xml_decl_empty() {
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).expect("utf-8 output"),
-               "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
-               "writer output (LHS)");
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
+        "writer output (LHS)"
+    );
 }
 
 #[test]
@@ -384,11 +400,11 @@ fn test_buf_position() {
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Err(_) if r.buffer_position() == 2 => assert!(true), // error at char 2: no opening tag
-        Err(e) => {
-            panic!("expecting buf_pos = 2, found {}, err: {:?}",
-                   r.buffer_position(),
-                   e)
-        }
+        Err(e) => panic!(
+            "expecting buf_pos = 2, found {}, err: {:?}",
+            r.buffer_position(),
+            e
+        ),
         e => panic!("expecting error, found {:?}", e),
     }
 
@@ -403,14 +419,13 @@ fn test_buf_position() {
             // error at char 5: no closing --> tag found
             assert!(true);
         }
-        Err(e) => {
-            panic!("expecting buf_pos = 5, found {}, err: {:?}",
-                   r.buffer_position(),
-                   e)
-        }
+        Err(e) => panic!(
+            "expecting buf_pos = 5, found {}, err: {:?}",
+            r.buffer_position(),
+            e
+        ),
         e => assert!(false, "expecting error, found {:?}", e),
     }
-
 }
 
 #[test]
@@ -487,9 +502,11 @@ fn test_default_namespace_reset() {
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
     if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        assert_eq!(&a[..],
-                   b"www1",
-                   "expecting outer start element with to resolve to 'www1'");
+        assert_eq!(
+            &a[..],
+            b"www1",
+            "expecting outer start element with to resolve to 'www1'"
+        );
     } else {
         panic!("expecting outer start element with to resolve to 'www1'");
     }
@@ -504,9 +521,11 @@ fn test_default_namespace_reset() {
     }
 
     if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        assert_eq!(&a[..],
-                   b"www1",
-                   "expecting outer end element with to resolve to 'www1'");
+        assert_eq!(
+            &a[..],
+            b"www1",
+            "expecting outer end element with to resolve to 'www1'"
+        );
     } else {
         panic!("expecting outer end element with to resolve to 'www1'");
     }
@@ -521,29 +540,31 @@ fn test_escaped_content() {
     match r.read_event(&mut buf) {
         Ok(Text(e)) => {
             if &*e != b"&lt;test&gt;" {
-                panic!("content unexpected: expecting '&lt;test&gt;', got '{:?}'",
-                       from_utf8(&*e));
+                panic!(
+                    "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
+                    from_utf8(&*e)
+                );
             }
             match e.unescaped() {
-                Ok(ref c) => {
-                    if &**c != b"<test>" {
-                        panic!("unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
-                               from_utf8(c))
-                    }
-                }
-                Err(e) => {
-                    panic!("cannot escape content at position {}: {:?}",
-                           r.buffer_position(),
-                           e)
-                }
+                Ok(ref c) => if &**c != b"<test>" {
+                    panic!(
+                        "unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
+                        from_utf8(c)
+                    )
+                },
+                Err(e) => panic!(
+                    "cannot escape content at position {}: {:?}",
+                    r.buffer_position(),
+                    e
+                ),
             }
         }
         Ok(e) => panic!("Expecting text event, got {:?}", e),
-        Err(e) => {
-            panic!("Cannot get next event at position {}: {:?}",
-                   r.buffer_position(),
-                   e)
-        }
+        Err(e) => panic!(
+            "Cannot get next event at position {}: {:?}",
+            r.buffer_position(),
+            e
+        ),
     }
     next_eq!(r, End, b"a");
 }
@@ -595,9 +616,11 @@ fn test_read_write_roundtrip_escape() {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.unescaped().unwrap();
-                assert!(writer
-                            .write_event(Event::Text(BytesText::borrowed(&t)))
-                            .is_ok());
+                assert!(
+                    writer
+                        .write_event(Event::Text(BytesText::borrowed(&t)))
+                        .is_ok()
+                );
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
