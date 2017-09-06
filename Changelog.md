@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.9.2
+- perf: update to encoding_rs 0.7.0, supposedly faster for utf8
+- style: rustfmt-nightly
+
 ## 0.9.1
 - perf: use memchr crate and rewrite some loops with iterators
 - docs: remove duplicate `Reader` doc in lib.rs
