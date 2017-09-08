@@ -45,14 +45,12 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
         }
         loc += 1;
     }
-    println!("escapes: {:?}", escapes);
 
     if escapes.is_empty() {
         Cow::Borrowed(raw)
     } else {
         let len = raw.len();
         let mut v = Vec::with_capacity(len);
-
         let mut start = 0;
         for (i, r) in escapes {
             v.extend_from_slice(&raw[start..i]);
