@@ -41,22 +41,23 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
             b'\'' => escapes.push((loc, b"&apos;")),
             b'&' => escapes.push((loc, b"&amp;")),
             b'"' => escapes.push((loc, b"&quot;")),
-            _ => unreachable!(),
+            _ => unreachable!("Only '<', '>','\', '&' and '\"' are escaped"),
         }
         loc += 1;
     }
+    println!("escapes: {:?}", escapes);
 
     if escapes.is_empty() {
         Cow::Borrowed(raw)
     } else {
         let len = raw.len();
         let mut v = Vec::with_capacity(len);
-        let mut start = 0;
 
+        let mut start = 0;
         for (i, r) in escapes {
             v.extend_from_slice(&raw[start..i]);
-            start += i + 1;
             v.extend_from_slice(r);
+            start = i + 1;
         }
 
         if start < len {
@@ -174,14 +175,21 @@ fn parse_decimal(bytes: &[u8]) -> Result<u32> {
 }
 
 #[test]
-fn test_escape() {
+fn test_unescape() {
     assert_eq!(&*unescape(b"test").unwrap(), b"test");
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    println!(
-        "{}",
-        ::std::str::from_utf8(&*unescape(b"&#xa9;").unwrap()).unwrap()
-    );
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
-    assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
+}
+
+#[test]
+fn test_escape() {
+    assert_eq!(&*escape(b"test"), b"test");
+    assert_eq!(&*escape(b"<test>"), b"&lt;test&gt;");
+    assert_eq!(&*escape(b"\"a\"bc"), b"&quot;a&quot;bc");
+    assert_eq!(&*escape(b"\"a\"b&c"), b"&quot;a&quot;b&amp;c");
+    assert_eq!(
+        &*escape(b"prefix_\"a\"b&<>c"),
+        "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
+    );
 }
