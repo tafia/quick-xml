@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.9.3
+- fix: escape was panicking at the 3rd character escaped.
+
 ## 0.9.2
 - perf: update to encoding_rs 0.7.0, supposedly faster for utf8
 - style: rustfmt-nightly
