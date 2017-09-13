@@ -128,19 +128,19 @@ fn test_xml_decl() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => assert_eq!(
-                    v,
+                    &*v,
                     b"1.0",
                     "expecting version '1.0', got '{:?}",
-                    from_utf8(v)
+                    from_utf8(&*v)
                 ),
                 Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
                 Some(Ok(v)) => assert_eq!(
-                    v,
+                    &*v,
                     b"utf-8",
                     "expecting encoding 'utf-8', got '{:?}",
-                    from_utf8(v)
+                    from_utf8(&*v)
                 ),
                 Some(Err(e)) => panic!("{:?}", e),
                 None => panic!("cannot find encoding"),
@@ -640,11 +640,11 @@ fn test_closing_bracket_in_single_quote_attr() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), ">".as_bytes()).into()),
                 x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "2".as_bytes()).into()),
                 x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -663,11 +663,11 @@ fn test_closing_bracket_in_double_quote_attr() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr", ">").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), ">".as_bytes()).into()),
                 x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check", "2").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "2".as_bytes()).into()),
                 x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -686,11 +686,11 @@ fn test_closing_bracket_in_double_quote_mixed() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr", "'>'").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), "'>'".as_bytes()).into()),
                 x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check", "'2'").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "'2'".as_bytes()).into()),
                 x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");
@@ -709,11 +709,11 @@ fn test_closing_bracket_in_single_quote_mixed() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr", "\">\"").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), "\">\"".as_bytes()).into()),
                 x => panic!("expected attribute 'attr', got {:?}", x),
             }
             match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check", "\"2\"").into()),
+                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "\"2\"".as_bytes()).into()),
                 x => panic!("expected attribute 'check', got {:?}", x),
             }
             assert!(attrs.next().is_none(), "expected only two attributes");

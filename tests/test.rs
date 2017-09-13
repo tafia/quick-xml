@@ -4,6 +4,7 @@ use quick_xml::reader::Reader;
 use quick_xml::events::Event::*;
 use quick_xml::events::attributes::Attribute;
 use std::io::Cursor;
+use std::borrow::Cow;
 
 #[test]
 fn test_sample() {
@@ -36,7 +37,7 @@ fn test_attributes_empty() {
                 Some(
                     Ok(Attribute {
                         key: b"att1",
-                        value: b"a",
+                        value: Cow::Borrowed(b"a"),
                     }),
                 ) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
@@ -45,7 +46,7 @@ fn test_attributes_empty() {
                 Some(
                     Ok(Attribute {
                         key: b"att2",
-                        value: b"b",
+                        value: Cow::Borrowed(b"b"),
                     }),
                 ) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
@@ -72,7 +73,7 @@ fn test_attribute_equal() {
                 Some(
                     Ok(Attribute {
                         key: b"att1",
-                        value: b"a=b",
+                        value: Cow::Borrowed(b"a=b"),
                     }),
                 ) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
@@ -112,11 +113,11 @@ fn test_attributes_empty_ns() {
                 (opt_ns, local_name, value)
             });
     match atts.next() {
-        Some((None, b"att1", b"a")) => (),
+        Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
         e => panic!("Expecting att1='a' attribute, found {:?}", e),
     }
     match atts.next() {
-        Some((Some(ns), b"att2", b"b")) => {
+        Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
             assert_eq!(&ns[..], b"urn:example:r");
         }
         e => panic!(
@@ -156,11 +157,11 @@ fn test_attributes_empty_ns_expanded() {
                 (opt_ns, local_name, value)
             });
         match atts.next() {
-            Some((None, b"att1", b"a")) => (),
+            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
             e => panic!("Expecting att1='a' attribute, found {:?}", e),
         }
         match atts.next() {
-            Some((Some(ns), b"att2", b"b")) => {
+            Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
                 assert_eq!(&ns[..], b"urn:example:r");
             }
             e => panic!(
@@ -222,7 +223,7 @@ fn test_default_ns_shadowing_empty() {
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
         match atts.next() {
-            Some((None, b"att1", b"a")) => (),
+            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
             e => panic!("Expecting att1='a' attribute, found {:?}", e),
         }
         match atts.next() {
@@ -283,7 +284,7 @@ fn test_default_ns_shadowing_expanded() {
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
         match atts.next() {
-            Some((None, b"att1", b"a")) => (),
+            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
             e => panic!("Expecting att1='a' attribute, found {:?}", e),
         }
         match atts.next() {

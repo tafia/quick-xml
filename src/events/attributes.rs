@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 use std::io::BufRead;
 use errors::Result;
-use escape::unescape;
+use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
 use memchr;
@@ -59,13 +59,13 @@ pub struct Attribute<'a> {
     /// the key to uniquely define the attribute
     pub key: &'a [u8],
     /// the value
-    pub value: &'a [u8],
+    pub value: Cow<'a, [u8]>,
 }
 
 impl<'a> Attribute<'a> {
     /// unescapes the value
     pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
-        unescape(self.value)
+        unescape(&*self.value)
     }
 
     /// unescapes then decode the value
@@ -84,7 +84,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
         Attribute {
             key: val.0,
-            value: val.1,
+            value: Cow::from(val.1),
         }
     }
 }
@@ -93,7 +93,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
         Attribute {
             key: val.0.as_bytes(),
-            value: val.1.as_bytes(),
+            value: escape(val.1.as_bytes()),
         }
     }
 }
@@ -224,7 +224,7 @@ impl<'a> Iterator for Attributes<'a> {
 
         Some(Ok(Attribute {
             key: &self.bytes[start_key..end_key],
-            value: &self.bytes[start_val..end_val],
+            value: Cow::from(&self.bytes[start_val..end_val]),
         }))
     }
 }
