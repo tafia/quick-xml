@@ -287,7 +287,7 @@ fn test_write_empty_element_attrs() {
 #[test]
 fn test_write_attrs() {
     let str_from = r#"<source attr="val"></source>"#;
-    let expected = r#"<copy attr="val" a="b" c="d" x="y"></copy>"#;
+    let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
@@ -300,7 +300,7 @@ fn test_write_attrs() {
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.extend_attributes(attrs);
-                elem.push_attribute(("x", "y"));
+                elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
             Ok(End(_)) => End(BytesEnd::borrowed(b"copy")),
