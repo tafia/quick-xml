@@ -103,7 +103,7 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// Change expand_empty_elements default behaviour (true per default)
+    /// Change expand_empty_elements default behaviour (false per default)
     ///
     /// When set to true, all `Empty` events are expanded into an `Open` event
     /// followed by a `Close` Event.
