@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.9.4
+- fix: bound tests in `read_bang` fn.
+
 ## 0.9.3
 - fix: escape was panicking at the 3rd character escaped.
 
