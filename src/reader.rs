@@ -268,13 +268,16 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
+    ///
+    /// Note: depending on the start of the Event, we may need to read more 
+    /// data, thus we need a mutable buffer
     fn read_bang<'a, 'b>(
         &'a mut self,
         buf_start: usize,
         buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
         let len = buf.len();
-        if len >= 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
+        if len >= buf_start + 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
             let mut len = buf.len();
             while len < 5 || &buf[len - 2..] != b"--" {
                 buf.push(b'>');
@@ -301,7 +304,7 @@ impl<B: BufRead> Reader<B> {
             Ok(Event::Comment(
                 BytesText::borrowed(&buf[buf_start + 3..len - 2]),
             ))
-        } else if len >= 8 {
+        } else if len >= buf_start + 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
                     let mut len = buf.len();
