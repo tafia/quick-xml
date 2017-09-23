@@ -342,3 +342,20 @@ fn fuzz_53() {
         }
     }
 }
+
+#[test]
+fn test_issue94() {
+    let data = br#"<Run>
+<!B>
+</Run>"#;
+    let mut reader = Reader::from_reader(&data[..]);
+    reader.trim_text(true);
+    let mut buf = vec![];
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            _ => buf.clear(),
+        }
+        buf.clear();
+    }
+}
