@@ -412,8 +412,10 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
                 Err(ref e) => write!(f, "{}", e),
             },
             Ok((_, Event::Decl(ref e))) => {
-                let version = from_utf8(e.version().unwrap()).unwrap();
-                let encoding = from_utf8(e.encoding().unwrap().unwrap()).unwrap();
+                let version_cow = e.version().unwrap();
+                let version = from_utf8(version_cow.as_ref()).unwrap();
+                let encoding_cow = e.encoding().unwrap().unwrap();
+                let encoding = from_utf8(encoding_cow.as_ref()).unwrap();
                 write!(f, "StartDocument({}, {})", version, encoding)
             }
             Ok((_, Event::Eof)) => write!(f, "EndDocument"),

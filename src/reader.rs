@@ -892,7 +892,7 @@ impl NamespaceBufferIndex {
                     match k.get(5) {
                         None => {
                             let start = buffer.len();
-                            buffer.extend_from_slice(v);
+                            buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
                                 start: start,
                                 prefix_len: 0,
@@ -903,7 +903,7 @@ impl NamespaceBufferIndex {
                         Some(&b':') => {
                             let start = buffer.len();
                             buffer.extend_from_slice(&k[6..]);
-                            buffer.extend_from_slice(v);
+                            buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
                                 start: start,
                                 prefix_len: k.len() - 6,

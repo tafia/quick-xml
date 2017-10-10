@@ -126,7 +126,7 @@ impl<'a> BytesStart<'a> {
         bytes.push(b' ');
         bytes.extend_from_slice(a.key);
         bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(a.value);
+        bytes.extend_from_slice(&*a.value);
         bytes.push(b'"');
     }
 }
@@ -148,7 +148,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets xml version, including quotes (' or ")
-    pub fn version(&self) -> Result<&[u8]> {
+    pub fn version(&self) -> Result<Cow<[u8]>> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(
@@ -170,7 +170,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets xml encoding, including quotes (' or ")
-    pub fn encoding(&self) -> Option<Result<&[u8]>> {
+    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -185,7 +185,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets xml standalone, including quotes (' or ")
-    pub fn standalone(&self) -> Option<Result<&[u8]>> {
+    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
@@ -250,7 +250,7 @@ impl<'a> BytesDecl<'a> {
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())
-            .and_then(|e| Encoding::for_label(e))
+            .and_then(|e| Encoding::for_label(&*e))
     }
 }
 

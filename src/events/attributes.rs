@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 use std::io::BufRead;
 use errors::Result;
-use escape::unescape;
+use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
 use memchr;
@@ -53,19 +53,20 @@ impl<'a> Attributes<'a> {
 
 /// A struct representing a key/value for a xml attribute
 ///
-/// Parses either `key="value"` or `key='value'`
+/// Parses either `key="value"` or `key='value'`.
+/// Field `value` stores raw bytes, possibly containing escape-sequences.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute<'a> {
     /// the key to uniquely define the attribute
     pub key: &'a [u8],
-    /// the value
-    pub value: &'a [u8],
+    /// the raw value of attribute
+    pub value: Cow<'a, [u8]>,
 }
 
 impl<'a> Attribute<'a> {
     /// unescapes the value
     pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
-        unescape(self.value)
+        unescape(&*self.value)
     }
 
     /// unescapes then decode the value
@@ -81,19 +82,39 @@ impl<'a> Attribute<'a> {
 }
 
 impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
+    /// Creates new attribute from raw bytes.
+    /// Does not apply any transformation to both key and value.
+    ///
+    /// # Example
+    /// ```
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
     fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
         Attribute {
             key: val.0,
-            value: val.1,
+            value: Cow::from(val.1),
         }
     }
 }
 
 impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
+    /// Creates new attribute from text representation.
+    /// Key is stored as-is, but the value will be escaped.
+    ///
+    /// # Example
+    /// ```
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from(("features", "Bells & whistles"));
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
         Attribute {
             key: val.0.as_bytes(),
-            value: val.1.as_bytes(),
+            value: escape(val.1.as_bytes()),
         }
     }
 }
@@ -224,7 +245,7 @@ impl<'a> Iterator for Attributes<'a> {
 
         Some(Ok(Attribute {
             key: &self.bytes[start_key..end_key],
-            value: &self.bytes[start_val..end_val],
+            value: Cow::from(&self.bytes[start_val..end_val]),
         }))
     }
 }
