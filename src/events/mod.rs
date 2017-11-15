@@ -303,7 +303,7 @@ pub struct BytesText<'a> {
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new `BytesEnd` borrowing a slice
+    /// Creates a new `BytesText` borrowing a slice
     #[inline]
     pub fn borrowed(content: &'a [u8]) -> BytesText<'a> {
         BytesText {
@@ -311,7 +311,7 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new `BytesEnd` owning its name
+    /// Creates a new `BytesText` owning its name
     #[inline]
     pub fn owned(content: Vec<u8>) -> BytesText<'static> {
         BytesText {
@@ -319,7 +319,7 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new `BytesEnd` from text
+    /// Creates a new `BytesText` from text
     #[inline]
     pub fn from_str<S: AsRef<str>>(text: S) -> BytesText<'static> {
         let bytes = escape(text.as_ref().as_bytes()).into_owned();
