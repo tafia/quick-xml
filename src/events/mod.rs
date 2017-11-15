@@ -319,6 +319,15 @@ impl<'a> BytesText<'a> {
         }
     }
 
+    /// Creates a new `BytesEnd` from text
+    #[inline]
+    pub fn from_str<S: AsRef<str>>(text: S) -> BytesText<'static> {
+        let bytes = escape(text.as_ref().as_bytes()).into_owned();
+        BytesText {
+            content: Cow::Owned(bytes),
+        }
+    }
+
     /// gets escaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
@@ -341,7 +350,7 @@ impl<'a> BytesText<'a> {
     ///
     /// Searches for any of `<, >, &, ', "` and xml escapes them.
     pub fn escaped(&self) -> Cow<[u8]> {
-        escape(self)
+        self.content.clone()
     }
 }
 
