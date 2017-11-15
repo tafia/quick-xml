@@ -597,6 +597,33 @@ fn test_read_write_roundtrip_results_in_identity() {
 }
 
 #[test]
+fn test_read_write_roundtrip() {
+    let input = r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <section ns:label="header">
+            <section ns:label="empty element section" />
+            <section ns:label="start/end section"></section>
+            <section ns:label="with text">data &lt;escaped&gt;</section>
+            </section>
+    "#;
+
+    let mut reader = Reader::from_str(input);
+    reader.trim_text(false).expand_empty_elements(false);
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Eof) => break,
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
+            Err(e) => panic!(e),
+        }
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+}
+
+#[test]
 fn test_read_write_roundtrip_escape() {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
