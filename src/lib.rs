@@ -2,7 +2,7 @@
 //!
 //! ## Description
 //!
-//! - `Reader`: a low leve xml pull-reader where buffer allocation/clearing is left to user
+//! - `Reader`: a low level xml pull-reader where buffer allocation/clearing is left to user
 //! - `Writer`: a xml writer. Can be nested with readers if you want to transform xmls
 //!
 //! ## Examples
