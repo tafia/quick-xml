@@ -349,8 +349,8 @@ impl<'a> BytesText<'a> {
     /// Gets escaped content
     ///
     /// Searches for any of `<, >, &, ', "` and xml escapes them.
-    pub fn escaped(&self) -> Cow<[u8]> {
-        self.content.clone()
+    pub fn escaped(&self) -> &[u8] {
+        self.content.as_ref()
     }
 }
 

@@ -645,7 +645,7 @@ fn test_read_write_roundtrip_escape() {
                 let t = e.escaped();
                 assert!(
                     writer
-                        .write_event(Event::Text(BytesText::owned(t.into_owned())))
+                        .write_event(Event::Text(BytesText::owned(t.to_vec())))
                         .is_ok()
                 );
             }
@@ -677,7 +677,7 @@ fn test_read_write_roundtrip_escape_text() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(Text(e)) => {
-                let t = String::from_utf8(e.unescaped().unwrap().into_owned()).unwrap();
+                let t = e.unescape_and_decode(&reader).unwrap();
                 assert!(
                     writer
                         .write_event(Event::Text(BytesText::from_str(t)))
