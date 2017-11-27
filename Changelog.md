@@ -8,6 +8,12 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.10.0
+- feat: update dependencies
+- doc: add doc for attribute creation functions
+- fix: escape attributes
+- fix: avoid double escapes
+
 ## 0.9.4
 - fix: bound tests in `read_bang` fn.
 
