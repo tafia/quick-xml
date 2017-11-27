@@ -269,7 +269,7 @@ impl<B: BufRead> Reader<B> {
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
     ///
-    /// Note: depending on the start of the Event, we may need to read more 
+    /// Note: depending on the start of the Event, we may need to read more
     /// data, thus we need a mutable buffer
     fn read_bang<'a, 'b>(
         &'a mut self,
@@ -603,9 +603,7 @@ impl<B: BufRead> Reader<B> {
                 Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(
-                        io_eof(&format!("Expecting {:?} end", from_utf8(end))).into(),
-                    )
+                    return Err(io_eof(&format!("Expecting {:?} end", from_utf8(end))).into())
                 }
                 _ => (),
             }

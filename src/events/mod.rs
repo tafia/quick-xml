@@ -163,9 +163,7 @@ impl<'a> BytesDecl<'a> {
                     from_utf8(a.key)
                 ).into(),
             ),
-            None => Err(
-                "XmlDecl must start with 'version' attribute, found none".into(),
-            ),
+            None => Err("XmlDecl must start with 'version' attribute, found none".into()),
         }
     }
 
