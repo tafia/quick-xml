@@ -175,14 +175,15 @@ impl<'a> Iterator for Attributes<'a> {
             {
                 return Some(self.error("Attribute key cannot contain quote", start_key + i));
             }
-            if let Some(r) = self.consumed.iter().cloned().find(|ref r| {
-                &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key]
-            }) {
+            if let Some(r) = self.consumed
+                .iter()
+                .cloned()
+                .find(|ref r| &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key])
+            {
                 return Some(self.error(
                     format!(
                         "Duplicate attribute at position {} and {}",
-                        r.start,
-                        start_key
+                        r.start, start_key
                     ),
                     start_key,
                 ));

@@ -151,18 +151,14 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<Cow<[u8]>> {
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(
-                Ok(Attribute {
-                    key: b"version",
-                    value: v,
-                }),
-            ) => Ok(v),
-            Some(Ok(a)) => Err(
-                format!(
-                    "XmlDecl must start with 'version' attribute, found {:?}",
-                    from_utf8(a.key)
-                ).into(),
-            ),
+            Some(Ok(Attribute {
+                key: b"version",
+                value: v,
+            })) => Ok(v),
+            Some(Ok(a)) => Err(format!(
+                "XmlDecl must start with 'version' attribute, found {:?}",
+                from_utf8(a.key)
+            ).into()),
             None => Err("XmlDecl must start with 'version' attribute, found none".into()),
         }
     }
