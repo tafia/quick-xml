@@ -301,9 +301,9 @@ impl<B: BufRead> Reader<B> {
                     offset -= 1;
                 }
             }
-            Ok(Event::Comment(
-                BytesText::borrowed(&buf[buf_start + 3..len - 2]),
-            ))
+            Ok(Event::Comment(BytesText::borrowed(
+                &buf[buf_start + 3..len - 2],
+            )))
         } else if len >= buf_start + 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
@@ -320,9 +320,9 @@ impl<B: BufRead> Reader<B> {
                         }
                         len = buf.len();
                     }
-                    Ok(Event::CData(
-                        BytesText::borrowed(&buf[buf_start + 8..len - 2]),
-                    ))
+                    Ok(Event::CData(BytesText::borrowed(
+                        &buf[buf_start + 8..len - 2],
+                    )))
                 }
                 b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
@@ -343,9 +343,9 @@ impl<B: BufRead> Reader<B> {
                         }
                     }
                     let len = buf.len();
-                    Ok(Event::DocType(
-                        BytesText::borrowed(&buf[buf_start + 8..len]),
-                    ))
+                    Ok(Event::DocType(BytesText::borrowed(
+                        &buf[buf_start + 8..len],
+                    )))
                 }
                 _ => bail!("Only Comment, CDATA and DOCTYPE nodes can start with a '!'"),
             }
