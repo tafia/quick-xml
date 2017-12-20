@@ -147,6 +147,10 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
 }
 
 fn parse_hexadecimal(bytes: &[u8]) -> Result<u32> {
+    // maximum code is character is 0x10FFFF => 6 characters
+    if bytes.len() > 6 {
+        bail!("Cannot convert hexadecimal to utf8");
+    }
     let mut code = 0;
     for &b in bytes {
         code <<= 4;
@@ -161,6 +165,10 @@ fn parse_hexadecimal(bytes: &[u8]) -> Result<u32> {
 }
 
 fn parse_decimal(bytes: &[u8]) -> Result<u32> {
+    // maximum code is character is 0x10FFFF = 1114111 => 7 characters
+    if bytes.len() > 7 {
+        bail!("Cannot convert decimal to utf8");
+    }
     let mut code = 0;
     for &b in bytes {
         code *= 10;
