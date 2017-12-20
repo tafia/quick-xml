@@ -360,3 +360,35 @@ fn test_issue94() {
         buf.clear();
     }
 }
+
+#[test]
+fn fuzz_101() {
+    let data: &[u8] = b"\x00\x00<\x00\x00\x0a>&#44444444401?#\x0a413518\
+                       #\x0a\x0a\x0a;<:<)(<:\x0a\x0a\x0a\x0a;<:\x0a\x0a\
+                       <:\x0a\x0a\x0a\x0a\x0a<\x00*\x00\x00\x00\x00";
+    let cursor = Cursor::new(data);
+    let mut reader = Reader::from_reader(cursor);
+    let mut buf = vec![];
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Start(ref e)) | Ok(Empty(ref e))=> {
+                if e.unescaped().is_err() {
+                    break;
+                }
+                for a in e.attributes() {
+                    if a.ok().map_or(true, |a| a.unescaped_value().is_err()) {
+                        break;
+                    }
+                }
+            }
+            Ok(Text(ref e)) => {
+                if e.unescaped().is_err() {
+                    break;
+                }
+            }
+            Ok(Eof) | Err(..) => break,
+            _ => (),
+        }
+        buf.clear();
+    }
+}
