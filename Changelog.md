@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.10.1
+- fix: overflow possibility when parsing Ascii codes
+
 ## 0.10.0
 - feat: update dependencies
 - doc: add doc for attribute creation functions
