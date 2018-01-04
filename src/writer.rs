@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use errors::Result;
+use errors::{Error, Result};
 use events::Event;
 
 /// Xml writer
@@ -10,11 +10,14 @@ use events::Event;
 /// Consumes a `Write` and writes xml Events
 ///
 /// ```rust
+/// # extern crate failure;
+/// # extern crate quick_xml;
+/// # fn main() {
+/// use failure::Fail;
 /// use quick_xml::writer::Writer;
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
 /// use quick_xml::reader::Reader;
 /// use std::io::Cursor;
-/// use std::iter;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 /// let mut reader = Reader::from_str(xml);
@@ -44,9 +47,9 @@ use events::Event;
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
 ///         Ok(e) => assert!(writer.write_event(&e).is_ok()),
-///         // error are chained, the last one usually being the
+///         // errors are chained, the last one usually being the
 ///         // position where the error has happened
-///         Err(e) => panic!("{:?}", e.iter().map(|e| format!("{:?} -", e)).collect::<String>()),
+///         Err(e) => panic!("{:?}", e.causes().map(|e| format!("{:?} -", e)).collect::<String>()),
 ///     }
 ///     buf.clear();
 /// }
@@ -54,6 +57,7 @@ use events::Event;
 /// let result = writer.into_inner().into_inner();
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
+/// # }
 /// ```
 #[derive(Clone)]
 pub struct Writer<W: Write> {
@@ -91,11 +95,11 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub fn write(&mut self, value: &[u8]) -> Result<usize> {
-        self.writer.write(value).map_err(|e| e.into())
+        self.writer.write(value).map_err(Error::Io)
     }
 
     #[inline]
     fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<usize> {
-        Ok(self.writer.write(before)? + self.writer.write(value)? + self.writer.write(after)?)
+        Ok(self.write(before)? + self.write(value)? + self.write(after)?)
     }
 }

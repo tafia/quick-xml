@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 use std::ops::Range;
 use std::io::BufRead;
-use errors::Result;
+use errors::{Error, Result};
 use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
@@ -45,9 +45,9 @@ impl<'a> Attributes<'a> {
     }
 
     /// sets `self.exit = true` to terminate the iterator
-    fn error<S: Into<String>>(&mut self, msg: S, p: usize) -> Result<Attribute<'a>> {
+    fn error(&mut self, err: Error) -> Result<Attribute<'a>> {
         self.exit = true;
-        Err(::errors::ErrorKind::Attribute(msg.into(), p).into())
+        Err(err.into())
     }
 }
 
@@ -66,7 +66,7 @@ pub struct Attribute<'a> {
 impl<'a> Attribute<'a> {
     /// unescapes the value
     pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
-        unescape(&*self.value)
+        unescape(&*self.value).map_err(Error::EscapeError)
     }
 
     /// unescapes then decode the value
@@ -173,20 +173,14 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .position(|&b| b == b'\'' || b == b'"')
             {
-                return Some(self.error("Attribute key cannot contain quote", start_key + i));
+                return Some(self.error(Error::NameWithQuote(start_key + i)));
             }
             if let Some(r) = self.consumed
                 .iter()
                 .cloned()
                 .find(|ref r| &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key])
             {
-                return Some(self.error(
-                    format!(
-                        "Duplicate attribute at position {} and {}",
-                        r.start, start_key
-                    ),
-                    start_key,
-                ));
+                return Some(self.error(Error::DuplicatedAttribute(start_key, r.start)));
             }
             self.consumed.push(start_key..end_key);
         }
@@ -205,10 +199,7 @@ impl<'a> Iterator for Attributes<'a> {
                 .iter()
                 .position(|&b| !is_whitespace(b))
             {
-                return Some(self.error(
-                    "Attribute key must be directly followed by = or space",
-                    end_key + i,
-                ));
+                return Some(self.error(Error::NoEqAfterName(end_key + i)));
             }
         }
 
@@ -221,7 +212,7 @@ impl<'a> Iterator for Attributes<'a> {
         {
             Some((i, b @ &b'\'')) | Some((i, b @ &b'"')) => (*b, start_val + i + 1),
             Some((i, _)) => {
-                return Some(self.error("Attribute value must start with a quote", start_val + i));
+                return Some(self.error(Error::UnquotedValue(start_val + i)));
             }
             None => {
                 self.position = len;
