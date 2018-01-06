@@ -52,18 +52,6 @@ impl<'a> Attributes<'a> {
         self.with_checks = val;
         self
     }
-
-    /// allow attributes without quote or `=`
-    pub fn html_style(&mut self, val: bool) -> &mut Attributes<'a> {
-        self.html = val;
-        self
-    }
-
-    /// sets `self.exit = true` to terminate the iterator
-    fn error(&mut self, err: Error, len: usize) -> Result<Attribute<'a>> {
-        self.position = len;
-        Err(err.into())
-    }
 }
 
 /// A struct representing a key/value for a xml attribute
@@ -140,18 +128,22 @@ impl<'a> Iterator for Attributes<'a> {
 
         let len = self.bytes.len();
 
-        // helper macro for last attribute
+        macro_rules! err {
+            ($err: expr) => {{
+                self.position = len;
+                return Some(Err($err.into()));
+            }}
+        }
+
         macro_rules! attr {
-            ($key: expr) => {
-                {
-                    self.position = len;
-                    if self.html {
-                        attr!($key, 0..0)
-                    } else {
-                        return None;
-                    };
-                }
-            };
+            ($key: expr) => {{
+                self.position = len;
+                if self.html {
+                    attr!($key, 0..0)
+                } else {
+                    return None;
+                };
+            }};
             ($key:expr, $val: expr) => {
                 return Some(Ok(Attribute {
                     key: &self.bytes[$key],
@@ -178,24 +170,22 @@ impl<'a> Iterator for Attributes<'a> {
         let end_key = match bytes.by_ref().find(|&(_, &b)| b == b'=' || is_whitespace(b)) {
             Some((i, &b'=')) => i,
             Some((i, &b'\'')) | Some((i, &b'"')) if self.with_checks => {
-                return Some(self.error(Error::NameWithQuote(i), len));
+                err!(Error::NameWithQuote(i));
             }
             Some((i, _)) => {
                 // consume until `=` or return if html
                 match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
                     Some((_, &b'=')) => i,
-                    Some((j, _)) => {
-                        if self.html {
-                            self.position = j - 1;
-                            attr!(start_key..i, 0..0);
-                        }
-                        return Some(self.error(Error::NoEqAfterName(j), len));
+                    Some((j, _)) if self.html => {
+                        self.position = j - 1;
+                        attr!(start_key..i, 0..0);
                     }
+                    Some((j, _)) => err!(Error::NoEqAfterName(j)),
                     None if self.html => {
                         self.position = len;
                         attr!(start_key..len, 0..0);
                     }
-                    None => return Some(self.error(Error::NoEqAfterName(len), len)),
+                    None => err!(Error::NoEqAfterName(len)),
                 }
             }
             None => attr!(start_key..len),
@@ -208,7 +198,7 @@ impl<'a> Iterator for Attributes<'a> {
                 .find(|r| &self.bytes[(*r).clone()] == &self.bytes[start_key..end_key])
                 .map(|ref r| r.start)
             {
-                return Some(self.error(Error::DuplicatedAttribute(start_key, start), len));
+                err!(Error::DuplicatedAttribute(start_key, start));
             }
             self.consumed.push(start_key..end_key);
         }
@@ -221,7 +211,7 @@ impl<'a> Iterator for Attributes<'a> {
                         self.position = j + 1;
                         attr!(start_key..end_key, i + 1..j)
                     }
-                    None => Some(self.error(Error::UnquotedValue(i), len)),
+                    None => err!(Error::UnquotedValue(i)),
                 }
             },
             Some((i, _)) if self.html => {
@@ -229,7 +219,7 @@ impl<'a> Iterator for Attributes<'a> {
                 self.position = j;
                 attr!(start_key..end_key, i..j)
             }
-            Some((i, _)) => Some(self.error(Error::UnquotedValue(i), len)),
+            Some((i, _)) => err!(Error::UnquotedValue(i)),
             None => attr!(start_key..end_key),
         }
     }
@@ -284,8 +274,8 @@ mod tests {
     #[test]
     fn html_ok() {
         let event = b"name a='a' e b=b c d ee=ee";
-        let mut attributes = Attributes::new(event, 0);
-        attributes.with_checks(true).html_style(true);
+        let mut attributes = Attributes::html(event, 0);
+        attributes.with_checks(true);
         let a = attributes.next().unwrap().unwrap();
         assert_eq!(a.key, b"a");
         assert_eq!(&*a.value, b"a");
