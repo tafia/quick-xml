@@ -125,7 +125,6 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
 impl<'a> Iterator for Attributes<'a> {
     type Item = Result<Attribute<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
-
         let len = self.bytes.len();
 
         macro_rules! err {
@@ -159,15 +158,20 @@ impl<'a> Iterator for Attributes<'a> {
         let mut bytes = self.bytes.iter().enumerate().skip(self.position);
 
         // key starts after the whitespace
-        let start_key = match bytes.by_ref()
+        let start_key = match bytes
+            .by_ref()
             .skip_while(|&(_, &b)| !is_whitespace(b))
-            .find(|&(_, &b)| !is_whitespace(b)) {
+            .find(|&(_, &b)| !is_whitespace(b))
+        {
             Some((i, _)) => i,
             None => attr!(self.position..len),
         };
 
         // key ends with either whitespace or =
-        let end_key = match bytes.by_ref().find(|&(_, &b)| b == b'=' || is_whitespace(b)) {
+        let end_key = match bytes
+            .by_ref()
+            .find(|&(_, &b)| b == b'=' || is_whitespace(b))
+        {
             Some((i, &b'=')) => i,
             Some((i, &b'\'')) | Some((i, &b'"')) if self.with_checks => {
                 err!(Error::NameWithQuote(i));
@@ -213,9 +217,12 @@ impl<'a> Iterator for Attributes<'a> {
                     }
                     None => err!(Error::UnquotedValue(i)),
                 }
-            },
+            }
             Some((i, _)) if self.html => {
-                let j = bytes.by_ref().find(|&(_, &b)| is_whitespace(b)).map_or(len, |(j, _)| j);
+                let j = bytes
+                    .by_ref()
+                    .find(|&(_, &b)| is_whitespace(b))
+                    .map_or(len, |(j, _)| j);
                 self.position = j;
                 attr!(start_key..end_key, i..j)
             }
