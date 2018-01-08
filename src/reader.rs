@@ -8,7 +8,7 @@ use std::str::from_utf8;
 
 use encoding_rs::Encoding;
 
-use errors::{ErrorKind, Result};
+use errors::{Error, Result};
 use events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use events::attributes::Attribute;
 
@@ -197,7 +197,7 @@ impl<B: BufRead> Reader<B> {
             };
 
             // throw the error we couldn't throw in the block above because `self` was sill borrowed
-            start = start_result?;
+            start = start_result.map_err(Error::Io)?;
 
             // We intentionally don't `consume()` the byte, otherwise we would have to handle things
             // like '<>' here already.
@@ -245,21 +245,21 @@ impl<B: BufRead> Reader<B> {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
                         self.buf_position -= len;
-                        bail!(ErrorKind::EndEventMismatch(
-                            from_utf8(&self.opened_buffer[start..])
+                        return Err(Error::EndEventMismatch {
+                            expected: from_utf8(&self.opened_buffer[start..])
                                 .unwrap_or("")
                                 .to_owned(),
-                            from_utf8(&buf[1..]).unwrap_or("").to_owned()
-                        ));
+                            found: from_utf8(&buf[1..]).unwrap_or("").to_owned()
+                        });
                     }
                     self.opened_buffer.truncate(start);
                 }
                 None => {
                     self.buf_position -= len;
-                    bail!(ErrorKind::EndEventMismatch(
-                        "".to_owned(),
-                        from_utf8(&buf[1..]).unwrap_or("").to_owned()
-                    ));
+                    return Err(Error::EndEventMismatch {
+                        expected: "".to_owned(),
+                        found: from_utf8(&buf[1..]).unwrap_or("").to_owned()
+                    });
                 }
             }
         }
@@ -284,7 +284,7 @@ impl<B: BufRead> Reader<B> {
                 match read_until(&mut self.reader, b'>', buf) {
                     Ok(0) => {
                         self.buf_position -= len;
-                        bail!(io_eof("Comment"))
+                        return Err(Error::UnexpectedEof("Comment".to_string()));
                     }
                     Ok(n) => self.buf_position += n,
                     Err(e) => return Err(e.into()),
@@ -296,7 +296,7 @@ impl<B: BufRead> Reader<B> {
                 for w in buf[buf_start + 3..len - 1].windows(2) {
                     if &*w == b"--" {
                         self.buf_position -= offset;
-                        bail!("Unexpected token '--'");
+                        return Err(Error::UnexpectedToken("--".to_string()));
                     }
                     offset -= 1;
                 }
@@ -313,7 +313,7 @@ impl<B: BufRead> Reader<B> {
                         match read_until(&mut self.reader, b'>', buf) {
                             Ok(0) => {
                                 self.buf_position -= len;
-                                bail!(io_eof("CData"));
+                                return Err(Error::UnexpectedEof("CData".to_string()));
                             }
                             Ok(n) => self.buf_position += n,
                             Err(e) => return Err(e.into()),
@@ -331,7 +331,7 @@ impl<B: BufRead> Reader<B> {
                         match read_until(&mut self.reader, b'>', buf) {
                             Ok(0) => {
                                 self.buf_position -= buf.len();
-                                bail!(io_eof("DOCTYPE"));
+                                return Err(Error::UnexpectedEof("DOCTYPE".to_string()));
                             }
                             Ok(n) => {
                                 self.buf_position += n;
@@ -347,11 +347,11 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..len],
                     )))
                 }
-                _ => bail!("Only Comment, CDATA and DOCTYPE nodes can start with a '!'"),
+                _ => return Err(Error::UnexpectedBang)
             }
         } else {
             self.buf_position -= buf.len();
-            bail!("Only Comment, CDATA and DOCTYPE nodes can start with a '!'");
+            return Err(Error::UnexpectedBang);
         }
     }
 
@@ -372,7 +372,7 @@ impl<B: BufRead> Reader<B> {
             }
         } else {
             self.buf_position -= len;
-            bail!(io_eof("XmlDecl"));
+            Err(Error::UnexpectedEof("XmlDecl".to_string()))
         }
     }
 
@@ -603,7 +603,7 @@ impl<B: BufRead> Reader<B> {
                 Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
                 Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(io_eof(&format!("Expecting {:?} end", from_utf8(end))).into())
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
                 }
                 _ => (),
             }
@@ -637,8 +637,8 @@ impl<B: BufRead> Reader<B> {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
-            Ok(Event::Eof) => return Err(io_eof("Text").into()),
-            _ => return Err("Cannot read text, expecting Event::Text".into()),
+            Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
+            _ => return Err(Error::TextNotFound),
         };
         self.read_to_end(end, buf)?;
         s
@@ -648,7 +648,8 @@ impl<B: BufRead> Reader<B> {
 impl Reader<BufReader<File>> {
     /// Creates a xml reader from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
-        let reader = BufReader::new(try!(File::open(path)));
+        let file = File::open(path).map_err(Error::Io)?;
+        let reader = BufReader::new(file);
         Ok(Reader::from_reader(reader))
     }
 }
@@ -672,7 +673,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => bail!(e),
+                Err(e) => return Err(Error::Io(e)),
             };
 
             match memchr::memchr(byte, available) {
@@ -723,7 +724,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => bail!(e),
+                Err(e) => return Err(Error::Io(e)),
             };
 
             let mut bytes = available.iter().enumerate();
@@ -942,8 +943,4 @@ impl NamespaceBufferIndex {
             })
             .unwrap_or((None, qname))
     }
-}
-
-fn io_eof(msg: &str) -> ::std::io::Error {
-    ::std::io::Error::new(::std::io::ErrorKind::UnexpectedEof, msg.to_string())
 }

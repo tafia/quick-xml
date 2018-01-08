@@ -1,4 +1,7 @@
+extern crate failure;
 extern crate quick_xml;
+
+use failure::Fail;
 
 use std::io::BufRead;
 use std::str::from_utf8;
@@ -93,12 +96,12 @@ fn sample_ns_short() {
 
 #[test]
 fn eof_1() {
-    test(br#"<?xml"#, br#"Error: XmlDecl"#, true);
+    test(br#"<?xml"#, br#"Error: Unexpected EOF during reading XmlDecl."#, true);
 }
 
 #[test]
 fn bad_1() {
-    test(br#"<?xml&.,"#, br#"1:6 Error: XmlDecl"#, true);
+    test(br#"<?xml&.,"#, br#"1:6 Error: Unexpected EOF during reading XmlDecl."#, true);
 }
 
 #[test]
@@ -422,7 +425,7 @@ impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
             Ok((_, Event::PI(ref e))) => {
                 write!(f, "ProcessingInstruction(PI={:?})", from_utf8(e).unwrap())
             }
-            Err(ref e) => write!(f, "Error: {}", e.iter().last().unwrap()),
+            Err(ref e) => write!(f, "Error: {}", e.root_cause()),
             Ok((_, Event::DocType(ref e))) => write!(f, "DocType({})", from_utf8(e).unwrap()),
         }
     }

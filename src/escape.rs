@@ -1,9 +1,32 @@
 //! Manage xml character escapes
 
 use std::borrow::Cow;
-use errors::Result;
-use errors::ErrorKind::Escape;
 use memchr;
+
+#[allow(missing_docs)]
+#[derive(Fail, Debug)]
+pub enum EscapeError {
+    #[fail(display = "Error while escaping character at range {:?}: Null character entity not allowed", _0)]
+    EntityWithNull(::std::ops::Range<usize>),
+
+    #[fail(display = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}", _0, _1)]
+    UnrecognizedSymbol(::std::ops::Range<usize>, ::std::result::Result<String, ::std::string::FromUtf8Error>),
+
+    #[fail(display = "Error while escaping character at range {:?}: Cannot find ';' after '&'", _0)]
+    UnterminatedEntity(::std::ops::Range<usize>),
+
+    #[fail(display = "Cannot convert hexadecimal to utf8")]
+    TooLongHexadecimal,
+
+    #[fail(display = "'{}' is not a valid hexadecimal character", _0)]
+    InvalidHexadecimal(char),
+
+    #[fail(display = "Cannot convert decimal to utf8")]
+    TooLongDecimal,
+
+    #[fail(display = "'{}' is not a valid decimal character", _0)]
+    InvalidDecimal(char),
+}
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
@@ -67,7 +90,7 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 
 /// helper function to unescape a `&[u8]` and replace all
 /// xml escaped characters ('&...;') into their corresponding value
-pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
+pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     let mut escapes = Vec::new();
 
     let mut start = 0;
@@ -82,29 +105,20 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>> {
                 b"amp" => ByteOrChar::Byte(b'&'),
                 b"apos" => ByteOrChar::Byte(b'\''),
                 b"quot" => ByteOrChar::Byte(b'\"'),
-                b"#x0" | b"#0" => bail!(Escape(
-                    "Null character entity not allowed".to_string(),
-                    start..end
-                )),
+                b"#x0" | b"#0" => return Err(EscapeError::EntityWithNull(start..end)),
                 bytes if bytes.starts_with(b"#x") => {
                     ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
                 bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => bail!(Escape(
-                    format!(
-                        "Unrecognized escape symbol: {:?}",
-                        ::std::str::from_utf8(bytes)
-                    ),
-                    start..end
+                bytes => return Err(EscapeError::UnrecognizedSymbol(
+                    start..end,
+                    String::from_utf8(bytes.to_vec())
                 )),
             };
             escapes.push((start - 1..end, b_o_c));
             start = end + 1;
         } else {
-            bail!(Escape(
-                "Cannot find ';' after '&'".to_string(),
-                start..raw.len()
-            ));
+            return Err(EscapeError::UnterminatedEntity(start..raw.len()));
         }
     }
     if escapes.is_empty() {
@@ -146,10 +160,10 @@ fn push_utf8(buf: &mut Vec<u8>, code: u32) {
     }
 }
 
-fn parse_hexadecimal(bytes: &[u8]) -> Result<u32> {
+fn parse_hexadecimal(bytes: &[u8]) -> Result<u32, EscapeError> {
     // maximum code is 0x10FFFF => 6 characters
     if bytes.len() > 6 {
-        bail!("Cannot convert hexadecimal to utf8");
+        return Err(EscapeError::TooLongHexadecimal);
     }
     let mut code = 0;
     for &b in bytes {
@@ -158,23 +172,23 @@ fn parse_hexadecimal(bytes: &[u8]) -> Result<u32> {
             b'0'...b'9' => b - b'0',
             b'a'...b'f' => b - b'a' + 10,
             b'A'...b'F' => b - b'A' + 10,
-            b => bail!("'{}' is not a valid hexadecimal character", b as char),
+            b => return Err(EscapeError::InvalidHexadecimal(b as char)),
         } as u32;
     }
     Ok(code)
 }
 
-fn parse_decimal(bytes: &[u8]) -> Result<u32> {
+fn parse_decimal(bytes: &[u8]) -> Result<u32, EscapeError> {
     // maximum code is 0x10FFFF = 1114111 => 7 characters
     if bytes.len() > 7 {
-        bail!("Cannot convert decimal to utf8");
+        return Err(EscapeError::TooLongDecimal);
     }
     let mut code = 0;
     for &b in bytes {
         code *= 10;
         code += match b {
             b'0'...b'9' => b - b'0',
-            b => bail!("'{}' is not a valid decimal character", b as char),
+            b => return Err(EscapeError::InvalidDecimal(b as char)),
         } as u32;
     }
     Ok(code)

@@ -2,22 +2,46 @@
 
 #![allow(missing_docs)]
 
-error_chain! {
-    foreign_links {
-        Io(::std::io::Error);
-    }
-    errors {
-        EndEventMismatch(expected: String, found: String) {
-            description("end event name mismatch with last start event name")
-            display("expecting </{}> found </{}>", expected, found)
-        }
-        Attribute(msg: String, i: usize) {
-            description("error while parsing attributes")
-            display("error while parsing attribute at position {}: {}", i, msg)
-        }
-        Escape(msg: String, range: ::std::ops::Range<usize>) {
-            description("error while escaping bytes")
-            display("Error while escaping character at range {:?}: {}", range, msg)
-        }
-    }
+#[derive(Fail, Debug)]
+pub enum Error {
+    #[fail(display = "I/O error")]
+    Io(#[cause] ::std::io::Error),
+
+    #[fail(display = "UTF8 error")]
+    Utf8(#[cause] ::std::str::Utf8Error),
+
+    #[fail(display = "Unexpected EOF during reading {}.", _0)]
+    UnexpectedEof(String),
+
+    #[fail(display = "Expecting </{}> found </{}>", expected, found)]
+    EndEventMismatch { expected: String, found: String },
+
+    #[fail(display = "Unexpected token '{}'", _0)]
+    UnexpectedToken(String),
+
+    #[fail(display = "Only Comment, CDATA and DOCTYPE nodes can start with a '!'")]
+    UnexpectedBang,
+
+    #[fail(display = "Cannot read text, expecting Event::Text")]
+    TextNotFound,
+
+    #[fail(display = "XmlDecl must start with 'version' attribute, found {:?}", _0)]
+    XmlDeclWithoutVersion(Option<String>),
+
+    #[fail(display = "error while parsing attribute at position {}: Attribute key cannot contain quote.", _0)]
+    NameWithQuote(usize),
+
+    #[fail(display = "error while parsing attribute at position {}: Attribute key must be directly followed by = or space", _0)]
+    NoEqAfterName(usize),
+
+    #[fail(display = "error while parsing attribute at position {}: Attribute value must start with a quote.", _0)]
+    UnquotedValue(usize),
+
+    #[fail(display = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}", _0, _1, _0)]
+    DuplicatedAttribute(usize, usize),
+
+    #[fail(display = "{}", _0)]
+    EscapeError(#[cause] ::escape::EscapeError),
 }
+
+pub type Result<T> = ::std::result::Result<T, Error>;

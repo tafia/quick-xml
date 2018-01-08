@@ -10,7 +10,7 @@ use std::io::BufRead;
 
 use escape::{escape, unescape};
 use self::attributes::{Attribute, Attributes};
-use errors::Result;
+use errors::{Error, Result};
 use reader::Reader;
 
 use memchr;
@@ -85,7 +85,7 @@ impl<'a> BytesStart<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(&*self.buf)
+        unescape(&*self.buf).map_err(Error::EscapeError)
     }
 
     /// gets attributes iterator
@@ -155,11 +155,11 @@ impl<'a> BytesDecl<'a> {
                 key: b"version",
                 value: v,
             })) => Ok(v),
-            Some(Ok(a)) => Err(format!(
-                "XmlDecl must start with 'version' attribute, found {:?}",
-                from_utf8(a.key)
-            ).into()),
-            None => Err("XmlDecl must start with 'version' attribute, found none".into()),
+            Some(Ok(a)) => {
+                let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
+                Err(Error::XmlDeclWithoutVersion(Some(found)))
+            },
+            None => Err(Error::XmlDeclWithoutVersion(None)),
         }
     }
 
@@ -327,7 +327,7 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(self)
+        unescape(self).map_err(Error::EscapeError)
     }
 
     /// helper method to unescape then decode self using the reader encoding
