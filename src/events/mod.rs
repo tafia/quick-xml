@@ -93,6 +93,11 @@ impl<'a> BytesStart<'a> {
         Attributes::new(self, self.name_len)
     }
 
+    /// gets attributes iterator with html syntax (no mandatory quote or =)
+    pub fn html_attributes(&self) -> Attributes {
+        Attributes::html(self, self.name_len)
+    }
+
     /// extend the attributes of this element from an iterator over (key, value) tuples.
     /// Key and value can be anything that implements the AsRef<[u8]> trait,
     /// like byte slices and strings.
@@ -158,7 +163,7 @@ impl<'a> BytesDecl<'a> {
             Some(Ok(a)) => {
                 let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
-            },
+            }
             None => Err(Error::XmlDeclWithoutVersion(None)),
         }
     }

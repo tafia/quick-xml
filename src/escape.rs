@@ -10,7 +10,8 @@ pub enum EscapeError {
     EntityWithNull(::std::ops::Range<usize>),
 
     #[fail(display = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}", _0, _1)]
-    UnrecognizedSymbol(::std::ops::Range<usize>, ::std::result::Result<String, ::std::string::FromUtf8Error>),
+    UnrecognizedSymbol(::std::ops::Range<usize>,
+                       ::std::result::Result<String, ::std::string::FromUtf8Error>),
 
     #[fail(display = "Error while escaping character at range {:?}: Cannot find ';' after '&'", _0)]
     UnterminatedEntity(::std::ops::Range<usize>),
@@ -110,10 +111,12 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                     ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
                 }
                 bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => return Err(EscapeError::UnrecognizedSymbol(
-                    start..end,
-                    String::from_utf8(bytes.to_vec())
-                )),
+                bytes => {
+                    return Err(EscapeError::UnrecognizedSymbol(
+                        start..end,
+                        String::from_utf8(bytes.to_vec()),
+                    ))
+                }
             };
             escapes.push((start - 1..end, b_o_c));
             start = end + 1;

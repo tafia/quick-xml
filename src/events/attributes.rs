@@ -8,8 +8,6 @@ use errors::{Error, Result};
 use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
-use memchr;
-
 /// Iterator over attributes key/value pairs
 #[derive(Clone)]
 pub struct Attributes<'a> {
@@ -17,10 +15,10 @@ pub struct Attributes<'a> {
     bytes: &'a [u8],
     /// current position of the iterator
     position: usize,
-    /// shall the next iterator early exit because there were an error last time
-    exit: bool,
     /// if true, checks for duplicate names
     with_checks: bool,
+    /// allows attribute without quote or `=`
+    html: bool,
     /// if `with_checks`, contains the ranges corresponding to the
     /// attribute names already parsed in this `Element`
     consumed: Vec<Range<usize>>,
@@ -32,7 +30,18 @@ impl<'a> Attributes<'a> {
         Attributes {
             bytes: buf,
             position: pos,
-            exit: false,
+            html: false,
+            with_checks: true,
+            consumed: Vec::new(),
+        }
+    }
+
+    /// creates a new attribute iterator from a buffer, allowing html attribute syntax
+    pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
+        Attributes {
+            bytes: buf,
+            position: pos,
+            html: true,
             with_checks: true,
             consumed: Vec::new(),
         }
@@ -42,12 +51,6 @@ impl<'a> Attributes<'a> {
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.with_checks = val;
         self
-    }
-
-    /// sets `self.exit = true` to terminate the iterator
-    fn error(&mut self, err: Error) -> Result<Attribute<'a>> {
-        self.exit = true;
-        Err(err.into())
     }
 }
 
@@ -122,118 +125,182 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
 impl<'a> Iterator for Attributes<'a> {
     type Item = Result<Attribute<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.exit {
-            return None;
-        }
-
         let len = self.bytes.len();
-        let p = self.position;
-        if len <= p {
+
+        macro_rules! err {
+            ($err: expr) => {{
+                self.position = len;
+                return Some(Err($err.into()));
+            }}
+        }
+
+        macro_rules! attr {
+            ($key: expr) => {{
+                self.position = len;
+                if self.html {
+                    attr!($key, 0..0)
+                } else {
+                    return None;
+                };
+            }};
+            ($key:expr, $val: expr) => {
+                return Some(Ok(Attribute {
+                    key: &self.bytes[$key],
+                    value: Cow::Borrowed(&self.bytes[$val]),
+                }));
+            };
+        }
+
+        if len <= self.position {
             return None;
         }
 
-        // search first space
-        let mut start_key = match self.bytes[p..len - 1]
-            .iter()
-            .position(|&b| is_whitespace(b))
+        let mut bytes = self.bytes.iter().enumerate().skip(self.position);
+
+        // key starts after the whitespace
+        let start_key = match bytes
+            .by_ref()
+            .skip_while(|&(_, &b)| !is_whitespace(b))
+            .find(|&(_, &b)| !is_whitespace(b))
         {
-            Some(i) => p + i + 1,
-            None => {
-                self.position = len;
-                return None;
-            }
+            Some((i, _)) => i,
+            None => attr!(self.position..len),
         };
 
-        // now search first non space
-        start_key += match self.bytes[start_key..len - 1]
-            .iter()
-            .position(|&b| !is_whitespace(b))
+        // key ends with either whitespace or =
+        let end_key = match bytes
+            .by_ref()
+            .find(|&(_, &b)| b == b'=' || is_whitespace(b))
         {
-            Some(i) => i,
-            None => {
-                self.position = len;
-                return None;
+            Some((i, &b'=')) => i,
+            Some((i, &b'\'')) | Some((i, &b'"')) if self.with_checks => {
+                err!(Error::NameWithQuote(i));
             }
-        };
-
-        // key end with either whitespace or =
-        let end_key = match self.bytes[start_key + 1..len - 1]
-            .iter()
-            .position(|&b| b == b'=' || is_whitespace(b))
-        {
-            Some(i) => start_key + 1 + i,
-            None => {
-                self.position = len;
-                return None;
+            Some((i, _)) => {
+                // consume until `=` or return if html
+                match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
+                    Some((_, &b'=')) => i,
+                    Some((j, _)) if self.html => {
+                        self.position = j - 1;
+                        attr!(start_key..i, 0..0);
+                    }
+                    Some((j, _)) => err!(Error::NoEqAfterName(j)),
+                    None if self.html => {
+                        self.position = len;
+                        attr!(start_key..len, 0..0);
+                    }
+                    None => err!(Error::NoEqAfterName(len)),
+                }
             }
+            None => attr!(start_key..len),
         };
 
         if self.with_checks {
-            if let Some(i) = self.bytes[start_key..end_key]
+            if let Some(start) = self.consumed
                 .iter()
-                .position(|&b| b == b'\'' || b == b'"')
+                .filter(|r| r.len() == end_key - start_key)
+                .find(|r| &self.bytes[(*r).clone()] == &self.bytes[start_key..end_key])
+                .map(|ref r| r.start)
             {
-                return Some(self.error(Error::NameWithQuote(start_key + i)));
-            }
-            if let Some(r) = self.consumed
-                .iter()
-                .cloned()
-                .find(|ref r| &self.bytes[(**r).clone()] == &self.bytes[start_key..end_key])
-            {
-                return Some(self.error(Error::DuplicatedAttribute(start_key, r.start)));
+                err!(Error::DuplicatedAttribute(start_key, start));
             }
             self.consumed.push(start_key..end_key);
         }
 
-        // values starts after =
-        let start_val = match memchr::memchr(b'=', &self.bytes[end_key..len - 1]) {
-            Some(i) => end_key + 1 + i,
-            None => {
-                self.position = len;
-                return None;
+        // value has quote if not html
+        match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
+            Some((i, quote @ &b'\'')) | Some((i, quote @ &b'"')) => {
+                match bytes.by_ref().find(|&(_, &b)| b == *quote) {
+                    Some((j, _)) => {
+                        self.position = j + 1;
+                        attr!(start_key..end_key, i + 1..j)
+                    }
+                    None => err!(Error::UnquotedValue(i)),
+                }
             }
-        };
-
-        if self.with_checks {
-            if let Some(i) = self.bytes[end_key..start_val - 1]
-                .iter()
-                .position(|&b| !is_whitespace(b))
-            {
-                return Some(self.error(Error::NoEqAfterName(end_key + i)));
+            Some((i, _)) if self.html => {
+                let j = bytes
+                    .by_ref()
+                    .find(|&(_, &b)| is_whitespace(b))
+                    .map_or(len, |(j, _)| j);
+                self.position = j;
+                attr!(start_key..end_key, i..j)
             }
+            Some((i, _)) => err!(Error::UnquotedValue(i)),
+            None => attr!(start_key..end_key),
         }
+    }
+}
 
-        // value starts with a quote
-        let (quote, start_val) = match self.bytes[start_val..len - 1]
-            .iter()
-            .enumerate()
-            .filter(|&(_, &b)| !is_whitespace(b))
-            .next()
-        {
-            Some((i, b @ &b'\'')) | Some((i, b @ &b'"')) => (*b, start_val + i + 1),
-            Some((i, _)) => {
-                return Some(self.error(Error::UnquotedValue(start_val + i)));
-            }
-            None => {
-                self.position = len;
-                return None;
-            }
-        };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        // value ends with the same quote
-        let end_val = match memchr::memchr(quote, &self.bytes[start_val..]) {
-            Some(i) => start_val + i,
-            None => {
-                self.position = len;
-                return None;
-            }
-        };
+    #[test]
+    fn regular() {
+        let event = b"name a='a' b = 'b'";
+        let mut attributes = Attributes::new(event, 0);
+        attributes.with_checks(true);
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.value, b"a");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.value, b"b");
+        assert!(attributes.next().is_none());
+    }
 
-        self.position = end_val + 1;
+    #[test]
+    fn mixed_quote() {
+        let event = b"name a='a' b = \"b\" c='cc\"cc'";
+        let mut attributes = Attributes::new(event, 0);
+        attributes.with_checks(true);
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.value, b"a");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.value, b"b");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"c");
+        assert_eq!(&*a.value, b"cc\"cc");
+        assert!(attributes.next().is_none());
+    }
 
-        Some(Ok(Attribute {
-            key: &self.bytes[start_key..end_key],
-            value: Cow::from(&self.bytes[start_val..end_val]),
-        }))
+    #[test]
+    fn html_fail() {
+        let event = b"name a='a' b=b c";
+        let mut attributes = Attributes::new(event, 0);
+        attributes.with_checks(true);
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.value, b"a");
+        assert!(attributes.next().unwrap().is_err());
+    }
+
+    #[test]
+    fn html_ok() {
+        let event = b"name a='a' e b=b c d ee=ee";
+        let mut attributes = Attributes::html(event, 0);
+        attributes.with_checks(true);
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.value, b"a");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"e");
+        assert_eq!(&*a.value, b"");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.value, b"b");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"c");
+        assert_eq!(&*a.value, b"");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"d");
+        assert_eq!(&*a.value, b"");
+        let a = attributes.next().unwrap().unwrap();
+        assert_eq!(a.key, b"ee");
+        assert_eq!(&*a.value, b"ee");
+        assert!(attributes.next().is_none());
     }
 }
