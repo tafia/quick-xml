@@ -163,7 +163,7 @@ impl<'a> BytesDecl<'a> {
             Some(Ok(a)) => {
                 let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
-            },
+            }
             None => Err(Error::XmlDeclWithoutVersion(None)),
         }
     }

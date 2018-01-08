@@ -249,7 +249,7 @@ impl<B: BufRead> Reader<B> {
                             expected: from_utf8(&self.opened_buffer[start..])
                                 .unwrap_or("")
                                 .to_owned(),
-                            found: from_utf8(&buf[1..]).unwrap_or("").to_owned()
+                            found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
                         });
                     }
                     self.opened_buffer.truncate(start);
@@ -258,7 +258,7 @@ impl<B: BufRead> Reader<B> {
                     self.buf_position -= len;
                     return Err(Error::EndEventMismatch {
                         expected: "".to_owned(),
-                        found: from_utf8(&buf[1..]).unwrap_or("").to_owned()
+                        found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
                     });
                 }
             }
@@ -347,7 +347,7 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..len],
                     )))
                 }
-                _ => return Err(Error::UnexpectedBang)
+                _ => return Err(Error::UnexpectedBang),
             }
         } else {
             self.buf_position -= buf.len();
