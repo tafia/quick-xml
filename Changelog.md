@@ -8,6 +8,12 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.11.0
+- feat: migrate from error-chain to failure
+- feat: allow html style attribute iterators
+- feat: add optional identation on writer
+- refactor: remove unecessary derive impl
+
 ## 0.10.1
 - fix: overflow possibility when parsing Ascii codes
 

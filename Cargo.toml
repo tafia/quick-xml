@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
@@ -18,7 +18,7 @@ travis-ci = { repository = "tafia/quick-xml" }
 [dependencies]
 encoding_rs = "0.7.1"
 failure = "0.1.1"
-memchr = "2.0.0"
+memchr = "2.0.1"
 
 [dev-dependencies]
 xml-rs = "0.7.0"
