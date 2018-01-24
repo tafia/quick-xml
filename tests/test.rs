@@ -1,6 +1,6 @@
 extern crate quick_xml;
 
-use quick_xml::reader::Reader;
+use quick_xml::Reader;
 use quick_xml::events::Event::*;
 use quick_xml::events::attributes::Attribute;
 use std::io::Cursor;

@@ -25,7 +25,7 @@ enum TagState {
 /// Consumes a `BufRead` and streams xml `Event`s
 ///
 /// ```
-/// use quick_xml::reader::Reader;
+/// use quick_xml::Reader;
 /// use quick_xml::events::Event;
 ///
 /// let xml = r#"<tag1 att1 = "test">
@@ -424,7 +424,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// # Examples
     /// ```
-    /// use quick_xml::reader::Reader;
+    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
     /// let xml = r#"<tag1 att1 = "test">
@@ -485,7 +485,7 @@ impl<B: BufRead> Reader<B> {
     /// # Examples
     /// ```
     /// use std::str::from_utf8;
-    /// use quick_xml::reader::Reader;
+    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
     /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -617,7 +617,7 @@ impl<B: BufRead> Reader<B> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::reader::Reader;
+    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
     /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]);

@@ -10,7 +10,7 @@
 //! ### Reader
 //!
 //! ```rust
-//! use quick_xml::reader::Reader;
+//! use quick_xml::Reader;
 //! use quick_xml::events::Event;
 //!
 //! let xml = r#"<tag1 att1 = "test">
@@ -58,9 +58,9 @@
 //! ### Writer
 //!
 //! ```rust
-//! use quick_xml::writer::Writer;
+//! use quick_xml::Writer;
 //! use quick_xml::events::{Event, BytesEnd, BytesStart};
-//! use quick_xml::reader::Reader;
+//! use quick_xml::Reader;
 //! use std::io::Cursor;
 //! use std::iter;
 //!
@@ -110,11 +110,13 @@ extern crate encoding_rs;
 extern crate failure;
 extern crate memchr;
 
-pub mod errors;
-pub mod reader;
-pub mod writer;
+mod errors;
+mod reader;
+mod writer;
 pub mod events;
 mod escape;
 
 // reexports
 pub use writer::Writer;
+pub use reader::Reader;
+pub use errors::{Error, Result};

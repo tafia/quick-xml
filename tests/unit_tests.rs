@@ -3,11 +3,9 @@ extern crate quick_xml;
 use std::str::from_utf8;
 use std::io::Cursor;
 
-use quick_xml::reader::Reader;
-use quick_xml::writer::Writer;
+use quick_xml::{Reader, Writer, Result};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::events::Event::*;
-use quick_xml::errors::Result;
 
 macro_rules! next_eq_name {
     ($r: expr, $t:tt, $bytes:expr) => {

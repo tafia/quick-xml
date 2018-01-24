@@ -5,7 +5,7 @@ extern crate test;
 
 use test::Bencher;
 use quick_xml::events::Event;
-use quick_xml::reader::Reader;
+use quick_xml::Reader;
 
 #[bench]
 fn bench_quick_xml(b: &mut Bencher) {
