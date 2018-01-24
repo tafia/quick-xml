@@ -1,6 +1,7 @@
 //! Xml Attributes module
 //!
 //! Provides an iterator over attributes key/value pairs
+
 use std::borrow::Cow;
 use std::ops::Range;
 use std::io::BufRead;
@@ -8,7 +9,7 @@ use errors::{Error, Result};
 use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
-/// Iterator over attributes key/value pairs
+/// Iterator over XML attributes.
 #[derive(Clone)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
@@ -25,7 +26,7 @@ pub struct Attributes<'a> {
 }
 
 impl<'a> Attributes<'a> {
-    /// creates a new attribute iterator from a buffer
+    /// Creates a new attribute iterator from a buffer.
     pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
             bytes: buf,
@@ -36,7 +37,7 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    /// creates a new attribute iterator from a buffer, allowing html attribute syntax
+    /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
     pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
         Attributes {
             bytes: buf,
@@ -47,37 +48,59 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    /// check if attributes are distincts
+    /// Changes whether attributes should be checked for uniqueness.
+    ///
+    /// The XML specification requires attribute keys in the same element to be unique. This check
+    /// can be disabled to improve performance slightly.
+    ///
+    /// (`true` by default)
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.with_checks = val;
         self
     }
 }
 
-/// A struct representing a key/value for a xml attribute
+/// A struct representing a key/value XML attribute.
 ///
-/// Parses either `key="value"` or `key='value'`.
-/// Field `value` stores raw bytes, possibly containing escape-sequences.
+/// Field `value` stores raw bytes, possibly containing escape-sequences. Most users will likely
+/// want to access the value using one of the [`unescaped_value`] and [`unescape_and_decode_value`]
+/// functions.
+///
+/// [`unescaped_value`]: #method.unescaped_value
+/// [`unescape_and_decode_value`]: #method.unescape_and_decode_value
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute<'a> {
-    /// the key to uniquely define the attribute
+    /// The key to uniquely define the attribute.
+    ///
+    /// If [`Attributes::with_checks`] is turned off, the key might not be unique.
+    ///
+    /// [`Attributes::with_checks`]: struct.Attributes.html#method.with_checks
     pub key: &'a [u8],
-    /// the raw value of attribute
+    /// The raw value of the attribute.
     pub value: Cow<'a, [u8]>,
 }
 
 impl<'a> Attribute<'a> {
-    /// unescapes the value
+    /// Returns the unescaped value.
+    ///
+    /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
+    /// replaced with their unescaped equivalents such as `>`.
+    ///
+    /// This will allocate if the value contains any escape sequences.
     pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
         unescape(&*self.value).map_err(Error::EscapeError)
     }
 
-    /// unescapes then decode the value
+    /// Returns the unescaped and decoded string value.
     ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. Attributes::unescaped_value()
-    /// 2. Reader::decode(...)
+    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
+    /// instead use one of:
+    ///
+    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    ///
+    /// [`unescaped_value()`]: #method.unescaped_value
+    /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped_value()
             .map(|e| reader.decode(&*e).into_owned())
@@ -88,7 +111,8 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// Creates new attribute from raw bytes.
     /// Does not apply any transformation to both key and value.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// use quick_xml::events::attributes::Attribute;
     ///
@@ -107,7 +131,8 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// Creates new attribute from text representation.
     /// Key is stored as-is, but the value will be escaped.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// use quick_xml::events::attributes::Attribute;
     ///

@@ -295,7 +295,7 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-/// A struct to manage `Event::End` events
+/// Data from various events (most notably, `Event::Text`).
 #[derive(Clone, Debug)]
 pub struct BytesText<'a> {
     content: Cow<'a, [u8]>,
@@ -318,7 +318,9 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new `BytesText` from text
+    /// Creates a new `BytesText` from text.
+    ///
+    /// The text will be XML-escaped automatically.
     #[inline]
     pub fn from_str<S: AsRef<str>>(text: S) -> BytesText<'static> {
         let bytes = escape(text.as_ref().as_bytes()).into_owned();
@@ -345,36 +347,36 @@ impl<'a> BytesText<'a> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 
-    /// Gets escaped content
-    ///
-    /// Searches for any of `<, >, &, ', "` and xml escapes them.
+    /// Gets escaped content.
     pub fn escaped(&self) -> &[u8] {
         self.content.as_ref()
     }
 }
 
-/// Event to interprete node as they are parsed
+/// Event emitted by [`Reader::read_event`].
+///
+/// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
 #[derive(Clone, Debug)]
 pub enum Event<'a> {
-    /// Start tag (with attributes) <...>
+    /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
-    /// End tag </...>
+    /// End tag `</tag>`.
     End(BytesEnd<'a>),
-    /// Empty element tag (with attributes) <.../>
+    /// Empty element tag (with attributes) `<tag attr="value" />`.
     Empty(BytesStart<'a>),
-    /// Data between Start and End element
+    /// Character data between `Start` and `End` element.
     Text(BytesText<'a>),
-    /// Comment <!-- ... -->
+    /// Comment `<!-- ... -->`.
     Comment(BytesText<'a>),
-    /// CData <![CDATA[...]]>
+    /// CData `<![CDATA[...]]>`.
     CData(BytesText<'a>),
-    /// Xml declaration <?xml ...?>
+    /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
-    /// Processing instruction <?...?>
+    /// Processing instruction `<?...?>`.
     PI(BytesText<'a>),
-    /// Doctype <!DOCTYPE...>
+    /// Doctype `<!DOCTYPE...>`.
     DocType(BytesText<'a>),
-    /// Eof of file event
+    /// End of XML document.
     Eof,
 }
 

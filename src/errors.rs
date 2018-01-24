@@ -2,6 +2,7 @@
 
 #![allow(missing_docs)]
 
+/// The error type used by this crate.
 #[derive(Fail, Debug)]
 pub enum Error {
     #[fail(display = "I/O error")]
@@ -44,4 +45,7 @@ pub enum Error {
     EscapeError(#[cause] ::escape::EscapeError),
 }
 
+/// A specialized `Result` type where the error is hard-wired to [`Error`].
+///
+/// [`Error`]: enum.Error.html
 pub type Result<T> = ::std::result::Result<T, Error>;
