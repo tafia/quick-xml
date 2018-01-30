@@ -6,8 +6,7 @@ use failure::Fail;
 use std::io::BufRead;
 use std::str::from_utf8;
 
-use quick_xml::errors::Result;
-use quick_xml::reader::Reader;
+use quick_xml::{Reader, Result};
 use quick_xml::events::{BytesStart, Event};
 
 use std::fmt;

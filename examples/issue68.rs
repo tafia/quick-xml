@@ -2,7 +2,7 @@
 
 extern crate quick_xml;
 
-use quick_xml::reader::Reader;
+use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::io::Read;
 

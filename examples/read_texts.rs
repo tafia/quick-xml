@@ -1,7 +1,7 @@
 extern crate quick_xml;
 
 fn main() {
-    use quick_xml::reader::Reader;
+    use quick_xml::Reader;
     use quick_xml::events::Event;
 
     let xml = "<tag1>text1</tag1><tag1>text2</tag1>\

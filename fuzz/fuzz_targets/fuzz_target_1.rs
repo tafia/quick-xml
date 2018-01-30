@@ -2,7 +2,7 @@
 #[macro_use] extern crate libfuzzer_sys;
 extern crate quick_xml;
 
-use quick_xml::reader::Reader;
+use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::io::Cursor;
 

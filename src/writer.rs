@@ -16,9 +16,8 @@ use events::Event;
 /// # extern crate quick_xml;
 /// # fn main() {
 /// use failure::Fail;
-/// use quick_xml::writer::Writer;
+/// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
-/// use quick_xml::reader::Reader;
 /// use std::io::Cursor;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
