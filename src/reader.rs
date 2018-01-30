@@ -113,9 +113,9 @@ impl<B: BufRead> Reader<B> {
     ///
     /// (`false` by default)
     ///
-    /// [`Empty`]: ../events/enum.Event.html#variant.Empty
-    /// [`Start`]: ../events/enum.Event.html#variant.Start
-    /// [`End`]: ../events/enum.Event.html#variant.End
+    /// [`Empty`]: events/enum.Event.html#variant.Empty
+    /// [`Start`]: events/enum.Event.html#variant.Start
+    /// [`End`]: events/enum.Event.html#variant.End
     pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<B> {
         self.expand_empty_elements = val;
         self
@@ -128,7 +128,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// (`false` by default)
     ///
-    /// [`Text`]: ../events/enum.Event.html#variant.Text
+    /// [`Text`]: events/enum.Event.html#variant.Text
     pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
         self.trim_text = val;
         self
@@ -146,7 +146,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// (`true` by default)
     ///
-    /// [`End`]: ../events/enum.Event.html#variant.End
+    /// [`End`]: events/enum.Event.html#variant.End
     pub fn check_end_names(&mut self, val: bool) -> &mut Reader<B> {
         self.check_end_names = val;
         self
@@ -161,7 +161,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// (`false` by default)
     ///
-    /// [`Comment`]: ../events/enum.Event.html#variant.Comment
+    /// [`Comment`]: events/enum.Event.html#variant.Comment
     pub fn check_comments(&mut self, val: bool) -> &mut Reader<B> {
         self.check_comments = val;
         self
@@ -677,8 +677,8 @@ impl<B: BufRead> Reader<B> {
     /// }
     /// ```
     ///
-    /// [`Text`]: ../events/enum.Event.html#variant.Text
-    /// [`End`]: ../events/enum.Event.html#variant.End
+    /// [`Text`]: events/enum.Event.html#variant.Text
+    /// [`End`]: events/enum.Event.html#variant.End
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
         let s = match self.read_event(buf) {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
