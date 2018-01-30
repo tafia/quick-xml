@@ -5,9 +5,11 @@ use std::io::Write;
 use errors::{Error, Result};
 use events::Event;
 
-/// Xml writer
+/// XML writer.
 ///
-/// Consumes a `Write` and writes xml Events
+/// Writes XML `Event`s to a `Write` implementor.
+///
+/// # Examples
 ///
 /// ```rust
 /// # extern crate failure;

@@ -20,9 +20,11 @@ enum TagState {
     Empty,
 }
 
-/// A low level Xml bytes reader
+/// A low level encoding-agnostic XML event reader.
 ///
-/// Consumes a `BufRead` and streams xml `Event`s
+/// Consumes a `BufRead` and streams XML `Event`s.
+///
+/// # Examples
 ///
 /// ```
 /// use quick_xml::reader::Reader;
@@ -85,7 +87,7 @@ pub struct Reader<B: BufRead> {
 }
 
 impl<B: BufRead> Reader<B> {
-    /// Creates a Reader from a generic BufReader
+    /// Creates a `Reader` that reads from a reader implementing `BufRead`.
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
             reader: reader,
@@ -103,46 +105,71 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// Change expand_empty_elements default behaviour (false per default)
+    /// Changes whether empty elements should be split into an `Open` and a `Close` event.
     ///
-    /// When set to true, all `Empty` events are expanded into an `Open` event
-    /// followed by a `Close` Event.
+    /// When set to `true`, all [`Empty`] events produced by a self-closing tag like `<tag/>` are
+    /// expanded into a [`Start`] event followed by a [`End`] event. When set to `false` (the
+    /// default), those tags are represented by an [`Empty`] event instead.
+    ///
+    /// (`false` by default)
+    ///
+    /// [`Empty`]: ../events/enum.Event.html#variant.Empty
+    /// [`Start`]: ../events/enum.Event.html#variant.Start
+    /// [`End`]: ../events/enum.Event.html#variant.End
     pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<B> {
         self.expand_empty_elements = val;
         self
     }
 
-    /// Change trim_text default behaviour (false per default)
+    /// Changes whether whitespace before and after character data should be removed.
     ///
-    /// When set to true, all Text events are trimed.
-    /// If they are empty, no event if pushed
+    /// When set to `true`, all [`Text`] events are trimmed. If they are empty, no event will be
+    /// pushed.
+    ///
+    /// (`false` by default)
+    ///
+    /// [`Text`]: ../events/enum.Event.html#variant.Text
     pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
         self.trim_text = val;
         self
     }
 
-    /// Change default check_end_names (true per default)
+    /// Changes whether mismatched closing tag names should be detected.
     ///
-    /// When set to false, it won't check if End node match last Start node.
-    /// If the xml is known to be sane (already processed etc ...)
-    /// this saves extra time
+    /// When set to `false`, it won't check if a closing tag matches the corresponding opening tag.
+    /// For example, `<mytag></different_tag>` will be permitted.
+    ///
+    /// If the XML is known to be sane (already processed, etc.) this saves extra time.
+    ///
+    /// Note that the emitted [`End`] event will not be modified if this is disabled, ie. it will
+    /// contain the data of the mismatched end tag.
+    ///
+    /// (`true` by default)
+    ///
+    /// [`End`]: ../events/enum.Event.html#variant.End
     pub fn check_end_names(&mut self, val: bool) -> &mut Reader<B> {
         self.check_end_names = val;
         self
     }
 
-    /// Change default check_comment (false per default)
+    /// Changes whether comments should be validated.
     ///
-    /// When set to true, every Comment event will be checked for not containing `--`
-    /// Most of the time we don't want comments at all so we don't really care about
-    /// comment correctness, thus default value is false for performance reason
+    /// When set to `true`, every [`Comment`] event will be checked for not containing `--`, which
+    /// is not allowed in XML comments. Most of the time we don't want comments at all so we don't
+    /// really care about comment correctness, thus the default value is `false` to improve
+    /// performance.
+    ///
+    /// (`false` by default)
+    ///
+    /// [`Comment`]: ../events/enum.Event.html#variant.Comment
     pub fn check_comments(&mut self, val: bool) -> &mut Reader<B> {
         self.check_comments = val;
         self
     }
 
-    /// Gets the current BufRead position
-    /// Useful when debugging errors
+    /// Gets the current byte position in the input data.
+    ///
+    /// Useful when debugging errors.
     pub fn buffer_position(&self) -> usize {
         self.buf_position
     }
@@ -409,20 +436,22 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// reads the next `Event`
+    /// Reads the next `Event`.
     ///
-    /// This is the main entry for reading xml `Event`s.
+    /// This is the main entry point for reading XML `Event`s.
     ///
-    /// `Event`s borrow `buf` and can get the ownership if needed (uses `Cow` internally).
+    /// `Event`s borrow `buf` and can be converted to own their data if needed (uses `Cow`
+    /// internally).
     ///
     /// Having the possibility to control the internal buffers gives you some additional benefits
     /// such as:
-    /// - reduce the number of allocations by reusing the same buffer. For contrained systems,
+    /// - Reduce the number of allocations by reusing the same buffer. For constrained systems,
     ///   you can call `buf.clear()` once you are done with processing the event (typically at the
-    ///   end of your loop)
-    /// - reserve the buffer length if you know the file size (using `Vec::with_capacity`)
+    ///   end of your loop).
+    /// - Reserve the buffer length if you know the file size (using `Vec::with_capacity`).
     ///
     /// # Examples
+    ///
     /// ```
     /// use quick_xml::reader::Reader;
     /// use quick_xml::events::Event;
@@ -480,9 +509,10 @@ impl<B: BufRead> Reader<B> {
         self.ns_buffer.resolve_namespace(qname, namespace_buffer)
     }
 
-    /// Reads the next event and resolve its namespace
+    /// Reads the next event and resolves its namespace (if applicable).
     ///
     /// # Examples
+    ///
     /// ```
     /// use std::str::from_utf8;
     /// use quick_xml::reader::Reader;
@@ -568,19 +598,23 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// Returns the `Reader`s encoding
+    /// Returns the `Reader`s encoding.
     ///
-    /// The used encoding may change after parsing the xml declaration
+    /// The used encoding may change after parsing the XML declaration.
+    ///
+    /// This encoding will be used by [`decode`].
+    ///
+    /// [`decode`]: #method.decode
     pub fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
 
-    /// Decodes a slice using the xml specified encoding
+    /// Decodes a slice using the encoding specified in the XML declaration.
     ///
-    /// Decode complete input to Cow<'a, str> with BOM sniffing and with malformed sequences
-    /// replaced with the REPLACEMENT CHARACTER
+    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
     ///
-    /// If no encoding is specified, then defaults to UTF_8
+    /// If no encoding is specified, defaults to UTF-8.
     #[inline]
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
@@ -611,8 +645,14 @@ impl<B: BufRead> Reader<B> {
         }
     }
 
-    /// Reads next event, if `Event::Text` or `Event::End`,
-    /// then returns an unescaped `String`, else returns an error
+    /// Reads optional text between start and end tags.
+    ///
+    /// If the next event is a [`Text`] event, returns the decoded and unescaped content as a
+    /// `String`. If the next event is an [`End`] event, returns the empty string. In all other
+    /// cases, returns an error.
+    ///
+    /// Any text will be decoded using the XML encoding specified in the XML declaration (or UTF-8
+    /// if none is specified).
     ///
     /// # Examples
     ///
@@ -620,18 +660,25 @@ impl<B: BufRead> Reader<B> {
     /// use quick_xml::reader::Reader;
     /// use quick_xml::events::Event;
     ///
-    /// let mut xml = Reader::from_reader(b"<a>&lt;b&gt;</a>" as &[u8]);
-    ///
+    /// let mut xml = Reader::from_reader(b"
+    ///     <a>&lt;b&gt;</a>
+    ///     <a></a>
+    /// " as &[u8]);
     /// xml.trim_text(true);
-    /// let mut buf = Vec::new();
     ///
-    /// match xml.read_event(&mut buf) {
-    ///     Ok(Event::Start(ref e)) => {
-    ///         assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), "<b>");
-    ///     },
-    ///     e => panic!("Expecting Start(a), found {:?}", e),
+    /// let expected = ["<b>", ""];
+    /// for &content in expected.iter() {
+    ///     match xml.read_event(&mut Vec::new()) {
+    ///         Ok(Event::Start(ref e)) => {
+    ///             assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), content);
+    ///         },
+    ///         e => panic!("Expecting Start event, found {:?}", e),
+    ///     }
     /// }
     /// ```
+    ///
+    /// [`Text`]: ../events/enum.Event.html#variant.Text
+    /// [`End`]: ../events/enum.Event.html#variant.End
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
         let s = match self.read_event(buf) {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
@@ -646,7 +693,7 @@ impl<B: BufRead> Reader<B> {
 }
 
 impl Reader<BufReader<File>> {
-    /// Creates a xml reader from a file path
+    /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
         let file = File::open(path).map_err(Error::Io)?;
         let reader = BufReader::new(file);
@@ -655,7 +702,7 @@ impl Reader<BufReader<File>> {
 }
 
 impl<'a> Reader<&'a [u8]> {
-    /// Creates a xml reader from a file path
+    /// Creates an XML reader from a string slice.
     pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
         Reader::from_reader(s.as_bytes())
     }

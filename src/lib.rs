@@ -1,4 +1,4 @@
-//! High performance xml reader/writer.
+//! High performance XML reader/writer.
 //!
 //! ## Description
 //!
