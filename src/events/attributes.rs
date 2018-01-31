@@ -10,6 +10,11 @@ use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
 
 /// Iterator over XML attributes.
+///
+/// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
+/// The duplicate check can be turned off by calling [`with_checks(false)`].
+///
+/// [`with_checks(false)`]: #method.with_checks
 #[derive(Clone)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes

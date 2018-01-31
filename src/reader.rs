@@ -445,6 +445,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// Having the possibility to control the internal buffers gives you some additional benefits
     /// such as:
+    ///
     /// - Reduce the number of allocations by reusing the same buffer. For constrained systems,
     ///   you can call `buf.clear()` once you are done with processing the event (typically at the
     ///   end of your loop).
