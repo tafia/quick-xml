@@ -303,7 +303,7 @@ pub struct BytesText<'a> {
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new text event from an escaped byte sequence.
+    /// Creates a new `BytesText` from an escaped byte sequence.
     #[inline]
     pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> BytesText<'a> {
         BytesText {
@@ -311,15 +311,16 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new text event from an unescaped byte sequence.
+    /// Creates a new `BytesText` from a byte sequence. The byte sequence is
+    /// expected not to be escaped.
     #[inline]
-    pub fn from_unescaped(content: &'a [u8]) -> BytesText<'a> {
+    pub fn from_plain(content: &'a [u8]) -> BytesText<'a> {
         BytesText {
             content: escape(content),
         }
     }
 
-    /// Creates a new text event from an escaped string.
+    /// Creates a new `BytesText` from an escaped string.
     #[inline]
     pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> BytesText<'a> {
         Self::from_escaped(match content.into() {
@@ -328,13 +329,14 @@ impl<'a> BytesText<'a> {
         })
     }
 
-    /// Creates a new text event from an unescaped string.
+    /// Creates a new `BytesText` from a string. The string is expected not to
+    /// be escaped.
     #[inline]
-    pub fn from_unescaped_str(content: &'a str) -> BytesText<'a> {
-        Self::from_unescaped(content.as_bytes())
+    pub fn from_plain_str(content: &'a str) -> BytesText<'a> {
+        Self::from_plain(content.as_bytes())
     }
 
-    /// Ensures that all data is owned to extend the event's lifetime if
+    /// Ensures that all data is owned to extend the object's lifetime if
     /// necessary.
     #[inline]
     pub fn into_owned(self) -> BytesText<'static> {

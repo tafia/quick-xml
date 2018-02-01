@@ -698,7 +698,7 @@ fn test_read_write_roundtrip_escape_text() {
                 let t = e.unescape_and_decode(&reader).unwrap();
                 assert!(
                     writer
-                        .write_event(Event::Text(BytesText::from_unescaped_str(&t)))
+                        .write_event(Event::Text(BytesText::from_plain_str(&t)))
                         .is_ok()
                 );
             }
