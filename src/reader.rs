@@ -196,7 +196,7 @@ impl<B: BufRead> Reader<B> {
                 } else {
                     (buf_start, buf.len())
                 };
-                Ok(Event::Text(BytesText::borrowed(&buf[start..len])))
+                Ok(Event::Text(BytesText::from_escaped(&buf[start..len])))
             }
             Err(e) => Err(e),
         }
@@ -328,7 +328,7 @@ impl<B: BufRead> Reader<B> {
                     offset -= 1;
                 }
             }
-            Ok(Event::Comment(BytesText::borrowed(
+            Ok(Event::Comment(BytesText::from_escaped(
                 &buf[buf_start + 3..len - 2],
             )))
         } else if len >= buf_start + 8 {
@@ -347,7 +347,7 @@ impl<B: BufRead> Reader<B> {
                         }
                         len = buf.len();
                     }
-                    Ok(Event::CData(BytesText::borrowed(
+                    Ok(Event::CData(BytesText::from_escaped(
                         &buf[buf_start + 8..len - 2],
                     )))
                 }
@@ -370,7 +370,7 @@ impl<B: BufRead> Reader<B> {
                         }
                     }
                     let len = buf.len();
-                    Ok(Event::DocType(BytesText::borrowed(
+                    Ok(Event::DocType(BytesText::from_escaped(
                         &buf[buf_start + 8..len],
                     )))
                 }
@@ -395,7 +395,7 @@ impl<B: BufRead> Reader<B> {
                 }
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::borrowed(&buf[1..len - 1])))
+                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
             }
         } else {
             self.buf_position -= len;

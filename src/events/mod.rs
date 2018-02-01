@@ -298,34 +298,48 @@ impl<'a> BytesEnd<'a> {
 /// Data from various events (most notably, `Event::Text`).
 #[derive(Clone, Debug)]
 pub struct BytesText<'a> {
+    // Invariant: The content is always escaped.
     content: Cow<'a, [u8]>,
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new `BytesText` borrowing a slice
+    /// Creates a new text event from an escaped byte sequence.
     #[inline]
-    pub fn borrowed(content: &'a [u8]) -> BytesText<'a> {
+    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> BytesText<'a> {
         BytesText {
-            content: Cow::Borrowed(content),
+            content: content.into(),
         }
     }
 
-    /// Creates a new `BytesText` owning its name
+    /// Creates a new text event from an unescaped byte sequence.
     #[inline]
-    pub fn owned(content: Vec<u8>) -> BytesText<'static> {
+    pub fn from_unescaped(content: &'a [u8]) -> BytesText<'a> {
         BytesText {
-            content: Cow::Owned(content),
+            content: escape(content),
         }
     }
 
-    /// Creates a new `BytesText` from text.
-    ///
-    /// The text will be XML-escaped automatically.
+    /// Creates a new text event from an escaped string.
     #[inline]
-    pub fn from_str<S: AsRef<str>>(text: S) -> BytesText<'static> {
-        let bytes = escape(text.as_ref().as_bytes()).into_owned();
+    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> BytesText<'a> {
+        Self::from_escaped(match content.into() {
+            Cow::Owned(o) => Cow::Owned(o.into_bytes()),
+            Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
+        })
+    }
+
+    /// Creates a new text event from an unescaped string.
+    #[inline]
+    pub fn from_unescaped_str(content: &'a str) -> BytesText<'a> {
+        Self::from_unescaped(content.as_bytes())
+    }
+
+    /// Ensures that all data is owned to extend the event's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesText<'static> {
         BytesText {
-            content: Cow::Owned(bytes),
+            content: self.content.into_owned().into(),
         }
     }
 
