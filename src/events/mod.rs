@@ -1,4 +1,4 @@
-//! A module to handle `Event` enumerator
+//! Defines zero-copy XML events used throughout this library.
 
 pub mod attributes;
 
@@ -15,9 +15,17 @@ use reader::Reader;
 
 use memchr;
 
-/// A struct to manage `Event::Start` events
+/// Opening tag data (`Event::Start`), with optional attributes.
 ///
-/// Provides in particular an iterator over attributes
+/// `<name attr="value">`.
+///
+/// The name can be accessed using the [`name`], [`local_name`] or [`unescaped`] methods. An
+/// iterator over the attributes is returned by the [`attributes`] method.
+///
+/// [`name`]: #method.name
+/// [`local_name`]: #method.local_name
+/// [`unescaped`]: #method.unescaped
+/// [`attributes`]: #method.attributes
 #[derive(Clone, Debug)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
@@ -36,7 +44,7 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Creates a new `BytesStart` from the given name. Owns its content
+    /// Creates a new `BytesStart` from the given name. Owns its contents.
     #[inline]
     pub fn owned(content: Vec<u8>, name_len: usize) -> BytesStart<'static> {
         BytesStart {
@@ -45,7 +53,7 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Converts the event into an Owned event
+    /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesStart<'static> {
         BytesStart {
             buf: Cow::Owned(self.buf.into_owned()),
@@ -53,10 +61,11 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Consumes self and adds attributes to this element from an iterator
-    /// over (key, value) tuples.
-    /// Key and value can be anything that implements the AsRef<[u8]> trait,
-    /// like byte slices and strings.
+    /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    ///
+    /// [`Attribute`]: attributes/struct.Attributes.html
     pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,
@@ -66,41 +75,43 @@ impl<'a> BytesStart<'a> {
         self
     }
 
-    /// name as &[u8] (without eventual attributes)
+    /// Gets the undecoded raw tag name as a `&[u8]`.
     pub fn name(&self) -> &[u8] {
         &self.buf[..self.name_len]
     }
 
-    /// local name (excluding namespace) as &[u8] (without eventual attributes)
-    /// returns the name() with any leading namespace removed (all content up to
-    /// and including the first ':' character)
+    /// Gets the undecoded raw local tag name (excluding namespace) as a `&[u8]`.
+    ///
+    /// All content up to and including the first `:` character is removed from the tag name.
     #[inline]
     pub fn local_name(&self) -> &[u8] {
         let name = self.name();
         memchr::memchr(b':', name).map_or(name, |i| &name[i + 1..])
     }
 
-    /// gets unescaped content
+    /// Gets the unescaped tag name.
     ///
-    /// Searches for '&' into content and try to escape the coded character if possible
-    /// returns Malformed error with index within element if '&' is not followed by ';'
+    /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
+    /// "`<`".
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         unescape(&*self.buf).map_err(Error::EscapeError)
     }
 
-    /// gets attributes iterator
+    /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
         Attributes::new(self, self.name_len)
     }
 
-    /// gets attributes iterator with html syntax (no mandatory quote or =)
+    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes {
         Attributes::html(self, self.name_len)
     }
 
-    /// extend the attributes of this element from an iterator over (key, value) tuples.
-    /// Key and value can be anything that implements the AsRef<[u8]> trait,
-    /// like byte slices and strings.
+    /// Add additional attributes to this tag using an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    ///
+    /// [`Attribute`]: attributes/struct.Attributes.html
     pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
     where
         I: IntoIterator,
@@ -112,19 +123,21 @@ impl<'a> BytesStart<'a> {
         self
     }
 
-    /// helper method to unescape then decode self using the reader encoding
+    /// Returns the unescaped and decoded string value.
     ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesStart::unescaped()
-    /// 2. Reader::decode(...)
+    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
+    /// instead use one of:
+    ///
+    /// * [`unescaped()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    ///
+    /// [`unescaped()`]: #method.unescaped
+    /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
 
-    /// Adds an attribute to this element from the given key and value.
-    /// Key and value can be anything that implements the AsRef<[u8]> trait,
-    /// like byte slices and strings.
+    /// Adds an attribute to this element.
     pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A) {
         let a = attr.into();
         let bytes = self.buf.to_mut();
@@ -136,11 +149,9 @@ impl<'a> BytesStart<'a> {
     }
 }
 
-/// Wrapper around `BytesElement` to parse/write `XmlDecl`
+/// An XML declaration (`Event::Decl`).
 ///
-/// Postpone element parsing only when needed.
-///
-/// [W3C XML 1.1 Prolog and Document Type Delcaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
+/// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug)]
 pub struct BytesDecl<'a> {
     element: BytesStart<'a>,
@@ -154,6 +165,7 @@ impl<'a> BytesDecl<'a> {
 
     /// Gets xml version, including quotes (' or ")
     pub fn version(&self) -> Result<Cow<[u8]>> {
+        // The version *must* be the first thing in the declaration.
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
             Some(Ok(Attribute {
