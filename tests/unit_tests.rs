@@ -3,7 +3,7 @@ extern crate quick_xml;
 use std::str::from_utf8;
 use std::io::Cursor;
 
-use quick_xml::{Reader, Writer, Result};
+use quick_xml::{Reader, Result, Writer};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::events::Event::*;
 
@@ -663,7 +663,7 @@ fn test_read_write_roundtrip_escape() {
                 let t = e.escaped();
                 assert!(
                     writer
-                        .write_event(Event::Text(BytesText::owned(t.to_vec())))
+                        .write_event(Event::Text(BytesText::from_escaped(t.to_vec())))
                         .is_ok()
                 );
             }
@@ -698,7 +698,7 @@ fn test_read_write_roundtrip_escape_text() {
                 let t = e.unescape_and_decode(&reader).unwrap();
                 assert!(
                     writer
-                        .write_event(Event::Text(BytesText::from_str(t)))
+                        .write_event(Event::Text(BytesText::from_plain_str(&t)))
                         .is_ok()
                 );
             }
