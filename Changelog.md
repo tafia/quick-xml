@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.12.0
+- feat: rename BytesText fn to better clarify escape intents
+- docs: various improvements!
+
 ## 0.11.0
 - feat: migrate from error-chain to failure
 - feat: allow html style attribute iterators
