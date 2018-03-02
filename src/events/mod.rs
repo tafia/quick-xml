@@ -263,6 +263,13 @@ impl<'a> BytesDecl<'a> {
             .and_then(|e| e.ok())
             .and_then(|e| Encoding::for_label(&*e))
     }
+
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesDecl<'static> {
+        BytesDecl {
+            element: self.element.into_owned(),
+        }
+    }
 }
 
 /// A struct to manage `Event::End` events
@@ -285,6 +292,13 @@ impl<'a> BytesEnd<'a> {
     pub fn owned(name: Vec<u8>) -> BytesEnd<'static> {
         BytesEnd {
             name: Cow::Owned(name),
+        }
+    }
+
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesEnd<'static> {
+        BytesEnd {
+            name: Cow::Owned(self.name.into_owned()),
         }
     }
 
@@ -406,6 +420,25 @@ pub enum Event<'a> {
     DocType(BytesText<'a>),
     /// End of XML document.
     Eof,
+}
+
+impl<'a> Event<'a> {
+    /// Converts the event to an owned version, untied to the lifetime of
+    /// buffer used when reading but incurring a new, seperate allocation.
+    pub fn into_owned(self) -> Event<'static> {
+        match self {
+            Event::Start(e) => Event::Start(e.into_owned()),
+            Event::End(e) => Event::End(e.into_owned()),
+            Event::Empty(e) => Event::Empty(e.into_owned()),
+            Event::Text(e) => Event::Text(e.into_owned()),
+            Event::Comment(e) => Event::Comment(e.into_owned()),
+            Event::CData(e) => Event::CData(e.into_owned()),
+            Event::Decl(e) => Event::Decl(e.into_owned()),
+            Event::PI(e) => Event::PI(e.into_owned()),
+            Event::DocType(e) => Event::DocType(e.into_owned()),
+            Event::Eof => Event::Eof
+        }
+    }
 }
 
 impl<'a> Deref for BytesStart<'a> {
