@@ -94,7 +94,7 @@ impl<'a> BytesStart<'a> {
     /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
     /// "`<`".
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(&*self.buf).map_err(Error::EscapeError)
+        unescape(&self.buf[..self.name_len]).map_err(Error::EscapeError)
     }
 
     /// Returns an iterator over the attributes of this tag.
