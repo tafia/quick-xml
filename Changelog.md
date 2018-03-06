@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.12.1
+- feat: enable `into_owned` for all events
+
 ## 0.12.0
 - feat: rename BytesText fn to better clarify escape intents
 - docs: various improvements!
