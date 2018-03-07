@@ -93,6 +93,38 @@ impl<'a> BytesStart<'a> {
     ///
     /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
     /// "`<`".
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quick_xml::events::BytesStart;
+    ///
+    /// let tag = b"this_way-&gt;";
+    /// // xml_elem corresponds to this xml snippet
+    /// // <this_way-&gt;>
+    /// let xml_elem = BytesStart::borrowed(tag, tag.len());
+    /// let unescaped = xml_elem.unescaped().unwrap();
+    ///
+    /// assert_eq!(unescaped.as_ref(), b"this_way->");
+    /// ```
+    ///
+    /// ```
+    /// use quick_xml::events::BytesStart;
+    ///
+    /// let tag = b"&quot;for_real&quot;";
+    /// let attributes = [("ascii", "as_you_expect"),
+    ///                   ("with_escapes", "& becomes &amp;")];
+    /// // This correspondes to the following xml snippet
+    /// // <&quot;for_real&quot; ascii="as_you_expect" with_escapes="&amp; becomes &amp;">
+    /// let xml_with_attributes = BytesStart::borrowed(tag, tag.len())
+    ///     .with_attributes(attributes.iter().map(|x| *x));
+    ///
+    /// let unescaped = xml_with_attributes.unescaped().unwrap();
+    ///
+    /// // `.unescaped()` only returns an unescaped tag name
+    /// assert_eq!(unescaped.as_ref(), b"\"for_real\"");
+    /// ```
+    ///
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         unescape(&self.buf[..self.name_len]).map_err(Error::EscapeError)
     }
