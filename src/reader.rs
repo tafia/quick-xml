@@ -268,26 +268,22 @@ impl<B: BufRead> Reader<B> {
     fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if self.check_end_names {
+            let mismatch_err = |expected: &[u8], buf_position: &mut usize| {
+                *buf_position -= len;
+                Err(Error::EndEventMismatch {
+                    expected: from_utf8(expected).unwrap_or("").to_owned(),
+                    found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
+                })
+            };
             match self.opened_starts.pop() {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
-                        self.buf_position -= len;
-                        return Err(Error::EndEventMismatch {
-                            expected: from_utf8(&self.opened_buffer[start..])
-                                .unwrap_or("")
-                                .to_owned(),
-                            found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
-                        });
+                        let expected = &self.opened_buffer[start..];
+                        return mismatch_err(expected, &mut self.buf_position);
                     }
                     self.opened_buffer.truncate(start);
                 }
-                None => {
-                    self.buf_position -= len;
-                    return Err(Error::EndEventMismatch {
-                        expected: "".to_owned(),
-                        found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
-                    });
-                }
+                None => return mismatch_err(b"", &mut self.buf_position),
             }
         }
         Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
