@@ -18,6 +18,8 @@ enum TagState {
     Opened,
     Closed,
     Empty,
+    /// Either Eof or Errored
+    Exit,
 }
 
 /// A low level encoding-agnostic XML event reader.
@@ -61,8 +63,6 @@ enum TagState {
 pub struct Reader<B: BufRead> {
     /// reader
     reader: B,
-    /// if was error, exit next
-    exit: bool,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
     /// current state Open/Close
@@ -91,7 +91,6 @@ impl<B: BufRead> Reader<B> {
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
             reader: reader,
-            exit: false,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
             tag_state: TagState::Closed,
@@ -171,7 +170,10 @@ impl<B: BufRead> Reader<B> {
     ///
     /// Useful when debugging errors.
     pub fn buffer_position(&self) -> usize {
-        self.buf_position
+        // when internal state is Opened, we have actually read until '<',
+        // which we don't want to show
+        let offset = if let TagState::Opened = self.tag_state { 1 } else { 0 };
+        self.buf_position - offset
     }
 
     /// private function to read until '<' is found
@@ -476,18 +478,17 @@ impl<B: BufRead> Reader<B> {
     /// println!("Text events: {:?}", txt);
     /// ```
     pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        if self.exit {
-            return Ok(Event::Eof);
-        }
-        let r = match self.tag_state {
+        let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
             TagState::Closed => self.read_until_open(buf),
             TagState::Empty => self.close_expanded_empty(),
+            TagState::Exit => return Ok(Event::Eof),
         };
-        if r.is_err() {
-            self.exit = true;
+        match event {
+            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
+            _ => {},
         }
-        r
+        event
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
