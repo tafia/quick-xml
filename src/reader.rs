@@ -18,6 +18,8 @@ enum TagState {
     Opened,
     Closed,
     Empty,
+    /// Either Eof or Errored
+    Exit,
 }
 
 /// A low level encoding-agnostic XML event reader.
@@ -61,8 +63,6 @@ enum TagState {
 pub struct Reader<B: BufRead> {
     /// reader
     reader: B,
-    /// if was error, exit next
-    exit: bool,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
     /// current state Open/Close
@@ -91,7 +91,6 @@ impl<B: BufRead> Reader<B> {
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
             reader: reader,
-            exit: false,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
             tag_state: TagState::Closed,
@@ -171,7 +170,10 @@ impl<B: BufRead> Reader<B> {
     ///
     /// Useful when debugging errors.
     pub fn buffer_position(&self) -> usize {
-        self.buf_position
+        // when internal state is Opened, we have actually read until '<',
+        // which we don't want to show
+        let offset = if let TagState::Opened = self.tag_state { 1 } else { 0 };
+        self.buf_position - offset
     }
 
     /// private function to read until '<' is found
@@ -268,26 +270,22 @@ impl<B: BufRead> Reader<B> {
     fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if self.check_end_names {
+            let mismatch_err = |expected: &[u8], buf_position: &mut usize| {
+                *buf_position -= len;
+                Err(Error::EndEventMismatch {
+                    expected: from_utf8(expected).unwrap_or("").to_owned(),
+                    found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
+                })
+            };
             match self.opened_starts.pop() {
                 Some(start) => {
                     if buf[1..] != self.opened_buffer[start..] {
-                        self.buf_position -= len;
-                        return Err(Error::EndEventMismatch {
-                            expected: from_utf8(&self.opened_buffer[start..])
-                                .unwrap_or("")
-                                .to_owned(),
-                            found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
-                        });
+                        let expected = &self.opened_buffer[start..];
+                        return mismatch_err(expected, &mut self.buf_position);
                     }
                     self.opened_buffer.truncate(start);
                 }
-                None => {
-                    self.buf_position -= len;
-                    return Err(Error::EndEventMismatch {
-                        expected: "".to_owned(),
-                        found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
-                    });
-                }
+                None => return mismatch_err(b"", &mut self.buf_position),
             }
         }
         Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
@@ -480,18 +478,17 @@ impl<B: BufRead> Reader<B> {
     /// println!("Text events: {:?}", txt);
     /// ```
     pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        if self.exit {
-            return Ok(Event::Eof);
-        }
-        let r = match self.tag_state {
+        let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
             TagState::Closed => self.read_until_open(buf),
             TagState::Empty => self.close_expanded_empty(),
+            TagState::Exit => return Ok(Event::Eof),
         };
-        if r.is_err() {
-            self.exit = true;
+        match event {
+            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
+            _ => {},
         }
-        r
+        event
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
