@@ -29,7 +29,7 @@ extern crate quick_xml;
 ### Reader
 
 ```rust
-use quick_xml::reader::Reader;
+use quick_xml::Reader;
 use quick_xml::events::Event;
 
 let xml = r#"<tag1 att1 = "test">
@@ -71,8 +71,8 @@ loop {
 ### Writer
 
 ```rust
-use quick_xml::writer::Writer;
-use quick_xml::reader::Reader;
+use quick_xml::Writer;
+use quick_xml::Reader;
 use quick_xml::events::{Event, BytesEnd, BytesStart};
 use std::io::Cursor;
 use std::iter;
