@@ -13,7 +13,7 @@ before_script:
   - travis-cargo --only nightly install rustfmt-nightly -- --force
 
 script:
-  - travis-cargo --only nighlty fmt -- --write-mode=diff
+  - travis-cargo --only nightly fmt -- --write-mode=diff
   - cargo build
   - cargo test
   - travis-cargo --only stable doc
