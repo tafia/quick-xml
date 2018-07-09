@@ -2,8 +2,8 @@
 
 extern crate quick_xml;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::Reader;
 use std::io::Read;
 
 struct Resource {

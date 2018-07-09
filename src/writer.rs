@@ -70,7 +70,10 @@ pub struct Writer<W: Write> {
 impl<W: Write> Writer<W> {
     /// Creates a Writer from a generic Write
     pub fn new(inner: W) -> Writer<W> {
-        Writer { writer: inner, indent: None }
+        Writer {
+            writer: inner,
+            indent: None,
+        }
     }
 
     /// Creates a Writer with configured whitespace indents from a generic Write
@@ -96,18 +99,18 @@ impl<W: Write> Writer<W> {
                     i.grow();
                 }
                 result
-            },
+            }
             Event::End(ref e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
                 self.write_wrapped(b"</", e, b">")
-            },
+            }
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
                 self.write(&e.escaped())
-            },
+            }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", e, b"]]>"),
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
@@ -132,8 +135,10 @@ impl<W: Write> Writer<W> {
         let mut wrote = 0;
         if let Some(ref i) = self.indent {
             if i.should_line_break {
-                wrote = self.writer.write(b"\n").map_err(Error::Io)? +
-                    self.writer.write(&i.indents[..i.indents_len]).map_err(Error::Io)?;
+                wrote = self.writer.write(b"\n").map_err(Error::Io)?
+                    + self.writer
+                        .write(&i.indents[..i.indents_len])
+                        .map_err(Error::Io)?;
             }
         }
         Ok(wrote + self.write(before)? + self.write(value)? + self.write(after)?)

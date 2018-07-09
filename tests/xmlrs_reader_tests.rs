@@ -6,8 +6,8 @@ use failure::Fail;
 use std::io::BufRead;
 use std::str::from_utf8;
 
-use quick_xml::{Reader, Result};
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::{Reader, Result};
 
 use std::fmt;
 
@@ -95,12 +95,20 @@ fn sample_ns_short() {
 
 #[test]
 fn eof_1() {
-    test(br#"<?xml"#, br#"Error: Unexpected EOF during reading XmlDecl."#, true);
+    test(
+        br#"<?xml"#,
+        br#"Error: Unexpected EOF during reading XmlDecl."#,
+        true,
+    );
 }
 
 #[test]
 fn bad_1() {
-    test(br#"<?xml&.,"#, br#"1:6 Error: Unexpected EOF during reading XmlDecl."#, true);
+    test(
+        br#"<?xml&.,"#,
+        br#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
+        true,
+    );
 }
 
 #[test]
