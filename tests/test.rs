@@ -1,10 +1,10 @@
 extern crate quick_xml;
 
-use quick_xml::Reader;
-use quick_xml::events::Event::*;
 use quick_xml::events::attributes::Attribute;
-use std::io::Cursor;
+use quick_xml::events::Event::*;
+use quick_xml::Reader;
 use std::borrow::Cow;
+use std::io::Cursor;
 
 #[test]
 fn test_sample() {
@@ -34,21 +34,17 @@ fn test_attributes_empty() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(
-                    Ok(Attribute {
-                        key: b"att1",
-                        value: Cow::Borrowed(b"a"),
-                    }),
-                ) => (),
+                Some(Ok(Attribute {
+                    key: b"att1",
+                    value: Cow::Borrowed(b"a"),
+                })) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
             }
             match atts.next() {
-                Some(
-                    Ok(Attribute {
-                        key: b"att2",
-                        value: Cow::Borrowed(b"b"),
-                    }),
-                ) => (),
+                Some(Ok(Attribute {
+                    key: b"att2",
+                    value: Cow::Borrowed(b"b"),
+                })) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
             }
             match atts.next() {
@@ -70,12 +66,10 @@ fn test_attribute_equal() {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
-                Some(
-                    Ok(Attribute {
-                        key: b"att1",
-                        value: Cow::Borrowed(b"a=b"),
-                    }),
-                ) => (),
+                Some(Ok(Attribute {
+                    key: b"att1",
+                    value: Cow::Borrowed(b"a=b"),
+                })) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
             }
             match atts.next() {
@@ -371,7 +365,7 @@ fn fuzz_101() {
     let mut buf = vec![];
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Start(ref e)) | Ok(Empty(ref e))=> {
+            Ok(Start(ref e)) | Ok(Empty(ref e)) => {
                 if e.unescaped().is_err() {
                     break;
                 }

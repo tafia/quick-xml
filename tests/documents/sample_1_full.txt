@@ -1,55 +1,86 @@
 StartDocument(1.0, utf-8)
 StartElement(project [name="project-name"])
-Whitespace("\n    ")
+Characters(
+    )
 StartElement(libraries)
-Whitespace("\n        ")
+Characters(
+        )
 EmptyElement(library [groupId="org.example", artifactId="<name>", version="0.1"])
-Whitespace("\n        ")
-EmptyElement(library [groupId="com.example", artifactId="\"cool-lib&", version="999"])
-Whitespace("\n    ")
+Characters(
+        )
+EmptyElement(library [groupId="com.example", artifactId=""cool-lib&", version="999"])
+Characters(
+    )
 EndElement(libraries)
-Whitespace("\n    ")
+Characters(
+    )
 StartElement(module [name="module-1"])
-Whitespace("\n        ")
+Characters(
+        )
 StartElement(files)
-Whitespace("\n            ")
+Characters(
+            )
 StartElement(file [name="somefile.java", type="java"])
-Characters("\n                Some <java> class\n            ")
+Characters(
+                Some <java> class
+            )
 EndElement(file)
-Whitespace("\n            ")
+Characters(
+            )
 StartElement(file [name="another_file.java", type="java"])
-Characters("\n                Another \"java\" class\n            ")
+Characters(
+                Another "java" class
+            )
 EndElement(file)
-Whitespace("\n            ")
+Characters(
+            )
 StartElement(file [name="config.xml", type="xml"])
-Characters("\n                Weird \'XML\' config\n            ")
+Characters(
+                Weird 'XML' config
+            )
 EndElement(file)
-Whitespace("\n        ")
+Characters(
+        )
 EndElement(files)
-Whitespace("\n        ")
+Characters(
+        )
 StartElement(libraries)
-Whitespace("\n            ")
+Characters(
+            )
 EmptyElement(library [groupId="junit", artifactId="junit", version="1.9.5"])
-Whitespace("\n        ")
+Characters(
+        )
 EndElement(libraries)
-Whitespace("\n    ")
+Characters(
+    )
 EndElement(module)
-Whitespace("\n    ")
+Characters(
+    )
 StartElement(module [name="module-2"])
-Whitespace("\n        ")
+Characters(
+        )
 StartElement(files)
-Whitespace("\n            ")
+Characters(
+            )
 StartElement(file [name="program.js", type="javascript"])
-Characters("\n                JavaScript & program\n            ")
+Characters(
+                JavaScript & program
+            )
 EndElement(file)
-Whitespace("\n            ")
+Characters(
+            )
 StartElement(file [name="style.css", type="css"])
-Characters("\n                Cascading style sheet: © - ҉\n            ")
+Characters(
+                Cascading style sheet: © - ҉
+            )
 EndElement(file)
-Whitespace("\n        ")
+Characters(
+        )
 EndElement(files)
-Whitespace("\n    ")
+Characters(
+    )
 EndElement(module)
-Whitespace("\n")
+Characters(
+)
 EndElement(project)
 EndDocument

@@ -1,32 +1,42 @@
 extern crate quick_xml;
 
-use std::str::from_utf8;
 use std::io::Cursor;
+use std::str::from_utf8;
 
-use quick_xml::{Reader, Result, Writer};
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::events::Event::*;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::{Reader, Result, Writer};
 
 macro_rules! next_eq_name {
-    ($r: expr, $t:tt, $bytes:expr) => {
+    ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
         match $r.read_event(&mut buf).unwrap() {
             $t(ref e) if e.name() == $bytes => (),
-            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e),
+            e => panic!(
+                "expecting {}({:?}), found {:?}",
+                stringify!($t),
+                from_utf8($bytes),
+                e
+            ),
         }
         buf.clear();
-    }
+    };
 }
 
 macro_rules! next_eq_content {
-    ($r: expr, $t:tt, $bytes:expr) => {
+    ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
         match $r.read_event(&mut buf).unwrap() {
             $t(ref e) if &**e == $bytes => (),
-            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), from_utf8($bytes), e),
+            e => panic!(
+                "expecting {}({:?}), found {:?}",
+                stringify!($t),
+                from_utf8($bytes),
+                e
+            ),
         }
         buf.clear();
-    }
+    };
 }
 
 macro_rules! next_eq {
@@ -88,19 +98,7 @@ fn test_empty_attr() {
 fn test_start_end_comment() {
     let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(
-        r,
-        Start,
-        b"b",
-        Empty,
-        b"a",
-        Empty,
-        b"a",
-        Comment,
-        b"t",
-        End,
-        b"b"
-    );
+    next_eq!(r, Start, b"b", Empty, b"a", Empty, b"a", Comment, b"t", End, b"b");
 }
 
 #[test]
@@ -162,22 +160,7 @@ fn test_trim_test() {
     let mut r = Reader::from_str(txt);
     r.trim_text(false);
     next_eq!(
-        r,
-        Text,
-        b"",
-        Start,
-        b"a",
-        Text,
-        b"",
-        Start,
-        b"b",
-        Text,
-        b"  ",
-        End,
-        b"b",
-        Text,
-        b"",
-        End,
+        r, Text, b"", Start, b"a", Text, b"", Start, b"b", Text, b"  ", End, b"b", Text, b"", End,
         b"a"
     );
 }
@@ -207,21 +190,7 @@ fn test_start_attr() {
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(
-        r,
-        Start,
-        b"a",
-        Start,
-        b"b",
-        Text,
-        b"test",
-        End,
-        b"b",
-        Empty,
-        b"c",
-        End,
-        b"a"
-    );
+    next_eq!(r, Start, b"a", Start, b"b", Text, b"test", End, b"b", Empty, b"c", End, b"a");
 }
 
 #[test]

@@ -3,13 +3,10 @@ extern crate quick_xml;
 
 use failure::Fail;
 
-use std::io::BufRead;
 use std::str::from_utf8;
 
-use quick_xml::{Reader, Result};
 use quick_xml::events::{BytesStart, Event};
-
-use std::fmt;
+use quick_xml::{Reader, Result};
 
 #[test]
 fn sample_1_short() {
@@ -95,12 +92,20 @@ fn sample_ns_short() {
 
 #[test]
 fn eof_1() {
-    test(br#"<?xml"#, br#"Error: Unexpected EOF during reading XmlDecl."#, true);
+    test(
+        br#"<?xml"#,
+        br#"Error: Unexpected EOF during reading XmlDecl."#,
+        true,
+    );
 }
 
 #[test]
 fn bad_1() {
-    test(br#"<?xml&.,"#, br#"1:6 Error: Unexpected EOF during reading XmlDecl."#, true);
+    test(
+        br#"<?xml&.,"#,
+        br#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
+        true,
+    );
 }
 
 #[test]
@@ -147,6 +152,7 @@ fn issue_83_duplicate_attributes() {
             |1:30 EmptyElement(some-tag, attr-error: error while parsing \
                   attribute at position 16: Duplicate attribute at position 9 and 16)
             |EndElement(hello)
+            |EndDocument
         ",
         true,
     );
@@ -159,6 +165,7 @@ fn issue_93_large_characters_in_entity_references() {
             |StartElement(hello)
             |1:10 Error while escaping character at range 1..5: Unrecognized escape symbol: Ok("𤶼")
             |EndElement(hello)
+            |EndDocument
         "#.as_bytes(),
          true)
 }
@@ -170,7 +177,7 @@ fn issue_98_cdata_ending_with_right_bracket() {
         br#"
             |StartElement(hello)
             |Characters()
-            |CData("Foo [Bar]")
+            |CData(Foo [Bar])
             |Characters()
             |EndElement(hello)
             |EndDocument
@@ -185,7 +192,7 @@ fn issue_105_unexpected_double_dash() {
         br#"<hello>-- </hello>"#,
         br#"
             |StartElement(hello)
-            |Characters("-- ")
+            |Characters(-- )
             |EndElement(hello)
             |EndDocument
         "#,
@@ -196,7 +203,7 @@ fn issue_105_unexpected_double_dash() {
         br#"<hello>--</hello>"#,
         br#"
             |StartElement(hello)
-            |Characters("--")
+            |Characters(--)
             |EndElement(hello)
             |EndDocument
         "#,
@@ -207,7 +214,7 @@ fn issue_105_unexpected_double_dash() {
         br#"<hello>--></hello>"#,
         br#"
             |StartElement(hello)
-            |Characters("-->")
+            |Characters(-->)
             |EndElement(hello)
             |EndDocument
         "#,
@@ -219,7 +226,7 @@ fn issue_105_unexpected_double_dash() {
         br#"
             |StartElement(hello)
             |Characters()
-            |CData("--")
+            |CData(--)
             |Characters()
             |EndElement(hello)
             |EndDocument
@@ -271,25 +278,6 @@ fn default_namespace_applies_to_end_elem() {
     );
 }
 
-// clones a lot but that's fine
-fn convert_to_quick_xml(s: &str) -> String {
-    let mut s = match s.trim() {
-        ts if ts.starts_with('|') => &ts[1..],
-        s => s,
-    };
-
-    if !s.is_empty() && s.as_bytes()[0] >= b'0' && s.as_bytes()[0] <= b'9' {
-        let p = s.chars().position(|c| c == ' ').unwrap();
-        s = &s[(p + 1)..];
-    }
-
-    if s.starts_with("Whitespace") {
-        format!("Characters{}", &s[10..])
-    } else {
-        s.to_string()
-    }
-}
-
 fn test(input: &[u8], output: &[u8], is_short: bool) {
     let mut reader = Reader::from_reader(input);
     reader
@@ -297,59 +285,52 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
         .check_comments(true)
         .expand_empty_elements(false);
 
-    let mut spec_lines = output
-        .lines()
-        .map(|line| convert_to_quick_xml(&line.unwrap()))
-        .filter(|line| !line.trim().is_empty())
-        .enumerate();
-
+    let mut spec_lines = SpecIter(output).enumerate();
     let mut buf = Vec::new();
     let mut ns_buffer = Vec::new();
 
     if !is_short {
+        // discard first whitespace
         reader.read_event(&mut buf).unwrap();
     }
 
     loop {
-        {
-            let line = {
-                let e = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
-                format!("{}", OptEvent(e))
-            };
-            if let Some((n, spec)) = spec_lines.next() {
-                if spec == "EndDocument" {
-                    break;
-                }
-                if line.trim() != spec.trim() {
-                    const SPLITTER: &'static str = "-------------------";
-                    panic!(
-                        "\n{}\nUnexpected event at line {}:\nExpected: {}\nFound: {}\n{}\n",
-                        SPLITTER,
-                        n + 1,
-                        spec,
-                        line,
-                        SPLITTER
-                    );
-                }
-            } else {
-                if line == "EndDocument" {
-                    break;
-                }
-                panic!("Unexpected event: {}", line);
+        buf.clear();
+        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+        let line = xmlrs_display(&event);
+        if let Some((n, spec)) = spec_lines.next() {
+            if spec.trim() == "EndDocument" {
+                break;
             }
+            if line.trim() != spec.trim() {
+                panic!(
+                    "\n-------------------\n\
+                     Unexpected event at line {}:\n\
+                     Expected: {}\nFound: {}\n\
+                     -------------------\n",
+                    n + 1,
+                    spec,
+                    line
+                );
+            }
+        } else {
+            if line == "EndDocument" {
+                break;
+            }
+            panic!("Unexpected event: {}", line);
+        }
 
-            if !is_short && line.starts_with("StartDocument") {
-                // advance next Characters(empty space) ...
-                if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf) {
-                    if e.iter().any(|b| match *b {
-                        b' ' | b'\r' | b'\n' | b'\t' => false,
-                        _ => true,
-                    }) {
-                        panic!("Reader expects empty Text event after a StartDocument");
-                    }
-                } else {
+        if !is_short && line.starts_with("StartDocument") {
+            // advance next Characters(empty space) ...
+            if let Ok(Event::Text(ref e)) = reader.read_event(&mut Vec::new()) {
+                if e.iter().any(|b| match *b {
+                    b' ' | b'\r' | b'\n' | b'\t' => false,
+                    _ => true,
+                }) {
                     panic!("Reader expects empty Text event after a StartDocument");
                 }
+            } else {
+                panic!("Reader expects empty Text event after a StartDocument");
             }
         }
     }
@@ -368,7 +349,7 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
         match a {
             Ok(a) => if a.key.len() < 5 || !a.key.starts_with(b"xmlns") {
                 atts.push(format!(
-                    "{}={:?}",
+                    "{}=\"{}\"",
                     from_utf8(a.key).unwrap(),
                     from_utf8(&*a.unescaped_value().unwrap()).unwrap()
                 ));
@@ -379,53 +360,70 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     Ok(atts.join(", "))
 }
 
-struct OptEvent<'a, 'b>(Result<(Option<&'a [u8]>, Event<'b>)>);
+fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
+    match opt_event {
+        Ok((ref n, Event::Start(ref e))) => {
+            let name = namespace_name(n, e.name());
+            match make_attrs(e) {
+                Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
+                Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
+                Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
+            }
+        }
+        Ok((ref n, Event::Empty(ref e))) => {
+            let name = namespace_name(n, e.name());
+            match make_attrs(e) {
+                Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
+                Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
+                Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
+            }
+        }
+        Ok((ref n, Event::End(ref e))) => format!("EndElement({})", namespace_name(n, e.name())),
+        Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
+        Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
+        Ok((_, Event::Text(ref e))) => match e.unescaped() {
+            Ok(c) => format!("Characters({})", from_utf8(&*c).unwrap()),
+            Err(ref e) => format!("{}", e),
+        },
+        Ok((_, Event::Decl(ref e))) => {
+            let version_cow = e.version().unwrap();
+            let version = from_utf8(version_cow.as_ref()).unwrap();
+            let encoding_cow = e.encoding().unwrap().unwrap();
+            let encoding = from_utf8(encoding_cow.as_ref()).unwrap();
+            format!("StartDocument({}, {})", version, encoding)
+        }
+        Ok((_, Event::Eof)) => format!("EndDocument"),
+        Ok((_, Event::PI(ref e))) => format!("ProcessingInstruction(PI={})", from_utf8(e).unwrap()),
+        Err(ref e) => format!("Error: {}", e.root_cause()),
+        Ok((_, Event::DocType(ref e))) => format!("DocType({})", from_utf8(e).unwrap()),
+    }
+}
 
-impl<'a, 'b> fmt::Display for OptEvent<'a, 'b> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.0 {
-            Ok((ref n, Event::Start(ref e))) => {
-                let name = namespace_name(n, e.name());
-                match make_attrs(e) {
-                    Ok(ref attrs) if attrs.is_empty() => write!(f, "StartElement({})", &name),
-                    Ok(ref attrs) => write!(f, "StartElement({} [{}])", &name, &attrs),
-                    Err(e) => write!(f, "StartElement({}, attr-error: {})", &name, &e),
-                }
+struct SpecIter<'a>(&'a [u8]);
+
+impl<'a> Iterator for SpecIter<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        let start = self.0
+            .iter()
+            .position(|b| match *b {
+                b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' => false,
+                b'0'...b'9' => false,
+                _ => true,
+            })
+            .unwrap_or(0);
+        if let Some(p) = self.0.windows(2).position(|w| w == b")\n") {
+            let (prev, next) = self.0.split_at(p + 1);
+            self.0 = next;
+            Some(from_utf8(&prev[start..]).expect("Error decoding to uft8"))
+        } else {
+            if self.0.is_empty() {
+                None
+            } else {
+                let p = self.0;
+                self.0 = &[];
+                Some(from_utf8(&p[start..]).unwrap())
             }
-            Ok((ref n, Event::Empty(ref e))) => {
-                let name = namespace_name(n, e.name());
-                match make_attrs(e) {
-                    Ok(ref attrs) if attrs.is_empty() => write!(f, "EmptyElement({})", &name),
-                    Ok(ref attrs) => write!(f, "EmptyElement({} [{}])", &name, &attrs),
-                    Err(e) => write!(f, "EmptyElement({}, attr-error: {})", &name, &e),
-                }
-            }
-            Ok((ref n, Event::End(ref e))) => {
-                write!(f, "EndElement({})", namespace_name(n, e.name()))
-            }
-            Ok((_, Event::Comment(ref e))) => write!(f, "Comment({:?})", from_utf8(e).unwrap()),
-            Ok((_, Event::CData(ref e))) => write!(f, "CData({:?})", from_utf8(e).unwrap()),
-            Ok((_, Event::Text(ref e))) => match e.unescaped() {
-                Ok(c) => if c.is_empty() {
-                    write!(f, "Characters()")
-                } else {
-                    write!(f, "Characters({:?})", from_utf8(&*c).unwrap())
-                },
-                Err(ref e) => write!(f, "{}", e),
-            },
-            Ok((_, Event::Decl(ref e))) => {
-                let version_cow = e.version().unwrap();
-                let version = from_utf8(version_cow.as_ref()).unwrap();
-                let encoding_cow = e.encoding().unwrap().unwrap();
-                let encoding = from_utf8(encoding_cow.as_ref()).unwrap();
-                write!(f, "StartDocument({}, {})", version, encoding)
-            }
-            Ok((_, Event::Eof)) => write!(f, "EndDocument"),
-            Ok((_, Event::PI(ref e))) => {
-                write!(f, "ProcessingInstruction(PI={:?})", from_utf8(e).unwrap())
-            }
-            Err(ref e) => write!(f, "Error: {}", e.root_cause()),
-            Ok((_, Event::DocType(ref e))) => write!(f, "DocType({})", from_utf8(e).unwrap()),
         }
     }
 }

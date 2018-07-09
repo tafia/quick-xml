@@ -111,12 +111,12 @@ extern crate failure;
 extern crate memchr;
 
 mod errors;
+mod escape;
+pub mod events;
 mod reader;
 mod writer;
-pub mod events;
-mod escape;
 
 // reexports
-pub use writer::Writer;
-pub use reader::Reader;
 pub use errors::{Error, Result};
+pub use reader::Reader;
+pub use writer::Writer;

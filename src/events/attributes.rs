@@ -2,12 +2,12 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
-use std::borrow::Cow;
-use std::ops::Range;
-use std::io::BufRead;
 use errors::{Error, Result};
 use escape::{escape, unescape};
 use reader::{is_whitespace, Reader};
+use std::borrow::Cow;
+use std::io::BufRead;
+use std::ops::Range;
 
 /// Iterator over XML attributes.
 ///
@@ -158,14 +158,14 @@ impl<'a> Iterator for Attributes<'a> {
         let len = self.bytes.len();
 
         macro_rules! err {
-            ($err: expr) => {{
+            ($err:expr) => {{
                 self.position = len;
                 return Some(Err($err.into()));
-            }}
+            }};
         }
 
         macro_rules! attr {
-            ($key: expr) => {{
+            ($key:expr) => {{
                 self.position = len;
                 if self.html {
                     attr!($key, 0..0)
@@ -173,7 +173,7 @@ impl<'a> Iterator for Attributes<'a> {
                     return None;
                 };
             }};
-            ($key:expr, $val: expr) => {
+            ($key:expr, $val:expr) => {
                 return Some(Ok(Attribute {
                     key: &self.bytes[$key],
                     value: Cow::Borrowed(&self.bytes[$val]),

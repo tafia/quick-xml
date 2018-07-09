@@ -9,8 +9,8 @@ use std::str::from_utf8;
 use encoding_rs::Encoding;
 
 use errors::{Error, Result};
-use events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use events::attributes::Attribute;
+use events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -172,7 +172,11 @@ impl<B: BufRead> Reader<B> {
     pub fn buffer_position(&self) -> usize {
         // when internal state is Opened, we have actually read until '<',
         // which we don't want to show
-        let offset = if let TagState::Opened = self.tag_state { 1 } else { 0 };
+        let offset = if let TagState::Opened = self.tag_state {
+            1
+        } else {
+            0
+        };
         self.buf_position - offset
     }
 
@@ -486,7 +490,7 @@ impl<B: BufRead> Reader<B> {
         };
         match event {
             Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
-            _ => {},
+            _ => {}
         }
         event
     }

@@ -2,15 +2,15 @@
 
 pub mod attributes;
 
-use std::borrow::Cow;
-use std::str::from_utf8;
-use std::ops::Deref;
 use encoding_rs::Encoding;
+use std::borrow::Cow;
 use std::io::BufRead;
+use std::ops::Deref;
+use std::str::from_utf8;
 
-use escape::{escape, unescape};
 use self::attributes::{Attribute, Attributes};
 use errors::{Error, Result};
+use escape::{escape, unescape};
 use reader::Reader;
 
 use memchr;
@@ -436,7 +436,7 @@ impl<'a> Event<'a> {
             Event::Decl(e) => Event::Decl(e.into_owned()),
             Event::PI(e) => Event::PI(e.into_owned()),
             Event::DocType(e) => Event::DocType(e.into_owned()),
-            Event::Eof => Event::Eof
+            Event::Eof => Event::Eof,
         }
     }
 }

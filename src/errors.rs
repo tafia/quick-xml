@@ -29,16 +29,30 @@ pub enum Error {
     #[fail(display = "XmlDecl must start with 'version' attribute, found {:?}", _0)]
     XmlDeclWithoutVersion(Option<String>),
 
-    #[fail(display = "error while parsing attribute at position {}: Attribute key cannot contain quote.", _0)]
+    #[fail(
+        display = "error while parsing attribute at position {}: Attribute key cannot contain quote.",
+        _0
+    )]
     NameWithQuote(usize),
 
-    #[fail(display = "error while parsing attribute at position {}: Attribute key must be directly followed by = or space", _0)]
+    #[fail(
+        display = "error while parsing attribute at position {}: Attribute key must be directly followed by = or space",
+        _0
+    )]
     NoEqAfterName(usize),
 
-    #[fail(display = "error while parsing attribute at position {}: Attribute value must start with a quote.", _0)]
+    #[fail(
+        display = "error while parsing attribute at position {}: Attribute value must start with a quote.",
+        _0
+    )]
     UnquotedValue(usize),
 
-    #[fail(display = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}", _0, _1, _0)]
+    #[fail(
+        display = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}",
+        _0,
+        _1,
+        _0
+    )]
     DuplicatedAttribute(usize, usize),
 
     #[fail(display = "{}", _0)]
