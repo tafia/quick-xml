@@ -1,12 +1,9 @@
 extern crate failure;
 extern crate quick_xml;
 
-use failure::Fail;
-
-use std::str::from_utf8;
-
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
+use std::str::from_utf8;
 
 #[test]
 fn sample_1_short() {
@@ -394,7 +391,7 @@ fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
         }
         Ok((_, Event::Eof)) => format!("EndDocument"),
         Ok((_, Event::PI(ref e))) => format!("ProcessingInstruction(PI={})", from_utf8(e).unwrap()),
-        Err(ref e) => format!("Error: {}", e.root_cause()),
+        Err(ref e) => format!("Error: {}", e),
         Ok((_, Event::DocType(ref e))) => format!("DocType({})", from_utf8(e).unwrap()),
     }
 }
@@ -404,7 +401,8 @@ struct SpecIter<'a>(&'a [u8]);
 impl<'a> Iterator for SpecIter<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<&'a str> {
-        let start = self.0
+        let start = self
+            .0
             .iter()
             .position(|b| match *b {
                 b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' => false,

@@ -226,7 +226,8 @@ impl<'a> Iterator for Attributes<'a> {
         };
 
         if self.with_checks {
-            if let Some(start) = self.consumed
+            if let Some(start) = self
+                .consumed
                 .iter()
                 .filter(|r| r.len() == end_key - start_key)
                 .find(|r| &self.bytes[(*r).clone()] == &self.bytes[start_key..end_key])
