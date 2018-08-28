@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.12.2
+- refactor: bump dependencies
+- test: fix travis
+
 ## 0.12.1
 - feat: enable `into_owned` for all events
 
