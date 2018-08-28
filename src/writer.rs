@@ -136,7 +136,8 @@ impl<W: Write> Writer<W> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 wrote = self.writer.write(b"\n").map_err(Error::Io)?
-                    + self.writer
+                    + self
+                        .writer
                         .write(&i.indents[..i.indents_len])
                         .map_err(Error::Io)?;
             }

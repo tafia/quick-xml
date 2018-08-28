@@ -408,7 +408,8 @@ impl<B: BufRead> Reader<B> {
     #[inline]
     fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
         self.tag_state = TagState::Closed;
-        let name = self.opened_buffer
+        let name = self
+            .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::owned(name)))
     }
@@ -897,7 +898,8 @@ impl NamespaceBufferIndex {
     ) -> Option<&'c [u8]> {
         let ns = match memchr::memchr(b':', element_name) {
             None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
-            Some(len) => self.slices
+            Some(len) => self
+                .slices
                 .iter()
                 .rev()
                 .find(|n| n.prefix(buffer) == &element_name[..len]),
