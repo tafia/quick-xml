@@ -35,7 +35,7 @@ pub struct BytesStart<'a> {
 }
 
 impl<'a> BytesStart<'a> {
-    /// Creates a new `BytesStart` from the given name.
+    /// Creates a new `BytesStart` from the given content (name + attributes).
     #[inline]
     pub fn borrowed(content: &'a [u8], name_len: usize) -> BytesStart<'a> {
         BytesStart {
@@ -44,12 +44,35 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Creates a new `BytesStart` from the given name. Owns its contents.
+    /// Creates a new `BytesStart` from the given name.
     #[inline]
-    pub fn owned(content: Vec<u8>, name_len: usize) -> BytesStart<'static> {
+    pub fn borrowed_name(name: &'a [u8]) -> BytesStart<'a> {
         BytesStart {
-            buf: Cow::Owned(content),
+            name_len: name.len(),
+            buf: Cow::Borrowed(name),
+        }
+    }
+
+    /// Creates a new `BytesStart` from the given content (name + attributes)
+    ///
+    /// Owns its contents.
+    #[inline]
+    pub fn owned<C: Into<Vec<u8>>>(content: C, name_len: usize) -> BytesStart<'static> {
+        BytesStart {
+            buf: Cow::Owned(content.into()),
             name_len: name_len,
+        }
+    }
+
+    /// Creates a new `BytesStart` from the given name
+    ///
+    /// Owns its contents.
+    #[inline]
+    pub fn owned_name<C: Into<Vec<u8>>>(name: C) -> BytesStart<'static> {
+        let content = name.into();
+        BytesStart {
+            name_len: content.len(),
+            buf: Cow::Owned(content),
         }
     }
 
@@ -493,40 +516,51 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 }
 
 #[cfg(test)]
-#[test]
-fn local_name() {
-    use std::str::from_utf8;
-    let xml = r#"
-        <foo:bus attr='bar'>foobusbar</foo:bus>
-        <foo: attr='bar'>foobusbar</foo:>
-        <:foo attr='bar'>foobusbar</:foo>
-        <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
-        "#;
-    let mut rdr = Reader::from_str(xml);
-    let mut buf = Vec::new();
-    let mut parsed_local_names = Vec::new();
-    loop {
-        match rdr.read_event(&mut buf).expect("unable to read xml event") {
-            Event::Start(ref e) => parsed_local_names.push(
-                from_utf8(e.local_name())
-                    .expect("unable to build str from local_name")
-                    .to_string(),
-            ),
-            Event::End(ref e) => parsed_local_names.push(
-                from_utf8(e.local_name())
-                    .expect("unable to build str from local_name")
-                    .to_string(),
-            ),
-            Event::Eof => break,
-            _ => {}
+mod test {
+    use super::*;
+
+    #[test]
+    fn local_name() {
+        use std::str::from_utf8;
+        let xml = r#"
+            <foo:bus attr='bar'>foobusbar</foo:bus>
+            <foo: attr='bar'>foobusbar</foo:>
+            <:foo attr='bar'>foobusbar</:foo>
+            <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
+            "#;
+        let mut rdr = Reader::from_str(xml);
+        let mut buf = Vec::new();
+        let mut parsed_local_names = Vec::new();
+        loop {
+            match rdr.read_event(&mut buf).expect("unable to read xml event") {
+                Event::Start(ref e) => parsed_local_names.push(
+                    from_utf8(e.local_name())
+                        .expect("unable to build str from local_name")
+                        .to_string(),
+                ),
+                Event::End(ref e) => parsed_local_names.push(
+                    from_utf8(e.local_name())
+                        .expect("unable to build str from local_name")
+                        .to_string(),
+                ),
+                Event::Eof => break,
+                _ => {}
+            }
         }
+        assert_eq!(parsed_local_names[0], "bus".to_string());
+        assert_eq!(parsed_local_names[1], "bus".to_string());
+        assert_eq!(parsed_local_names[2], "".to_string());
+        assert_eq!(parsed_local_names[3], "".to_string());
+        assert_eq!(parsed_local_names[4], "foo".to_string());
+        assert_eq!(parsed_local_names[5], "foo".to_string());
+        assert_eq!(parsed_local_names[6], "bus:baz".to_string());
+        assert_eq!(parsed_local_names[7], "bus:baz".to_string());
     }
-    assert_eq!(parsed_local_names[0], "bus".to_string());
-    assert_eq!(parsed_local_names[1], "bus".to_string());
-    assert_eq!(parsed_local_names[2], "".to_string());
-    assert_eq!(parsed_local_names[3], "".to_string());
-    assert_eq!(parsed_local_names[4], "foo".to_string());
-    assert_eq!(parsed_local_names[5], "foo".to_string());
-    assert_eq!(parsed_local_names[6], "bus:baz".to_string());
-    assert_eq!(parsed_local_names[7], "bus:baz".to_string());
+
+    #[test]
+    fn bytestart_create() {
+        let b = BytesStart::owned_name("test");
+        assert_eq!(b.len(), 4);
+        assert_eq!(b.name(), b"test");
+    }
 }
