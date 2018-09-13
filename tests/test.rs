@@ -81,6 +81,21 @@ fn test_attribute_equal() {
     }
 }
 
+#[test]
+fn test_comment_starting_with_gt() {
+    let src = b"<a /><!-->-->";
+    let mut r = Reader::from_reader(src as &[u8]);
+    r.trim_text(true).expand_empty_elements(false);
+    let mut buf = Vec::new();
+    loop {
+        match r.read_event(&mut buf) {
+            Ok(Comment(ref e)) if &**e == b">" => break,
+            Ok(Eof) => panic!("Expecting Comment"),
+            _ => (),
+        }
+    }
+}
+
 /// Single empty element with qualified attributes.
 /// Empty element expansion: disabled
 /// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.

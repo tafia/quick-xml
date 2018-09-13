@@ -308,7 +308,7 @@ impl<B: BufRead> Reader<B> {
         let len = buf.len();
         if len >= buf_start + 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
             let mut len = buf.len();
-            while len < 5 || &buf[len - 2..] != b"--" {
+            while (len - buf_start) < 5 || &buf[len - 2..] != b"--" {
                 buf.push(b'>');
                 match read_until(&mut self.reader, b'>', buf) {
                     Ok(0) => {
