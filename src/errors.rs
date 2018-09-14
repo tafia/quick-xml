@@ -26,7 +26,10 @@ pub enum Error {
     #[fail(display = "Cannot read text, expecting Event::Text")]
     TextNotFound,
 
-    #[fail(display = "XmlDecl must start with 'version' attribute, found {:?}", _0)]
+    #[fail(
+        display = "XmlDecl must start with 'version' attribute, found {:?}",
+        _0
+    )]
     XmlDeclWithoutVersion(Option<String>),
 
     #[fail(

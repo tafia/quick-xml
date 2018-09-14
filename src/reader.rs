@@ -991,7 +991,6 @@ impl NamespaceBufferIndex {
                     .rev()
                     .find(|n| n.prefix(buffer) == prefix)
                     .map(|ns| (ns.opt_value(buffer), &value[1..]))
-            })
-            .unwrap_or((None, qname))
+            }).unwrap_or((None, qname))
     }
 }

@@ -23,7 +23,8 @@ pub enum EscapeError {
     ),
 
     #[fail(
-        display = "Error while escaping character at range {:?}: Cannot find ';' after '&'", _0
+        display = "Error while escaping character at range {:?}: Cannot find ';' after '&'",
+        _0
     )]
     UnterminatedEntity(::std::ops::Range<usize>),
 
