@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.12.4
+- fix: Fix minor bug for parsing comment tag
+
 ## 0.12.3
 - feat: add BytesStart::{owned_name, borrowed_name} 
 
