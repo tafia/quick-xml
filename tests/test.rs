@@ -424,7 +424,6 @@ fn test_default_namespace() {
         };
 
         //We check if the resolve_namespace method also work properly
-        println!("resolving event: {:?}", ::std::str::from_utf8(event.name()));
         match r.event_namespace(event.name(), &mut ns_buf) {
             (Some(b"www1"), _) => (),
             (Some(_), _) => panic!("expecting namespace to resolve to 'www1'"),
