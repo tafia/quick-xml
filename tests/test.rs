@@ -118,7 +118,7 @@ fn test_attributes_empty_ns() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
     match atts.next() {
@@ -162,7 +162,7 @@ fn test_attributes_empty_ns_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         match atts.next() {
@@ -226,7 +226,7 @@ fn test_default_ns_shadowing_empty() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -287,7 +287,7 @@ fn test_default_ns_shadowing_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_namespace(name, &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -399,5 +399,52 @@ fn fuzz_101() {
             _ => (),
         }
         buf.clear();
+    }
+}
+
+#[test]
+fn test_default_namespace() {
+    let mut r = Reader::from_str("<a ><b xmlns=\"www1\"></b></a>");
+    r.trim_text(true);
+
+    // <a>
+    let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
+    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    } else {
+        panic!("expecting outer start element with no namespace");
+    }
+
+    // <b>
+    {
+        let event = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+            Ok((Some(b"www1"), Start(event))) => event,
+            Ok((Some(_), Start(_))) => panic!("expecting namespace to resolve to 'www1'"),
+            _ => panic!("expecting namespace resolution"),
+        };
+
+        //We check if the resolve_namespace method also work properly
+        match r.event_namespace(event.name(), &mut ns_buf) {
+            (Some(b"www1"), _) => (),
+            (Some(_), _) => panic!("expecting namespace to resolve to 'www1'"),
+            ns => panic!(
+                "expecting namespace resolution by the resolve_nemespace method {:?}",
+                ns
+            ),
+        }
+    }
+
+    // </b>
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+        Ok((Some(b"www1"), End(_))) => (),
+        Ok((Some(_), End(_))) => panic!("expecting namespace to resolve to 'www1'"),
+        _ => panic!("expecting namespace resolution"),
+    }
+
+    // </a> very important: a should not be in any namespace. The default namespace only applies to
+    // the sub-document it is defined on.
+    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    } else {
+        panic!("expecting outer end element with no namespace");
     }
 }

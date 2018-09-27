@@ -8,11 +8,15 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.13.0
+- feat: rename `resolve_namespace` into `attribute_namespace`
+- feat: add a `event_namespace` fn
+
 ## 0.12.4
 - fix: Fix minor bug for parsing comment tag
 
 ## 0.12.3
-- feat: add BytesStart::{owned_name, borrowed_name} 
+- feat: add `BytesStart::{owned_name, borrowed_name}`
 
 ## 0.12.2
 - refactor: bump dependencies

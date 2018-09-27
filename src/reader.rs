@@ -496,6 +496,23 @@ impl<B: BufRead> Reader<B> {
         event
     }
 
+    /// Resolves a potentially qualified **event name** into (namespace name, local name).
+    ///
+    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
+    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
+    /// can be defined on the same element as the attribute in question.
+    ///
+    /// *Unqualified* event inherits the current *default namespace*.
+    #[inline]
+    pub fn event_namespace<'a, 'b, 'c>(
+        &'a self,
+        qname: &'b [u8],
+        namespace_buffer: &'c [u8],
+    ) -> (Option<&'c [u8]>, &'b [u8]) {
+        self.ns_buffer
+            .resolve_namespace(qname, namespace_buffer, true)
+    }
+
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
     ///
     /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
@@ -504,12 +521,13 @@ impl<B: BufRead> Reader<B> {
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     #[inline]
-    pub fn resolve_namespace<'a, 'b, 'c>(
+    pub fn attribute_namespace<'a, 'b, 'c>(
         &'a self,
         qname: &'b [u8],
         namespace_buffer: &'c [u8],
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.ns_buffer.resolve_namespace(qname, namespace_buffer)
+        self.ns_buffer
+            .resolve_namespace(qname, namespace_buffer, false)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -982,15 +1000,31 @@ impl NamespaceBufferIndex {
         &'a self,
         qname: &'b [u8],
         buffer: &'c [u8],
+        use_default: bool,
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        memchr::memchr(b':', qname)
-            .and_then(|len| {
+        match memchr::memchr(b':', qname) {
+            Some(len) => {
                 let (prefix, value) = qname.split_at(len);
-                self.slices
+                let ns = self
+                    .slices
                     .iter()
                     .rev()
                     .find(|n| n.prefix(buffer) == prefix)
-                    .map(|ns| (ns.opt_value(buffer), &value[1..]))
-            }).unwrap_or((None, qname))
+                    .and_then(|ns| ns.opt_value(buffer));
+                (ns, &value[1..])
+            }
+            None => {
+                let ns = if use_default {
+                    self.slices
+                        .iter()
+                        .rev()
+                        .find(|n| n.prefix_len == 0)
+                        .and_then(|ns| ns.opt_value(buffer))
+                } else {
+                    None
+                };
+                (ns, qname)
+            }
+        }
     }
 }
