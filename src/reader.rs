@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Seek};
 use std::path::Path;
 use std::str::from_utf8;
 
@@ -710,6 +710,64 @@ impl<B: BufRead> Reader<B> {
         };
         self.read_to_end(end, buf)?;
         s
+    }
+}
+
+impl<T: BufRead + Seek> Reader<T> {
+    /// Consumes `Reader` returning the underlying reader implementing `BufRead + Seek`
+    ///
+    /// Can be used to compute line and column of a parsing error position
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::{str, io::Cursor};
+    /// use quick_xml::Reader;
+    /// use quick_xml::events::Event;
+    ///
+    /// let xml = r#"<tag1 att1 = "test">
+    ///                 <tag2><!--Test comment-->Test</tag2>
+    ///                 <tag3>Test 2</tag3>
+    ///             </tag1>"#;
+    /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+    /// let mut buf = Vec::new();
+    ///
+    /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
+    ///     let end_pos = reader.buffer_position();
+    ///     let mut cursor = reader.into_underlying_reader();
+    ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
+    ///         .expect("can't make a string");
+    ///     let mut line = 1;
+    ///     let mut column = 0;
+    ///     for c in s.chars() {
+    ///         if c == '\n' {
+    ///             line += 1;
+    ///             column = 0;
+    ///         } else {
+    ///             column += 1;
+    ///         }
+    ///     }
+    ///     (line, column)
+    /// }
+    ///
+    /// loop {
+    ///     match reader.read_event(&mut buf) {
+    ///         Ok(Event::Start(ref e)) => match e.name() {
+    ///             b"tag1" | b"tag2" => (),
+    ///             tag => {
+    ///                 assert_eq!(b"tag3", tag);
+    ///                 assert_eq!((3, 22), into_line_and_column(reader));
+    ///                 break;
+    ///             }
+    ///         },
+    ///         Ok(Event::Eof) => unreachable!(),
+    ///         _ => (),
+    ///     }
+    ///     buf.clear();
+    /// }
+    /// ```
+    pub fn into_underlying_reader(self) -> T {
+        self.reader
     }
 }
 

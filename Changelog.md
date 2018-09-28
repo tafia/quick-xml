@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.x.y
+- feat: Add into_underlying_reader method for `Reader<BufRead + Seek>`
+
 ## 0.13.0
 - feat: rename `resolve_namespace` into `attribute_namespace`
 - feat: add a `event_namespace` fn
