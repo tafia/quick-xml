@@ -8,7 +8,7 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## 0.x.y
+## 0.13.1
 - feat: Add into_underlying_reader method for `Reader<BufRead + Seek>`
 
 ## 0.13.0
