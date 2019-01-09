@@ -273,26 +273,37 @@ impl<B: BufRead> Reader<B> {
     /// return `End` event
     fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
+        // XML standard permits whitespaces after the markup name in closing tags.
+        // Let's strip them from the buffer before comparing tag names.
+        let name = if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()){
+            let (name, _) = buf[1..].split_at(pos_end_name + 1);
+            name
+        } else {
+            &buf[1..]
+        };
         if self.check_end_names {
-            let mismatch_err = |expected: &[u8], buf_position: &mut usize| {
+            let mismatch_err = |expected: &[u8], found: &[u8], buf_position: &mut usize| {
                 *buf_position -= len;
                 Err(Error::EndEventMismatch {
                     expected: from_utf8(expected).unwrap_or("").to_owned(),
-                    found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
+                    found: from_utf8(found).unwrap_or("").to_owned(),
                 })
             };
             match self.opened_starts.pop() {
                 Some(start) => {
-                    if buf[1..] != self.opened_buffer[start..] {
+                    if name != &self.opened_buffer[start..] {
                         let expected = &self.opened_buffer[start..];
-                        return mismatch_err(expected, &mut self.buf_position);
+                        mismatch_err(expected, name, &mut self.buf_position)
+                    } else {
+                        self.opened_buffer.truncate(start);
+                        Ok(Event::End(BytesEnd::borrowed(name)))
                     }
-                    self.opened_buffer.truncate(start);
                 }
-                None => return mismatch_err(b"", &mut self.buf_position),
+                None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
             }
+        } else {
+            Ok(Event::End(BytesEnd::borrowed(name)))
         }
-        Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
     }
 
     /// reads `BytesElement` starting with a `!`,

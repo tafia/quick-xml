@@ -67,6 +67,13 @@ fn test_start_end() {
 }
 
 #[test]
+fn test_start_end_with_ws() {
+    let mut r = Reader::from_str("<a></a >");
+    r.trim_text(true);
+    next_eq!(r, Start, b"a", End, b"a");
+}
+
+#[test]
 fn test_start_end_attr() {
     let mut r = Reader::from_str("<a b=\"test\"></a>");
     r.trim_text(true);
