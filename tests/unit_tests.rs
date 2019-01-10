@@ -540,12 +540,14 @@ fn test_escaped_content() {
                 );
             }
             match e.unescaped() {
-                Ok(ref c) => if &**c != b"<test>" {
-                    panic!(
-                        "unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
-                        from_utf8(c)
-                    )
-                },
+                Ok(ref c) => {
+                    if &**c != b"<test>" {
+                        panic!(
+                            "unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
+                            from_utf8(c)
+                        )
+                    }
+                }
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
                     r.buffer_position(),
@@ -637,11 +639,9 @@ fn test_read_write_roundtrip_escape() {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.escaped();
-                assert!(
-                    writer
-                        .write_event(Event::Text(BytesText::from_escaped(t.to_vec())))
-                        .is_ok()
-                );
+                assert!(writer
+                    .write_event(Event::Text(BytesText::from_escaped(t.to_vec())))
+                    .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),
@@ -672,11 +672,9 @@ fn test_read_write_roundtrip_escape_text() {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.unescape_and_decode(&reader).unwrap();
-                assert!(
-                    writer
-                        .write_event(Event::Text(BytesText::from_plain_str(&t)))
-                        .is_ok()
-                );
+                assert!(writer
+                    .write_event(Event::Text(BytesText::from_plain_str(&t)))
+                    .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
             Err(e) => panic!(e),

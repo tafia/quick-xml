@@ -275,12 +275,13 @@ impl<B: BufRead> Reader<B> {
         let len = buf.len();
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
-        let name = if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()){
-            let (name, _) = buf[1..].split_at(pos_end_name + 1);
-            name
-        } else {
-            &buf[1..]
-        };
+        let name =
+            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+                let (name, _) = buf[1..].split_at(pos_end_name + 1);
+                name
+            } else {
+                &buf[1..]
+            };
         if self.check_end_names {
             let mismatch_err = |expected: &[u8], found: &[u8], buf_position: &mut usize| {
                 *buf_position -= len;
