@@ -52,9 +52,7 @@ pub enum Error {
 
     #[fail(
         display = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}",
-        _0,
-        _1,
-        _0
+        _0, _1, _0
     )]
     DuplicatedAttribute(usize, usize),
 

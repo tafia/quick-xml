@@ -344,13 +344,15 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {
-            Ok(a) => if a.key.len() < 5 || !a.key.starts_with(b"xmlns") {
-                atts.push(format!(
-                    "{}=\"{}\"",
-                    from_utf8(a.key).unwrap(),
-                    from_utf8(&*a.unescaped_value().unwrap()).unwrap()
-                ));
-            },
+            Ok(a) => {
+                if a.key.len() < 5 || !a.key.starts_with(b"xmlns") {
+                    atts.push(format!(
+                        "{}=\"{}\"",
+                        from_utf8(a.key).unwrap(),
+                        from_utf8(&*a.unescaped_value().unwrap()).unwrap()
+                    ));
+                }
+            }
             Err(e) => return Err(e.to_string()),
         }
     }
@@ -408,7 +410,8 @@ impl<'a> Iterator for SpecIter<'a> {
                 b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' => false,
                 b'0'...b'9' => false,
                 _ => true,
-            }).unwrap_or(0);
+            })
+            .unwrap_or(0);
         if let Some(p) = self.0.windows(2).position(|w| w == b")\n") {
             let (prev, next) = self.0.split_at(p + 1);
             self.0 = next;

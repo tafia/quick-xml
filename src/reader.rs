@@ -71,6 +71,8 @@ pub struct Reader<B: BufRead> {
     expand_empty_elements: bool,
     /// trims Text events, skip the element if text is empty
     trim_text: bool,
+    /// trims trailing whitespaces from markup names in closing tags `</a >`
+    trim_markup_names_in_closing_tags: bool,
     /// check if End nodes match last Start node
     check_end_names: bool,
     /// check if comments contains `--` (false per default)
@@ -96,6 +98,7 @@ impl<B: BufRead> Reader<B> {
             tag_state: TagState::Closed,
             expand_empty_elements: false,
             trim_text: false,
+            trim_markup_names_in_closing_tags: true,
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
@@ -130,6 +133,22 @@ impl<B: BufRead> Reader<B> {
     /// [`Text`]: events/enum.Event.html#variant.Text
     pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
         self.trim_text = val;
+        self
+    }
+
+    /// Changes wether trailing whitespaces after the markup name are trimmed in closing tags
+    /// `</a >`.
+    ///
+    /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
+    ///
+    /// Note that if set to `false` and `check_end_names` is true the comparison of markup names is
+    /// going to fail erronously if a closing tag contains trailing whitespaces.
+    ///
+    /// (`true` by default)
+    ///
+    /// [`End`]: events/enum.Event.html#variant.End
+    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Reader<B> {
+        self.trim_markup_names_in_closing_tags = val;
         self
     }
 
@@ -273,26 +292,41 @@ impl<B: BufRead> Reader<B> {
     /// return `End` event
     fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
+        // XML standard permits whitespaces after the markup name in closing tags.
+        // Let's strip them from the buffer before comparing tag names.
+        let name = if self.trim_markup_names_in_closing_tags {
+            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+                let (name, _) = buf[1..].split_at(pos_end_name + 1);
+                name
+            } else {
+                &buf[1..]
+            }
+        } else {
+            &buf[1..]
+        };
         if self.check_end_names {
-            let mismatch_err = |expected: &[u8], buf_position: &mut usize| {
+            let mismatch_err = |expected: &[u8], found: &[u8], buf_position: &mut usize| {
                 *buf_position -= len;
                 Err(Error::EndEventMismatch {
                     expected: from_utf8(expected).unwrap_or("").to_owned(),
-                    found: from_utf8(&buf[1..]).unwrap_or("").to_owned(),
+                    found: from_utf8(found).unwrap_or("").to_owned(),
                 })
             };
             match self.opened_starts.pop() {
                 Some(start) => {
-                    if buf[1..] != self.opened_buffer[start..] {
+                    if name != &self.opened_buffer[start..] {
                         let expected = &self.opened_buffer[start..];
-                        return mismatch_err(expected, &mut self.buf_position);
+                        mismatch_err(expected, name, &mut self.buf_position)
+                    } else {
+                        self.opened_buffer.truncate(start);
+                        Ok(Event::End(BytesEnd::borrowed(name)))
                     }
-                    self.opened_buffer.truncate(start);
                 }
-                None => return mismatch_err(b"", &mut self.buf_position),
+                None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
             }
+        } else {
+            Ok(Event::End(BytesEnd::borrowed(name)))
         }
-        Ok(Event::End(BytesEnd::borrowed(&buf[1..])))
     }
 
     /// reads `BytesElement` starting with a `!`,

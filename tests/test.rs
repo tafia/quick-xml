@@ -113,14 +113,15 @@ fn test_attributes_empty_ns() {
         e => panic!("Expecting Empty event, got {:?}", e),
     };
 
-    let mut atts = e.attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
-            });
+    let mut atts = e
+        .attributes()
+        .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
+        // we don't care about xmlns attributes for this test
+        .filter(|kv| !kv.key.starts_with(b"xmlns"))
+        .map(|Attribute { key: name, value }| {
+            let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
+            (opt_ns, local_name, value)
+        });
     match atts.next() {
         Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
         e => panic!("Expecting att1='a' attribute, found {:?}", e),
@@ -157,7 +158,8 @@ fn test_attributes_empty_ns_expanded() {
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
-        let mut atts = e.attributes()
+        let mut atts = e
+            .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
@@ -221,7 +223,8 @@ fn test_default_ns_shadowing_empty() {
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
-        let mut atts = e.attributes()
+        let mut atts = e
+            .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
@@ -282,7 +285,8 @@ fn test_default_ns_shadowing_expanded() {
             }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
         };
-        let mut atts = e.attributes()
+        let mut atts = e
+            .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
