@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.13.2
+- fix: allow whitespace in End events
+- feat: bump dependencies
+
 ## 0.13.1
 - feat: Add into_underlying_reader method for `Reader<BufRead + Seek>`
 
