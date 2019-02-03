@@ -126,7 +126,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                     return Err(EscapeError::UnrecognizedSymbol(
                         start..end,
                         String::from_utf8(bytes.to_vec()),
-                    ))
+                    ));
                 }
             };
             escapes.push((start - 1..end, b_o_c));
