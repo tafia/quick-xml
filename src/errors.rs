@@ -60,6 +60,22 @@ pub enum Error {
     EscapeError(#[cause] ::escape::EscapeError),
 }
 
+impl From<::std::io::Error> for Error {
+    /// Creates a new `Error::Io` from the given error
+    #[inline]
+    fn from(error: ::std::io::Error) -> Error {
+        Error::Io(error)
+    }
+}
+
+impl From<::std::str::Utf8Error> for Error {
+    /// Creates a new `Error::Utf8` from the given error
+    #[inline]
+    fn from(error: ::std::str::Utf8Error) -> Error {
+        Error::Utf8(error)
+    }
+}
+
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 ///
 /// [`Error`]: enum.Error.html
