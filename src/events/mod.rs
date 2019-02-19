@@ -170,6 +170,22 @@ impl<'a> BytesStart<'a> {
         bytes.extend_from_slice(&*a.value);
         bytes.push(b'"');
     }
+
+    /// Edit the name of the BytesStart in-place
+    pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
+        {
+            let bytes = self.buf.to_mut();
+            bytes.splice(..self.name_len, name.to_vec());
+        }
+        self.name_len = name.len();
+        self
+    }
+
+    /// Remove all attributes from the ByteStart
+    pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
+        self.buf.to_mut().truncate(self.name_len);
+        self
+    }
 }
 
 /// An XML declaration (`Event::Decl`).
@@ -560,6 +576,29 @@ mod test {
     #[test]
     fn bytestart_create() {
         let b = BytesStart::owned_name("test");
+        assert_eq!(b.len(), 4);
+        assert_eq!(b.name(), b"test");
+    }
+
+    #[test]
+    fn bytestart_set_name() {
+        let mut b = BytesStart::owned_name("test");
+        assert_eq!(b.len(), 4);
+        assert_eq!(b.name(), b"test");
+        b.push_attribute(("x", "a"));
+        assert_eq!(b.len(), 10);
+        b.set_name(b"g");
+        assert_eq!(b.len(), 7);
+        assert_eq!(b.name(), b"g");
+    }
+
+    #[test]
+    fn bytestart_clear_attributes() {
+        let mut b = BytesStart::owned_name("test");
+        b.push_attribute(("x", "y\"z"));
+        b.push_attribute(("x", "y\"z"));
+        b.clear_attributes();
+        assert!(b.attributes().next().is_none());
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), b"test");
     }
