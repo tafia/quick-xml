@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.13.3
+- feat: allow changing name without deallocating `BytesStart` buffer
+- feat: add standard error type conversion
+
 ## 0.13.2
 - fix: allow whitespace in End events
 - feat: bump dependencies
