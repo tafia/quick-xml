@@ -175,7 +175,7 @@ impl<'a> BytesStart<'a> {
     pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
         {
             let bytes = self.buf.to_mut();
-            bytes.splice(..self.name_len, name.to_vec());
+            bytes.splice(..self.name_len, name.iter().cloned());
         }
         self.name_len = name.len();
         self
