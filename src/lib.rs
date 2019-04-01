@@ -107,7 +107,7 @@
 
 extern crate encoding_rs;
 #[macro_use]
-extern crate failure;
+extern crate derive_more;
 extern crate memchr;
 
 mod errors;
