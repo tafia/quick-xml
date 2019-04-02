@@ -27,10 +27,7 @@ pub enum Error {
     #[display(fmt = "Cannot read text, expecting Event::Text")]
     TextNotFound,
 
-    #[display(
-        fmt = "XmlDecl must start with 'version' attribute, found {:?}",
-        "_0"
-    )]
+    #[display(fmt = "XmlDecl must start with 'version' attribute, found {:?}", "_0")]
     XmlDeclWithoutVersion(Option<String>),
 
     #[display(
@@ -53,7 +50,9 @@ pub enum Error {
 
     #[display(
         fmt = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}",
-        "_0", "_1", "_0"
+        "_0",
+        "_1",
+        "_0"
     )]
     DuplicatedAttribute(usize, usize),
 

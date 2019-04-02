@@ -15,7 +15,8 @@ pub enum EscapeError {
 
     #[display(
         fmt = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
-        "_0", "_1"
+        "_0",
+        "_1"
     )]
     UnrecognizedSymbol(
         ::std::ops::Range<usize>,
