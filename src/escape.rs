@@ -4,6 +4,7 @@ use memchr;
 use std::borrow::Cow;
 
 #[allow(missing_docs)]
+#[cfg_attr(feature = "failure", derive(Fail))]
 #[derive(Display, Debug)]
 pub enum EscapeError {
     #[display(

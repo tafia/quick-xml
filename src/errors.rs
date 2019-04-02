@@ -3,13 +3,14 @@
 #![allow(missing_docs)]
 
 /// The error type used by this crate.
+#[cfg_attr(feature = "failure", derive(Fail))]
 #[derive(Display, Debug)]
 pub enum Error {
     #[display(fmt = "I/O error: {}", "_0")]
-    Io(::std::io::Error),
+    Io(#[cfg_attr(feature = "failure", cause)] ::std::io::Error),
 
     #[display(fmt = "UTF8 error: {}", "_0")]
-    Utf8(::std::str::Utf8Error),
+    Utf8(#[cfg_attr(feature = "failure", cause)] ::std::str::Utf8Error),
 
     #[display(fmt = "Unexpected EOF during reading {}.", "_0")]
     UnexpectedEof(String),
@@ -57,7 +58,7 @@ pub enum Error {
     DuplicatedAttribute(usize, usize),
 
     #[display(fmt = "{}", "_0")]
-    EscapeError(::escape::EscapeError),
+    EscapeError(#[cfg_attr(feature = "failure", cause)] ::escape::EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
