@@ -12,10 +12,8 @@ use events::Event;
 /// # Examples
 ///
 /// ```rust
-/// # extern crate failure;
 /// # extern crate quick_xml;
 /// # fn main() {
-/// use failure::Fail;
 /// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
@@ -48,9 +46,7 @@ use events::Event;
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
 ///         Ok(e) => assert!(writer.write_event(&e).is_ok()),
-///         // errors are chained, the last one usually being the
-///         // position where the error has happened
-///         Err(e) => panic!("{:?}", e.causes().map(|e| format!("{:?} -", e)).collect::<String>()),
+///         Err(e) => panic!("{}", e),
 ///     }
 ///     buf.clear();
 /// }

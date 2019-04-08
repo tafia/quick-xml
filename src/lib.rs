@@ -106,8 +106,11 @@
 #![recursion_limit = "1024"]
 
 extern crate encoding_rs;
+#[cfg(feature = "failure")]
 #[macro_use]
 extern crate failure;
+#[macro_use]
+extern crate derive_more;
 extern crate memchr;
 
 mod errors;

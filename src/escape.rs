@@ -4,39 +4,41 @@ use memchr;
 use std::borrow::Cow;
 
 #[allow(missing_docs)]
-#[derive(Fail, Debug)]
+#[cfg_attr(feature = "failure", derive(Fail))]
+#[derive(Display, Debug)]
 pub enum EscapeError {
-    #[fail(
-        display = "Error while escaping character at range {:?}: Null character entity not allowed",
-        _0
+    #[display(
+        fmt = "Error while escaping character at range {:?}: Null character entity not allowed",
+        "_0"
     )]
     EntityWithNull(::std::ops::Range<usize>),
 
-    #[fail(
-        display = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
-        _0, _1
+    #[display(
+        fmt = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
+        "_0",
+        "_1"
     )]
     UnrecognizedSymbol(
         ::std::ops::Range<usize>,
         ::std::result::Result<String, ::std::string::FromUtf8Error>,
     ),
 
-    #[fail(
-        display = "Error while escaping character at range {:?}: Cannot find ';' after '&'",
-        _0
+    #[display(
+        fmt = "Error while escaping character at range {:?}: Cannot find ';' after '&'",
+        "_0"
     )]
     UnterminatedEntity(::std::ops::Range<usize>),
 
-    #[fail(display = "Cannot convert hexadecimal to utf8")]
+    #[display(fmt = "Cannot convert hexadecimal to utf8")]
     TooLongHexadecimal,
 
-    #[fail(display = "'{}' is not a valid hexadecimal character", _0)]
+    #[display(fmt = "'{}' is not a valid hexadecimal character", "_0")]
     InvalidHexadecimal(char),
 
-    #[fail(display = "Cannot convert decimal to utf8")]
+    #[display(fmt = "Cannot convert decimal to utf8")]
     TooLongDecimal,
 
-    #[fail(display = "'{}' is not a valid decimal character", _0)]
+    #[display(fmt = "'{}' is not a valid decimal character", "_0")]
     InvalidDecimal(char),
 }
 

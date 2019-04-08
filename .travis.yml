@@ -14,4 +14,6 @@ before_script:
 script:
   - if [[ $(rustup show active-toolchain) == stable* ]]; then cargo fmt -- --check; fi;
   - cargo build
+  - cargo build --no-default-features
   - cargo test
+  - cargo test --no-default-features

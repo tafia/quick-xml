@@ -1,4 +1,3 @@
-extern crate failure;
 extern crate quick_xml;
 
 use quick_xml::events::{BytesStart, Event};
