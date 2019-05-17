@@ -1,5 +1,7 @@
+extern crate encoding_rs;
 extern crate quick_xml;
 
+use encoding_rs::Encoding;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::Reader;
@@ -22,6 +24,29 @@ fn test_sample() {
         buf.clear();
     }
     println!("{}", count);
+}
+
+#[test]
+fn test_sample_utf16() {
+    let src: &[u8] = include_bytes!("./documents/utf16.xml");
+    let mut buf = Vec::new();
+    let mut r = Reader::from_reader(src);
+
+    let mut count = 0;
+    loop {
+        match r.read_event(&mut buf).unwrap() {
+            Start(s) => {
+                println!("{:?}: {:?}", s.unescape_and_decode(&r), r.buffer_position());
+                count += 1;
+            }
+            Decl(e) => println!("{:?}", e.version()),
+            Eof => break,
+            _ => (),
+        }
+        buf.clear();
+    }
+    assert_eq!(Some(r.encoding()), Encoding::for_label(b"utf-16"));
+    assert_eq!(count, 6);
 }
 
 #[test]
