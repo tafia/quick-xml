@@ -14,16 +14,6 @@ The reader:
 
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 
-## Usage
-
-```toml
-[dependencies]
-quick-xml = "0.12.0"
-```
-``` rust
-extern crate quick_xml;
-```
-
 ## Example
 
 ### Reader
