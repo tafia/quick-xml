@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Seek};
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::from_utf8;
 
@@ -745,10 +745,8 @@ impl<B: BufRead> Reader<B> {
         self.read_to_end(end, buf)?;
         s
     }
-}
 
-impl<T: BufRead + Seek> Reader<T> {
-    /// Consumes `Reader` returning the underlying reader implementing `BufRead + Seek`
+    /// Consumes `Reader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
     ///
@@ -800,7 +798,7 @@ impl<T: BufRead + Seek> Reader<T> {
     ///     buf.clear();
     /// }
     /// ```
-    pub fn into_underlying_reader(self) -> T {
+    pub fn into_underlying_reader(self) -> B {
         self.reader
     }
 }
