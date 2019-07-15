@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.15.0
+- feat: remove Seek bound
+- style: rustfmt
+
 ## 0.14.0
 - feat: make failure error crate optional. To revert back to old behavior, use the `--failure` feature.
 
