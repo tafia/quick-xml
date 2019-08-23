@@ -102,9 +102,16 @@
 //! let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 //! assert_eq!(result, expected.as_bytes());
 //! ```
+//!
+//! # Features
+//!
+//! quick-xml supports 2 additional features, non activated by default:
+//! - `encoding`: support non utf8 xmls
+//! - `use-failure`: support for failure chainable error
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 
+#[cfg(feature = "encoding_rs")]
 extern crate encoding_rs;
 #[cfg(feature = "failure")]
 #[macro_use]

@@ -325,6 +325,7 @@ fn test_default_ns_shadowing_expanded() {
 }
 
 #[test]
+#[cfg(feature = "encoding_rs")]
 fn test_koi8_r_encoding() {
     let src: &[u8] = include_bytes!("documents/opennews_all.rss");
     let mut r = Reader::from_reader(src as &[u8]);

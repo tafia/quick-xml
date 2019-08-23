@@ -1,11 +1,13 @@
 //! A module to handle `Reader`
 
+#[cfg(feature = "encoding_rs")]
 use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::from_utf8;
 
+#[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 
 use errors::{Error, Result};
@@ -84,6 +86,7 @@ pub struct Reader<B: BufRead> {
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
     ns_buffer: NamespaceBufferIndex,
+    #[cfg(feature = "encoding_rs")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
 }
@@ -103,6 +106,7 @@ impl<B: BufRead> Reader<B> {
             buf_position: 0,
             check_comments: false,
             ns_buffer: NamespaceBufferIndex::default(),
+            #[cfg(feature = "encoding_rs")]
             encoding: ::encoding_rs::UTF_8,
         }
     }
@@ -420,6 +424,7 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
+    #[cfg(feature = "encoding_rs")]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
@@ -429,6 +434,25 @@ impl<B: BufRead> Reader<B> {
                 if let Some(enc) = event.encoder() {
                     self.encoding = enc;
                 }
+                Ok(Event::Decl(event))
+            } else {
+                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
+            }
+        } else {
+            self.buf_position -= len;
+            Err(Error::UnexpectedEof("XmlDecl".to_string()))
+        }
+    }
+
+    /// reads `BytesElement` starting with a `?`,
+    /// return `Decl` or `PI` event
+    #[cfg(not(feature = "encoding_rs"))]
+    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        let len = buf.len();
+        if len > 2 && buf[len - 1] == b'?' {
+            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
+                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+                // Try getting encoding from the declaration event
                 Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
@@ -660,6 +684,7 @@ impl<B: BufRead> Reader<B> {
     /// This encoding will be used by [`decode`].
     ///
     /// [`decode`]: #method.decode
+    #[cfg(feature = "encoding_rs")]
     pub fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
@@ -671,8 +696,23 @@ impl<B: BufRead> Reader<B> {
     ///
     /// If no encoding is specified, defaults to UTF-8.
     #[inline]
+    #[cfg(feature = "encoding_rs")]
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
+    }
+
+    /// Decodes a UTF8 slice regarless of XML declaration.
+    ///
+    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
+    ///
+    /// # Note
+    ///
+    /// If you instead want to use XML declared encoding, use the `encoding_rs` feature
+    #[inline]
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+        std::str::from_utf8(bytes).map_err(Error::Utf8)
     }
 
     /// Reads until end element is found

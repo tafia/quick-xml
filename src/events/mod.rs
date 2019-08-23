@@ -2,6 +2,7 @@
 
 pub mod attributes;
 
+#[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::io::BufRead;
@@ -156,8 +157,25 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
+    #[cfg(feature = "encoding_rs")]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
+    }
+
+    /// Returns the unescaped and decoded string value.
+    ///
+    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
+    /// instead use one of:
+    ///
+    /// * [`unescaped()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    ///
+    /// [`unescaped()`]: #method.unescaped
+    /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+        self.unescaped()
+            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
     }
 
     /// Adds an attribute to this element.
@@ -297,6 +315,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets the decoder struct
+    #[cfg(feature = "encoding_rs")]
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())
@@ -424,8 +443,21 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    #[cfg(feature = "encoding_rs")]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
+    }
+
+    /// helper method to unescape then decode self using the reader encoding
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+        self.unescaped()
+            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
     }
 
     /// Gets escaped content.

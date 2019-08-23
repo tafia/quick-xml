@@ -8,7 +8,7 @@ High performance xml pull reader/writer.
 The reader:
 - is almost zero-copy (use of `Cow` whenever possible)
 - is easy on memory allocation (the API provides a way to reuse buffers)
-- support various encoding, namespaces resolution, special characters.
+- support various encoding (with `encoding` feature), namespaces resolution, special characters.
 
 [docs.rs](https://docs.rs/quick-xml)
 
@@ -104,6 +104,12 @@ let result = writer.into_inner().into_inner();
 let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 assert_eq!(result, expected.as_bytes());
 ```
+
+# Features
+
+quick-xml supports 2 additional features, non activated by default:
+- `encoding`: support non utf8 xmls
+- `use-failure`: support for failure chainable error
 
 ## Performance
 
