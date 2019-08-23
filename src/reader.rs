@@ -11,8 +11,7 @@ use std::str::from_utf8;
 use encoding_rs::Encoding;
 
 use errors::{Error, Result};
-use events::attributes::Attribute;
-use events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -712,7 +711,7 @@ impl<B: BufRead> Reader<B> {
     #[inline]
     #[cfg(not(feature = "encoding_rs"))]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        std::str::from_utf8(bytes).map_err(Error::Utf8)
+        from_utf8(bytes).map_err(Error::Utf8)
     }
 
     /// Reads until end element is found
@@ -905,7 +904,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 #[inline]
 fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     #[derive(Clone, Copy)]
-    enum ElemReadState {
+    enum State {
         /// The initial state (inside element, but outside of attribute value)
         Elem,
         /// Inside a single-quoted attribute value
@@ -913,7 +912,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
         /// Inside a double-quoted attribute value
         DoubleQ,
     }
-    let mut state = ElemReadState::Elem;
+    let mut state = State::Elem;
     let mut read = 0;
     let mut done = false;
     while !done {
@@ -931,20 +930,18 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                 match memiter.next() {
                     Some(i) => {
                         state = match (state, available[i]) {
-                            (ElemReadState::Elem, b) if b == end_byte => {
+                            (State::Elem, b) if b == end_byte => {
                                 // only allowed to match `end_byte` while we are in state `Elem`
                                 buf.extend_from_slice(&available[..i]);
                                 done = true;
                                 used = i + 1;
                                 break;
                             }
-                            (ElemReadState::Elem, b'\'') => ElemReadState::SingleQ,
-                            (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
+                            (State::Elem, b'\'') => State::SingleQ,
+                            (State::Elem, b'\"') => State::DoubleQ,
 
                             // the only end_byte that gets us out if the same character
-                            (ElemReadState::SingleQ, b'\'') | (ElemReadState::DoubleQ, b'\"') => {
-                                ElemReadState::Elem
-                            }
+                            (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
 
                             // all other bytes: no state change
                             _ => state,
@@ -1012,10 +1009,8 @@ impl Namespace {
         if self.value_len == 0 {
             None
         } else {
-            Some(
-                &ns_buffer
-                    [self.start + self.prefix_len..self.start + self.prefix_len + self.value_len],
-            )
+            let start = self.start + self.prefix_len;
+            Some(&ns_buffer[start..start + self.value_len])
         }
     }
 }

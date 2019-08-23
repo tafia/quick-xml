@@ -119,12 +119,12 @@ Here on my particular file, quick-xml is around **50 times faster** than [xml-rs
 
 ```
 // quick-xml benches
-test bench_quick_xml            ... bench:     256,921 ns/iter (+/- 18,306)
-test bench_quick_xml_escaped    ... bench:     324,320 ns/iter (+/- 19,968)
-test bench_quick_xml_namespaced ... bench:     396,318 ns/iter (+/- 23,663)
+test bench_quick_xml            ... bench:     198,866 ns/iter (+/- 9,663)
+test bench_quick_xml_escaped    ... bench:     282,740 ns/iter (+/- 61,625)
+test bench_quick_xml_namespaced ... bench:     389,977 ns/iter (+/- 32,045)
 
 // same bench with xml-rs
-test bench_xml_rs               ... bench:  14,839,533 ns/iter (+/- 2,377,647)
+test bench_xml_rs               ... bench:  14,468,930 ns/iter (+/- 321,171)
 ```
 
 For a feature and performance comparison, you can also have a look at RazrFalcon's [choose-your-xml-rs](https://github.com/RazrFalcon/choose-your-xml-rs).

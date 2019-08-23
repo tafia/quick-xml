@@ -20,7 +20,6 @@ encoding_rs = { version = "0.8.17", optional = true }
 failure = { version = "0.1.5", optional = true }
 derive_more = "0.15"
 memchr = "2.2.1"
-log = "0.4.8"
 
 [dev-dependencies]
 xml-rs = "0.8.0"
