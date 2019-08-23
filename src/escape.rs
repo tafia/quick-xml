@@ -185,9 +185,9 @@ fn parse_hexadecimal(bytes: &[u8]) -> Result<u32, EscapeError> {
     for &b in bytes {
         code <<= 4;
         code += match b {
-            b'0'...b'9' => b - b'0',
-            b'a'...b'f' => b - b'a' + 10,
-            b'A'...b'F' => b - b'A' + 10,
+            b'0'..=b'9' => b - b'0',
+            b'a'..=b'f' => b - b'a' + 10,
+            b'A'..=b'F' => b - b'A' + 10,
             b => return Err(EscapeError::InvalidHexadecimal(b as char)),
         } as u32;
     }
