@@ -203,7 +203,7 @@ fn parse_decimal(bytes: &[u8]) -> Result<u32, EscapeError> {
     for &b in bytes {
         code *= 10;
         code += match b {
-            b'0'...b'9' => b - b'0',
+            b'0'..=b'9' => b - b'0',
             b => return Err(EscapeError::InvalidDecimal(b as char)),
         } as u32;
     }

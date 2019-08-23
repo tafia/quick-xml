@@ -925,13 +925,12 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                 Err(e) => return Err(Error::Io(e)),
             };
 
-            let mut bytes = available.iter().enumerate();
-
+            let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
             let used: usize;
             loop {
-                match bytes.next() {
-                    Some((i, &b)) => {
-                        state = match (state, b) {
+                match memiter.next() {
+                    Some(i) => {
+                        state = match (state, available[i]) {
                             (ElemReadState::Elem, b) if b == end_byte => {
                                 // only allowed to match `end_byte` while we are in state `Elem`
                                 buf.extend_from_slice(&available[..i]);
