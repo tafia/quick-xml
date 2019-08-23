@@ -995,12 +995,6 @@ struct Namespace {
 }
 
 impl Namespace {
-    /// Gets the prefix slice out of namespace buffer
-    #[inline]
-    fn prefix<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> &'b [u8] {
-        &ns_buffer[self.start..self.start + self.prefix_len]
-    }
-
     /// Gets the value slice out of namespace buffer
     ///
     /// Returns `None` if `value_len == 0`
@@ -1011,6 +1005,17 @@ impl Namespace {
         } else {
             let start = self.start + self.prefix_len;
             Some(&ns_buffer[start..start + self.value_len])
+        }
+    }
+
+    /// Check if the namespace matches the potentially qualified name
+    #[inline]
+    fn is_match(&self, ns_buffer: &[u8], qname: &[u8]) -> bool {
+        if self.prefix_len == 0 {
+            !qname.contains(&b':')
+        } else {
+            qname.get(self.prefix_len).map_or(false, |n| *n == b':')
+                && qname.starts_with(&ns_buffer[self.start..self.start + self.prefix_len])
         }
     }
 }
@@ -1038,15 +1043,10 @@ impl NamespaceBufferIndex {
         element_name: &'b [u8],
         buffer: &'c [u8],
     ) -> Option<&'c [u8]> {
-        let ns = match memchr::memchr(b':', element_name) {
-            None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
-            Some(len) => self
-                .slices
-                .iter()
-                .rev()
-                .find(|n| n.prefix(buffer) == &element_name[..len]),
-        };
-        ns.and_then(|n| n.opt_value(buffer))
+        self.slices
+            .iter()
+            .rfind(|n| n.is_match(buffer, element_name))
+            .and_then(|n| n.opt_value(buffer))
     }
 
     fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
@@ -1126,29 +1126,18 @@ impl NamespaceBufferIndex {
         buffer: &'c [u8],
         use_default: bool,
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        match memchr::memchr(b':', qname) {
-            Some(len) => {
-                let (prefix, value) = qname.split_at(len);
-                let ns = self
-                    .slices
-                    .iter()
-                    .rev()
-                    .find(|n| n.prefix(buffer) == prefix)
-                    .and_then(|ns| ns.opt_value(buffer));
-                (ns, &value[1..])
-            }
-            None => {
-                let ns = if use_default {
-                    self.slices
-                        .iter()
-                        .rev()
-                        .find(|n| n.prefix_len == 0)
-                        .and_then(|ns| ns.opt_value(buffer))
+        self.slices
+            .iter()
+            .rfind(|n| n.is_match(buffer, qname))
+            .map_or((None, qname), |n| {
+                let len = n.prefix_len;
+                if len > 0 {
+                    (n.opt_value(buffer), &qname[len + 1..])
+                } else if use_default {
+                    (n.opt_value(buffer), qname)
                 } else {
-                    None
-                };
-                (ns, qname)
-            }
-        }
+                    (None, qname)
+                }
+            })
     }
 }
