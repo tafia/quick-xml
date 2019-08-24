@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.16.0
+- feat: set failure and encoding_rs crates as optional. You should now use respectively 
+`use-failure` and `encoding` features to get the old behavior
+
 ## 0.15.0
 - feat: remove Seek bound
 - style: rustfmt

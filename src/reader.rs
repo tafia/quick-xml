@@ -1,16 +1,17 @@
 //! A module to handle `Reader`
 
+#[cfg(feature = "encoding_rs")]
 use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::from_utf8;
 
+#[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 
 use errors::{Error, Result};
-use events::attributes::Attribute;
-use events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -84,6 +85,7 @@ pub struct Reader<B: BufRead> {
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
     ns_buffer: NamespaceBufferIndex,
+    #[cfg(feature = "encoding_rs")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
 }
@@ -103,6 +105,7 @@ impl<B: BufRead> Reader<B> {
             buf_position: 0,
             check_comments: false,
             ns_buffer: NamespaceBufferIndex::default(),
+            #[cfg(feature = "encoding_rs")]
             encoding: ::encoding_rs::UTF_8,
         }
     }
@@ -420,6 +423,7 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
+    #[cfg(feature = "encoding_rs")]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
@@ -429,6 +433,25 @@ impl<B: BufRead> Reader<B> {
                 if let Some(enc) = event.encoder() {
                     self.encoding = enc;
                 }
+                Ok(Event::Decl(event))
+            } else {
+                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
+            }
+        } else {
+            self.buf_position -= len;
+            Err(Error::UnexpectedEof("XmlDecl".to_string()))
+        }
+    }
+
+    /// reads `BytesElement` starting with a `?`,
+    /// return `Decl` or `PI` event
+    #[cfg(not(feature = "encoding_rs"))]
+    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        let len = buf.len();
+        if len > 2 && buf[len - 1] == b'?' {
+            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
+                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+                // Try getting encoding from the declaration event
                 Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
@@ -660,6 +683,7 @@ impl<B: BufRead> Reader<B> {
     /// This encoding will be used by [`decode`].
     ///
     /// [`decode`]: #method.decode
+    #[cfg(feature = "encoding_rs")]
     pub fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
@@ -671,8 +695,23 @@ impl<B: BufRead> Reader<B> {
     ///
     /// If no encoding is specified, defaults to UTF-8.
     #[inline]
+    #[cfg(feature = "encoding_rs")]
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
+    }
+
+    /// Decodes a UTF8 slice regarless of XML declaration.
+    ///
+    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
+    ///
+    /// # Note
+    ///
+    /// If you instead want to use XML declared encoding, use the `encoding_rs` feature
+    #[inline]
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+        from_utf8(bytes).map_err(Error::Utf8)
     }
 
     /// Reads until end element is found
@@ -865,7 +904,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 #[inline]
 fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
     #[derive(Clone, Copy)]
-    enum ElemReadState {
+    enum State {
         /// The initial state (inside element, but outside of attribute value)
         Elem,
         /// Inside a single-quoted attribute value
@@ -873,7 +912,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
         /// Inside a double-quoted attribute value
         DoubleQ,
     }
-    let mut state = ElemReadState::Elem;
+    let mut state = State::Elem;
     let mut read = 0;
     let mut done = false;
     while !done {
@@ -885,27 +924,24 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                 Err(e) => return Err(Error::Io(e)),
             };
 
-            let mut bytes = available.iter().enumerate();
-
+            let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
             let used: usize;
             loop {
-                match bytes.next() {
-                    Some((i, &b)) => {
-                        state = match (state, b) {
-                            (ElemReadState::Elem, b) if b == end_byte => {
+                match memiter.next() {
+                    Some(i) => {
+                        state = match (state, available[i]) {
+                            (State::Elem, b) if b == end_byte => {
                                 // only allowed to match `end_byte` while we are in state `Elem`
                                 buf.extend_from_slice(&available[..i]);
                                 done = true;
                                 used = i + 1;
                                 break;
                             }
-                            (ElemReadState::Elem, b'\'') => ElemReadState::SingleQ,
-                            (ElemReadState::Elem, b'\"') => ElemReadState::DoubleQ,
+                            (State::Elem, b'\'') => State::SingleQ,
+                            (State::Elem, b'\"') => State::DoubleQ,
 
                             // the only end_byte that gets us out if the same character
-                            (ElemReadState::SingleQ, b'\'') | (ElemReadState::DoubleQ, b'\"') => {
-                                ElemReadState::Elem
-                            }
+                            (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
 
                             // all other bytes: no state change
                             _ => state,
@@ -959,12 +995,6 @@ struct Namespace {
 }
 
 impl Namespace {
-    /// Gets the prefix slice out of namespace buffer
-    #[inline]
-    fn prefix<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> &'b [u8] {
-        &ns_buffer[self.start..self.start + self.prefix_len]
-    }
-
     /// Gets the value slice out of namespace buffer
     ///
     /// Returns `None` if `value_len == 0`
@@ -973,10 +1003,19 @@ impl Namespace {
         if self.value_len == 0 {
             None
         } else {
-            Some(
-                &ns_buffer
-                    [self.start + self.prefix_len..self.start + self.prefix_len + self.value_len],
-            )
+            let start = self.start + self.prefix_len;
+            Some(&ns_buffer[start..start + self.value_len])
+        }
+    }
+
+    /// Check if the namespace matches the potentially qualified name
+    #[inline]
+    fn is_match(&self, ns_buffer: &[u8], qname: &[u8]) -> bool {
+        if self.prefix_len == 0 {
+            !qname.contains(&b':')
+        } else {
+            qname.get(self.prefix_len).map_or(false, |n| *n == b':')
+                && qname.starts_with(&ns_buffer[self.start..self.start + self.prefix_len])
         }
     }
 }
@@ -1004,15 +1043,10 @@ impl NamespaceBufferIndex {
         element_name: &'b [u8],
         buffer: &'c [u8],
     ) -> Option<&'c [u8]> {
-        let ns = match memchr::memchr(b':', element_name) {
-            None => self.slices.iter().rev().find(|n| n.prefix_len == 0),
-            Some(len) => self
-                .slices
-                .iter()
-                .rev()
-                .find(|n| n.prefix(buffer) == &element_name[..len]),
-        };
-        ns.and_then(|n| n.opt_value(buffer))
+        self.slices
+            .iter()
+            .rfind(|n| n.is_match(buffer, element_name))
+            .and_then(|n| n.opt_value(buffer))
     }
 
     fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
@@ -1092,29 +1126,18 @@ impl NamespaceBufferIndex {
         buffer: &'c [u8],
         use_default: bool,
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        match memchr::memchr(b':', qname) {
-            Some(len) => {
-                let (prefix, value) = qname.split_at(len);
-                let ns = self
-                    .slices
-                    .iter()
-                    .rev()
-                    .find(|n| n.prefix(buffer) == prefix)
-                    .and_then(|ns| ns.opt_value(buffer));
-                (ns, &value[1..])
-            }
-            None => {
-                let ns = if use_default {
-                    self.slices
-                        .iter()
-                        .rev()
-                        .find(|n| n.prefix_len == 0)
-                        .and_then(|ns| ns.opt_value(buffer))
+        self.slices
+            .iter()
+            .rfind(|n| n.is_match(buffer, qname))
+            .map_or((None, qname), |n| {
+                let len = n.prefix_len;
+                if len > 0 {
+                    (n.opt_value(buffer), &qname[len + 1..])
+                } else if use_default {
+                    (n.opt_value(buffer), qname)
                 } else {
-                    None
-                };
-                (ns, qname)
-            }
-        }
+                    (None, qname)
+                }
+            })
     }
 }

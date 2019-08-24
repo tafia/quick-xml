@@ -106,9 +106,26 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    #[cfg(feature = "encoding_rs")]
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped_value()
             .map(|e| reader.decode(&*e).into_owned())
+    }
+
+    /// Returns the unescaped and decoded string value.
+    ///
+    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
+    /// instead use one of:
+    ///
+    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    ///
+    /// [`unescaped_value()`]: #method.unescaped_value
+    /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+        self.unescaped_value()
+            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
     }
 }
 
