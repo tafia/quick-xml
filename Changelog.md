@@ -9,8 +9,9 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## 0.16.0
-- feat: set failure and encoding_rs crates as optional. You should now use respectively 
-`use-failure` and `encoding` features to get the old behavior
+- feat: (breaking change) set failure and encoding_rs crates as optional. 
+You should now use respectively `use-failure` and `encoding` features to get the old behavior
+- perf: improve perf using memchr3 iterator. Reading is 18% better on benches
 
 ## 0.15.0
 - feat: remove Seek bound
