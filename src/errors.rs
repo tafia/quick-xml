@@ -1,62 +1,39 @@
 //! Error management module
 
-#![allow(missing_docs)]
-
 /// The error type used by this crate.
 #[cfg_attr(feature = "failure", derive(Fail))]
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum Error {
-    #[display(fmt = "I/O error: {}", "_0")]
+    /// IO error
     Io(#[cfg_attr(feature = "failure", cause)] ::std::io::Error),
-
-    #[display(fmt = "UTF8 error: {}", "_0")]
+    /// Utf8 error
     Utf8(#[cfg_attr(feature = "failure", cause)] ::std::str::Utf8Error),
-
-    #[display(fmt = "Unexpected EOF during reading {}.", "_0")]
+    /// Unexpected End of File
     UnexpectedEof(String),
-
-    #[display(fmt = "Expecting </{}> found </{}>", expected, found)]
-    EndEventMismatch { expected: String, found: String },
-
-    #[display(fmt = "Unexpected token '{}'", "_0")]
+    /// End event mismatch
+    EndEventMismatch {
+        /// Expected end event
+        expected: String,
+        /// Found end event
+        found: String,
+    },
+    /// Unexpected token
     UnexpectedToken(String),
-
-    #[display(fmt = "Only Comment, CDATA and DOCTYPE nodes can start with a '!'")]
+    /// Unexpected <!>
     UnexpectedBang,
-
-    #[display(fmt = "Cannot read text, expecting Event::Text")]
+    /// Text not found, expected `Event::Text`
     TextNotFound,
-
-    #[display(fmt = "XmlDecl must start with 'version' attribute, found {:?}", "_0")]
+    /// `Event::XmlDecl` must start with *version* attribute
     XmlDeclWithoutVersion(Option<String>),
-
-    #[display(
-        fmt = "error while parsing attribute at position {}: Attribute key cannot contain quote.",
-        "_0"
-    )]
+    /// Attribute Name contains quote
     NameWithQuote(usize),
-
-    #[display(
-        fmt = "error while parsing attribute at position {}: Attribute key must be directly followed by = or space",
-        "_0"
-    )]
+    /// Attribute key not followed by with `=`
     NoEqAfterName(usize),
-
-    #[display(
-        fmt = "error while parsing attribute at position {}: Attribute value must start with a quote.",
-        "_0"
-    )]
+    /// Attribute value not quoted
     UnquotedValue(usize),
-
-    #[display(
-        fmt = "error while parsing attribute at position {}: Duplicate attribute at position {} and {}",
-        "_0",
-        "_1",
-        "_0"
-    )]
+    /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
-
-    #[display(fmt = "{}", "_0")]
+    /// Escape error
     EscapeError(#[cfg_attr(feature = "failure", cause)] ::escape::EscapeError),
 }
 
@@ -80,3 +57,52 @@ impl From<::std::str::Utf8Error> for Error {
 ///
 /// [`Error`]: enum.Error.html
 pub type Result<T> = ::std::result::Result<T, Error>;
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::Utf8(e) => write!(f, "UTF8 error: {}", e),
+            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}.", e),
+            Error::EndEventMismatch { expected, found } => {
+                write!(f, "Expecting </{}> found </{}>", expected, found)
+            }
+            Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
+            Error::UnexpectedBang => write!(
+                f,
+                "Only Comment, CDATA and DOCTYPE nodes can start with a '!'"
+            ),
+            Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
+            Error::XmlDeclWithoutVersion(e) => write!(
+                f,
+                "XmlDecl must start with 'version' attribute, found {:?}",
+                e
+            ),
+            Error::NameWithQuote(e) => write!(
+                f,
+                "error while parsing attribute at position {}: \
+                 Attribute key cannot contain quote.",
+                e
+            ),
+            Error::NoEqAfterName(e) => write!(
+                f,
+                "error while parsing attribute at position {}: \
+                 Attribute key must be directly followed by = or space",
+                e
+            ),
+            Error::UnquotedValue(e) => write!(
+                f,
+                "error while parsing attribute at position {}: \
+                 Attribute value must start with a quote.",
+                e
+            ),
+            Error::DuplicatedAttribute(pos1, pos2) => write!(
+                f,
+                "error while parsing attribute at position {0}: \
+                 Duplicate attribute at position {1} and {0}",
+                pos1, pos2
+            ),
+            Error::EscapeError(e) => write!(f, "{}", e),
+        }
+    }
+}

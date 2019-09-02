@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.16.1
+- refactor: remove derive_more dependency (used only in 2 structs)
+- refactor: move xml-rs bench dependency into another local crate
+
 ## 0.16.0
 - feat: (breaking change) set failure and encoding_rs crates as optional. 
 You should now use respectively `use-failure` and `encoding` features to get the old behavior

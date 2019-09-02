@@ -3,43 +3,54 @@
 use memchr;
 use std::borrow::Cow;
 
-#[allow(missing_docs)]
 #[cfg_attr(feature = "failure", derive(Fail))]
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum EscapeError {
-    #[display(
-        fmt = "Error while escaping character at range {:?}: Null character entity not allowed",
-        "_0"
-    )]
+    /// Entity with Null character
     EntityWithNull(::std::ops::Range<usize>),
-
-    #[display(
-        fmt = "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
-        "_0",
-        "_1"
-    )]
+    /// Unrecognized escape symbol
     UnrecognizedSymbol(
         ::std::ops::Range<usize>,
         ::std::result::Result<String, ::std::string::FromUtf8Error>,
     ),
-
-    #[display(
-        fmt = "Error while escaping character at range {:?}: Cannot find ';' after '&'",
-        "_0"
-    )]
+    /// Cannot find `;` after `&`
     UnterminatedEntity(::std::ops::Range<usize>),
-
-    #[display(fmt = "Cannot convert hexadecimal to utf8")]
+    /// Cannot convert Hexa to utf8
     TooLongHexadecimal,
-
-    #[display(fmt = "'{}' is not a valid hexadecimal character", "_0")]
+    /// Character is not a valid hexadecimal value
     InvalidHexadecimal(char),
-
-    #[display(fmt = "Cannot convert decimal to utf8")]
+    /// Cannot convert decimal to hexa
     TooLongDecimal,
-
-    #[display(fmt = "'{}' is not a valid decimal character", "_0")]
+    /// Character is not a valid decimal value
     InvalidDecimal(char),
+}
+
+impl std::fmt::Display for EscapeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            EscapeError::EntityWithNull(e) => write!(
+                f,
+                "Error while escaping character at range {:?}: Null character entity not allowed",
+                e
+            ),
+            EscapeError::UnrecognizedSymbol(rge, res) => write!(
+                f,
+                "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
+                rge, res
+            ),
+            EscapeError::UnterminatedEntity(e) => write!(
+                f,
+                "Error while escaping character at range {:?}: Cannot find ';' after '&'",
+                e
+            ),
+            EscapeError::TooLongHexadecimal => write!(f, "Cannot convert hexadecimal to utf8"),
+            EscapeError::InvalidHexadecimal(e) => {
+                write!(f, "'{}' is not a valid hexadecimal character", e)
+            }
+            EscapeError::TooLongDecimal => write!(f, "Cannot convert decimal to utf8"),
+            EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
+        }
+    }
 }
 
 // UTF-8 ranges and tags for encoding characters
