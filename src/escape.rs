@@ -118,36 +118,37 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     let mut escapes = Vec::new();
 
-    let mut start = 0;
-    while let Some(i) = memchr::memchr(b'&', &raw[start..]) {
-        start += i + 1;
-        if let Some(j) = memchr::memchr(b';', &raw[start..]) {
-            let end = start + j;
-            // search for character correctness
-            let b_o_c = match &raw[start..end] {
-                b"lt" => ByteOrChar::Byte(b'<'),
-                b"gt" => ByteOrChar::Byte(b'>'),
-                b"amp" => ByteOrChar::Byte(b'&'),
-                b"apos" => ByteOrChar::Byte(b'\''),
-                b"quot" => ByteOrChar::Byte(b'\"'),
-                b"#x0" | b"#0" => return Err(EscapeError::EntityWithNull(start..end)),
-                bytes if bytes.starts_with(b"#x") => {
-                    ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
-                }
-                bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => {
-                    return Err(EscapeError::UnrecognizedSymbol(
-                        start..end,
-                        String::from_utf8(bytes.to_vec()),
-                    ));
-                }
-            };
-            escapes.push((start - 1..end, b_o_c));
-            start = end + 1;
-        } else {
-            return Err(EscapeError::UnterminatedEntity(start..raw.len()));
+    let mut iter = memchr::memchr2_iter(b'&', b';', raw);
+    while let Some(start) = iter.by_ref().find(|p| raw[*p] == b'&') {
+        match iter.next() {
+            Some(end) if raw[end] == b';' => {
+                // search for character correctness
+                let b_o_c = match &raw[start + 1..end] {
+                    b"lt" => ByteOrChar::Byte(b'<'),
+                    b"gt" => ByteOrChar::Byte(b'>'),
+                    b"amp" => ByteOrChar::Byte(b'&'),
+                    b"apos" => ByteOrChar::Byte(b'\''),
+                    b"quot" => ByteOrChar::Byte(b'\"'),
+                    b"#x0" | b"#0" => return Err(EscapeError::EntityWithNull(start..end)),
+                    bytes if bytes.starts_with(b"#x") => {
+                        ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
+                    }
+                    bytes if bytes.starts_with(b"#") => {
+                        ByteOrChar::Char(parse_decimal(&bytes[1..])?)
+                    }
+                    bytes => {
+                        return Err(EscapeError::UnrecognizedSymbol(
+                            start + 1..end,
+                            String::from_utf8(bytes.to_vec()),
+                        ));
+                    }
+                };
+                escapes.push((start..end, b_o_c));
+            }
+            _ => return Err(EscapeError::UnterminatedEntity(start..raw.len())),
         }
     }
+
     if escapes.is_empty() {
         Ok(Cow::Borrowed(raw))
     } else {
