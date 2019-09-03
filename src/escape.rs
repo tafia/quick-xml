@@ -66,8 +66,6 @@ const MAX_THREE_B: u32 = 0x10000;
 /// xml special characters (<, >, &, ', ") with their corresponding
 /// xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
-    let mut escapes: Vec<(usize, &'static [u8])> = Vec::new();
-    let mut bytes = raw.iter();
     fn to_escape(b: u8) -> bool {
         match b {
             b'<' | b'>' | b'\'' | b'&' | b'"' => true,
@@ -75,36 +73,34 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
         }
     }
 
-    let mut loc = 0;
+    let mut escaped = None;
+    let mut bytes = raw.iter();
+    let mut pos = 0;
     while let Some(i) = bytes.position(|&b| to_escape(b)) {
-        loc += i;
-        match raw[loc] {
-            b'<' => escapes.push((loc, b"&lt;")),
-            b'>' => escapes.push((loc, b"&gt;")),
-            b'\'' => escapes.push((loc, b"&apos;")),
-            b'&' => escapes.push((loc, b"&amp;")),
-            b'"' => escapes.push((loc, b"&quot;")),
+        if escaped.is_none() {
+            escaped = Some(Vec::with_capacity(raw.len()));
+        }
+        let escaped = escaped.as_mut().expect("initialized");
+        let new_pos = pos + i;
+        escaped.extend_from_slice(&raw[pos..new_pos]);
+        match raw[new_pos] {
+            b'<' => escaped.extend_from_slice(b"&lt;"),
+            b'>' => escaped.extend_from_slice(b"&gt;"),
+            b'\'' => escaped.extend_from_slice(b"&apos;"),
+            b'&' => escaped.extend_from_slice(b"&amp;"),
+            b'"' => escaped.extend_from_slice(b"&quot;"),
             _ => unreachable!("Only '<', '>','\', '&' and '\"' are escaped"),
         }
-        loc += 1;
+        pos = new_pos + 1;
     }
 
-    if escapes.is_empty() {
-        Cow::Borrowed(raw)
+    if let Some(mut escaped) = escaped {
+        if let Some(raw) = raw.get(pos..) {
+            escaped.extend_from_slice(raw);
+        }
+        Cow::Owned(escaped)
     } else {
-        let len = raw.len();
-        let mut v = Vec::with_capacity(len);
-        let mut start = 0;
-        for (i, r) in escapes {
-            v.extend_from_slice(&raw[start..i]);
-            v.extend_from_slice(r);
-            start = i + 1;
-        }
-
-        if start < len {
-            v.extend_from_slice(&raw[start..]);
-        }
-        Cow::Owned(v)
+        Cow::Borrowed(raw)
     }
 }
 

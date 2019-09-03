@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.16.2
+- perf: speed up (un)escape a little
+
 ## 0.16.1
 - refactor: remove derive_more dependency (used only in 2 structs)
 - refactor: move xml-rs bench dependency into another local crate
