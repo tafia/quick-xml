@@ -62,11 +62,6 @@ const MAX_ONE_B: u32 = 0x80;
 const MAX_TWO_B: u32 = 0x800;
 const MAX_THREE_B: u32 = 0x10000;
 
-enum ByteOrChar {
-    Byte(u8),
-    Char(u32),
-}
-
 /// helper function to escape a `&[u8]` and replace all
 /// xml special characters (<, >, &, ', ") with their corresponding
 /// xml escaped value.
@@ -116,56 +111,56 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 /// helper function to unescape a `&[u8]` and replace all
 /// xml escaped characters ('&...;') into their corresponding value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
-    let mut escapes = Vec::new();
+    let mut unescaped = None;
+    let mut last_end = 0;
+    let mut iter = memchr::memchr2_iter(b'&', b';', raw);
+    while let Some(start) = iter.by_ref().find(|p| raw[*p] == b'&') {
+        match iter.next() {
+            Some(end) if raw[end] == b';' => {
+                // append valid data
+                if unescaped.is_none() {
+                    unescaped = Some(Vec::with_capacity(raw.len()));
+                }
+                let unescaped = unescaped.as_mut().expect("initialized");
+                unescaped.extend_from_slice(&raw[last_end..start]);
 
-    let mut start = 0;
-    while let Some(i) = memchr::memchr(b'&', &raw[start..]) {
-        start += i + 1;
-        if let Some(j) = memchr::memchr(b';', &raw[start..]) {
-            let end = start + j;
-            // search for character correctness
-            let b_o_c = match &raw[start..end] {
-                b"lt" => ByteOrChar::Byte(b'<'),
-                b"gt" => ByteOrChar::Byte(b'>'),
-                b"amp" => ByteOrChar::Byte(b'&'),
-                b"apos" => ByteOrChar::Byte(b'\''),
-                b"quot" => ByteOrChar::Byte(b'\"'),
-                b"#x0" | b"#0" => return Err(EscapeError::EntityWithNull(start..end)),
-                bytes if bytes.starts_with(b"#x") => {
-                    ByteOrChar::Char(parse_hexadecimal(&bytes[2..])?)
+                // search for character correctness
+                match &raw[start + 1..end] {
+                    b"lt" => unescaped.push(b'<'),
+                    b"gt" => unescaped.push(b'>'),
+                    b"amp" => unescaped.push(b'&'),
+                    b"apos" => unescaped.push(b'\''),
+                    b"quot" => unescaped.push(b'\"'),
+                    bytes => {
+                        let code = if bytes.starts_with(b"#x") {
+                            parse_hexadecimal(&bytes[2..])
+                        } else if bytes.starts_with(b"#") {
+                            parse_decimal(&bytes[1..])
+                        } else {
+                            Err(EscapeError::UnrecognizedSymbol(
+                                start + 1..end,
+                                String::from_utf8(bytes.to_vec()),
+                            ))
+                        }?;
+                        if code == 0 {
+                            return Err(EscapeError::EntityWithNull(start..end));
+                        }
+                        push_utf8(unescaped, code);
+                    }
                 }
-                bytes if bytes.starts_with(b"#") => ByteOrChar::Char(parse_decimal(&bytes[1..])?),
-                bytes => {
-                    return Err(EscapeError::UnrecognizedSymbol(
-                        start..end,
-                        String::from_utf8(bytes.to_vec()),
-                    ));
-                }
-            };
-            escapes.push((start - 1..end, b_o_c));
-            start = end + 1;
-        } else {
-            return Err(EscapeError::UnterminatedEntity(start..raw.len()));
+                last_end = end + 1;
+            }
+            _ => return Err(EscapeError::UnterminatedEntity(start..raw.len())),
         }
     }
-    if escapes.is_empty() {
-        Ok(Cow::Borrowed(raw))
+
+    if let Some(mut unescaped) = unescaped {
+        if let Some(raw) = raw.get(last_end..) {
+            unescaped.extend_from_slice(raw);
+        }
+        Ok(Cow::Owned(unescaped))
     } else {
-        let len = raw.len();
-        let mut v = Vec::with_capacity(len);
-        let mut start = 0;
-        for (r, b) in escapes {
-            v.extend_from_slice(&raw[start..r.start]);
-            match b {
-                ByteOrChar::Byte(b) => v.push(b),
-                ByteOrChar::Char(c) => push_utf8(&mut v, c),
-            }
-            start = r.end + 1;
-        }
-        if start < raw.len() {
-            v.extend_from_slice(&raw[start..]);
-        }
-        Ok(Cow::Owned(v))
+        Ok(Cow::Borrowed(raw))
     }
 }
 
