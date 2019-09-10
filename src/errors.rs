@@ -1,13 +1,12 @@
 //! Error management module
 
 /// The error type used by this crate.
-#[cfg_attr(feature = "failure", derive(Fail))]
 #[derive(Debug)]
 pub enum Error {
     /// IO error
-    Io(#[cfg_attr(feature = "failure", cause)] ::std::io::Error),
+    Io(::std::io::Error),
     /// Utf8 error
-    Utf8(#[cfg_attr(feature = "failure", cause)] ::std::str::Utf8Error),
+    Utf8(::std::str::Utf8Error),
     /// Unexpected End of File
     UnexpectedEof(String),
     /// End event mismatch
@@ -34,7 +33,7 @@ pub enum Error {
     /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
     /// Escape error
-    EscapeError(#[cfg_attr(feature = "failure", cause)] ::escape::EscapeError),
+    EscapeError(::escape::EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
@@ -103,6 +102,17 @@ impl std::fmt::Display for Error {
                 pos1, pos2
             ),
             Error::EscapeError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Io(e) => Some(e),
+            Error::Utf8(e) => Some(e),
+            Error::EscapeError(e) => Some(e),
+            _ => None,
         }
     }
 }

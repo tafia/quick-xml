@@ -3,7 +3,6 @@
 use memchr;
 use std::borrow::Cow;
 
-#[cfg_attr(feature = "failure", derive(Fail))]
 #[derive(Debug)]
 pub enum EscapeError {
     /// Entity with Null character
@@ -52,6 +51,8 @@ impl std::fmt::Display for EscapeError {
         }
     }
 }
+
+impl std::error::Error for EscapeError {}
 
 // UTF-8 ranges and tags for encoding characters
 const TAG_CONT: u8 = 0b1000_0000;
