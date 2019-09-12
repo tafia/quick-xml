@@ -37,6 +37,10 @@ pub struct BytesStart<'a> {
 
 impl<'a> BytesStart<'a> {
     /// Creates a new `BytesStart` from the given content (name + attributes).
+    ///
+    /// # Warning
+    ///
+    /// `&content[..name_len]` is not checked to be a valid name
     #[inline]
     pub fn borrowed(content: &'a [u8], name_len: usize) -> BytesStart<'a> {
         BytesStart {
@@ -46,12 +50,13 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Creates a new `BytesStart` from the given name.
+    ///
+    /// # Warning
+    ///
+    /// `&content` is not checked to be a valid name
     #[inline]
     pub fn borrowed_name(name: &'a [u8]) -> BytesStart<'a> {
-        BytesStart {
-            name_len: name.len(),
-            buf: Cow::Borrowed(name),
-        }
+        Self::borrowed(name, name.len())
     }
 
     /// Creates a new `BytesStart` from the given content (name + attributes)
@@ -79,10 +84,7 @@ impl<'a> BytesStart<'a> {
 
     /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesStart<'static> {
-        BytesStart {
-            buf: Cow::Owned(self.buf.into_owned()),
-            name_len: self.name_len,
-        }
+        Self::owned(self.buf.into_owned(), self.name_len)
     }
 
     /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
@@ -100,6 +102,7 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Gets the undecoded raw tag name as a `&[u8]`.
+    #[inline]
     pub fn name(&self) -> &[u8] {
         &self.buf[..self.name_len]
     }
@@ -117,6 +120,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
     /// "`<`".
+    #[inline]
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         unescape(&*self.buf).map_err(Error::EscapeError)
     }
@@ -158,6 +162,7 @@ impl<'a> BytesStart<'a> {
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
     #[cfg(feature = "encoding_rs")]
+    #[inline]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped().map(|e| reader.decode(&*e).into_owned())
     }
@@ -173,6 +178,7 @@ impl<'a> BytesStart<'a> {
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
     #[cfg(not(feature = "encoding_rs"))]
+    #[inline]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped()
             .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
@@ -190,11 +196,13 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Edit the name of the BytesStart in-place
+    ///
+    /// # Warning
+    ///
+    /// `name` is not checked to be a valid name
     pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
-        {
-            let bytes = self.buf.to_mut();
-            bytes.splice(..self.name_len, name.iter().cloned());
-        }
+        let bytes = self.buf.to_mut();
+        bytes.splice(..self.name_len, name.iter().cloned());
         self.name_len = name.len();
         self
     }
