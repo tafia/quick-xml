@@ -17,11 +17,16 @@ travis-ci = { repository = "tafia/quick-xml" }
 
 [dependencies]
 encoding_rs = { version = "0.8.17", optional = true }
+serde = { version = "1.0.99", optional = true }
 memchr = "2.2.1"
+
+[dev-dependencies]
+serde = { version = "1.0.99", features = ["derive"] }
 
 [lib]
 bench = false
 
 [features]
-default = []
+default = ["serialize"]
 encoding = ["encoding_rs"]
+serialize = ["serde"]

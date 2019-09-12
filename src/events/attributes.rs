@@ -63,6 +63,16 @@ impl<'a> Attributes<'a> {
         self.with_checks = val;
         self
     }
+
+    pub(crate) unsafe fn into_extended_lifetime<'b>(self) -> Attributes<'b> {
+        Attributes {
+            bytes: std::slice::from_raw_parts(self.bytes.as_ptr(), self.bytes.len()),
+            position: self.position,
+            with_checks: self.with_checks,
+            html: self.html,
+            consumed: self.consumed,
+        }
+    }
 }
 
 /// A struct representing a key/value XML attribute.

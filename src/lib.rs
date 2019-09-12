@@ -114,7 +114,11 @@
 #[cfg(feature = "encoding_rs")]
 extern crate encoding_rs;
 extern crate memchr;
+#[cfg(feature = "serialize")]
+extern crate serde;
 
+#[cfg(feature = "serialize")]
+pub mod de;
 mod errors;
 mod escape;
 pub mod events;

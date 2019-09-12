@@ -714,6 +714,18 @@ impl<B: BufRead> Reader<B> {
         from_utf8(bytes).map_err(Error::Utf8)
     }
 
+    #[cfg(feature = "encoding_rs")]
+    pub(crate) fn decoder(&self) -> Decoder {
+        Decoder {
+            encoding: self.encoding,
+        }
+    }
+
+    #[cfg(not(feature = "encoding_rs"))]
+    pub(crate) fn decoder(&self) -> Decoder {
+        Decoder
+    }
+
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -1139,5 +1151,27 @@ impl NamespaceBufferIndex {
                     (None, qname)
                 }
             })
+    }
+}
+
+#[cfg(not(feature = "encoding"))]
+#[derive(Clone, Copy)]
+pub(crate) struct Decoder;
+
+#[cfg(feature = "encoding")]
+#[derive(Clone, Copy)]
+pub(crate) struct Decoder {
+    encoding: &'static Encoding,
+}
+
+impl Decoder {
+    #[cfg(not(feature = "encoding"))]
+    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+        from_utf8(bytes).map_err(Error::Utf8)
+    }
+
+    #[cfg(feature = "encoding")]
+    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+        self.encoding.decode(bytes).0
     }
 }
