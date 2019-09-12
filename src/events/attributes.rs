@@ -73,7 +73,7 @@ impl<'a> Attributes<'a> {
 ///
 /// [`unescaped_value`]: #method.unescaped_value
 /// [`unescape_and_decode_value`]: #method.unescape_and_decode_value
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
     ///
@@ -126,6 +126,18 @@ impl<'a> Attribute<'a> {
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.unescaped_value()
             .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
+    }
+}
+
+impl<'a> std::fmt::Debug for Attribute<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use crate::utils::write_byte_string;
+
+        write!(f, "Attribute {{ key: ")?;
+        write_byte_string(f, self.key)?;
+        write!(f, ", value: ")?;
+        write_byte_string(f, &self.value)?;
+        write!(f, " }}")
     }
 }
 
