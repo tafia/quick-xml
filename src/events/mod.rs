@@ -27,7 +27,7 @@ use memchr;
 /// [`local_name`]: #method.local_name
 /// [`unescaped`]: #method.unescaped
 /// [`attributes`]: #method.attributes
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
@@ -214,6 +214,16 @@ impl<'a> BytesStart<'a> {
     }
 }
 
+impl<'a> std::fmt::Debug for BytesStart<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use crate::utils::write_byte_string;
+
+        write!(f, "BytesStart {{ buf: ")?;
+        write_byte_string(f, &self.buf)?;
+        write!(f, ", name_len: {} }}", self.name_len)
+    }
+}
+
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
@@ -339,7 +349,7 @@ impl<'a> BytesDecl<'a> {
 }
 
 /// A struct to manage `Event::End` events
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>,
 }
@@ -387,8 +397,18 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
+impl<'a> std::fmt::Debug for BytesEnd<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use crate::utils::write_byte_string;
+
+        write!(f, "BytesEnd {{ name: ")?;
+        write_byte_string(f, &self.name)?;
+        write!(f, " }}")
+    }
+}
+
 /// Data from various events (most notably, `Event::Text`).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BytesText<'a> {
     // Invariant: The content is always escaped.
     content: Cow<'a, [u8]>,
@@ -471,6 +491,16 @@ impl<'a> BytesText<'a> {
     /// Gets escaped content.
     pub fn escaped(&self) -> &[u8] {
         self.content.as_ref()
+    }
+}
+
+impl<'a> std::fmt::Debug for BytesText<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        use crate::utils::write_byte_string;
+
+        write!(f, "BytesText {{ content: ")?;
+        write_byte_string(f, &self.content)?;
+        write!(f, " }}")
     }
 }
 

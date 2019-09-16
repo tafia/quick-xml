@@ -119,6 +119,7 @@ mod errors;
 mod escape;
 pub mod events;
 mod reader;
+mod utils;
 mod writer;
 
 // reexports
