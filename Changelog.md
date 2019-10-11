@@ -8,8 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## 0.16.2
+## 0.17.0
 - perf: speed up (un)escape a little
+- feat: remove failure completely (breaking change) and implement `std::error::Error` for `Error`
+- feat: improve `Debug`s for `Attribute`, `BytesStart`, `BytesEnd`, `BytesText`
 
 ## 0.16.1
 - refactor: remove derive_more dependency (used only in 2 structs)

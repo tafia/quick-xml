@@ -410,7 +410,7 @@ impl<'a> Iterator for SpecIter<'a> {
             .iter()
             .position(|b| match *b {
                 b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' => false,
-                b'0'...b'9' => false,
+                b'0'..=b'9' => false,
                 _ => true,
             })
             .unwrap_or(0);

@@ -107,9 +107,7 @@ assert_eq!(result, expected.as_bytes());
 
 # Features
 
-quick-xml supports 2 additional features, non activated by default:
 - `encoding`: support non utf8 xmls
-- `use-failure`: support for failure chainable error
 
 ## Performance
 
