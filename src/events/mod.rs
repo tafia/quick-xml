@@ -30,9 +30,9 @@ use memchr;
 #[derive(Clone)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
-    pub(crate) buf: Cow<'a, [u8]>,
+    buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
-    pub(crate) name_len: usize,
+    name_len: usize,
 }
 
 impl<'a> BytesStart<'a> {
@@ -128,16 +128,6 @@ impl<'a> BytesStart<'a> {
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
         Attributes::new(self, self.name_len)
-    }
-
-    /// Returns an iterator over the attributes of this tag with a lifetime extended to `'a`.
-    ///
-    /// Works only when self is borrowed
-    pub fn borrowed_attributes(&self) -> Option<Attributes<'a>> {
-        match self.buf {
-            Cow::Borrowed(b) => Some(Attributes::new(b, self.name_len)),
-            Cow::Owned(_) => None,
-        }
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).

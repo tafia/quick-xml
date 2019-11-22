@@ -20,7 +20,7 @@ pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
     /// current position of the iterator
-    position: usize,
+    pub(crate) position: usize,
     /// if true, checks for duplicate names
     with_checks: bool,
     /// allows attribute without quote or `=`
@@ -62,16 +62,6 @@ impl<'a> Attributes<'a> {
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.with_checks = val;
         self
-    }
-
-    pub(crate) unsafe fn into_extended_lifetime<'b>(self) -> Attributes<'b> {
-        Attributes {
-            bytes: std::slice::from_raw_parts(self.bytes.as_ptr(), self.bytes.len()),
-            position: self.position,
-            with_checks: self.with_checks,
-            html: self.html,
-            consumed: self.consumed,
-        }
     }
 }
 

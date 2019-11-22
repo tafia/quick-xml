@@ -1,13 +1,13 @@
 //! A module to handle `Reader`
 
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::from_utf8;
 
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 
 use errors::{Error, Result};
@@ -683,7 +683,7 @@ impl<B: BufRead> Reader<B> {
     /// This encoding will be used by [`decode`].
     ///
     /// [`decode`]: #method.decode
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
@@ -695,7 +695,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// If no encoding is specified, defaults to UTF-8.
     #[inline]
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
@@ -709,19 +709,19 @@ impl<B: BufRead> Reader<B> {
     ///
     /// If you instead want to use XML declared encoding, use the `encoding_rs` feature
     #[inline]
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
         from_utf8(bytes).map_err(Error::Utf8)
     }
 
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub(crate) fn decoder(&self) -> Decoder {
         Decoder {
             encoding: self.encoding,
         }
     }
 
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     pub(crate) fn decoder(&self) -> Decoder {
         Decoder
     }

@@ -425,7 +425,7 @@ fn test_buf_position() {
 #[test]
 fn test_namespace() {
     let mut r = Reader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>");
-    r.trim_text(true);;
+    r.trim_text(true);
 
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
@@ -448,7 +448,7 @@ fn test_namespace() {
 #[test]
 fn test_default_namespace() {
     let mut r = Reader::from_str("<a ><b xmlns=\"www1\"></b></a>");
-    r.trim_text(true);;
+    r.trim_text(true);
 
     // <a>
     let mut buf = Vec::new();
@@ -491,7 +491,7 @@ fn test_default_namespace() {
 #[test]
 fn test_default_namespace_reset() {
     let mut r = Reader::from_str("<a xmlns=\"www1\"><b xmlns=\"\"></b></a>");
-    r.trim_text(true);;
+    r.trim_text(true);
 
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
