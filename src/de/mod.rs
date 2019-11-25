@@ -4,6 +4,7 @@ mod errors;
 mod escape;
 mod map;
 mod seq;
+mod var;
 
 pub use self::errors::DeError;
 use crate::{
@@ -13,6 +14,8 @@ use crate::{
 use serde::de::{self, DeserializeOwned};
 use serde::forward_to_deserialize_any;
 use std::io::BufRead;
+
+const INNER_VALUE: &str = "$value";
 
 /// An xml deserializer
 pub struct Deserializer<R: BufRead> {
@@ -164,12 +167,13 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
-            let map = map::MapAccess::new(self, e, self.reader.decoder())?;
+            let inner_value = fields.contains(&INNER_VALUE);
+            let map = map::MapAccess::new(self, e, self.reader.decoder(), inner_value)?;
             let value = visitor.visit_map(map)?;
             self.read_to_end(&name)?;
             Ok(value)
@@ -262,8 +266,7 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        //    self.read_inner_value::<V, V::Value, _>(|this| visitor.visit_enum(EnumAccess::new(this)))
-        unimplemented!()
+        visitor.visit_enum(var::EnumAccess::new(self))
     }
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -271,13 +274,7 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        unimplemented!()
-        //    self.unset_map_value();
-        //    expect!(self.next()?, XmlEvent::StartElement { name, attributes, .. } => {
-        //        let map_value = visitor.visit_map(MapAccess::new(self, attributes, false))?;
-        //        self.expect_end_element(name)?;
-        //        Ok(map_value)
-        //    })
+        self.deserialize_struct("", &[], visitor)
     }
 
     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -410,6 +407,46 @@ mod tests {
                         name: "hello2".to_string(),
                         source: "world2.rs".to_string(),
                     },
+                ],
+            }
+        );
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    enum MyEnum {
+        A(String),
+        B { name: String, flag: bool },
+        C,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct MyEnums {
+        #[serde(rename = "$value")]
+        items: Vec<MyEnum>,
+    }
+
+    #[test]
+    fn collection_of_enums() {
+        let s = r##"
+	    <enums>
+		<A>test</A>
+		<B name="hello" flag="t" />
+		<C />
+	    </enums>
+	"##;
+
+        let project: MyEnums = from_str(s).unwrap();
+
+        assert_eq!(
+            project,
+            MyEnums {
+                items: vec![
+                    MyEnum::A("test".to_string()),
+                    MyEnum::B {
+                        name: "hello".to_string(),
+                        flag: true,
+                    },
+                    MyEnum::C,
                 ],
             }
         );

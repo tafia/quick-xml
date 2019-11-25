@@ -1,17 +1,18 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{errors::DeError, escape::EscapedDeserializer, Deserializer},
+    de::{errors::DeError, escape::EscapedDeserializer, Deserializer, INNER_VALUE},
     events::{attributes::Attribute, BytesStart, Event},
     reader::Decoder,
 };
-use serde::de::{self, DeserializeSeed};
+use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use std::io::BufRead;
 
 enum MapValue {
     Empty,
     Attribute { value: Vec<u8> },
     Nested,
+    InnerValue,
 }
 
 /// A deserializer for `Attributes`
@@ -21,6 +22,7 @@ pub(crate) struct MapAccess<'a, R: BufRead> {
     decoder: Decoder,
     position: usize,
     value: MapValue,
+    inner_value: bool,
 }
 
 impl<'a, R: BufRead> MapAccess<'a, R> {
@@ -29,6 +31,7 @@ impl<'a, R: BufRead> MapAccess<'a, R> {
         de: &'a mut Deserializer<R>,
         start: BytesStart<'static>,
         decoder: Decoder,
+        inner_value: bool,
     ) -> Result<Self, DeError> {
         let position = start.attributes().position;
         Ok(MapAccess {
@@ -37,6 +40,7 @@ impl<'a, R: BufRead> MapAccess<'a, R> {
             decoder,
             position,
             value: MapValue::Empty,
+            inner_value,
         })
     }
 
@@ -62,25 +66,22 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
         if let Some((key, value)) = attr_key_val {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
-            seed.deserialize(EscapedDeserializer {
-                decoder: self.decoder,
-                escaped_value: key,
-                escaped: false,
-            })
-            .map(Some)
+            seed.deserialize(EscapedDeserializer::new(key, self.decoder, false))
+                .map(Some)
         } else {
             // try getting from events (<key>value</key>)
-            if let Some(Event::Start(e)) = self.de.peek()? {
-                let name = e.name().to_owned();
-                self.value = MapValue::Nested;
-                seed.deserialize(EscapedDeserializer {
-                    decoder: self.decoder,
-                    escaped_value: name,
-                    escaped: false,
-                })
-                .map(Some)
-            } else {
-                Ok(None)
+            match self.de.peek()? {
+                Some(Event::Text(_)) | Some(Event::Start(_)) if self.inner_value => {
+                    self.value = MapValue::InnerValue;
+                    seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
+                }
+                Some(Event::Start(e)) => {
+                    let name = e.name().to_owned();
+                    self.value = MapValue::Nested;
+                    seed.deserialize(EscapedDeserializer::new(name, self.decoder, false))
+                        .map(Some)
+                }
+                _ => Ok(None),
             }
         }
     }
@@ -90,12 +91,10 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.value, MapValue::Empty) {
-            MapValue::Attribute { value } => seed.deserialize(EscapedDeserializer {
-                decoder: self.decoder,
-                escaped_value: value,
-                escaped: true,
-            }),
-            MapValue::Nested => seed.deserialize(&mut *self.de),
+            MapValue::Attribute { value } => {
+                seed.deserialize(EscapedDeserializer::new(value, self.decoder, true))
+            }
+            MapValue::Nested | MapValue::InnerValue => seed.deserialize(&mut *self.de),
             MapValue::Empty => Err(DeError::EndOfAttributes),
         }
     }

@@ -13,12 +13,19 @@ use std::borrow::Cow;
 /// when converting to float, we don't expect any escapable character
 /// anyway
 pub(crate) struct EscapedDeserializer {
-    pub decoder: Decoder,
-    pub escaped_value: Vec<u8>,
-    pub escaped: bool,
+    decoder: Decoder,
+    escaped_value: Vec<u8>,
+    escaped: bool,
 }
 
 impl EscapedDeserializer {
+    pub fn new(escaped_value: Vec<u8>, decoder: Decoder, escaped: bool) -> Self {
+        EscapedDeserializer {
+            decoder,
+            escaped_value,
+            escaped,
+        }
+    }
     fn unescaped(&self) -> Result<Cow<[u8]>, DeError> {
         if self.escaped {
             unescape(&self.escaped_value).map_err(|e| DeError::Xml(Error::EscapeError(e)))
@@ -85,7 +92,9 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
         V: Visitor<'de>,
     {
         match &*self.decoder.decode(&self.escaped_value)? {
-            "TRUE" | "true" | "True" | "1" => visitor.visit_bool(true),
+            "TRUE" | "true" | "True" | "t" | "1" | "yes" | "Yes" | "YES" | "y" => {
+                visitor.visit_bool(true)
+            }
             _ => visitor.visit_bool(false),
         }
     }
