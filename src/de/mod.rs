@@ -21,8 +21,7 @@ const INNER_VALUE: &str = "$value";
 pub struct Deserializer<R: BufRead> {
     reader: Reader<R>,
     peek: Option<Event<'static>>,
-    peek_text: Option<BytesText<'static>>,
-    depth: usize,
+    has_value_field: bool,
 }
 
 /// Deserialize a xml string
@@ -42,8 +41,7 @@ impl<R: BufRead> Deserializer<R> {
         Deserializer {
             reader,
             peek: None,
-            peek_text: None,
-            depth: 0,
+            has_value_field: false,
         }
     }
 
@@ -60,92 +58,68 @@ impl<R: BufRead> Deserializer<R> {
     fn peek(&mut self) -> Result<Option<&Event<'static>>, DeError> {
         if self.peek.is_none() {
             let mut buf = Vec::new();
-            self.peek = Some(self.reader.read_event(&mut buf)?.into_owned());
+            self.peek = Some(self.next(&mut buf)?);
         }
         Ok(self.peek.as_ref())
     }
 
-    fn next<'a>(&mut self, buf: &'a mut Vec<u8>) -> Result<Event<'a>, DeError> {
+    fn next<'a>(&mut self, buf: &'a mut Vec<u8>) -> Result<Event<'static>, DeError> {
         if let Some(e) = self.peek.take() {
             return Ok(e);
         }
-        Ok(self.reader.read_event(buf)?)
-    }
-
-    fn next_text(&mut self) -> Result<BytesText<'static>, DeError> {
-        if let Some(t) = self.peek_text.take() {
-            return Ok(t);
-        }
-        let mut buf = Vec::new();
-        let depth = self.depth;
         loop {
-            let e = self.next(&mut buf)?;
+            let e = self.reader.read_event(buf)?;
             match e {
-                Event::Start(e) => {
-                    if self.depth == depth + 1 {
-                        self.reader.read_to_end(e.name(), &mut Vec::new())?;
-                    }
-                    self.depth += 1;
+                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof => {
+                    return Ok(e.into_owned())
                 }
-                Event::End(_) => {
-                    if self.depth == depth + 1 {
-                        self.depth -= 1;
-                        return Ok(BytesText::from_escaped(&[] as &'static [u8]));
-                    }
-                    return Err(DeError::End);
-                }
-                Event::Text(e) => {
-                    self.read_to_depth(depth)?;
-                    return Ok(e.into_owned());
-                }
-                Event::Eof => return Err(DeError::Eof),
                 _ => buf.clear(),
             }
         }
     }
 
-    fn next_start(&mut self) -> Result<Option<BytesStart<'static>>, DeError> {
-        let mut buf = Vec::new();
-        if let Event::Start(e) = self.next(&mut buf)? {
-            Ok(Some(e.into_owned()))
-        } else {
-            Ok(None)
+    fn next_start(&mut self, buf: &mut Vec<u8>) -> Result<Option<BytesStart<'static>>, DeError> {
+        loop {
+            let e = self.next(buf)?;
+            match e {
+                Event::Start(e) => return Ok(Some(e)),
+                Event::End(_) => return Err(DeError::End),
+                Event::Eof => return Ok(None),
+                _ => buf.clear(), // ignore texts
+            }
         }
     }
 
-    fn read_to_depth(&mut self, depth: usize) -> Result<(), DeError> {
-        if self.depth > depth {
-            let mut buf = Vec::new();
-            while self.depth != depth {
-                match self.next(&mut buf)? {
-                    Event::Start(_) => self.depth += 1,
-                    Event::End(_) => self.depth -= 1,
+    fn next_text<'a>(&mut self) -> Result<BytesText<'static>, DeError> {
+        match self.next(&mut Vec::new())? {
+            Event::Text(e) => Ok(e),
+            Event::Eof => Err(DeError::Eof),
+            Event::Start(e) => {
+                // allow one nested level
+                let mut buf = Vec::new();
+                let t = match self.next(&mut buf)? {
+                    Event::Text(t) => t,
+                    Event::Start(_) => return Err(DeError::Start),
+                    Event::End(_) => return Err(DeError::End),
                     Event::Eof => return Err(DeError::Eof),
-                    _ => buf.clear(),
-                }
+                    _ => unreachable!(),
+                };
+                self.read_to_end(e.name())?;
+                Ok(t)
             }
+            Event::End(_) => Err(DeError::End),
+            _ => unreachable!(),
         }
-        Ok(())
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
-        // don't use self.reader.read_to_end because there may be some peeked item
         let mut buf = Vec::new();
-        let mut depth = 1;
-        loop {
-            match self.next(&mut buf)? {
-                Event::End(e) => {
-                    depth -= 1;
-                    if depth == 0 && e.name() == name {
-                        break;
-                    }
-                }
-                Event::Start(_) => depth += 1,
-                Event::Eof => return Err(DeError::Eof),
-                _ => (),
-            }
+        match self.next(&mut buf)? {
+            Event::Start(e) => self.reader.read_to_end(e.name(), &mut Vec::new())?,
+            Event::End(e) if e.name() == name => return Ok(()),
+            _ => buf.clear(),
         }
-        Ok(())
+        Ok(self.reader.read_to_end(name, &mut buf)?)
     }
 }
 
@@ -176,11 +150,13 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        if let Some(e) = self.next_start()? {
+        let mut buf = Vec::new();
+        if let Some(e) = self.next_start(&mut buf)? {
             let name = e.name().to_vec();
-            let inner_value = fields.contains(&INNER_VALUE);
-            let map = map::MapAccess::new(self, e, self.reader.decoder(), inner_value)?;
+            self.has_value_field = fields.contains(&INNER_VALUE);
+            let map = map::MapAccess::new(self, e)?;
             let value = visitor.visit_map(map)?;
+            self.has_value_field = false;
             self.read_to_end(&name)?;
             Ok(value)
         } else {
@@ -277,7 +253,7 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         len: usize,
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, Some(len)))
+        visitor.visit_seq(seq::SeqAccess::new(self, Some(len))?)
     }
 
     fn deserialize_tuple_struct<V: de::Visitor<'de>>(
@@ -295,11 +271,12 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        visitor.visit_enum(var::EnumAccess::new(self))
+        let value = visitor.visit_enum(var::EnumAccess::new(self))?;
+        Ok(value)
     }
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, None))
+        visitor.visit_seq(seq::SeqAccess::new(self, None)?)
     }
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -307,20 +284,19 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        let value = self.next_text()?;
-        if value.is_empty() {
-            visitor.visit_none()
-        } else {
-            self.peek_text = Some(value);
-            visitor.visit_some(self)
+        match self.peek()? {
+            Some(Event::Text(t)) if t.is_empty() => visitor.visit_none(),
+            None | Some(Event::Eof) => visitor.visit_none(),
+            _ => visitor.visit_some(self),
         }
     }
 
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        let depth = self.depth;
-        let mut buf = Vec::new();
-        let _ = self.next(&mut buf)?;
-        self.read_to_depth(depth)?;
+        match self.next(&mut Vec::new())? {
+            Event::Start(e) => self.read_to_end(e.name())?,
+            Event::End(_) => return Err(DeError::End),
+            _ => (),
+        }
         visitor.visit_unit()
     }
 
@@ -389,9 +365,9 @@ mod tests {
     fn simple_struct_from_attribute_and_child() {
         let s = r##"
 	    <item name="hello">
-		<source>world.rs</source>
-	    </item>
-	"##;
+            <source>world.rs</source>
+            </item>
+        "##;
 
         let item: Item = from_str(s).unwrap();
 

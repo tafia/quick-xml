@@ -30,18 +30,12 @@ impl<'de, 'a, R: 'a + BufRead> de::EnumAccess<'de> for EnumAccess<'a, R> {
             None => return Err(DeError::Eof),
         };
         let name = seed.deserialize(de)?;
-        Ok((name, VariantAccess::new(self.de)))
+        Ok((name, VariantAccess { de: self.de }))
     }
 }
 
 pub struct VariantAccess<'a, R: BufRead> {
     de: &'a mut Deserializer<R>,
-}
-
-impl<'a, R: BufRead> VariantAccess<'a, R> {
-    pub fn new(de: &'a mut Deserializer<R>) -> Self {
-        VariantAccess { de }
-    }
 }
 
 impl<'de, 'a, R: BufRead> de::VariantAccess<'de> for VariantAccess<'a, R> {
@@ -72,9 +66,9 @@ impl<'de, 'a, R: BufRead> de::VariantAccess<'de> for VariantAccess<'a, R> {
 
     fn struct_variant<V: de::Visitor<'de>>(
         self,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        self.de.deserialize_map(visitor)
+        self.de.deserialize_struct("", fields, visitor)
     }
 }
