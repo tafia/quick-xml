@@ -34,7 +34,7 @@ impl<'de, 'a, R: 'a + BufRead> de::SeqAccess<'de> for SeqAccess<'a, R> {
             *s -= 1;
         }
         match self.de.peek()? {
-            None | Some(Event::End(_)) | Some(Event::Eof) => return Ok(None),
+            None | Some(Event::Eof) | Some(Event::End(_)) => Ok(None),
             _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }

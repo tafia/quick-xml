@@ -151,7 +151,7 @@ macro_rules! deserialize_type {
         fn $deserialize<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
             let txt = self.next_text()?;
             let value = self.reader.decode(&*txt)?.parse()?;
-            return visitor.$visit(value);
+            visitor.$visit(value)
         }
     }
 }
@@ -159,12 +159,7 @@ macro_rules! deserialize_type {
 impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = DeError;
 
-    forward_to_deserialize_any! {
-        newtype_struct identifier
-    }
-
-    //struct bool unit unit_struct tuple_struct tuple enum
-    //struct bool unit unit_struct tuple_struct tuple enum deserialize_string deserialize_option deserialize_seq deserialize_map deserialize_ignored_any
+    forward_to_deserialize_any! { newtype_struct identifier }
 
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
@@ -173,8 +168,10 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         visitor: V,
     ) -> Result<V::Value, DeError> {
         if let Some(e) = self.next_start()? {
+            let name = e.name().to_vec();
             let map = map::MapAccess::new(self, e, self.reader.decoder())?;
             let value = visitor.visit_map(map)?;
+            self.read_to_end(&name)?;
             Ok(value)
         } else {
             Err(DeError::Start)

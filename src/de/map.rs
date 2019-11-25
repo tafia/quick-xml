@@ -11,7 +11,7 @@ use std::io::BufRead;
 enum MapValue {
     Empty,
     Attribute { value: Vec<u8> },
-    Nested { name: Vec<u8> },
+    Nested,
 }
 
 /// A deserializer for `Attributes`
@@ -72,11 +72,7 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
             // try getting from events (<key>value</key>)
             if let Some(Event::Start(e)) = self.de.peek()? {
                 let name = e.name().to_owned();
-
-                let _ = self.de.next(&mut Vec::new())?;
-                self.value = MapValue::Nested { name: name.clone() };
-
-                // return key
+                self.value = MapValue::Nested;
                 seed.deserialize(EscapedDeserializer {
                     decoder: self.decoder,
                     escaped_value: name,
@@ -84,8 +80,7 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
                 })
                 .map(Some)
             } else {
-                self.de.read_to_end(self.start.name())?;
-                return Ok(None);
+                Ok(None)
             }
         }
     }
@@ -94,18 +89,13 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
         &mut self,
         seed: K,
     ) -> Result<K::Value, Self::Error> {
-        dbg!("val");
         match std::mem::replace(&mut self.value, MapValue::Empty) {
             MapValue::Attribute { value } => seed.deserialize(EscapedDeserializer {
                 decoder: self.decoder,
                 escaped_value: value,
                 escaped: true,
             }),
-            MapValue::Nested { name } => {
-                let value = seed.deserialize(&mut *self.de)?;
-                self.de.read_to_end(&name)?;
-                Ok(value)
-            }
+            MapValue::Nested => seed.deserialize(&mut *self.de),
             MapValue::Empty => Err(DeError::EndOfAttributes),
         }
     }
