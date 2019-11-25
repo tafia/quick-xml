@@ -4,7 +4,7 @@ use std::fmt;
 /// Deserialization error
 #[derive(Debug)]
 pub enum DeError {
-    /// Custom error
+    /// Serde custom error
     Custom(String),
     /// Cannot parse to integer
     Int(std::num::ParseIntError),
@@ -14,21 +14,8 @@ pub enum DeError {
     Xml(Error),
     /// Unexpected end of attributes
     EndOfAttributes,
-    /// Unexpected `Event::Start`
-    StartEvent(String),
-    /// Cannot deserialize owned event
-    OwnedEvent,
-    /// Unexpected of of file
+    /// Unexpected end of file
     Eof,
-    /// Cannot peek event
-    Peek,
-    /// Unexpected Start event name
-    NameMismatch {
-        /// Expected name
-        expected: &'static str,
-        /// Event name found
-        found: String,
-    },
     /// Invalid value for a boolean
     InvalidBoolean(String),
     /// Invalid unit value
@@ -51,15 +38,7 @@ impl fmt::Display for DeError {
             DeError::Int(e) => write!(f, "{}", e),
             DeError::Float(e) => write!(f, "{}", e),
             DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
-            DeError::StartEvent(n) => write!(f, "Unexpected `Event::Start`: {}", n),
-            DeError::OwnedEvent => write!(f, "Cannot deserialize owned event"),
             DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
-            DeError::Peek => write!(f, "Cannot peek event"),
-            DeError::NameMismatch { expected, found } => write!(
-                f,
-                "Start event name mismatch:\nExpecting: {}\nFound: {}",
-                expected, found
-            ),
             DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
             DeError::InvalidUnit(v) => {
                 write!(f, "Invalid unit value '{}', expected empty string", v)

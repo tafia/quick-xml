@@ -1,10 +1,15 @@
 extern crate quick_xml;
+#[cfg(feature = "serialize")]
+extern crate serde;
 
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::Reader;
 use std::borrow::Cow;
 use std::io::Cursor;
+
+#[cfg(feature = "serialize")]
+use serde::Deserialize;
 
 #[test]
 fn test_sample() {
@@ -452,4 +457,99 @@ fn test_default_namespace() {
     } else {
         panic!("expecting outer end element with no namespace");
     }
+}
+
+#[cfg(feature = "serialize")]
+#[test]
+fn line_score() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct LineScoreData {
+        game_pk: u32,
+        game_type: char,
+        venue: String,
+        venue_w_chan_loc: String,
+        venue_id: u32,
+        time: String,
+        time_zone: String,
+        ampm: String,
+        home_team_id: u32,
+        home_team_city: String,
+        home_team_name: String,
+        home_league_id: u32,
+        away_team_id: u32,
+        away_team_city: String,
+        away_team_name: String,
+        away_league_id: u32,
+        #[serde(rename = "linescore", skip_serializing)]
+        innings: Vec<LineScore>,
+    }
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct LineScore {
+        #[serde(rename = "away_inning_runs")]
+        away_runs: u32,
+        #[serde(rename = "home_inning_runs")]
+        //needs to be an Option, since home team doesn't always bat.
+        home_runs: Option<u32>,
+        // Keeping the inning as a string, since we'll need it to construct URLs later
+        inning: String,
+    }
+
+    let res: LineScoreData = quick_xml::de::from_str(include_str!("linescore.xml")).unwrap();
+
+    let expected = LineScoreData {
+        game_pk: 239575,
+        game_type: 'R',
+        venue: "Generic".to_owned(),
+        venue_w_chan_loc: "USNY0996".to_owned(),
+        venue_id: 401,
+        time: "Gm 2".to_owned(),
+        time_zone: "ET".to_owned(),
+        ampm: "AM".to_owned(),
+        home_team_id: 611,
+        home_team_city: "DSL Dodgers".to_owned(),
+        home_team_name: "DSL Dodgers".to_owned(),
+        home_league_id: 130,
+        away_team_id: 604,
+        away_team_city: "DSL Blue Jays1".to_owned(),
+        away_team_name: "DSL Blue Jays1".to_owned(),
+        away_league_id: 130,
+        innings: vec![
+            LineScore {
+                away_runs: 1,
+                home_runs: Some(0),
+                inning: "1".to_owned(),
+            },
+            LineScore {
+                away_runs: 0,
+                home_runs: Some(0),
+                inning: "2".to_owned(),
+            },
+            LineScore {
+                away_runs: 1,
+                home_runs: Some(1),
+                inning: "3".to_owned(),
+            },
+            LineScore {
+                away_runs: 2,
+                home_runs: Some(0),
+                inning: "4".to_owned(),
+            },
+            LineScore {
+                away_runs: 0,
+                home_runs: Some(0),
+                inning: "5".to_owned(),
+            },
+            LineScore {
+                away_runs: 0,
+                home_runs: Some(0),
+                inning: "6".to_owned(),
+            },
+            LineScore {
+                away_runs: 0,
+                home_runs: Some(0),
+                inning: "7".to_owned(),
+            },
+        ],
+    };
+    assert_eq!(res, expected);
 }

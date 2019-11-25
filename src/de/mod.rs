@@ -57,8 +57,7 @@ impl<R: BufRead> Deserializer<R> {
 
     fn peek(&mut self) -> Result<Option<&Event<'static>>, DeError> {
         if self.peek.is_none() {
-            let mut buf = Vec::new();
-            self.peek = Some(self.next(&mut buf)?);
+            self.peek = Some(self.next(&mut Vec::new())?);
         }
         Ok(self.peek.as_ref())
     }
@@ -96,8 +95,7 @@ impl<R: BufRead> Deserializer<R> {
             Event::Eof => Err(DeError::Eof),
             Event::Start(e) => {
                 // allow one nested level
-                let mut buf = Vec::new();
-                let t = match self.next(&mut buf)? {
+                let t = match self.next(&mut Vec::new())? {
                     Event::Text(t) => t,
                     Event::Start(_) => return Err(DeError::Start),
                     Event::End(_) => return Err(DeError::End),
@@ -150,8 +148,7 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        let mut buf = Vec::new();
-        if let Some(e) = self.next_start(&mut buf)? {
+        if let Some(e) = self.next_start(&mut Vec::new())? {
             let name = e.name().to_vec();
             self.has_value_field = fields.contains(&INNER_VALUE);
             let map = map::MapAccess::new(self, e)?;

@@ -145,7 +145,7 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
         if self.escaped_value.is_empty() {
             visitor.visit_unit()
         } else {
-            Err(DeError::Custom(
+            Err(DeError::InvalidUnit(
                 "Expecting unit, got non empty attribute".into(),
             ))
         }
