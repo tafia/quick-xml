@@ -153,7 +153,13 @@ macro_rules! deserialize_type {
     ($deserialize:ident => $visit:ident) => {
         fn $deserialize<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
             let txt = self.next_text()?;
+
+            #[cfg(not(feature = "encoding"))]
             let value = self.reader.decode(&*txt)?.parse()?;
+
+            #[cfg(feature = "encoding")]
+            let value = self.reader.decode(&*txt).parse()?;
+
             visitor.$visit(value)
         }
     }
@@ -195,11 +201,34 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         let txt = self.next_text()?;
-        let value = self.reader.decode(&*txt)?;
-        match value {
-            "true" | "1" | "True" | "Yes" => visitor.visit_bool(true),
-            "false" | "0" | "False" | "No" => visitor.visit_bool(false),
-            _ => Err(DeError::InvalidBoolean(value.into())),
+
+        #[cfg(feature = "encoding")]
+        {
+            #[cfg(feature = "encoding")]
+            let value = self.reader.decode(&*txt);
+
+            match value.as_ref() {
+                "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
+                    visitor.visit_bool(true)
+                }
+                "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
+                    visitor.visit_bool(false)
+                }
+                _ => Err(DeError::InvalidBoolean(value.into())),
+            }
+        }
+
+        #[cfg(not(feature = "encoding"))]
+        {
+            match txt.as_ref() {
+                b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
+                    visitor.visit_bool(true)
+                }
+                b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
+                    visitor.visit_bool(false)
+                }
+                e => Err(DeError::InvalidBoolean(self.reader.decode(e)?.into())),
+            }
         }
     }
 

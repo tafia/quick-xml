@@ -714,15 +714,17 @@ impl<B: BufRead> Reader<B> {
         from_utf8(bytes).map_err(Error::Utf8)
     }
 
+    /// Get utf8 decoder
     #[cfg(feature = "encoding")]
-    pub(crate) fn decoder(&self) -> Decoder {
+    pub fn decoder(&self) -> Decoder {
         Decoder {
             encoding: self.encoding,
         }
     }
 
+    /// Get utf8 decoder
     #[cfg(not(feature = "encoding"))]
-    pub(crate) fn decoder(&self) -> Decoder {
+    pub fn decoder(&self) -> Decoder {
         Decoder
     }
 
@@ -1154,13 +1156,15 @@ impl NamespaceBufferIndex {
     }
 }
 
+/// Utf8 Decoder
 #[cfg(not(feature = "encoding"))]
 #[derive(Clone, Copy)]
-pub(crate) struct Decoder;
+pub struct Decoder;
 
+/// Utf8 Decoder
 #[cfg(feature = "encoding")]
 #[derive(Clone, Copy)]
-pub(crate) struct Decoder {
+pub struct Decoder {
     encoding: &'static Encoding,
 }
 
@@ -1171,7 +1175,7 @@ impl Decoder {
     }
 
     #[cfg(feature = "encoding")]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
 }

@@ -41,8 +41,13 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            let v = self.decoder.decode(&self.escaped_value)?;
-            visitor.$visit(v.parse()?)
+            #[cfg(not(feature = "encoding"))]
+            let value = self.decoder.decode(&self.escaped_value)?.parse()?;
+
+            #[cfg(feature = "encoding")]
+            let value = self.decoder.decode(&self.escaped_value).parse()?;
+
+            visitor.$visit(value)
         }
     }
 }
@@ -61,8 +66,13 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     where
         V: Visitor<'de>,
     {
-        let v = self.unescaped()?;
-        visitor.visit_str(self.decoder.decode(&v)?)
+        let unescaped = self.unescaped()?;
+        #[cfg(not(feature = "encoding"))]
+        let value = self.decoder.decode(&unescaped)?;
+
+        #[cfg(feature = "encoding")]
+        let value = self.decoder.decode(&unescaped);
+        visitor.visit_str(&value)
     }
 
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -91,11 +101,33 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     where
         V: Visitor<'de>,
     {
-        match &*self.decoder.decode(&self.escaped_value)? {
-            "TRUE" | "true" | "True" | "t" | "1" | "yes" | "Yes" | "YES" | "y" => {
-                visitor.visit_bool(true)
+        #[cfg(feature = "encoding")]
+        {
+            #[cfg(feature = "encoding")]
+            let value = self.decoder.decode(&self.escaped_value);
+
+            match value.as_ref() {
+                "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
+                    visitor.visit_bool(true)
+                }
+                "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
+                    visitor.visit_bool(false)
+                }
+                _ => Err(DeError::InvalidBoolean(value.into())),
             }
-            _ => visitor.visit_bool(false),
+        }
+
+        #[cfg(not(feature = "encoding"))]
+        {
+            match &*self.escaped_value {
+                b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
+                    visitor.visit_bool(true)
+                }
+                b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
+                    visitor.visit_bool(false)
+                }
+                e => Err(DeError::InvalidBoolean(self.decoder.decode(e)?.into())),
+            }
         }
     }
 
@@ -103,8 +135,7 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     where
         V: Visitor<'de>,
     {
-        let s = self.decoder.decode(&self.escaped_value)?;
-        visitor.visit_char(s.chars().next().expect("s not empty"))
+        self.deserialize_str(visitor)
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
