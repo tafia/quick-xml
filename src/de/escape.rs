@@ -1,7 +1,7 @@
 //! Serde `Deserializer` module
 
 use crate::{de::errors::DeError, errors::Error, escape::unescape, reader::Decoder};
-use serde::de::Visitor;
+use serde::de::{self, Visitor};
 use serde::{self, forward_to_deserialize_any};
 use std::borrow::Cow;
 
@@ -12,6 +12,7 @@ use std::borrow::Cow;
 /// Escaping the value is actually not always necessary, for instance
 /// when converting to float, we don't expect any escapable character
 /// anyway
+#[derive(Clone)]
 pub(crate) struct EscapedDeserializer {
     decoder: Decoder,
     escaped_value: Vec<u8>,
@@ -162,14 +163,14 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
         }
     }
 
-    //fn deserialize_enum<V: de::Visitor<'de>>(
-    //    self,
-    //    _name: &str,
-    //    _variants: &'static [&'static str],
-    //    visitor: V,
-    //) -> Result<V::Value, Self::Error> {
-    //    visitor.visit_enum(self.0.into_deserializer())
-    //}
+    fn deserialize_enum<V: de::Visitor<'de>>(
+        self,
+        _name: &str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_enum(self)
+    }
 
     fn deserialize_newtype_struct<V>(
         self,
@@ -194,6 +195,50 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     deserialize_num!(deserialize_f32, visit_f32);
 
     forward_to_deserialize_any! {
-        unit_struct seq tuple tuple_struct map struct enum identifier ignored_any
+        unit_struct seq tuple tuple_struct map struct identifier ignored_any
+    }
+}
+
+impl<'de> de::EnumAccess<'de> for EscapedDeserializer {
+    type Error = DeError;
+    type Variant = Self;
+
+    fn variant_seed<V: de::DeserializeSeed<'de>>(
+        self,
+        seed: V,
+    ) -> Result<(V::Value, Self), DeError> {
+        let name = seed.deserialize(self.clone())?;
+        Ok((name, self))
+    }
+}
+
+impl<'de> de::VariantAccess<'de> for EscapedDeserializer {
+    type Error = DeError;
+
+    fn unit_variant(self) -> Result<(), DeError> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T: de::DeserializeSeed<'de>>(
+        self,
+        seed: T,
+    ) -> Result<T::Value, DeError> {
+        seed.deserialize(self)
+    }
+
+    fn tuple_variant<V: de::Visitor<'de>>(
+        self,
+        _len: usize,
+        _visitor: V,
+    ) -> Result<V::Value, DeError> {
+        unimplemented!()
+    }
+
+    fn struct_variant<V: de::Visitor<'de>>(
+        self,
+        _fields: &'static [&'static str],
+        _visitor: V,
+    ) -> Result<V::Value, DeError> {
+        unimplemented!()
     }
 }
