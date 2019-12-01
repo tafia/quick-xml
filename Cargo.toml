@@ -30,3 +30,6 @@ bench = false
 default = []
 encoding = ["encoding_rs"]
 serialize = ["serde"]
+
+[package.metadata.docs.rs]
+features = ["serialize"]
