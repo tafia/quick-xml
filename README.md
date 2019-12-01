@@ -108,6 +108,7 @@ assert_eq!(result, expected.as_bytes());
 # Features
 
 - `encoding`: support non utf8 xmls
+- `serialize`: support serde `Serialize`/`Deserialize`
 
 ## Performance
 

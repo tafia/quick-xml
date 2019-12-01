@@ -20,7 +20,7 @@ pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
     /// current position of the iterator
-    position: usize,
+    pub(crate) position: usize,
     /// if true, checks for duplicate names
     with_checks: bool,
     /// allows attribute without quote or `=`

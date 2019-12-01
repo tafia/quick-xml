@@ -42,7 +42,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// `&content[..name_len]` is not checked to be a valid name
     #[inline]
-    pub fn borrowed(content: &'a [u8], name_len: usize) -> BytesStart<'a> {
+    pub fn borrowed(content: &'a [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len: name_len,
@@ -85,6 +85,11 @@ impl<'a> BytesStart<'a> {
     /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesStart<'static> {
         Self::owned(self.buf.into_owned(), self.name_len)
+    }
+
+    /// Converts the event into an owned event without taking ownershiph of Event
+    pub fn to_owned(&self) -> BytesStart<'static> {
+        Self::owned(self.buf.to_owned(), self.name_len)
     }
 
     /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.

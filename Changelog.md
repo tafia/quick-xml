@@ -8,6 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.17.1
+- feat: add new `serialize` feature to support serde serialize/deserialize
+
 ## 0.17.0
 - perf: speed up (un)escape a little
 - feat: remove failure completely (breaking change) and implement `std::error::Error` for `Error`
