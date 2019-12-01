@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.17.0"
+version = "0.17.1"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
@@ -27,6 +27,6 @@ serde = { version = "1.0", features = ["derive"] }
 bench = false
 
 [features]
-default = ["serialize"]
+default = []
 encoding = ["encoding_rs"]
 serialize = ["serde"]
