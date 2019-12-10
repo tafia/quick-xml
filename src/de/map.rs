@@ -69,7 +69,7 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 Some(Event::Start(e)) => {
-                    let name = e.name().to_owned();
+                    let name = e.local_name().to_owned();
                     self.value = MapValue::Nested;
                     seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                         .map(Some)

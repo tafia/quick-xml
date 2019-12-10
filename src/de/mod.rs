@@ -175,7 +175,7 @@ impl<R: BufRead> Deserializer<R> {
         loop {
             let e = self.reader.read_event(buf)?;
             match e {
-                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof => {
+                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof | Event::CData(_) => {
                     return Ok(e.into_owned())
                 }
                 _ => buf.clear(),
@@ -208,6 +208,7 @@ impl<R: BufRead> Deserializer<R> {
                     Event::End(end) if end.name() == e.name() => {
                         return Ok(BytesText::from_escaped(&[] as &[u8]));
                     }
+                    Event::End(_) => return Err(DeError::End),
                     Event::Eof => return Err(DeError::Eof),
                     _ => unreachable!(),
                 };
