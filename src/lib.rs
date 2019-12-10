@@ -129,6 +129,8 @@ mod utils;
 mod writer;
 
 // reexports
+#[cfg(feature = "serialize")]
+pub use errors::serialize::DeError;
 pub use errors::{Error, Result};
 pub use reader::Reader;
 pub use writer::Writer;

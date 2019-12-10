@@ -333,13 +333,13 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        let value = self.next_text()?;
-        if value.is_empty() {
-            visitor.visit_unit()
-        } else {
-            Err(DeError::InvalidUnit(
-                value.unescape_and_decode(&self.reader)?,
-            ))
+        let mut buf = Vec::new();
+        match self.next(&mut buf)? {
+            Event::Start(s) => {
+                self.read_to_end(s.name())?;
+                visitor.visit_unit()
+            }
+            e => Err(DeError::InvalidUnit(format!("{:?}", e))),
         }
     }
 
