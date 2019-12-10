@@ -225,3 +225,134 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         Err(DeError::Unsupported("serialize_struct_variant"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::ser::{SerializeMap, SerializeStruct};
+    use serde::{Serialize, Serializer as SerSerializer};
+
+    #[test]
+    fn test_serialize_bool() {
+        let inputs = vec![(true, "true"), (false, "false")];
+
+        for (src, should_be) in inputs {
+            let mut buffer = Vec::new();
+
+            {
+                let mut ser = Serializer::new(&mut buffer);
+                ser.serialize_bool(src).unwrap();
+            }
+
+            let got = String::from_utf8(buffer).unwrap();
+            assert_eq!(got, should_be);
+        }
+    }
+
+    #[test]
+    fn test_start_serialize_struct() {
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            let _ = ser.serialize_struct("foo", 0).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, "<foo>");
+    }
+
+    #[test]
+    fn test_serialize_struct_field() {
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            let mut struct_ser = Struct::new(&mut ser, "baz");
+            struct_ser.serialize_field("foo", "bar").unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, "<foo>bar</foo>");
+    }
+
+    #[test]
+    fn test_serialize_struct() {
+        #[derive(Serialize)]
+        struct Person {
+            name: String,
+            age: u32,
+        }
+
+        let bob = Person {
+            name: "Bob".to_string(),
+            age: 42,
+        };
+        let should_be = "<Person><name>Bob</name><age>42</age></Person>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            bob.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn test_serialize_map_entries() {
+        let should_be = "<name>Bob</name><age>5</age>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            let mut map = Map::new(&mut ser);
+            map.serialize_entry("name", "Bob").unwrap();
+            map.serialize_entry("age", "5").unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn test_serialize_enum() {
+        #[derive(Serialize)]
+        #[allow(dead_code)]
+        enum Node {
+            Boolean(bool),
+            Number(f64),
+            String(String),
+        }
+
+        let mut buffer = Vec::new();
+        let should_be = "<Boolean>true</Boolean>";
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            let node = Node::Boolean(true);
+            node.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    #[ignore]
+    fn serialize_a_list() {
+        let inputs = vec![1, 2, 3, 4];
+
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::new(&mut buffer);
+            inputs.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        println!("{}", got);
+        panic!();
+    }
+}
