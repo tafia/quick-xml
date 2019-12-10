@@ -1,6 +1,6 @@
 //! Serde `Deserializer` module
 
-use crate::{de::errors::DeError, errors::Error, escape::unescape, reader::Decoder};
+use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
 use serde::de::{self, Visitor};
 use serde::{self, forward_to_deserialize_any};
 use std::borrow::Cow;

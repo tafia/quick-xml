@@ -107,13 +107,12 @@
 //! }
 //! ```
 
-mod errors;
 mod escape;
 mod map;
 mod seq;
 mod var;
 
-pub use self::errors::DeError;
+pub use crate::errors::serialize::DeError;
 use crate::{
     events::{BytesStart, BytesText, Event},
     Reader,

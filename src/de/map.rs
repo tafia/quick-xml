@@ -1,7 +1,8 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{errors::DeError, escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    de::{escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    errors::serialize::DeError,
     events::{attributes::Attribute, BytesStart, Event},
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
