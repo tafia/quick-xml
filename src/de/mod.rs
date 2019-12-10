@@ -197,21 +197,27 @@ impl<R: BufRead> Deserializer<R> {
 
     fn next_text<'a>(&mut self) -> Result<BytesText<'static>, DeError> {
         match self.next(&mut Vec::new())? {
-            Event::Text(e) => Ok(e),
+            Event::Text(e) | Event::CData(e) => Ok(e),
             Event::Eof => Err(DeError::Eof),
             Event::Start(e) => {
                 // allow one nested level
-                let t = match self.next(&mut Vec::new())? {
-                    Event::Text(t) => t,
+                let inner = self.next(&mut Vec::new())?;
+                let t = match inner {
+                    Event::Text(t) | Event::CData(t) => t,
                     Event::Start(_) => return Err(DeError::Start),
-                    Event::End(_) => return Err(DeError::End),
+                    Event::End(end) if end.name() == e.name() => {
+                        return Ok(BytesText::from_escaped(&[] as &[u8]));
+                    }
                     Event::Eof => return Err(DeError::Eof),
                     _ => unreachable!(),
                 };
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            Event::End(_) => Err(DeError::End),
+            Event::End(e) => {
+                self.peek = Some(Event::End(e));
+                Ok(BytesText::from_escaped(&[] as &[u8]))
+            }
             _ => unreachable!(),
         }
     }
