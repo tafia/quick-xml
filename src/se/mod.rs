@@ -2,7 +2,7 @@
 
 mod var;
 
-use self::var::{Map, Struct};
+use self::var::{Map, Seq, Struct};
 use crate::{
     errors::serialize::DeError,
     events::{BytesEnd, BytesStart, BytesText, Event},
@@ -58,7 +58,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     type Ok = ();
     type Error = DeError;
 
-    type SerializeSeq = Impossible<Self::Ok, DeError>;
+    type SerializeSeq = Seq<'w, W>;
     type SerializeTuple = Impossible<Self::Ok, DeError>;
     type SerializeTupleStruct = Impossible<Self::Ok, DeError>;
     type SerializeTupleVariant = Impossible<Self::Ok, DeError>;
@@ -175,8 +175,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, DeError> {
-        // TODO: Figure out how to constrain the things written to only be composites
-        Err(DeError::Unsupported("serialize_seq"))
+        Ok(Seq::new(self))
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, DeError> {

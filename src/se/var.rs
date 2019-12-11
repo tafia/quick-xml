@@ -114,3 +114,41 @@ where
         Ok(())
     }
 }
+
+/// An implementation of `SerializeSeq' for serializing to XML.
+pub struct Seq<'w, W>
+where
+    W: 'w + Write,
+{
+    parent: &'w mut Serializer<W>,
+}
+
+impl<'w, W> Seq<'w, W>
+where
+    W: 'w + Write,
+{
+    /// Create a new `Seq`
+    pub fn new(parent: &'w mut Serializer<W>) -> Seq<'w, W> {
+        Seq { parent }
+    }
+}
+
+impl<'w, W> ser::SerializeSeq for Seq<'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize,
+    {
+        value.serialize(&mut *self.parent)?;
+        Ok(())
+    }
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
