@@ -107,10 +107,13 @@ assert_eq!(result, expected.as_bytes());
 
 ## Serde
 
-Upon activating the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
+When using the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
 
-It has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). It follows its 
-convention for deserialization, including the [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
+This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
+quick-xml follows its convention for deserialization, including the 
+[`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
+
+Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
 
 Here is an example deserializing crates.io source:
 
@@ -118,7 +121,7 @@ Here is an example deserializing crates.io source:
 // Cargo.toml
 // [dependencies]
 // serde = { version = "1.0", features = [ "derive" ] }
-// quick_xml = "0.17"
+// quick_xml = { version = "0.17", features = [ "serialize" ] }
 extern crate serde;
 extern crate quick_xml;
 
@@ -230,6 +233,10 @@ test bench_quick_xml_namespaced ... bench:     389,977 ns/iter (+/- 32,045)
 
 // same bench with xml-rs
 test bench_xml_rs               ... bench:  14,468,930 ns/iter (+/- 321,171)
+
+// serde-xml-rs vs serialize feature
+test bench_serde_quick_xml      ... bench:   1,181,198 ns/iter (+/- 138,290)
+test bench_serde_xml_rs         ... bench:  15,039,564 ns/iter (+/- 783,485)
 ```
 
 For a feature and performance comparison, you can also have a look at RazrFalcon's [choose-your-xml-rs](https://github.com/RazrFalcon/choose-your-xml-rs).

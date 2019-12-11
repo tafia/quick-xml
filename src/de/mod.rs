@@ -8,7 +8,7 @@
 //! // Cargo.toml
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
-//! // quick_xml = "0.17"
+//! // quick_xml = { version = "0.17", features = [ "serialize" ] }
 //! extern crate serde;
 //! extern crate quick_xml;
 //!
