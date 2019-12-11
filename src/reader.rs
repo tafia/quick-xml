@@ -85,7 +85,7 @@ pub struct Reader<B: BufRead> {
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
     ns_buffer: NamespaceBufferIndex,
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
 }
@@ -105,7 +105,7 @@ impl<B: BufRead> Reader<B> {
             buf_position: 0,
             check_comments: false,
             ns_buffer: NamespaceBufferIndex::default(),
-            #[cfg(feature = "encoding_rs")]
+            #[cfg(feature = "encoding")]
             encoding: ::encoding_rs::UTF_8,
         }
     }
@@ -236,28 +236,18 @@ impl<B: BufRead> Reader<B> {
 
         // need to read 1 character to decide whether pay special attention to attribute values
         let buf_start = buf.len();
-        let start;
-        loop {
-            // Need to contain the `self.reader.fill_buf()` in a scope lexically separate from the
-            // `self.error()` call because both require `&mut self`.
-            let start_result = {
-                let available = match self.reader.fill_buf() {
-                    Ok(n) if n.is_empty() => return Ok(Event::Eof),
-                    Ok(n) => Ok(n),
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(e),
-                };
-                // `available` is a non-empty slice => we only need the first byte to decide
-                available.map(|xs| xs[0])
-            };
-
-            // throw the error we couldn't throw in the block above because `self` was sill borrowed
-            start = start_result.map_err(Error::Io)?;
-
-            // We intentionally don't `consume()` the byte, otherwise we would have to handle things
-            // like '<>' here already.
-            break;
-        }
+        let start = loop {
+            match self.reader.fill_buf() {
+                Ok(n) if n.is_empty() => return Ok(Event::Eof),
+                Ok(n) => {
+                    // We intentionally don't `consume()` the byte, otherwise we would have to
+                    // handle things like '<>' here already.
+                    break n[0];
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(Error::Io(e)),
+            }
+        };
 
         if start != b'/' && start != b'!' && start != b'?' {
             match read_elem_until(&mut self.reader, b'>', buf) {
@@ -382,7 +372,7 @@ impl<B: BufRead> Reader<B> {
                                 return Err(Error::UnexpectedEof("CData".to_string()));
                             }
                             Ok(n) => self.buf_position += n,
-                            Err(e) => return Err(e.into()),
+                            Err(e) => return Err(e),
                         }
                         len = buf.len();
                     }
@@ -405,7 +395,7 @@ impl<B: BufRead> Reader<B> {
                                 count += buf.iter().skip(start).filter(|&&b| b == b'<').count();
                                 count -= 1;
                             }
-                            Err(e) => return Err(e.into()),
+                            Err(e) => return Err(e),
                         }
                     }
                     let len = buf.len();
@@ -423,7 +413,7 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
@@ -445,13 +435,12 @@ impl<B: BufRead> Reader<B> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
                 let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
-                // Try getting encoding from the declaration event
                 Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
@@ -707,7 +696,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// # Note
     ///
-    /// If you instead want to use XML declared encoding, use the `encoding_rs` feature
+    /// If you instead want to use XML declared encoding, use the `encoding` feature
     #[inline]
     #[cfg(not(feature = "encoding"))]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
