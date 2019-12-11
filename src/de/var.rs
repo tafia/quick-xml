@@ -1,5 +1,8 @@
-use crate::de::{errors::DeError, escape::EscapedDeserializer, Deserializer};
-use crate::events::Event;
+use crate::{
+    de::{escape::EscapedDeserializer, Deserializer},
+    errors::serialize::DeError,
+    events::Event,
+};
 use serde::de::{self, Deserializer as SerdeDeserializer};
 use std::io::BufRead;
 

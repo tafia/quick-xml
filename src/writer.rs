@@ -85,6 +85,11 @@ impl<W: Write> Writer<W> {
         self.writer
     }
 
+    /// Get inner writer, keeping ownership
+    pub fn inner(&mut self) -> &mut W {
+        &mut self.writer
+    }
+
     /// Writes the given event to the underlying writer.
     pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<usize> {
         let mut next_should_line_break = true;

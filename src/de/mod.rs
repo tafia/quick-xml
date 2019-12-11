@@ -8,7 +8,7 @@
 //! // Cargo.toml
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
-//! // quick_xml = "0.17"
+//! // quick_xml = { version = "0.17", features = [ "serialize" ] }
 //! extern crate serde;
 //! extern crate quick_xml;
 //!
@@ -107,13 +107,12 @@
 //! }
 //! ```
 
-mod errors;
 mod escape;
 mod map;
 mod seq;
 mod var;
 
-pub use self::errors::DeError;
+pub use crate::errors::serialize::DeError;
 use crate::{
     events::{BytesStart, BytesText, Event},
     Reader,
@@ -176,7 +175,7 @@ impl<R: BufRead> Deserializer<R> {
         loop {
             let e = self.reader.read_event(buf)?;
             match e {
-                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof => {
+                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof | Event::CData(_) => {
                     return Ok(e.into_owned())
                 }
                 _ => buf.clear(),
@@ -198,13 +197,17 @@ impl<R: BufRead> Deserializer<R> {
 
     fn next_text<'a>(&mut self) -> Result<BytesText<'static>, DeError> {
         match self.next(&mut Vec::new())? {
-            Event::Text(e) => Ok(e),
+            Event::Text(e) | Event::CData(e) => Ok(e),
             Event::Eof => Err(DeError::Eof),
             Event::Start(e) => {
                 // allow one nested level
-                let t = match self.next(&mut Vec::new())? {
-                    Event::Text(t) => t,
+                let inner = self.next(&mut Vec::new())?;
+                let t = match inner {
+                    Event::Text(t) | Event::CData(t) => t,
                     Event::Start(_) => return Err(DeError::Start),
+                    Event::End(end) if end.name() == e.name() => {
+                        return Ok(BytesText::from_escaped(&[] as &[u8]));
+                    }
                     Event::End(_) => return Err(DeError::End),
                     Event::Eof => return Err(DeError::Eof),
                     _ => unreachable!(),
@@ -212,7 +215,10 @@ impl<R: BufRead> Deserializer<R> {
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            Event::End(_) => Err(DeError::End),
+            Event::End(e) => {
+                self.peek = Some(Event::End(e));
+                Ok(BytesText::from_escaped(&[] as &[u8]))
+            }
             _ => unreachable!(),
         }
     }
@@ -334,13 +340,13 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        let value = self.next_text()?;
-        if value.is_empty() {
-            visitor.visit_unit()
-        } else {
-            Err(DeError::InvalidUnit(
-                value.unescape_and_decode(&self.reader)?,
-            ))
+        let mut buf = Vec::new();
+        match self.next(&mut buf)? {
+            Event::Start(s) => {
+                self.read_to_end(s.name())?;
+                visitor.visit_unit()
+            }
+            e => Err(DeError::InvalidUnit(format!("{:?}", e))),
         }
     }
 

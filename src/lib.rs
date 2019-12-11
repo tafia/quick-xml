@@ -107,7 +107,7 @@
 //!
 //! quick-xml supports 2 additional features, non activated by default:
 //! - `encoding`: support non utf8 xmls
-//! - `use-failure`: support for failure chainable error
+//! - `serialize`: support serde `Serialize`/`Deserialize`
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 
@@ -123,10 +123,14 @@ mod errors;
 mod escape;
 pub mod events;
 mod reader;
+#[cfg(feature = "serialize")]
+pub mod se;
 mod utils;
 mod writer;
 
 // reexports
+#[cfg(feature = "serialize")]
+pub use errors::serialize::DeError;
 pub use errors::{Error, Result};
 pub use reader::Reader;
 pub use writer::Writer;

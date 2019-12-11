@@ -1,7 +1,8 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{errors::DeError, escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    de::{escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    errors::serialize::DeError,
     events::{attributes::Attribute, BytesStart, Event},
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
@@ -68,7 +69,7 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 Some(Event::Start(e)) => {
-                    let name = e.name().to_owned();
+                    let name = e.local_name().to_owned();
                     self.value = MapValue::Nested;
                     seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                         .map(Some)
