@@ -107,6 +107,12 @@ assert_eq!(result, expected.as_bytes());
 
 ## Serde
 
+Upon activating the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
+
+It has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). It follows its 
+convention for deserialization, including the [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
+
+Here is an example deserializing crates.io source:
 
 ```rust
 // Cargo.toml
