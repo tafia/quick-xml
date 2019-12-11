@@ -1,3 +1,5 @@
+#![cfg(feature = "serialize")]
+
 extern crate quick_xml;
 extern crate serde;
 
