@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.17.2
+- feat: add Seq to serializer
+- docs: update readme with example for `$value`
+
 ## 0.17.1
 - feat: add new `serialize` feature to support serde serialize/deserialize
 
