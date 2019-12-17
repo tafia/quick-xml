@@ -77,10 +77,10 @@ fn round_trip_list_of_enums() {
 }
 
 #[test]
-fn no_contiguous_fields(){
+fn no_contiguous_fields() {
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Xml {
-        #[serde(rename= "$value")]
+        #[serde(rename = "$value")]
         fields: Vec<Field>,
     }
 
@@ -101,13 +101,22 @@ fn no_contiguous_fields(){
 "#;
 
     let xml: Xml = ::quick_xml::de::from_str(source).unwrap();
-    assert_eq!(xml, Xml {
-        fields: vec![
-            Field::Field1 { name: "a".to_string() },
-            Field::Field2 { name: "b".to_string() },
-            Field::Field1 { name: "a".to_string() },
-        ],
-    });
+    assert_eq!(
+        xml,
+        Xml {
+            fields: vec![
+                Field::Field1 {
+                    name: "a".to_string()
+                },
+                Field::Field2 {
+                    name: "b".to_string()
+                },
+                Field::Field1 {
+                    name: "a".to_string()
+                },
+            ],
+        }
+    );
 
     // TODO: impl Serialize for struct variants
     // let serialized = to_string(&xml).unwrap();
