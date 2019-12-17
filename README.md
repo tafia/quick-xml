@@ -109,12 +109,6 @@ assert_eq!(result, expected.as_bytes());
 
 When using the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
 
-This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
-quick-xml follows its convention for deserialization, including the 
-[`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
-
-Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
-
 Here is an example deserializing crates.io source:
 
 ```rust
@@ -213,6 +207,28 @@ fn crates_io() -> Result<Html, DeError> {
     Ok(html)
 }
 ```
+
+### Credits
+
+This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
+quick-xml follows its convention for deserialization, including the 
+[`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
+
+### Parsing the "value" of a tag
+
+If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`, you can use the special name `$value`:
+
+```rust,ignore
+struct Foo {
+    pub abc: String,
+    #[serde(rename = "$value")]
+    pub body: String,
+}
+```
+
+### Performance
+
+Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
 
 # Features
 
