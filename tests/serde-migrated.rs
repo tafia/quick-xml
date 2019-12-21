@@ -490,9 +490,7 @@ fn test_nicolai86() {
                 Sender: TheSender {
                     name: "European Central Bank".to_string(),
                 },
-                Cube: OuterCube {
-                    Cube: vec![],
-                }
+                Cube: OuterCube { Cube: vec![] },
             },
         ),
         (
@@ -526,7 +524,7 @@ fn test_nicolai86() {
                             },
                         ],
                     }],
-                }
+                },
             },
         ),
     ]);
