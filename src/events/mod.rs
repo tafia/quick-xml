@@ -87,7 +87,7 @@ impl<'a> BytesStart<'a> {
         Self::owned(self.buf.into_owned(), self.name_len)
     }
 
-    /// Converts the event into an owned event without taking ownershiph of Event
+    /// Converts the event into an owned event without taking ownership of Event
     pub fn to_owned(&self) -> BytesStart<'static> {
         Self::owned(self.buf.to_owned(), self.name_len)
     }
