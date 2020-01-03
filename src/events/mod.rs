@@ -140,6 +140,13 @@ impl<'a> BytesStart<'a> {
         Attributes::html(self, self.name_len)
     }
 
+    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
+    /// including the whitespace after the tag name if there is any.
+    #[inline]
+    pub fn attributes_raw(&self) -> &[u8] {
+        &self.buf[self.name_len..]
+    }
+
     /// Add additional attributes to this tag using an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
@@ -660,8 +667,10 @@ mod test {
         let mut b = BytesStart::owned_name("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), b"test");
+        assert_eq!(b.attributes_raw(), b"");
         b.push_attribute(("x", "a"));
         assert_eq!(b.len(), 10);
+        assert_eq!(b.attributes_raw(), b" x=\"a\"");
         b.set_name(b"g");
         assert_eq!(b.len(), 7);
         assert_eq!(b.name(), b"g");
