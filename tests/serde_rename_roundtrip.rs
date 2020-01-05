@@ -70,7 +70,7 @@ fn basic_struct() {
 
 #[test]
 fn nested_struct() {
-    let src = r#"<Nested><A><Nm>Banana</Nm><Src>Store</Src></A><B><Cnt>2</Cnt><Nodes></Nodes></Nested>"#;
+    let src = r#"<Nested><A><Nm>Banana</Nm><Src>Store</Src></A><B><Cnt>2</Cnt><Nodes><Boolean>false</Boolean><EOF /></Nodes></Nested>"#;
     let should_be = Nested {
         a: ItemA {
             name: "Banana".to_string(),

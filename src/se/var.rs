@@ -96,14 +96,19 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
+        let wrap_inner = key != crate::de::INNER_VALUE;
         let key = key.as_bytes();
-        self.parent
-            .writer
-            .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
+        if wrap_inner {
+            self.parent
+                .writer
+                .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
+        }
         value.serialize(&mut *self.parent)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(key)))?;
+        if wrap_inner {
+            self.parent
+                .writer
+                .write_event(Event::End(BytesEnd::borrowed(key)))?;
+        }
         Ok(())
     }
 

@@ -146,17 +146,12 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
 
     fn serialize_unit_variant(
         self,
-        name: &'static str,
+        _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        let name = name.as_bytes();
         self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(name)))?;
-        self.writer
-            .write_event(Event::Text(BytesText::from_plain_str(variant)))?;
-        self.writer
-            .write_event(Event::End(BytesEnd::borrowed(name)))?;
+            .write_event(Event::Empty(BytesStart::borrowed_name(variant.as_bytes())))?;
         Ok(())
     }
 
@@ -180,6 +175,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         let mut this = self;
         this.nesting += 1;
         value.serialize(&mut *this)?;
+        this.nesting = this.nesting.saturating_sub(1);
         this.writer
             .write_event(Event::End(BytesEnd::borrowed(variant.as_bytes())))?;
         Ok(())
