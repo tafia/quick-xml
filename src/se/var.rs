@@ -108,9 +108,13 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;
+        let mut this = self;
+        this.parent.nesting = this.parent.nesting.saturating_sub(1);
+        if this.parent.nesting == 0 {
+            this.parent
+                .writer
+                .write_event(Event::End(BytesEnd::borrowed(this.name.as_bytes())))?;
+        }
         Ok(())
     }
 }

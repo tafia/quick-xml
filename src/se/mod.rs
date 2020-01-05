@@ -28,6 +28,7 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
 /// A Serializer
 pub struct Serializer<W: Write> {
     writer: Writer<W>,
+    nesting: usize,
 }
 
 impl<W: Write> Serializer<W> {
@@ -35,6 +36,7 @@ impl<W: Write> Serializer<W> {
     pub fn new(writer: W) -> Self {
         Serializer {
             writer: Writer::new(writer),
+            nesting: 0,
         }
     }
 
@@ -144,11 +146,18 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
 
     fn serialize_unit_variant(
         self,
-        _name: &'static str,
+        name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported("serialize_unit_variant"))
+        let name = name.as_bytes();
+        self.writer
+            .write_event(Event::Start(BytesStart::borrowed_name(name)))?;
+        self.writer
+            .write_event(Event::Text(BytesText::from_plain_str(variant)))?;
+        self.writer
+            .write_event(Event::End(BytesEnd::borrowed(name)))?;
+        Ok(())
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -168,8 +177,10 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     ) -> Result<Self::Ok, DeError> {
         self.writer
             .write_event(Event::Start(BytesStart::borrowed_name(variant.as_bytes())))?;
-        value.serialize(&mut *self)?;
-        self.writer
+        let mut this = self;
+        this.nesting += 1;
+        value.serialize(&mut *this)?;
+        this.writer
             .write_event(Event::End(BytesEnd::borrowed(variant.as_bytes())))?;
         Ok(())
     }
@@ -209,9 +220,13 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(name.as_bytes())))?;
-        Ok(Struct::new(self, name))
+        if self.nesting == 0 {
+            self.writer
+                .write_event(Event::Start(BytesStart::borrowed_name(name.as_bytes())))?;
+        }
+        let mut this = self;
+        this.nesting += 1;
+        Ok(Struct::new(this, name))
     }
 
     fn serialize_struct_variant(
