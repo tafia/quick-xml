@@ -28,7 +28,8 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
 /// A Serializer
 pub struct Serializer<W: Write> {
     writer: Writer<W>,
-    nesting: usize,
+    pending_field: Option<&'static str>,
+    fields: Vec<Option<&'static str>>,
 }
 
 impl<W: Write> Serializer<W> {
@@ -36,7 +37,8 @@ impl<W: Write> Serializer<W> {
     pub fn new(writer: W) -> Self {
         Serializer {
             writer: Writer::new(writer),
-            nesting: 0,
+            pending_field: None,
+            fields: vec![],
         }
     }
 
@@ -54,6 +56,44 @@ impl<W: Write> Serializer<W> {
         self.writer.write_event(Event::Text(event))?;
         Ok(())
     }
+
+    fn skip_field(&mut self) -> &mut Self {
+        self.fields.push(None);
+        self
+    }
+
+    fn enter_pending_field(&mut self, field: &'static str) -> &mut Self {
+        println!("({}) Pending: Fields={:?}", field, self.fields);
+        self.pending_field = Some(field);
+        self
+    }
+
+    fn enter_field(&mut self, field: &'static str) -> Result<(), DeError> {
+        self.pending_field.take();
+        println!("({}) Start: Fields={:?}", field, self.fields);
+        self.writer
+            .write_event(Event::Start(BytesStart::borrowed_name(field.as_bytes())))?;
+        self.fields.push(Some(field));
+        Ok(())
+    }
+
+    fn activate_pending_field(&mut self) -> Result<(), DeError> {
+        println!("Attempting to activate pending: Pending={:?}   Fields={:?}", self.pending_field, self.fields);
+        if let Some(f) = self.pending_field.take() {
+            self.enter_field(f)?;
+        }
+        Ok(())
+    }
+
+    fn exit_field(&mut self) -> Result<(), DeError> {
+        println!("End: Fields={:?}", self.fields);
+        self.pending_field.take();
+        if let Some(Some(f)) = self.fields.pop() {
+            self.writer
+                .write_event(Event::End(BytesEnd::borrowed(f.as_bytes())))?;
+        }
+        Ok(())
+    }
 }
 
 impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
@@ -69,54 +109,67 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     type SerializeStructVariant = Impossible<Self::Ok, DeError>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(if v { "true" } else { "false" }, true)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, true)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(v, false)
     }
 
     fn serialize_str(self, value: &str) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.write_primitive(value, false)
     }
 
@@ -135,10 +188,11 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, DeError> {
-        self.serialize_none()
+        Ok(())
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, DeError> {
+        self.activate_pending_field()?;
         self.writer
             .write_event(Event::Empty(BytesStart::borrowed_name(name.as_bytes())))?;
         Ok(())
@@ -152,6 +206,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     ) -> Result<Self::Ok, DeError> {
         self.writer
             .write_event(Event::Empty(BytesStart::borrowed_name(variant.as_bytes())))?;
+        println!("serialize_unit_variant {} exit", variant);
         Ok(())
     }
 
@@ -170,14 +225,11 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, DeError> {
-        self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(variant.as_bytes())))?;
-        let mut this = self;
-        this.nesting += 1;
-        value.serialize(&mut *this)?;
-        this.nesting = this.nesting.saturating_sub(1);
-        this.writer
-            .write_event(Event::End(BytesEnd::borrowed(variant.as_bytes())))?;
+        self.activate_pending_field()?;
+        self.enter_field(variant)?;
+        value.serialize(&mut *self)?;
+        println!("serialize_newtype_variant {} write_end", variant);
+        self.exit_field()?;
         Ok(())
     }
 
@@ -216,13 +268,15 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        if self.nesting == 0 {
-            self.writer
-                .write_event(Event::Start(BytesStart::borrowed_name(name.as_bytes())))?;
+        let top_level = self.fields.is_empty() && self.pending_field.is_none();
+        if top_level {
+            self.enter_pending_field(name);
         }
-        let mut this = self;
-        this.nesting += 1;
-        Ok(Struct::new(this, name))
+        self.activate_pending_field()?;
+        if !top_level {
+            self.skip_field();
+        }
+        Ok(Struct::new(self, name))
     }
 
     fn serialize_struct_variant(

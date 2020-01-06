@@ -96,30 +96,21 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let wrap_inner = key != crate::de::INNER_VALUE;
-        let key = key.as_bytes();
-        if wrap_inner {
-            self.parent
-                .writer
-                .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
+        let enter_field = key != crate::de::INNER_VALUE;
+        if enter_field {
+            self.parent.enter_pending_field(key);
+        } else {
+            self.parent.skip_field();
         }
         value.serialize(&mut *self.parent)?;
-        if wrap_inner {
-            self.parent
-                .writer
-                .write_event(Event::End(BytesEnd::borrowed(key)))?;
-        }
+        println!("serialize_field {} write_end", key);
+        self.parent.exit_field()?;
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        let mut this = self;
-        this.parent.nesting = this.parent.nesting.saturating_sub(1);
-        if this.parent.nesting == 0 {
-            this.parent
-                .writer
-                .write_event(Event::End(BytesEnd::borrowed(this.name.as_bytes())))?;
-        }
+        println!("Finalizing struct {}", self.name);
+        self.parent.exit_field()?;
         Ok(())
     }
 }

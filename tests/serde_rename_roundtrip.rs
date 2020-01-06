@@ -12,6 +12,8 @@ struct Nested {
     a: ItemA,
     #[serde(rename="B")]
     b: ItemB,
+    #[serde(rename="C")]
+    c: Option<ItemC>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -38,6 +40,12 @@ struct ItemB {
     cnt: usize,
     #[serde(rename="Nodes")]
     nodes: Nodes,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct ItemC {
+    #[serde(rename="Wrp")]
+    inner: Wrapper,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -70,7 +78,7 @@ fn basic_struct() {
 
 #[test]
 fn nested_struct() {
-    let src = r#"<Nested><A><Nm>Banana</Nm><Src>Store</Src></A><B><Cnt>2</Cnt><Nodes><Boolean>false</Boolean><EOF /></Nodes></Nested>"#;
+    let src = r#"<Nested><A><Nm>Banana</Nm><Src>Store</Src></A><B><Cnt>2</Cnt><Nodes><Boolean>false</Boolean><EOF/></Nodes></B></Nested>"#;
     let should_be = Nested {
         a: ItemA {
             name: "Banana".to_string(),
@@ -84,7 +92,43 @@ fn nested_struct() {
                     Node::EOF,
                 ]
             }
-        }
+        },
+        c: None,
+    };
+
+    let ser_item = to_string(&should_be).unwrap();
+    println!("Serialized: {}", ser_item);
+
+    let v: Nested = from_str(src).unwrap();
+    assert_eq!(v, should_be);
+
+    let reserialized_item = to_string(&v).unwrap();
+    assert_eq!(src, reserialized_item);
+}
+
+#[test]
+fn nested_enum() {
+    let src = r#"<Nested><A><Nm>Banana</Nm><Src>Store</Src></A><B><Cnt>2</Cnt><Nodes><Boolean>false</Boolean><EOF /></Nodes></B><C><ItA><Nm>Apple</Nm><Src>Orchard</Src></ItA></C></Nested>"#;
+    let should_be = Nested {
+        a: ItemA {
+            name: "Banana".to_string(),
+            source: "Store".to_string(),
+        },
+        b: ItemB {
+            cnt: 2,
+            nodes: Nodes {
+                items: vec![
+                    Node::Boolean(false),
+                    Node::EOF,
+                ]
+            }
+        },
+        c: Some(ItemC {
+            inner: Wrapper::A(ItemA {
+                name: "Apple".to_string(),
+                source: "Orchard".to_string(),
+            })
+        })
     };
 
     let ser_item = to_string(&should_be).unwrap();
