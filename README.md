@@ -203,7 +203,7 @@ fn crates_io() -> Result<Html, DeError> {
         </html>
 }";
     let html: Html = from_str(xml)?;
-    assert_eq!(&html.head.title, "crates.io: Rust Package Registr");
+    assert_eq!(&html.head.title, "crates.io: Rust Package Registry");
     Ok(html)
 }
 ```
