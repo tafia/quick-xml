@@ -870,12 +870,15 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
     while !done {
         let used = {
             let available = match r.fill_buf() {
+                Ok(n) if is_bom(n) => {
+                    r.consume(3);
+                    continue;
+                }
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => return Err(Error::Io(e)),
             };
-
             match memchr::memchr(byte, available) {
                 Some(i) => {
                     buf.extend_from_slice(&available[..i]);
@@ -972,6 +975,12 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
         b' ' | b'\r' | b'\n' | b'\t' => true,
         _ => false,
     }
+}
+
+/// A function to check whether the byte is a UTF8 BOM
+#[inline]
+pub(crate) fn is_bom(b: &[u8]) -> bool {
+    b.starts_with(b"\xEF\xBB\xBF")
 }
 
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default
