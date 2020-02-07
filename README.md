@@ -115,7 +115,7 @@ Here is an example deserializing crates.io source:
 // Cargo.toml
 // [dependencies]
 // serde = { version = "1.0", features = [ "derive" ] }
-// quick_xml = { version = "0.17", features = [ "serialize" ] }
+// quick-xml = { version = "0.17", features = [ "serialize" ] }
 extern crate serde;
 extern crate quick_xml;
 
