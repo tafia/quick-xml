@@ -277,15 +277,6 @@ fn default_namespace_applies_to_end_elem() {
     );
 }
 
-#[test]
-fn can_read_files_with_bom() {
-    test(
-        include_bytes!("documents/sample_1_with_bom.xml"),
-        include_bytes!("documents/sample_1_short.txt"),
-        true,
-    );
-}
-
 fn test(input: &[u8], output: &[u8], is_short: bool) {
     let mut reader = Reader::from_reader(input);
     reader
