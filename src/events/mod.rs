@@ -478,6 +478,38 @@ impl<'a> BytesText<'a> {
     }
 
     /// helper method to unescape then decode self using the reader encoding
+    /// but without BOM (Byte order mark)
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    #[cfg(feature = "encoding_rs")]
+    pub fn unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+    ) -> Result<String> {
+        self.unescaped()
+            .map(|e| reader.decode_without_bom(&*e).into_owned())
+    }
+
+    /// helper method to unescape then decode self using the reader encoding
+    /// but without BOM (Byte order mark)
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    #[cfg(not(feature = "encoding_rs"))]
+    pub fn unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+    ) -> Result<String> {
+        self.unescaped()
+            .and_then(|e| reader.decode_without_bom(&*e).map(|s| s.to_owned()))
+    }
+
+    /// helper method to unescape then decode self using the reader encoding
     ///
     /// for performance reasons (could avoid allocating a `String`),
     /// it might be wiser to manually use

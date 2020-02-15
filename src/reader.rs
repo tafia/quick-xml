@@ -689,6 +689,36 @@ impl<B: BufRead> Reader<B> {
         self.encoding.decode(bytes).0
     }
 
+    /// Decodes a UTF8 slice without BOM (Byte order mark) regarless of XML declaration.
+    ///
+    /// Decode `bytes` without BOM and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
+    ///
+    /// # Note
+    ///
+    /// If you instead want to use XML declared encoding, use the `encoding` feature
+    #[inline]
+    #[cfg(not(feature = "encoding"))]
+    pub fn decode_without_bom<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
+        if bytes.starts_with(b"\xEF\xBB\xBF") {
+            from_utf8(&bytes[3..]).map_err(Error::Utf8)
+        } else {
+            from_utf8(bytes).map_err(Error::Utf8)
+        }
+    }
+
+    /// Decodes a slice using without BOM (Byte order mark) the encoding specified in the XML declaration.
+    ///
+    /// Decode `bytes` without BOM and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
+    ///
+    /// If no encoding is specified, defaults to UTF-8.
+    #[inline]
+    #[cfg(feature = "encoding")]
+    pub fn decode_without_bom<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
+        self.encoding.decode_with_bom_removal(bytes).0
+    }
+
     /// Decodes a UTF8 slice regarless of XML declaration.
     ///
     /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
