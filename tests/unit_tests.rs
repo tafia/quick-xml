@@ -809,12 +809,12 @@ fn test_unescape_and_decode_without_bom_removes_utf16be_bom() {
 
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
         }
     }
-    assert_eq!(txt, vec![""]);
+    assert_eq!(txt[0], "");
 }
 
 #[test]
@@ -828,12 +828,12 @@ fn test_unescape_and_decode_without_bom_removes_utf16le_bom() {
 
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
         }
     }
-    assert_eq!(txt, vec![""]);
+    assert_eq!(txt[0], "");
 }
 
 #[test]
@@ -849,7 +849,7 @@ fn test_unescape_and_decode_without_bom_does_nothing_if_no_bom_exists() {
 
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
         }

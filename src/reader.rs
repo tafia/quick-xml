@@ -8,7 +8,7 @@ use std::path::Path;
 use std::str::from_utf8;
 
 #[cfg(feature = "encoding")]
-use encoding_rs::Encoding;
+use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use errors::{Error, Result};
 use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
@@ -88,6 +88,9 @@ pub struct Reader<B: BufRead> {
     #[cfg(feature = "encoding")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
+    #[cfg(feature = "encoding")]
+    /// check if quick-rs could find out the encoding
+    is_encoding_set: bool,
 }
 
 impl<B: BufRead> Reader<B> {
@@ -107,6 +110,8 @@ impl<B: BufRead> Reader<B> {
             ns_buffer: NamespaceBufferIndex::default(),
             #[cfg(feature = "encoding")]
             encoding: ::encoding_rs::UTF_8,
+            #[cfg(feature = "encoding")]
+            is_encoding_set: false,
         }
     }
 
@@ -715,10 +720,24 @@ impl<B: BufRead> Reader<B> {
     /// If no encoding is specified, defaults to UTF-8.
     #[inline]
     #[cfg(feature = "encoding")]
-    pub fn decode_without_bom<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode_with_bom_removal(bytes).0
+    pub fn decode_without_bom<'b, 'c>(&'b mut self, mut bytes: &'c [u8]) -> Cow<'c, str> {
+        if self.is_encoding_set {
+            return self.encoding.decode_with_bom_removal(bytes).0;
+        }
+        if bytes.starts_with(b"\xEF\xBB\xBF") {
+            self.is_encoding_set = true;
+            bytes = &bytes[3..];
+        } else if bytes.starts_with(b"\xFF\xFE") {
+            self.is_encoding_set = true;
+            self.encoding = UTF_16LE;
+            bytes = &bytes[2..];
+        } else if bytes.starts_with(b"\xFE\xFF") {
+            self.is_encoding_set = true;
+            self.encoding = UTF_16BE;
+            bytes = &bytes[3..];
+        };
+        self.encoding.decode_without_bom_handling(bytes).0
     }
-
     /// Decodes a UTF8 slice regarless of XML declaration.
     ///
     /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the

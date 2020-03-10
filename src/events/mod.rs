@@ -487,7 +487,7 @@ impl<'a> BytesText<'a> {
     #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_without_bom<B: BufRead>(
         &self,
-        reader: &Reader<B>,
+        reader: &mut Reader<B>,
     ) -> Result<String> {
         self.unescaped()
             .map(|e| reader.decode_without_bom(&*e).into_owned())
