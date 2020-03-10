@@ -484,7 +484,7 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_without_bom<B: BufRead>(
         &self,
         reader: &Reader<B>,
@@ -500,7 +500,7 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_without_bom<B: BufRead>(
         &self,
         reader: &Reader<B>,
