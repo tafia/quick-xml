@@ -694,7 +694,7 @@ impl<B: BufRead> Reader<B> {
         self.encoding.decode(bytes).0
     }
 
-    /// Decodes a UTF8 slice without BOM (Byte order mark) regarless of XML declaration.
+    /// Decodes a UTF8 slice without BOM (Byte order mark) regardless of XML declaration.
     ///
     /// Decode `bytes` without BOM and with malformed sequences replaced with the
     /// `U+FFFD REPLACEMENT CHARACTER`.
