@@ -8,6 +8,10 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## 0.18.0
+- feat: add `decode_without_bom` fns for BOM prefixed text fields
+- fix: decode then unescape instead of unescape and decode
+
 ## 0.17.2
 - feat: add Seq to serializer
 - docs: update readme with example for `$value`
