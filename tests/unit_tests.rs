@@ -776,3 +776,83 @@ fn test_closing_bracket_in_single_quote_mixed() {
     }
     next_eq!(r, End, b"a");
 }
+
+#[test]
+#[cfg(not(feature = "encoding"))]
+fn test_unescape_and_decode_without_bom_removes_utf8_bom() {
+    let input: &str = std::str::from_utf8(b"\xEF\xBB\xBF<?xml version=\"1.0\"?>").unwrap();
+
+    let mut reader = Reader::from_str(&input);
+    reader.trim_text(true);
+
+    let mut txt = Vec::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
+            Ok(Event::Eof) => break,
+            _ => (),
+        }
+    }
+    assert_eq!(txt, vec![""]);
+}
+
+#[test]
+#[cfg(feature = "encoding")]
+fn test_unescape_and_decode_without_bom_removes_utf16be_bom() {
+    let mut reader = Reader::from_file("./tests/documents/utf16be.xml").unwrap();
+    reader.trim_text(true);
+
+    let mut txt = Vec::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
+            Ok(Event::Eof) => break,
+            _ => (),
+        }
+    }
+    assert_eq!(txt[0], "");
+}
+
+#[test]
+#[cfg(feature = "encoding")]
+fn test_unescape_and_decode_without_bom_removes_utf16le_bom() {
+    let mut reader = Reader::from_file("./tests/documents/utf16le.xml").unwrap();
+    reader.trim_text(true);
+
+    let mut txt = Vec::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
+            Ok(Event::Eof) => break,
+            _ => (),
+        }
+    }
+    assert_eq!(txt[0], "");
+}
+
+#[test]
+#[cfg(not(feature = "encoding"))]
+fn test_unescape_and_decode_without_bom_does_nothing_if_no_bom_exists() {
+    let input: &str = std::str::from_utf8(b"<?xml version=\"1.0\"?>").unwrap();
+
+    let mut reader = Reader::from_str(&input);
+    reader.trim_text(true);
+
+    let mut txt = Vec::new();
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
+            Ok(Event::Eof) => break,
+            _ => (),
+        }
+    }
+    assert_eq!(txt.is_empty(), true);
+}
