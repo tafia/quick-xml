@@ -427,6 +427,7 @@ impl<B: BufRead> Reader<B> {
                 // Try getting encoding from the declaration event
                 if let Some(enc) = event.encoder() {
                     self.encoding = enc;
+                    self.is_encoding_set = true;
                 }
                 Ok(Event::Decl(event))
             } else {
