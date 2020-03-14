@@ -173,10 +173,12 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     #[inline]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped().map(|e| reader.decode(&*e).into_owned())
+        let decoded = reader.decode(&*self);
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// Returns the unescaped and decoded string value.
@@ -189,11 +191,12 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     #[inline]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped()
-            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
+        let decoded = reader.decode(&*self)?;
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// Adds an attribute to this element.
@@ -489,8 +492,9 @@ impl<'a> BytesText<'a> {
         &self,
         reader: &mut Reader<B>,
     ) -> Result<String> {
-        self.unescaped()
-            .map(|e| reader.decode_without_bom(&*e).into_owned())
+        let decoded = reader.decode_without_bom(&*self);
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -505,8 +509,9 @@ impl<'a> BytesText<'a> {
         &self,
         reader: &Reader<B>,
     ) -> Result<String> {
-        self.unescaped()
-            .and_then(|e| reader.decode_without_bom(&*e).map(|s| s.to_owned()))
+        let decoded = reader.decode_without_bom(&*self)?;
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -515,9 +520,11 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped().map(|e| reader.decode(&*e).into_owned())
+        let decoded = reader.decode(&*self);
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -526,10 +533,11 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped()
-            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
+        let decoded = reader.decode(&*self)?;
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     /// Gets escaped content.

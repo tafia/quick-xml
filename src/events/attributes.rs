@@ -96,36 +96,72 @@ impl<'a> Attribute<'a> {
         unescape(&*self.value).map_err(Error::EscapeError)
     }
 
-    /// Returns the unescaped and decoded string value.
+    /// Decode then unescapes the value
     ///
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
-    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
     /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
     ///
     /// [`unescaped_value()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped_value()
-            .map(|e| reader.decode(&*e).into_owned())
+        let decoded = reader.decode(&*self.value);
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
-    /// Returns the unescaped and decoded string value.
+    /// Decode then unescapes the value
     ///
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
-    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
     /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
     ///
     /// [`unescaped_value()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
-    #[cfg(not(feature = "encoding_rs"))]
+    #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        self.unescaped_value()
-            .and_then(|e| reader.decode(&*e).map(|s| s.to_owned()))
+        let decoded = reader.decode(&*self.value)?;
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
+    /// helper method to unescape then decode self using the reader encoding
+    /// but without BOM (Byte order mark)
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    #[cfg(feature = "encoding")]
+    pub fn unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &mut Reader<B>,
+    ) -> Result<String> {
+        let decoded = reader.decode_without_bom(&*self.value);
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
+    /// helper method to unescape then decode self using the reader encoding
+    /// but without BOM (Byte order mark)
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    #[cfg(not(feature = "encoding"))]
+    pub fn unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+    ) -> Result<String> {
+        let decoded = reader.decode_without_bom(&*self.value)?;
+        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 }
 
