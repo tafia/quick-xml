@@ -1,10 +1,23 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, BytesStart, Event},
     se::Serializer,
 };
 use serde::ser::{self, Serialize};
 use std::io::Write;
+
+/// Determine if this is a basic type that should be an attribute
+fn is_attr_type(type_name: &str) -> bool {
+    match type_name {
+        "bool" | "char" | "option" | "()" => true,
+        "u8" | "u16" | "u32" | "u64" | "u128" => true,
+        "i8" | "i16" | "i32" | "i64" | "i128" => true,
+        "f32" | "f64" => true,
+        "[u8]" | "str" => true,
+        "alloc::string::String" => true,
+        _ => false
+    }
+}
+
 
 /// An implementation of `SerializeMap` for serializing to XML.
 pub struct Map<'w, W>
@@ -72,21 +85,23 @@ where
 {
     parent: &'w mut Serializer<W>,
     name: &'w str,
+    attrs: u32,
+    needs_close: bool,
 }
 
 impl<'w, W> Struct<'w, W>
-where
-    W: 'w + Write,
+    where
+        W: 'w + Write,
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
-        Struct { parent, name }
+        Struct { parent, name, attrs: 0, needs_close: true }
     }
 }
 
 impl<'w, W> ser::SerializeStruct for Struct<'w, W>
-where
-    W: 'w + Write,
+    where
+        W: 'w + Write,
 {
     type Ok = ();
     type Error = DeError;
@@ -96,21 +111,36 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let key = key.as_bytes();
-        self.parent
-            .writer
-            .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
-        value.serialize(&mut *self.parent)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(key)))?;
+        let type_name = std::any::type_name::<T>();
+        let is_attr = is_attr_type(type_name);
+        //println!{"type_name {}", type_name};
+        if is_attr {
+            write!(self.parent.writer.inner(), " ").map_err(Error::Io)?;
+            key.serialize(&mut *self.parent)?;
+            write!(self.parent.writer.inner(), "=").map_err(Error::Io)?;
+
+            write!(self.parent.writer.inner(), r#"""#).map_err(Error::Io)?;
+            value.serialize(&mut *self.parent)?;
+            write!(self.parent.writer.inner(), r#"""#).map_err(Error::Io)?;
+            self.attrs += 1;
+        } else {
+            if self.needs_close {
+                write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+                self.needs_close = false;
+            }
+            value.serialize(&mut *self.parent)?;
+        }
+
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;
+        if self.needs_close {
+            write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+        }
+        write!(self.parent.writer.inner(), "</").map_err(Error::Io)?;
+        self.name.serialize(&mut *self.parent)?;
+        write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
         Ok(())
     }
 }

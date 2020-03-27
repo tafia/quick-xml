@@ -4,7 +4,7 @@ mod var;
 
 use self::var::{Map, Seq, Struct};
 use crate::{
-    errors::serialize::DeError,
+    errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, BytesText, Event},
     writer::Writer,
 };
@@ -209,8 +209,8 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(name.as_bytes())))?;
+        write!(self.writer.inner(), r#"<"#).map_err(Error::Io)?;
+        name.serialize(&mut *self)?;
         Ok(Struct::new(self, name))
     }
 
@@ -258,7 +258,8 @@ mod tests {
         }
 
         let got = String::from_utf8(buffer).unwrap();
-        assert_eq!(got, "<foo>");
+        println!{"got {}", &got};
+        assert_eq!(got, "<foo");
     }
 
     #[test]
@@ -272,7 +273,8 @@ mod tests {
         }
 
         let got = String::from_utf8(buffer).unwrap();
-        assert_eq!(got, "<foo>bar</foo>");
+        println!{"got {}", &got};
+        assert_eq!(got, r#" foo="bar""#);
     }
 
     #[test]
@@ -287,7 +289,7 @@ mod tests {
             name: "Bob".to_string(),
             age: 42,
         };
-        let should_be = "<Person><name>Bob</name><age>42</age></Person>";
+        let should_be = r#"<Person name="Bob" age="42"></Person>"#;
         let mut buffer = Vec::new();
 
         {
@@ -353,5 +355,91 @@ mod tests {
         let got = String::from_utf8(buffer).unwrap();
         println!("{}", got);
         panic!();
+    }
+
+    #[test]
+    fn test_serialize_struct_complex_outer()
+    {
+        use se;
+
+        #[derive(Debug, Serialize, PartialEq, Default)]
+        #[serde(rename = "inner", default)]
+        struct Inner {
+            in_dummy: u32
+        }
+
+        #[derive(Debug, Serialize, PartialEq, Default)]
+        struct Test1 {
+            dummy1: u32,
+            dummy2: String,
+            inner: Inner,
+        }
+
+        const TEST_XML_1: &str =
+            r#"<Test1 dummy1="10" dummy2="bar"><inner in_dummy="30"></inner></Test1>"#;
+
+        let outer: Test1 = Test1 {
+            dummy1: 10,
+            dummy2: "bar".to_string(),
+            inner: Inner {
+                in_dummy: 30,
+            }
+        };
+
+
+        println!{"outer {:?}", &outer};
+        println!{};
+
+        let xml2 = match se::to_string(&outer) {
+            Ok(xml2) => xml2,
+            Err(e) => {
+                println!{"serialize error {:?}", e};
+                assert!{false};
+                return;
+            }
+        };
+        println!{"serialized {:?}", &xml2};
+        println!{};
+
+        assert_eq!(TEST_XML_1, &xml2)
+    }
+
+    #[test]
+    fn test_serialize_struct_nested()
+    {
+        use se;
+
+        #[derive(Debug, Serialize, PartialEq, Default)]
+        #[serde(rename = "inner", default)]
+        struct Inner {
+            in_dummy: u32
+        }
+
+        #[derive(Debug, Serialize, PartialEq, Default)]
+        struct Test2 {
+            inner: Inner,
+        }
+        const TEST_XML_2: &str =
+            r#"<Test2><inner in_dummy="30"></inner></Test2>"#;
+
+        let outer: Test2 = Test2 {
+            inner: Inner {
+                in_dummy: 30,
+            }
+        };
+
+        println!{"outer {:?}", &outer};
+
+        let xml2 = match se::to_string(&outer) {
+            Ok(xml2) => xml2,
+            Err(e) => {
+                println!{"serialize error {:?}", e};
+                assert!{false};
+                return;
+            }
+        };
+        println!{"serialized {:?}", &xml2};
+
+        assert_eq!(TEST_XML_2, &xml2)
     }
 }

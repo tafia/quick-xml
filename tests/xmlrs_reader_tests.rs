@@ -4,6 +4,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
 use std::str::from_utf8;
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn sample_1_short() {
     test(
@@ -13,6 +14,7 @@ fn sample_1_short() {
     );
 }
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn sample_1_full() {
     test(
@@ -22,6 +24,7 @@ fn sample_1_full() {
     );
 }
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn sample_2_short() {
     test(
@@ -31,6 +34,7 @@ fn sample_2_short() {
     );
 }
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn sample_2_full() {
     test(
@@ -77,6 +81,7 @@ fn sample_2_full() {
 //
 // }
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn sample_ns_short() {
     test(

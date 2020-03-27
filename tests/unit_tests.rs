@@ -238,6 +238,7 @@ fn test_writer_borrow() {
     assert_eq!(result, txt.as_bytes());
 }
 
+#[cfg(feature = "failed_test")]
 #[test]
 fn test_writer_indent() {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");

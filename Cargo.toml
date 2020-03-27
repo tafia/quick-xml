@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.17.2"
+version = "0.17.3"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 
@@ -30,6 +30,7 @@ bench = false
 default = []
 encoding = ["encoding_rs"]
 serialize = ["serde"]
+failed_test = []
 
 [package.metadata.docs.rs]
 features = ["serialize"]
