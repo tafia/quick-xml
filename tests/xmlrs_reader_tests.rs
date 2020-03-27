@@ -4,8 +4,8 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
 use std::str::from_utf8;
 
-#[cfg(feature = "failed_test")]
 #[test]
+#[ignore]
 fn sample_1_short() {
     test(
         include_bytes!("documents/sample_1.xml"),
@@ -14,8 +14,8 @@ fn sample_1_short() {
     );
 }
 
-#[cfg(feature = "failed_test")]
 #[test]
+#[ignore]
 fn sample_1_full() {
     test(
         include_bytes!("documents/sample_1.xml"),
@@ -24,8 +24,8 @@ fn sample_1_full() {
     );
 }
 
-#[cfg(feature = "failed_test")]
 #[test]
+#[ignore]
 fn sample_2_short() {
     test(
         include_bytes!("documents/sample_2.xml"),
@@ -34,8 +34,8 @@ fn sample_2_short() {
     );
 }
 
-#[cfg(feature = "failed_test")]
 #[test]
+#[ignore]
 fn sample_2_full() {
     test(
         include_bytes!("documents/sample_2.xml"),
@@ -81,8 +81,8 @@ fn sample_2_full() {
 //
 // }
 
-#[cfg(feature = "failed_test")]
 #[test]
+#[ignore]
 fn sample_ns_short() {
     test(
         include_bytes!("documents/sample_ns.xml"),

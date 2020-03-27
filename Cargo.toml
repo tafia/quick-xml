@@ -30,7 +30,6 @@ bench = false
 default = []
 encoding = ["encoding_rs"]
 serialize = ["serde"]
-failed_test = []
 
 [package.metadata.docs.rs]
 features = ["serialize"]
