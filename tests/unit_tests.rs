@@ -239,6 +239,7 @@ fn test_writer_borrow() {
 }
 
 #[test]
+#[ignore]
 fn test_writer_indent() {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
     let mut reader = Reader::from_str(txt);
