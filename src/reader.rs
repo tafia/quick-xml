@@ -199,12 +199,11 @@ impl<B: BufRead> Reader<B> {
     pub fn buffer_position(&self) -> usize {
         // when internal state is Opened, we have actually read until '<',
         // which we don't want to show
-        let offset = if let TagState::Opened = self.tag_state {
-            1
+        if let TagState::Opened = self.tag_state {
+            self.buf_position - 1
         } else {
-            0
-        };
-        self.buf_position - offset
+            self.buf_position
+        }
     }
 
     /// private function to read until '<' is found
@@ -212,10 +211,9 @@ impl<B: BufRead> Reader<B> {
     fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Opened;
         let buf_start = buf.len();
-        match read_until(&mut self.reader, b'<', buf) {
+        match read_until(&mut self.reader, b'<', buf, &mut self.buf_position) {
             Ok(0) => Ok(Event::Eof),
-            Ok(n) => {
-                self.buf_position += n;
+            Ok(_) => {
                 let (start, len) = if self.trim_text {
                     match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
                         Some(start) => (
@@ -255,31 +253,27 @@ impl<B: BufRead> Reader<B> {
         };
 
         if start != b'/' && start != b'!' && start != b'?' {
-            match read_elem_until(&mut self.reader, b'>', buf) {
+            match read_elem_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
                 Ok(0) => Ok(Event::Eof),
-                Ok(n) => {
-                    self.buf_position += n;
+                Ok(_) => {
                     // we already *know* that we are in this case
                     self.read_start(&buf[buf_start..])
                 }
                 Err(e) => Err(e),
             }
         } else {
-            match read_until(&mut self.reader, b'>', buf) {
+            match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
                 Ok(0) => Ok(Event::Eof),
-                Ok(n) => {
-                    self.buf_position += n;
-                    match start {
-                        b'/' => self.read_end(&buf[buf_start..]),
-                        b'!' => self.read_bang(buf_start, buf),
-                        b'?' => self.read_question_mark(&buf[buf_start..]),
-                        _ => unreachable!(
-                            "We checked that `start` must be one of [/!?], was {:?} \
+                Ok(_) => match start {
+                    b'/' => self.read_end(&buf[buf_start..]),
+                    b'!' => self.read_bang(buf_start, buf),
+                    b'?' => self.read_question_mark(&buf[buf_start..]),
+                    _ => unreachable!(
+                        "We checked that `start` must be one of [/!?], was {:?} \
                              instead.",
-                            start
-                        ),
-                    }
-                }
+                        start
+                    ),
+                },
                 Err(e) => Err(e),
             }
         }
@@ -289,7 +283,6 @@ impl<B: BufRead> Reader<B> {
     /// if `self.check_end_names`, checks that element matches last opened element
     /// return `End` event
     fn read_end<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let len = buf.len();
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
         let name = if self.trim_markup_names_in_closing_tags {
@@ -304,7 +297,7 @@ impl<B: BufRead> Reader<B> {
         };
         if self.check_end_names {
             let mismatch_err = |expected: &[u8], found: &[u8], buf_position: &mut usize| {
-                *buf_position -= len;
+                *buf_position -= buf.len();
                 Err(Error::EndEventMismatch {
                     expected: from_utf8(expected).unwrap_or("").to_owned(),
                     found: from_utf8(found).unwrap_or("").to_owned(),
@@ -337,65 +330,59 @@ impl<B: BufRead> Reader<B> {
         buf_start: usize,
         buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
-        let len = buf.len();
-        if len >= buf_start + 3 && &buf[buf_start + 1..buf_start + 3] == b"--" {
-            let mut len = buf.len();
-            while (len - buf_start) < 5 || &buf[len - 2..] != b"--" {
+        if buf[buf_start..].starts_with(b"!--") {
+            while buf.len() < buf_start + 5 || !buf.ends_with(b"--") {
                 buf.push(b'>');
-                match read_until(&mut self.reader, b'>', buf) {
+                match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
                     Ok(0) => {
-                        self.buf_position -= len;
+                        self.buf_position -= buf.len() - buf_start;
                         return Err(Error::UnexpectedEof("Comment".to_string()));
                     }
-                    Ok(n) => self.buf_position += n,
+                    Ok(_) => (),
                     Err(e) => return Err(e.into()),
                 }
-                len = buf.len();
             }
+            let len = buf.len();
             if self.check_comments {
-                let mut offset = len - 3;
-                for w in buf[buf_start + 3..len - 1].windows(2) {
-                    if &*w == b"--" {
-                        self.buf_position -= offset;
-                        return Err(Error::UnexpectedToken("--".to_string()));
-                    }
-                    offset -= 1;
+                // search if '--' not in comments
+                if let Some(p) = memchr::memchr_iter(b'-', &buf[buf_start + 3..len - 2])
+                    .position(|p| buf[buf_start + 3 + p + 1] == b'-')
+                {
+                    self.buf_position -= buf.len() - buf_start + p;
+                    return Err(Error::UnexpectedToken("--".to_string()));
                 }
             }
             Ok(Event::Comment(BytesText::from_escaped(
                 &buf[buf_start + 3..len - 2],
             )))
-        } else if len >= buf_start + 8 {
+        } else if buf.len() >= buf_start + 8 {
             match &buf[buf_start + 1..buf_start + 8] {
                 b"[CDATA[" => {
-                    let mut len = buf.len();
-                    while len < 10 || &buf[len - 2..] != b"]]" {
+                    while buf.len() < 10 || !buf.ends_with(b"]]") {
                         buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf) {
+                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
                             Ok(0) => {
-                                self.buf_position -= len;
+                                self.buf_position -= buf.len() - buf_start;
                                 return Err(Error::UnexpectedEof("CData".to_string()));
                             }
-                            Ok(n) => self.buf_position += n,
+                            Ok(_) => (),
                             Err(e) => return Err(e),
                         }
-                        len = buf.len();
                     }
                     Ok(Event::CData(BytesText::from_escaped(
-                        &buf[buf_start + 8..len - 2],
+                        &buf[buf_start + 8..buf.len() - 2],
                     )))
                 }
                 b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf) {
+                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
                             Ok(0) => {
-                                self.buf_position -= buf.len();
+                                self.buf_position -= buf.len() - buf_start;
                                 return Err(Error::UnexpectedEof("DOCTYPE".to_string()));
                             }
                             Ok(n) => {
-                                self.buf_position += n;
                                 let start = buf.len() - n;
                                 count += buf.iter().skip(start).filter(|&&b| b == b'<').count();
                                 count -= 1;
@@ -403,15 +390,14 @@ impl<B: BufRead> Reader<B> {
                             Err(e) => return Err(e),
                         }
                     }
-                    let len = buf.len();
                     Ok(Event::DocType(BytesText::from_escaped(
-                        &buf[buf_start + 8..len],
+                        &buf[buf_start + 8..buf.len()],
                     )))
                 }
                 _ => return Err(Error::UnexpectedBang),
             }
         } else {
-            self.buf_position -= buf.len();
+            self.buf_position -= buf.len() - buf_start;
             return Err(Error::UnexpectedBang);
         }
     }
@@ -915,16 +901,24 @@ impl<'a> Reader<&'a [u8]> {
 /// read until `byte` is found or end of file
 /// return the position of byte
 #[inline]
-fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
+fn read_until<R: BufRead>(
+    r: &mut R,
+    byte: u8,
+    buf: &mut Vec<u8>,
+    position: &mut usize,
+) -> Result<usize> {
     let mut read = 0;
     let mut done = false;
     while !done {
         let used = {
             let available = match r.fill_buf() {
-                Ok(n) if n.is_empty() => return Ok(read),
+                Ok(n) if n.is_empty() => break,
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
+                Err(e) => {
+                    *position += read;
+                    return Err(Error::Io(e));
+                }
             };
 
             match memchr::memchr(byte, available) {
@@ -942,6 +936,7 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
         r.consume(used);
         read += used;
     }
+    *position += read;
     Ok(read)
 }
 
@@ -956,7 +951,12 @@ fn read_until<R: BufRead>(r: &mut R, byte: u8, buf: &mut Vec<u8>) -> Result<usiz
 /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
 /// level)
 #[inline]
-fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Result<usize> {
+fn read_elem_until<R: BufRead>(
+    r: &mut R,
+    end_byte: u8,
+    buf: &mut Vec<u8>,
+    position: &mut usize,
+) -> Result<usize> {
     #[derive(Clone, Copy)]
     enum State {
         /// The initial state (inside element, but outside of attribute value)
@@ -975,7 +975,10 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
                 Ok(n) if n.is_empty() => return Ok(read),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
+                Err(e) => {
+                    *position += read;
+                    return Err(Error::Io(e));
+                }
             };
 
             let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
@@ -1013,6 +1016,7 @@ fn read_elem_until<R: BufRead>(r: &mut R, end_byte: u8, buf: &mut Vec<u8>) -> Re
         r.consume(used);
         read += used;
     }
+    *position += read;
     Ok(read)
 }
 

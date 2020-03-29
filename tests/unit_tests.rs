@@ -387,13 +387,13 @@ fn test_new_xml_decl_empty() {
 }
 
 #[test]
-fn test_buf_position() {
+fn test_buf_position_err_end_element() {
     let mut r = Reader::from_str("</a>");
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
-        Err(_) if r.buffer_position() == 2 => assert!(true), // error at char 2: no opening tag
+        Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
         Err(e) => panic!(
             "expecting buf_pos = 2, found {}, err: {:?}",
             r.buffer_position(),
@@ -401,15 +401,66 @@ fn test_buf_position() {
         ),
         e => panic!("expecting error, found {:?}", e),
     }
+}
 
-    r = Reader::from_str("<a><!--b>");
+#[test]
+fn test_buf_position_err_comment() {
+    let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
     next_eq!(r, Start, b"a");
+    assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
-        Err(_) if r.buffer_position() == 5 => {
+        Err(_) if r.buffer_position() == 4 => {
+            // error at char 5: no closing --> tag found
+            assert!(true);
+        }
+        Err(e) => panic!(
+            "expecting buf_pos = 5, found {}, err: {:?}",
+            r.buffer_position(),
+            e
+        ),
+        e => assert!(false, "expecting error, found {:?}", e),
+    }
+}
+
+#[test]
+fn test_buf_position_err_comment_2_buf() {
+    let mut r = Reader::from_str("<a><!--b>");
+    r.trim_text(true).check_end_names(true);
+
+    let mut buf = Vec::new();
+    let _ = r.read_event(&mut buf).unwrap();
+    assert_eq!(r.buffer_position(), 3);
+
+    let mut buf = Vec::new();
+    match r.read_event(&mut buf) {
+        Err(_) if r.buffer_position() == 4 => {
+            // error at char 5: no closing --> tag found
+            assert!(true);
+        }
+        Err(e) => panic!(
+            "expecting buf_pos = 5, found {}, err: {:?}",
+            r.buffer_position(),
+            e
+        ),
+        e => assert!(false, "expecting error, found {:?}", e),
+    }
+}
+
+#[test]
+fn test_buf_position_err_comment_trim_text() {
+    let mut r = Reader::from_str("<a>\r\n <!--b>");
+    r.trim_text(true).check_end_names(true);
+
+    next_eq!(r, Start, b"a");
+    assert_eq!(r.buffer_position(), 3);
+
+    let mut buf = Vec::new();
+    match r.read_event(&mut buf) {
+        Err(_) if r.buffer_position() == 7 => {
             // error at char 5: no closing --> tag found
             assert!(true);
         }
