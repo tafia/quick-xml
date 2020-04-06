@@ -210,26 +210,50 @@ impl<B: BufRead> Reader<B> {
     /// return a `Text` event
     fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Opened;
-        let buf_start = buf.len();
-        match read_until(&mut self.reader, b'<', buf, &mut self.buf_position) {
-            Ok(0) => Ok(Event::Eof),
-            Ok(_) => {
-                let (start, len) = if self.trim_text {
-                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
-                        Some(start) => (
-                            buf_start + start,
-                            buf.iter()
-                                .rposition(|&b| !is_whitespace(b))
-                                .map_or_else(|| buf.len(), |p| p + 1),
-                        ),
-                        None => return self.read_event(buf),
-                    }
-                } else {
-                    (buf_start, buf.len())
-                };
-                Ok(Event::Text(BytesText::from_escaped(&buf[start..len])))
+
+        let skip_text = if self.trim_text {
+            self.reader.skip_whitespace(&mut self.buf_position)?;
+
+            let start = match self.reader.peek_one() {
+                Ok(None) => return Ok(Event::Eof),
+                Ok(Some(byte)) => byte,
+                Err(e) => return Err(e),
+            };
+
+            if start == b'<' {
+                // Trimming whitespace skipped all text and reached a tag
+                self.reader
+                    .read_bytes_until(b'<', buf, &mut self.buf_position)?;
+                true
+            } else {
+                false
             }
-            Err(e) => Err(e),
+        } else {
+            false
+        };
+
+        if skip_text {
+            return self.read_event(buf);
+        } else {
+            return match self
+                .reader
+                .read_bytes_until(b'<', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => {
+                    // Skip the ending '<'
+                    let len = if self.trim_text {
+                        bytes
+                            .iter()
+                            .rposition(|&b| !is_whitespace(b))
+                            .map_or_else(|| bytes.len(), |p| p + 1)
+                    } else {
+                        bytes.len()
+                    };
+                    Ok(Event::Text(BytesText::from_escaped(&bytes[0..len])))
+                }
+                Err(e) => Err(e),
+            };
         }
     }
 
@@ -238,39 +262,39 @@ impl<B: BufRead> Reader<B> {
         self.tag_state = TagState::Closed;
 
         // need to read 1 character to decide whether pay special attention to attribute values
-        let buf_start = buf.len();
-        let start = loop {
-            match self.reader.fill_buf() {
-                Ok(n) if n.is_empty() => return Ok(Event::Eof),
-                Ok(n) => {
-                    // We intentionally don't `consume()` the byte, otherwise we would have to
-                    // handle things like '<>' here already.
-                    break n[0];
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
-            }
+        let start = match self.reader.peek_one() {
+            Ok(None) => return Ok(Event::Eof),
+            Ok(Some(byte)) => byte,
+            Err(e) => return Err(e),
         };
 
         if start != b'/' && start != b'!' && start != b'?' {
-            match read_elem_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
-                Ok(0) => Ok(Event::Eof),
-                Ok(_) => {
+            match self.reader.read_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => {
                     // we already *know* that we are in this case
-                    self.read_start(&buf[buf_start..])
+                    self.read_start(bytes)
                 }
                 Err(e) => Err(e),
             }
+        } else if start == b'!' {
+            match self.reader.read_bang_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_bang(bytes),
+                Err(e) => Err(e),
+            }
         } else {
-            match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
-                Ok(0) => Ok(Event::Eof),
-                Ok(_) => match start {
-                    b'/' => self.read_end(&buf[buf_start..]),
-                    b'!' => self.read_bang(buf_start, buf),
-                    b'?' => self.read_question_mark(&buf[buf_start..]),
+            match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => match start {
+                    b'/' => self.read_end(bytes),
+                    b'?' => self.read_question_mark(bytes),
                     _ => unreachable!(
-                        "We checked that `start` must be one of [/!?], was {:?} \
-                             instead.",
+                        "We checked that `start` must be one of [/?], was {:?} \
+                         instead.",
                         start
                     ),
                 },
@@ -325,80 +349,32 @@ impl<B: BufRead> Reader<B> {
     ///
     /// Note: depending on the start of the Event, we may need to read more
     /// data, thus we need a mutable buffer
-    fn read_bang<'a, 'b>(
-        &'a mut self,
-        buf_start: usize,
-        buf: &'b mut Vec<u8>,
-    ) -> Result<Event<'b>> {
-        if buf[buf_start..].starts_with(b"!--") {
-            while buf.len() < buf_start + 5 || !buf.ends_with(b"--") {
-                buf.push(b'>');
-                match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
-                    Ok(0) => {
-                        self.buf_position -= buf.len() - buf_start;
-                        return Err(Error::UnexpectedEof("Comment".to_string()));
-                    }
-                    Ok(_) => (),
-                    Err(e) => return Err(e.into()),
-                }
-            }
-            let len = buf.len();
+    fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        let len = buf.len();
+        if buf.starts_with(b"!--") {
+            // FIXME: actually, isn't, it misses <!-->
+            debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_elem");
             if self.check_comments {
                 // search if '--' not in comments
-                if let Some(p) = memchr::memchr_iter(b'-', &buf[buf_start + 3..len - 2])
-                    .position(|p| buf[buf_start + 3 + p + 1] == b'-')
+                if let Some(p) =
+                    memchr::memchr_iter(b'-', &buf[3..len - 2]).position(|p| buf[3 + p + 1] == b'-')
                 {
-                    self.buf_position -= buf.len() - buf_start + p;
+                    // FIXME: Should be `- p`
+                    self.buf_position -= buf.len() + p;
                     return Err(Error::UnexpectedToken("--".to_string()));
                 }
             }
-            Ok(Event::Comment(BytesText::from_escaped(
-                &buf[buf_start + 3..len - 2],
+            Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
+        } else if buf.starts_with(b"![CDATA[") {
+            debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
+            Ok(Event::CData(BytesText::from_escaped(
+                &buf[8..buf.len() - 2],
             )))
-        } else if buf.len() >= buf_start + 8 {
-            match &buf[buf_start + 1..buf_start + 8] {
-                b"[CDATA[" => {
-                    while buf.len() < 10 || !buf.ends_with(b"]]") {
-                        buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
-                            Ok(0) => {
-                                self.buf_position -= buf.len() - buf_start;
-                                return Err(Error::UnexpectedEof("CData".to_string()));
-                            }
-                            Ok(_) => (),
-                            Err(e) => return Err(e),
-                        }
-                    }
-                    Ok(Event::CData(BytesText::from_escaped(
-                        &buf[buf_start + 8..buf.len() - 2],
-                    )))
-                }
-                b"DOCTYPE" => {
-                    let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
-                    while count > 0 {
-                        buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
-                            Ok(0) => {
-                                self.buf_position -= buf.len() - buf_start;
-                                return Err(Error::UnexpectedEof("DOCTYPE".to_string()));
-                            }
-                            Ok(n) => {
-                                let start = buf.len() - n;
-                                count += buf.iter().skip(start).filter(|&&b| b == b'<').count();
-                                count -= 1;
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-                    Ok(Event::DocType(BytesText::from_escaped(
-                        &buf[buf_start + 8..buf.len()],
-                    )))
-                }
-                _ => return Err(Error::UnexpectedBang),
-            }
+        } else if buf.starts_with(b"!DOCTYPE") {
+            debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
+            Ok(Event::DocType(BytesText::from_escaped(&buf[8..])))
         } else {
-            self.buf_position -= buf.len() - buf_start;
-            return Err(Error::UnexpectedBang);
+            unreachable!("Proper bang start guaranteed by read_bang_elem");
         }
     }
 
@@ -898,126 +874,294 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
-/// read until `byte` is found or end of file
-/// return the position of byte
-#[inline]
-fn read_until<R: BufRead>(
-    r: &mut R,
-    byte: u8,
-    buf: &mut Vec<u8>,
-    position: &mut usize,
-) -> Result<usize> {
-    let mut read = 0;
-    let mut done = false;
-    while !done {
-        let used = {
-            let available = match r.fill_buf() {
-                Ok(n) if n.is_empty() => break,
-                Ok(n) => n,
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            };
+trait BufferedInput<'r, B> {
+    fn read_bytes_until(
+        &mut self,
+        byte: u8,
+        buf: B,
+        position: &mut usize,
+    ) -> Result<Option<&'r [u8]>>;
 
-            match memchr::memchr(byte, available) {
-                Some(i) => {
-                    buf.extend_from_slice(&available[..i]);
-                    done = true;
-                    i + 1
-                }
-                None => {
-                    buf.extend_from_slice(available);
-                    available.len()
-                }
-            }
-        };
-        r.consume(used);
-        read += used;
-    }
-    *position += read;
-    Ok(read)
+    fn read_bang_element(
+        &mut self,
+        buf: &'r mut Vec<u8>,
+        position: &mut usize,
+    ) -> Result<Option<&'r [u8]>>;
+
+    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
+
+    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
+
+    fn peek_one(&mut self) -> Result<Option<u8>>;
 }
 
-/// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
-/// [W3C Extensible Markup Language (XML) 1.1 (2006)](https://www.w3.org/TR/xml11)
-///
-/// Attribute values are defined as follows:
-/// ```plain
-/// AttValue := '"' (([^<&"]) | Reference)* '"'
-///           | "'" (([^<&']) | Reference)* "'"
-/// ```
-/// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
-/// level)
-#[inline]
-fn read_elem_until<R: BufRead>(
-    r: &mut R,
-    end_byte: u8,
-    buf: &mut Vec<u8>,
-    position: &mut usize,
-) -> Result<usize> {
-    #[derive(Clone, Copy)]
-    enum State {
-        /// The initial state (inside element, but outside of attribute value)
-        Elem,
-        /// Inside a single-quoted attribute value
-        SingleQ,
-        /// Inside a double-quoted attribute value
-        DoubleQ,
-    }
-    let mut state = State::Elem;
-    let mut read = 0;
-    let mut done = false;
-    while !done {
-        let used = {
-            let available = match r.fill_buf() {
-                Ok(n) if n.is_empty() => return Ok(read),
-                Ok(n) => n,
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            };
+/// Implementation of BufferedInput for any BufRead reader using a user-given
+/// Vec<u8> as buffer that will be borrowed by events.
+impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
+    /// read until `byte` is found or end of file
+    /// return the position of byte
+    #[inline]
+    fn read_bytes_until(
+        &mut self,
+        byte: u8,
+        buf: &'b mut Vec<u8>,
+        position: &mut usize,
+    ) -> Result<Option<&'b [u8]>> {
+        let mut read = 0;
+        let mut done = false;
+        let start = buf.len();
+        while !done {
+            let used = {
+                let available = match self.fill_buf() {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e));
+                    }
+                };
 
-            let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
-            let used: usize;
-            loop {
-                match memiter.next() {
+                match memchr::memchr(byte, available) {
                     Some(i) => {
-                        state = match (state, available[i]) {
-                            (State::Elem, b) if b == end_byte => {
-                                // only allowed to match `end_byte` while we are in state `Elem`
-                                buf.extend_from_slice(&available[..i]);
-                                done = true;
-                                used = i + 1;
-                                break;
-                            }
-                            (State::Elem, b'\'') => State::SingleQ,
-                            (State::Elem, b'\"') => State::DoubleQ,
-
-                            // the only end_byte that gets us out if the same character
-                            (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
-
-                            // all other bytes: no state change
-                            _ => state,
-                        };
+                        buf.extend_from_slice(&available[..i]);
+                        done = true;
+                        i + 1
                     }
                     None => {
                         buf.extend_from_slice(available);
-                        used = available.len();
-                        break;
+                        available.len()
                     }
                 }
-            }
-            used
-        };
-        r.consume(used);
-        read += used;
+            };
+            self.consume(used);
+            read += used;
+        }
+        *position += read;
+
+        if read == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(&buf[start..]))
+        }
     }
-    *position += read;
-    Ok(read)
+
+    fn read_bang_element(
+        &mut self,
+        buf: &'b mut Vec<u8>,
+        position: &mut usize,
+    ) -> Result<Option<&'b [u8]>> {
+        // Peeked one bang ('!') before being called, so it's guaranteed to
+        // start with it.
+        let start = buf.len();
+        let mut read = 1;
+        buf.push(b'!');
+        self.consume(1);
+
+        enum BangType {
+            // <![CDATA[...]]>
+            CData,
+            // <!--...-->
+            Comment,
+            // <!DOCTYPE...>
+            DocType,
+        }
+
+        let bang_type = match self.peek_one()? {
+            Some(b'[') => BangType::CData,
+            Some(b'-') => BangType::Comment,
+            Some(b'D') => BangType::DocType,
+            Some(_) => return Err(Error::UnexpectedBang),
+            None => return Err(Error::UnexpectedEof("unknown".to_string())),
+        };
+
+        loop {
+            let available = match self.fill_buf() {
+                Ok(n) if n.is_empty() => {
+                    // Note: Do not update position, so the error points to
+                    // somewhere sane rather than at the EOF
+                    let bang_str = match bang_type {
+                        BangType::CData => "CData",
+                        BangType::Comment => "Comment",
+                        BangType::DocType => "DOCTYPE",
+                    };
+                    return Err(Error::UnexpectedEof(bang_str.to_string()));
+                }
+                Ok(n) => n,
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    *position += read;
+                    return Err(Error::Io(e));
+                }
+            };
+
+            match memchr::memchr(b'>', available) {
+                Some(i) => {
+                    buf.extend_from_slice(&available[..i]);
+                    let used = i + 1;
+                    self.consume(used);
+                    read += used;
+
+                    let finished = match bang_type {
+                        BangType::Comment => read >= 5 && buf.ends_with(b"--"),
+                        BangType::CData => buf.ends_with(b"]]"),
+                        BangType::DocType => {
+                            // Inefficient, but unlikely to happen often
+                            let open = buf.iter().skip(start).filter(|b| **b == b'<').count();
+                            let closed = buf.iter().skip(start).filter(|b| **b == b'>').count();
+                            open == closed
+                        }
+                    };
+
+                    if finished {
+                        break;
+                    } else {
+                        // '>' was omitted in the extend_from_slice above
+                        buf.push(b'>');
+                    }
+                }
+                None => {
+                    buf.extend_from_slice(available);
+                    let used = available.len();
+                    self.consume(used);
+                    read += used;
+                }
+            }
+        }
+        *position += read;
+
+        if read == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(&buf[start..]))
+        }
+    }
+
+    /// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
+    /// [W3C Extensible Markup Language (XML) 1.1 (2006)](https://www.w3.org/TR/xml11)
+    ///
+    /// Attribute values are defined as follows:
+    /// ```plain
+    /// AttValue := '"' (([^<&"]) | Reference)* '"'
+    ///           | "'" (([^<&']) | Reference)* "'"
+    /// ```
+    /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
+    /// level)
+    #[inline]
+    fn read_element(
+        &mut self,
+        buf: &'b mut Vec<u8>,
+        position: &mut usize,
+    ) -> Result<Option<&'b [u8]>> {
+        #[derive(Clone, Copy)]
+        enum State {
+            /// The initial state (inside element, but outside of attribute value)
+            Elem,
+            /// Inside a single-quoted attribute value
+            SingleQ,
+            /// Inside a double-quoted attribute value
+            DoubleQ,
+        }
+        let mut state = State::Elem;
+        let mut read = 0;
+        let mut done = false;
+        let end_byte = b'>';
+        let start = buf.len();
+        while !done {
+            let used = {
+                let available = match self.fill_buf() {
+                    Ok(n) if n.is_empty() => {
+                        if read == 0 {
+                            return Ok(None);
+                        } else {
+                            return Ok(Some(&buf[start..]));
+                        }
+                    }
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e));
+                    }
+                };
+
+                let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
+                let used: usize;
+                loop {
+                    match memiter.next() {
+                        Some(i) => {
+                            state = match (state, available[i]) {
+                                (State::Elem, b) if b == end_byte => {
+                                    // only allowed to match `end_byte` while we are in state `Elem`
+                                    buf.extend_from_slice(&available[..i]);
+                                    done = true;
+                                    used = i + 1;
+                                    break;
+                                }
+                                (State::Elem, b'\'') => State::SingleQ,
+                                (State::Elem, b'\"') => State::DoubleQ,
+
+                                // the only end_byte that gets us out if the same character
+                                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+
+                                // all other bytes: no state change
+                                _ => state,
+                            };
+                        }
+                        None => {
+                            buf.extend_from_slice(available);
+                            used = available.len();
+                            break;
+                        }
+                    }
+                }
+                used
+            };
+            self.consume(used);
+            read += used;
+        }
+        *position += read;
+
+        if read == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(&buf[start..]))
+        }
+    }
+
+    /// Consume and discard all the whitespace until the next non-whitespace
+    /// character or EOF.
+    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+        loop {
+            break match self.fill_buf() {
+                Ok(n) => {
+                    let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
+                    if count > 0 {
+                        self.consume(count);
+                        *position += count;
+                        continue;
+                    } else {
+                        Ok(())
+                    }
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => Err(Error::Io(e)),
+            };
+        }
+    }
+
+    /// Return one character without consuming it, so that future `read_*` calls
+    /// will still include it. On EOF, return None.
+    fn peek_one(&mut self) -> Result<Option<u8>> {
+        loop {
+            break match self.fill_buf() {
+                Ok(n) if n.is_empty() => Ok(None),
+                Ok(n) => Ok(Some(n[0])),
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => Err(Error::Io(e)),
+            };
+        }
+    }
 }
 
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
