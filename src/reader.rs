@@ -61,9 +61,9 @@ enum TagState {
 ///     buf.clear();
 /// }
 /// ```
-pub struct Reader<B: BufRead> {
+pub struct Reader<R: BufRead> {
     /// reader
-    reader: B,
+    reader: R,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
     /// current state Open/Close
@@ -93,9 +93,9 @@ pub struct Reader<B: BufRead> {
     is_encoding_set: bool,
 }
 
-impl<B: BufRead> Reader<B> {
+impl<R: BufRead> Reader<R> {
     /// Creates a `Reader` that reads from a reader implementing `BufRead`.
-    pub fn from_reader(reader: B) -> Reader<B> {
+    pub fn from_reader(reader: R) -> Reader<R> {
         Reader {
             reader: reader,
             opened_buffer: Vec::new(),
@@ -126,7 +126,7 @@ impl<B: BufRead> Reader<B> {
     /// [`Empty`]: events/enum.Event.html#variant.Empty
     /// [`Start`]: events/enum.Event.html#variant.Start
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<R> {
         self.expand_empty_elements = val;
         self
     }
@@ -139,7 +139,7 @@ impl<B: BufRead> Reader<B> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_text(&mut self, val: bool) -> &mut Reader<R> {
         self.trim_text = val;
         self
     }
@@ -155,7 +155,7 @@ impl<B: BufRead> Reader<B> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Reader<R> {
         self.trim_markup_names_in_closing_tags = val;
         self
     }
@@ -173,7 +173,7 @@ impl<B: BufRead> Reader<B> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn check_end_names(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn check_end_names(&mut self, val: bool) -> &mut Reader<R> {
         self.check_end_names = val;
         self
     }
@@ -188,7 +188,7 @@ impl<B: BufRead> Reader<B> {
     /// (`false` by default)
     ///
     /// [`Comment`]: events/enum.Event.html#variant.Comment
-    pub fn check_comments(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn check_comments(&mut self, val: bool) -> &mut Reader<R> {
         self.check_comments = val;
         self
     }
@@ -208,32 +208,21 @@ impl<B: BufRead> Reader<B> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    where
+        R: BufferedInput<'i, B>
+    {
         self.tag_state = TagState::Opened;
 
         let skip_text = if self.trim_text {
             self.reader.skip_whitespace(&mut self.buf_position)?;
-
-            let start = match self.reader.peek_one() {
-                Ok(None) => return Ok(Event::Eof),
-                Ok(Some(byte)) => byte,
-                Err(e) => return Err(e),
-            };
-
-            if start == b'<' {
-                // Trimming whitespace skipped all text and reached a tag
-                self.reader
-                    .read_bytes_until(b'<', buf, &mut self.buf_position)?;
-                true
-            } else {
-                false
-            }
+            self.reader.skip_one(b'<', &mut self.buf_position)?
         } else {
             false
         };
 
         if skip_text {
-            return self.read_event(buf);
+            return self.read_event_buffered(buf);
         } else {
             return match self
                 .reader
@@ -258,7 +247,10 @@ impl<B: BufRead> Reader<B> {
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    where
+        R: BufferedInput<'i, B>
+    {
         self.tag_state = TagState::Closed;
 
         // need to read 1 character to decide whether pay special attention to attribute values
@@ -497,6 +489,16 @@ impl<B: BufRead> Reader<B> {
     /// println!("Text events: {:?}", txt);
     /// ```
     pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        self.read_event_buffered(buf)
+    }
+
+    /// Read text into the given buffer, and return an event that borrows from
+    /// either that buffer or from the input itself, based on the type of the
+    /// reader.
+    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    where
+        R: BufferedInput<'i, B>
+    {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
             TagState::Closed => self.read_until_open(buf),
@@ -853,7 +855,7 @@ impl<B: BufRead> Reader<B> {
     ///     buf.clear();
     /// }
     /// ```
-    pub fn into_underlying_reader(self) -> B {
+    pub fn into_underlying_reader(self) -> R {
         self.reader
     }
 }
@@ -872,6 +874,11 @@ impl<'a> Reader<&'a [u8]> {
     pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
         Reader::from_reader(s.as_bytes())
     }
+
+    /// Read an event that borrows from the input rather than a buffer.
+    pub fn read_event_unbuffered(&mut self) -> Result<Event<'a>> {
+        self.read_event_buffered(())
+    }
 }
 
 trait BufferedInput<'r, B> {
@@ -882,15 +889,13 @@ trait BufferedInput<'r, B> {
         position: &mut usize,
     ) -> Result<Option<&'r [u8]>>;
 
-    fn read_bang_element(
-        &mut self,
-        buf: &'r mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<&'r [u8]>>;
+    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
+
+    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
     fn peek_one(&mut self) -> Result<Option<u8>>;
 }
@@ -972,7 +977,7 @@ impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
             Some(b'-') => BangType::Comment,
             Some(b'D') => BangType::DocType,
             Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("unknown".to_string())),
+            None => return Err(Error::UnexpectedEof("Bang".to_string())),
         };
 
         loop {
@@ -1150,6 +1155,19 @@ impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
         }
     }
 
+    /// Consume and discard one character if it matches the given byte. Return
+    /// true if it matched.
+    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        match self.peek_one()? {
+            Some(b) if b == byte => {
+                *position += 1;
+                self.consume(1);
+                Ok(true)
+            },
+            _ => Ok(false),
+        }
+    }
+
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return None.
     fn peek_one(&mut self) -> Result<Option<u8>> {
@@ -1161,6 +1179,153 @@ impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
                 Err(e) => Err(Error::Io(e)),
             };
         }
+    }
+}
+
+/// Implementation of BufferedInput for any BufRead reader using a user-given
+/// Vec<u8> as buffer that will be borrowed by events.
+impl<'a> BufferedInput<'a, ()> for &'a [u8] {
+    fn read_bytes_until(
+        &mut self,
+        byte: u8,
+        _buf: (),
+        position: &mut usize,
+    ) -> Result<Option<&'a [u8]>> {
+        if self.is_empty() {
+            return Ok(None);
+        }
+
+        let i = memchr::memchr(byte, self).unwrap_or(self.len());
+
+        *position += i;
+        let bytes = &self[..i];
+        // Skip the end byte too.
+        *self = &self[i + 1..];
+
+        return Ok(Some(bytes));
+    }
+
+    fn read_bang_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
+        // Peeked one bang ('!') before being called, so it's guaranteed to
+        // start with it.
+        debug_assert_eq!(self[0], b'!');
+
+        enum BangType {
+            // <![CDATA[...]]>
+            CData,
+            // <!--...-->
+            Comment,
+            // <!DOCTYPE...>
+            DocType,
+        }
+
+        let bang_type = match &self[1..].first() {
+            Some(b'[') => BangType::CData,
+            Some(b'-') => BangType::Comment,
+            Some(b'D') => BangType::DocType,
+            Some(_) => return Err(Error::UnexpectedBang),
+            None => return Err(Error::UnexpectedEof("Bang".to_string())),
+        };
+
+        for i in memchr::memchr_iter(b'>', self) {
+            let finished = match bang_type {
+                BangType::Comment => i >= 5 && self[..i].ends_with(b"--"),
+                BangType::CData => self[..i].ends_with(b"]]"),
+                BangType::DocType => {
+                    // Inefficient, but unlikely to happen often
+                    let open = self[..i].iter().filter(|b| **b == b'<').count();
+                    let closed = self[..i].iter().filter(|b| **b == b'>').count();
+                    open == closed
+                }
+            };
+
+            if finished {
+                *position += i;
+                let bytes = &self[..i];
+                // Skip the '>' too.
+                *self = &self[i+1..];
+                return Ok(Some(bytes));
+            }
+        }
+
+        // Note: Do not update position, so the error points to
+        // somewhere sane rather than at the EOF
+        let bang_str = match bang_type {
+            BangType::CData => "CData",
+            BangType::Comment => "Comment",
+            BangType::DocType => "DOCTYPE",
+        };
+        Err(Error::UnexpectedEof(bang_str.to_string()))
+    }
+
+    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
+        if self.is_empty() {
+            return Ok(None);
+        }
+
+        #[derive(Clone, Copy)]
+        enum State {
+            /// The initial state (inside element, but outside of attribute value)
+            Elem,
+            /// Inside a single-quoted attribute value
+            SingleQ,
+            /// Inside a double-quoted attribute value
+            DoubleQ,
+        }
+        let mut state = State::Elem;
+
+        let end_byte = b'>';
+
+        for i in memchr::memchr3_iter(end_byte, b'\'', b'"', self) {
+            state = match (state, self[i]) {
+                (State::Elem, b) if b == end_byte => {
+                    // only allowed to match `end_byte` while we are in state `Elem`
+                    *position += i;
+                    let bytes = &self[..i];
+                    // Skip the '>' too.
+                    *self = &self[i + 1..];
+                    return Ok(Some(bytes));
+                }
+                (State::Elem, b'\'') => State::SingleQ,
+                (State::Elem, b'\"') => State::DoubleQ,
+
+                // the only end_byte that gets us out if the same character
+                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+
+                // all other bytes: no state change
+                _ => state,
+            };
+        }
+
+        // Note: Do not update position, so the error points to a sane place
+        // rather than at the EOF.
+        Err(Error::UnexpectedEof("Element".to_string()))
+
+        // FIXME: Figure out why the other one works without UnexpectedEof
+    }
+
+    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+        let whitespaces = self
+            .iter()
+            .position(|b| !is_whitespace(*b))
+            .unwrap_or(self.len());
+        *position += whitespaces;
+        *self = &self[whitespaces..];
+        Ok(())
+    }
+
+    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        if self.first() == Some(&byte) {
+            *self = &self[1..];
+            *position += 1;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn peek_one(&mut self) -> Result<Option<u8>> {
+        Ok(self.first().copied())
     }
 }
 
