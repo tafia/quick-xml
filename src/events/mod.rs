@@ -58,7 +58,7 @@ use memchr;
 /// [`local_name`]: #method.local_name
 /// [`unescaped`]: #method.unescaped
 /// [`attributes`]: #method.attributes
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
@@ -225,7 +225,7 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self, self.name_len)
+        Attributes::new(&self.buf, self.name_len)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
@@ -377,7 +377,7 @@ impl<'a> std::fmt::Debug for BytesStart<'a> {
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
     element: BytesStart<'a>,
 }
@@ -499,7 +499,7 @@ impl<'a> BytesDecl<'a> {
 }
 
 /// A struct to manage `Event::End` events
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>,
 }
@@ -558,7 +558,7 @@ impl<'a> std::fmt::Debug for BytesEnd<'a> {
 }
 
 /// Data from various events (most notably, `Event::Text`).
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     // Invariant: The content is always escaped.
     content: Cow<'a, [u8]>,
@@ -647,6 +647,23 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
+    }
+
+    /// gets escaped content
+    ///
+    /// Same as `unescaped()`, but will reuse the internal buffer when possible.
+    pub fn into_unescaped(self) -> Result<Cow<'a, [u8]>> {
+        match self.content {
+            Cow::Owned(bytes) => {
+                // TODO: Make unescape accept a Cow and reuse the owned string
+                unescape(&bytes)
+                    .map(|b| b.into_owned().into())
+                    .map_err(Error::EscapeError)
+            },
+            Cow::Borrowed(bytes) => {
+                unescape(bytes).map_err(Error::EscapeError)
+            }
+        }
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -814,7 +831,7 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
 /// Event emitted by [`Reader::read_event`].
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
