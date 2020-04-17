@@ -7,8 +7,8 @@ use std::str::from_utf8;
 #[test]
 fn sample_1_short() {
     test(
-        include_bytes!("documents/sample_1.xml"),
-        include_bytes!("documents/sample_1_short.txt"),
+        include_str!("documents/sample_1.xml"),
+        include_str!("documents/sample_1_short.txt"),
         true,
     );
 }
@@ -16,8 +16,8 @@ fn sample_1_short() {
 #[test]
 fn sample_1_full() {
     test(
-        include_bytes!("documents/sample_1.xml"),
-        include_bytes!("documents/sample_1_full.txt"),
+        include_str!("documents/sample_1.xml"),
+        include_str!("documents/sample_1_full.txt"),
         false,
     );
 }
@@ -25,8 +25,8 @@ fn sample_1_full() {
 #[test]
 fn sample_2_short() {
     test(
-        include_bytes!("documents/sample_2.xml"),
-        include_bytes!("documents/sample_2_short.txt"),
+        include_str!("documents/sample_2.xml"),
+        include_str!("documents/sample_2_short.txt"),
         true,
     );
 }
@@ -34,8 +34,8 @@ fn sample_2_short() {
 #[test]
 fn sample_2_full() {
     test(
-        include_bytes!("documents/sample_2.xml"),
-        include_bytes!("documents/sample_2_full.txt"),
+        include_str!("documents/sample_2.xml"),
+        include_str!("documents/sample_2_full.txt"),
         false,
     );
 }
@@ -43,8 +43,8 @@ fn sample_2_full() {
 // #[test]
 // fn sample_3_short() {
 //     test(
-//         include_bytes!("documents/sample_3.xml"),
-//         include_bytes!("documents/sample_3_short.txt"),
+//         include_str!("documents/sample_3.xml"),
+//         include_str!("documents/sample_3_short.txt"),
 //         true
 //     );
 // }
@@ -52,8 +52,8 @@ fn sample_2_full() {
 // #[test]
 // fn sample_3_full() {
 //     test(
-//         include_bytes!("documents/sample_3.xml"),
-//         include_bytes!("documents/sample_3_full.txt"),
+//         include_str!("documents/sample_3.xml"),
+//         include_str!("documents/sample_3_full.txt"),
 //         false
 //     );
 // }
@@ -61,8 +61,8 @@ fn sample_2_full() {
 // #[test]
 // fn sample_4_short() {
 //     test(
-//         include_bytes!("documents/sample_4.xml"),
-//         include_bytes!("documents/sample_4_short.txt"),
+//         include_str!("documents/sample_4.xml"),
+//         include_str!("documents/sample_4_short.txt"),
 //         true
 //     );
 // }
@@ -70,8 +70,8 @@ fn sample_2_full() {
 // #[test]
 // fn sample_4_full() {
 //     test(
-//         include_bytes!("documents/sample_4.xml"),
-//         include_bytes!("documents/sample_4_full.txt"),
+//         include_str!("documents/sample_4.xml"),
+//         include_str!("documents/sample_4_full.txt"),
 //         false
 //     );
 //
@@ -80,8 +80,8 @@ fn sample_2_full() {
 #[test]
 fn sample_ns_short() {
     test(
-        include_bytes!("documents/sample_ns.xml"),
-        include_bytes!("documents/sample_ns_short.txt"),
+        include_str!("documents/sample_ns.xml"),
+        include_str!("documents/sample_ns_short.txt"),
         true,
     );
 }
@@ -89,8 +89,8 @@ fn sample_ns_short() {
 #[test]
 fn eof_1() {
     test(
-        br#"<?xml"#,
-        br#"Error: Unexpected EOF during reading XmlDecl."#,
+        r#"<?xml"#,
+        r#"Error: Unexpected EOF during reading XmlDecl."#,
         true,
     );
 }
@@ -98,8 +98,8 @@ fn eof_1() {
 #[test]
 fn bad_1() {
     test(
-        br#"<?xml&.,"#,
-        br#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
+        r#"<?xml&.,"#,
+        r#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
         true,
     );
 }
@@ -107,16 +107,16 @@ fn bad_1() {
 #[test]
 fn dashes_in_comments() {
     test(
-        br#"<!-- comment -- --><hello/>"#,
-        br#"
+        r#"<!-- comment -- --><hello/>"#,
+        r#"
         |Error: Unexpected token '--'
         "#,
         true,
     );
 
     test(
-        br#"<!-- comment ---><hello/>"#,
-        br#"
+        r#"<!-- comment ---><hello/>"#,
+        r#"
         |Error: Unexpected token '--'
         "#,
         true,
@@ -126,8 +126,8 @@ fn dashes_in_comments() {
 #[test]
 fn tabs_1() {
     test(
-        b"\t<a>\t<b/></a>",
-        br#"
+        "\t<a>\t<b/></a>",
+        r#"
             StartElement(a)
             EmptyElement(b)
             EndElement(a)
@@ -142,8 +142,8 @@ fn issue_83_duplicate_attributes() {
     // Error when parsing attributes won't stop main event reader
     // as it is a lazy operation => add ending events
     test(
-        br#"<hello><some-tag a='10' a="20"/></hello>"#,
-        b"
+        r#"<hello><some-tag a='10' a="20"/></hello>"#,
+        "
             |StartElement(hello)
             |1:30 EmptyElement(some-tag, attr-error: error while parsing \
                   attribute at position 16: Duplicate attribute at position 9 and 16)
@@ -157,14 +157,13 @@ fn issue_83_duplicate_attributes() {
 #[test]
 fn issue_93_large_characters_in_entity_references() {
     test(
-        r#"<hello>&𤶼;</hello>"#.as_bytes(),
+        r#"<hello>&𤶼;</hello>"#,
         r#"
             |StartElement(hello)
             |1:10 Error while escaping character at range 1..5: Unrecognized escape symbol: Ok("𤶼")
             |EndElement(hello)
             |EndDocument
-        "#
-        .as_bytes(),
+        "#,
         true,
     )
 }
@@ -172,8 +171,8 @@ fn issue_93_large_characters_in_entity_references() {
 #[test]
 fn issue_98_cdata_ending_with_right_bracket() {
     test(
-        br#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
-        br#"
+        r#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
+        r#"
             |StartElement(hello)
             |Characters()
             |CData(Foo [Bar])
@@ -188,8 +187,8 @@ fn issue_98_cdata_ending_with_right_bracket() {
 #[test]
 fn issue_105_unexpected_double_dash() {
     test(
-        br#"<hello>-- </hello>"#,
-        br#"
+        r#"<hello>-- </hello>"#,
+        r#"
             |StartElement(hello)
             |Characters(-- )
             |EndElement(hello)
@@ -199,8 +198,8 @@ fn issue_105_unexpected_double_dash() {
     );
 
     test(
-        br#"<hello>--</hello>"#,
-        br#"
+        r#"<hello>--</hello>"#,
+        r#"
             |StartElement(hello)
             |Characters(--)
             |EndElement(hello)
@@ -210,8 +209,8 @@ fn issue_105_unexpected_double_dash() {
     );
 
     test(
-        br#"<hello>--></hello>"#,
-        br#"
+        r#"<hello>--></hello>"#,
+        r#"
             |StartElement(hello)
             |Characters(-->)
             |EndElement(hello)
@@ -221,8 +220,8 @@ fn issue_105_unexpected_double_dash() {
     );
 
     test(
-        br#"<hello><![CDATA[--]]></hello>"#,
-        br#"
+        r#"<hello><![CDATA[--]]></hello>"#,
+        r#"
             |StartElement(hello)
             |Characters()
             |CData(--)
@@ -239,8 +238,8 @@ fn issue_attributes_have_no_default_namespace() {
     // At the moment, the 'test' method doesn't render namespaces for attribute names.
     // This test only checks whether the default namespace got applied to the EmptyElement.
     test(
-        br#"<hello xmlns="urn:foo" x="y"/>"#,
-        br#"
+        r#"<hello xmlns="urn:foo" x="y"/>"#,
+        r#"
              |EmptyElement({urn:foo}hello [x="y"])
              |EndDocument
          "#,
@@ -252,8 +251,8 @@ fn issue_attributes_have_no_default_namespace() {
 fn issue_default_namespace_on_outermost_element() {
     // Regression test
     test(
-        br#"<hello xmlns="urn:foo"/>"#,
-        br#"
+        r#"<hello xmlns="urn:foo"/>"#,
+        r#"
                 |EmptyElement({urn:foo}hello)
                 |EndDocument
             "#,
@@ -264,10 +263,10 @@ fn issue_default_namespace_on_outermost_element() {
 #[test]
 fn default_namespace_applies_to_end_elem() {
     test(
-        br#"<hello xmlns="urn:foo" x="y">
+        r#"<hello xmlns="urn:foo" x="y">
               <inner/>
             </hello>"#,
-        br#"
+        r#"
             |StartElement({urn:foo}hello [x="y"])
             |EmptyElement({urn:foo}inner)
             |EndElement({urn:foo}hello)
@@ -277,7 +276,13 @@ fn default_namespace_applies_to_end_elem() {
     );
 }
 
-fn test(input: &[u8], output: &[u8], is_short: bool) {
+fn test(input: &str, output: &str, is_short: bool) {
+    // Normalize newlines on Windows to just \n, which is what the reader and
+    // writer use.
+    let input = input.replace("\r\n", "\n");
+    let input = input.as_bytes();
+    let output = output.replace("\r\n", "\n");
+    let output = output.as_bytes();
     let mut reader = Reader::from_reader(input);
     reader
         .trim_text(is_short)
