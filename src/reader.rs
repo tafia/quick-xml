@@ -63,7 +63,7 @@ enum TagState {
 /// ```
 pub struct Reader<R: BufRead> {
     /// reader
-    reader: R,
+    pub(crate) reader: R,
     /// current buffer position, useful for debuging errors
     buf_position: usize,
     /// current state Open/Close
@@ -208,9 +208,9 @@ impl<R: BufRead> Reader<R> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_open<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>
+        R: BufferedInput<'i, 'r, B>
     {
         self.tag_state = TagState::Opened;
 
@@ -247,9 +247,9 @@ impl<R: BufRead> Reader<R> {
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>
+        R: BufferedInput<'i, 'r, B>
     {
         self.tag_state = TagState::Closed;
 
@@ -495,9 +495,9 @@ impl<R: BufRead> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_buffered<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>
+        R: BufferedInput<'i, 'r, B>
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -875,13 +875,45 @@ impl<'a> Reader<&'a [u8]> {
         Reader::from_reader(s.as_bytes())
     }
 
+    /// Creates an XML reader from a slice of bytes.
+    pub fn from_bytes(s: &'a [u8]) -> Reader<&'a [u8]> {
+        Reader::from_reader(s)
+    }
+
     /// Read an event that borrows from the input rather than a buffer.
     pub fn read_event_unbuffered(&mut self) -> Result<Event<'a>> {
         self.read_event_buffered(())
     }
+
+    /// Reads until end element is found
+    ///
+    /// Manages nested cases where parent and child elements have the same name
+    pub fn read_to_end_unbuffered<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+        let mut depth = 0;
+        let end = end.as_ref();
+        loop {
+            match self.read_event_unbuffered() {
+                Ok(Event::End(ref e)) if e.name() == end => {
+                    if depth == 0 {
+                        return Ok(());
+                    }
+                    depth -= 1;
+                }
+                Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
+                Err(e) => return Err(e),
+                Ok(Event::Eof) => {
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
+                }
+                _ => (),
+            }
+        }
+    }
 }
 
-trait BufferedInput<'r, B> {
+trait BufferedInput<'r, 'i, B>
+where
+    Self: 'i
+{
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -898,11 +930,13 @@ trait BufferedInput<'r, B> {
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
     fn peek_one(&mut self) -> Result<Option<u8>>;
+
+    fn input_borrowed(event: Event<'r>) -> Event<'i>;
 }
 
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
-impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
+impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
     /// read until `byte` is found or end of file
     /// return the position of byte
     #[inline]
@@ -1180,11 +1214,15 @@ impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
             };
         }
     }
+
+    fn input_borrowed(event: Event<'b>) -> Event<'i> {
+        event.into_owned()
+    }
 }
 
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
-impl<'a> BufferedInput<'a, ()> for &'a [u8] {
+impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -1199,8 +1237,14 @@ impl<'a> BufferedInput<'a, ()> for &'a [u8] {
 
         *position += i;
         let bytes = &self[..i];
-        // Skip the end byte too.
-        *self = &self[i + 1..];
+        let i = if i < self.len() {
+            // Skip the matched byte too.
+            i + 1
+        } else {
+            // Unless we're at the end of the string
+            i
+        };
+        *self = &self[i..];
 
         return Ok(Some(bytes));
     }
@@ -1326,6 +1370,10 @@ impl<'a> BufferedInput<'a, ()> for &'a [u8] {
 
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
+    }
+
+    fn input_borrowed(event: Event<'a>) -> Event<'a> {
+        return event;
     }
 }
 
@@ -1525,6 +1573,12 @@ impl Decoder {
     #[cfg(not(feature = "encoding"))]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
         from_utf8(bytes).map_err(Error::Utf8)
+    }
+
+    #[cfg(not(feature = "encoding"))]
+    pub fn decode_owned<'c>(&self, bytes: Vec<u8>) -> Result<String> {
+        String::from_utf8(bytes)
+            .map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     #[cfg(feature = "encoding")]

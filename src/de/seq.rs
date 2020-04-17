@@ -1,10 +1,9 @@
-use crate::de::{DeError, Deserializer};
+use crate::de::{DeError, Deserializer, BorrowingReader};
 use crate::{
     events::{BytesStart, Event},
     reader::Decoder,
 };
 use serde::de;
-use std::io::BufRead;
 
 #[derive(Debug)]
 enum Names {
@@ -27,15 +26,15 @@ impl Names {
 }
 
 /// A SeqAccess
-pub struct SeqAccess<'a, R: BufRead> {
-    de: &'a mut Deserializer<R>,
+pub struct SeqAccess<'de, 'a, R: BorrowingReader<'de>> {
+    de: &'a mut Deserializer<'de, R>,
     max_size: Option<usize>,
     names: Names,
 }
 
-impl<'a, R: BufRead> SeqAccess<'a, R> {
+impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
     /// Get a new SeqAccess
-    pub fn new(de: &'a mut Deserializer<R>, max_size: Option<usize>) -> Result<Self, DeError> {
+    pub fn new(de: &'a mut Deserializer<'de, R>, max_size: Option<usize>) -> Result<Self, DeError> {
         let decoder = de.reader.decoder();
         let names = if de.has_value_field {
             Names::Unknown
@@ -58,7 +57,7 @@ impl<'a, R: BufRead> SeqAccess<'a, R> {
     }
 }
 
-impl<'de, 'a, R: 'a + BufRead> de::SeqAccess<'de> for SeqAccess<'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de>> de::SeqAccess<'de> for SeqAccess<'de, 'a, R> {
     type Error = DeError;
 
     fn size_hint(&self) -> Option<usize> {

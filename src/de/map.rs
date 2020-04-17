@@ -1,12 +1,11 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    de::{escape::EscapedDeserializer, Deserializer, BorrowingReader, INNER_VALUE},
     errors::serialize::DeError,
-    events::{attributes::Attribute, BytesStart, Event},
+    events::{BytesStart, Event},
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
-use std::io::BufRead;
 
 enum MapValue {
     Empty,
@@ -16,16 +15,16 @@ enum MapValue {
 }
 
 /// A deserializer for `Attributes`
-pub(crate) struct MapAccess<'a, R: BufRead> {
-    start: BytesStart<'static>,
-    de: &'a mut Deserializer<R>,
+pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de> + 'a> {
+    start: BytesStart<'de>,
+    de: &'a mut Deserializer<'de, R>,
     position: usize,
     value: MapValue,
 }
 
-impl<'a, R: BufRead> MapAccess<'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
     /// Create a new MapAccess
-    pub fn new(de: &'a mut Deserializer<R>, start: BytesStart<'static>) -> Result<Self, DeError> {
+    pub fn new(de: &'a mut Deserializer<'de, R>, start: BytesStart<'de>) -> Result<Self, DeError> {
         let position = start.attributes().position;
         Ok(MapAccess {
             de,
@@ -35,28 +34,25 @@ impl<'a, R: BufRead> MapAccess<'a, R> {
         })
     }
 
-    fn next_attr(&mut self) -> Result<Option<Attribute>, DeError> {
+    fn next_attr(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>, DeError> {
         let mut attributes = self.start.attributes();
         attributes.position = self.position;
-        let next_att = attributes.next();
+        let next_att = attributes.next().transpose()?;
         self.position = attributes.position;
-        Ok(next_att.transpose()?)
+        Ok(next_att.map(|a| (a.key.to_owned(), a.value.into_owned())))
     }
 }
 
-impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
     type Error = DeError;
 
     fn next_key_seed<K: DeserializeSeed<'de>>(
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Self::Error> {
-        let attr_key_val = self
-            .next_attr()?
-            .map(|a| (a.key.to_owned(), a.value.into_owned()));
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
-        if let Some((key, value)) = attr_key_val {
+        if let Some((key, value)) = self.next_attr()? {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
             seed.deserialize(EscapedDeserializer::new(key, decoder, false))
