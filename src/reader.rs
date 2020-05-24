@@ -15,6 +15,7 @@ use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, 
 
 use memchr;
 
+#[derive(Clone)]
 enum TagState {
     Opened,
     Closed,
@@ -61,6 +62,7 @@ enum TagState {
 ///     buf.clear();
 /// }
 /// ```
+#[derive(Clone)]
 pub struct Reader<B: BufRead> {
     /// reader
     reader: B,
@@ -1031,7 +1033,7 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
 
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default
 /// namespace.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Namespace {
     /// Index of the namespace in the buffer
     start: usize,
@@ -1081,7 +1083,7 @@ impl Namespace {
 /// A namespace management buffer.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct NamespaceBufferIndex {
     /// a buffer of namespace ranges
     slices: Vec<Namespace>,
