@@ -145,6 +145,28 @@ impl<W: Write> Writer<W> {
         }
         Ok(wrote + self.write(before)? + self.write(value)? + self.write(after)?)
     }
+
+    /// Manually write a newline and indentation at the proper level. 
+    /// 
+    /// This can be used when the heuristic to line break and indent after any [Event] apart 
+    /// from [Text] fails such as when a [Start] occurs directly after [Text].
+    /// This method will do nothing if `Writer` was not constructed with `new_with_indent`.
+    ///
+    /// [Event]: events/enum.Event.html
+    /// [Text]: events/enum.Event.html#variant.Text
+    /// [Start]: events/enum.Event.html#variant.Start
+    pub fn write_indent(&mut self) -> Result<usize> {
+        let mut wrote = 0;
+        if let Some(ref i) = self.indent {
+            wrote = self.writer.write(b"\n").map_err(Error::Io)?
+                + self
+                    .writer
+                    .write(&i.indents[..i.indents_len])
+                    .map_err(Error::Io)?;
+        }
+        Ok(wrote)
+    }
+
 }
 
 #[derive(Clone)]
