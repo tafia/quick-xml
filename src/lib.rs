@@ -120,7 +120,12 @@ extern crate serde;
 #[cfg(feature = "serialize")]
 pub mod de;
 mod errors;
-mod escape;
+mod escapei;
+pub mod escape {
+    //! Manage xml character escapes
+    pub(crate) use escapei::EscapeError;
+    pub use escapei::{escape, unescape};
+}
 pub mod events;
 mod reader;
 #[cfg(feature = "serialize")]

@@ -63,9 +63,8 @@ const MAX_ONE_B: u32 = 0x80;
 const MAX_TWO_B: u32 = 0x800;
 const MAX_THREE_B: u32 = 0x10000;
 
-/// helper function to escape a `&[u8]` and replace all
-/// xml special characters (<, >, &, ', ") with their corresponding
-/// xml escaped value.
+/// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
+/// corresponding xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
     fn to_escape(b: u8) -> bool {
         match b {
@@ -105,8 +104,8 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
     }
 }
 
-/// helper function to unescape a `&[u8]` and replace all
-/// xml escaped characters ('&...;') into their corresponding value
+/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
+/// value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     let mut unescaped = None;
     let mut last_end = 0;
