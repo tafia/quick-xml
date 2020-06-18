@@ -108,6 +108,7 @@
 //! quick-xml supports 2 additional features, non activated by default:
 //! - `encoding`: support non utf8 xmls
 //! - `serialize`: support serde `Serialize`/`Deserialize`
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 
