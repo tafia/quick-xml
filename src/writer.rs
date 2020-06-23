@@ -197,6 +197,9 @@ impl Indentation {
     }
 
     fn shrink(&mut self) {
-        self.indents_len = self.indents_len - self.indent_size;
+        self.indents_len = match self.indents_len.checked_sub(self.indent_size) {
+            Some(result) => result,
+            None => 0,
+        };
     }
 }
