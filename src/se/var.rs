@@ -72,6 +72,9 @@ where
 {
     parent: &'w mut Serializer<W>,
     name: &'w str,
+    attrs: Vec<u8>,
+    children: Vec<u8>,
+    buffer: Vec<u8>,
 }
 
 impl<'w, W> Struct<'w, W>
@@ -80,7 +83,7 @@ where
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
-        Struct { parent, name }
+        Struct { parent, name, attrs: Vec::new(), children: Vec::new(), buffer: Vec::new() }
     }
 }
 
@@ -96,18 +99,42 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let key = key.as_bytes();
-        self.parent
-            .writer
-            .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
-        value.serialize(&mut *self.parent)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(key)))?;
+        // 先序列化到一个独立的地方
+        let mut serializer = Serializer::new(&mut self.buffer);
+        value.serialize(&mut serializer)?;
+
+        // None 序列化后的值长度为 0
+        if self.buffer.len() > 0 {
+            // 如果是复杂类型，必定以 < 打头
+            // 复杂类型当做子节点处理，简单类型当做属性处理
+            if self.buffer[0] == b'<' {
+                let key = key.as_bytes();
+                self.children.append(&mut self.buffer);
+            } else {
+                self.attrs.extend(" ".as_bytes());
+                self.attrs.extend(key.as_bytes());
+                self.attrs.extend("=\"".as_bytes());
+                self.attrs.extend(&self.buffer);
+                self.attrs.extend("\"".as_bytes());
+            }
+
+            self.buffer.clear();
+        }
+
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
+        // 将属性和子节点写入
+        self.parent
+            .writer
+            .write(&self.attrs);
+        self.parent
+            .writer
+            .write(">".as_bytes());
+        self.parent
+            .writer
+            .write(&self.children);
         self.parent
             .writer
             .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;

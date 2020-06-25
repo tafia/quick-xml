@@ -209,8 +209,9 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
+        // 这里只写入 '<name', 后面在序列化 field 时写入 '>'
         self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(name.as_bytes())))?;
+            .write(format!("<{}", name).as_bytes());
         Ok(Struct::new(self, name))
     }
 
