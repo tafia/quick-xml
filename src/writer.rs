@@ -91,7 +91,7 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<usize> {
+    pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<()> {
         let mut next_should_line_break = true;
         let result = match *event.as_ref() {
             Event::Start(ref e) => {
@@ -117,7 +117,7 @@ impl<W: Write> Writer<W> {
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", e, b">"),
-            Event::Eof => Ok(0),
+            Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
             i.should_line_break = next_should_line_break;
@@ -127,23 +127,25 @@ impl<W: Write> Writer<W> {
 
     /// Writes bytes
     #[inline]
-    pub fn write(&mut self, value: &[u8]) -> Result<usize> {
-        self.writer.write(value).map_err(Error::Io)
+    pub fn write(&mut self, value: &[u8]) -> Result<()> {
+        self.writer.write_all(value).map_err(Error::Io)
     }
 
     #[inline]
-    fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<usize> {
-        let mut wrote = 0;
+    fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<()> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
-                wrote = self.writer.write(b"\n").map_err(Error::Io)?
-                    + self
-                        .writer
-                        .write(&i.indents[..i.indents_len])
-                        .map_err(Error::Io)?;
+                self.writer.write_all(b"\n").map_err(Error::Io)?;
+                self
+                    .writer
+                    .write_all(&i.indents[..i.indents_len])
+                    .map_err(Error::Io)?;
             }
         }
-        Ok(wrote + self.write(before)? + self.write(value)? + self.write(after)?)
+        self.write(before)?;
+        self.write(value)?;
+        self.write(after)?;
+        Ok(())
     }
 
     /// Manually write a newline and indentation at the proper level. 
@@ -155,16 +157,15 @@ impl<W: Write> Writer<W> {
     /// [Event]: events/enum.Event.html
     /// [Text]: events/enum.Event.html#variant.Text
     /// [Start]: events/enum.Event.html#variant.Start
-    pub fn write_indent(&mut self) -> Result<usize> {
-        let mut wrote = 0;
+    pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
-            wrote = self.writer.write(b"\n").map_err(Error::Io)?
-                + self
-                    .writer
-                    .write(&i.indents[..i.indents_len])
-                    .map_err(Error::Io)?;
+            self.writer.write_all(b"\n").map_err(Error::Io)?;
+            self
+                .writer
+                .write_all(&i.indents[..i.indents_len])
+                .map_err(Error::Io)?;
         }
-        Ok(wrote)
+        Ok(())
     }
 
 }
