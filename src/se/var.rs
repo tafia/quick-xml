@@ -108,8 +108,9 @@ where
             // 如果是复杂类型，必定以 < 打头
             // 复杂类型当做子节点处理，简单类型当做属性处理
             if self.buffer[0] == b'<' {
-                let key = key.as_bytes();
-                self.children.append(&mut self.buffer);
+                self.children.extend(format!("<{}>", key).bytes());
+                self.children.extend(&self.buffer);
+                self.children.extend(format!("</{}>", key).bytes());
             } else {
                 self.attrs.extend(" ".as_bytes());
                 self.attrs.extend(key.as_bytes());
