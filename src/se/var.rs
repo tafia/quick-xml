@@ -1,6 +1,6 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, BytesStart, Event},
+    events::{BytesEnd, Event},
     se::Serializer,
 };
 use serde::ser::{self, Serialize};
@@ -129,13 +129,13 @@ where
         // 将属性和子节点写入
         self.parent
             .writer
-            .write(&self.attrs);
+            .write(&self.attrs)?;
         self.parent
             .writer
-            .write(">".as_bytes());
+            .write(">".as_bytes())?;
         self.parent
             .writer
-            .write(&self.children);
+            .write(&self.children)?;
         self.parent
             .writer
             .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;

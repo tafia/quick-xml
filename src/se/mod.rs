@@ -211,7 +211,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     ) -> Result<Self::SerializeStruct, DeError> {
         // 这里只写入 '<name', 后面在序列化 field 时写入 '>'
         self.writer
-            .write(format!("<{}", name).as_bytes());
+            .write(format!("<{}", name).as_bytes())?;
         Ok(Struct::new(self, name))
     }
 
