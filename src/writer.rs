@@ -146,9 +146,9 @@ impl<W: Write> Writer<W> {
         Ok(wrote + self.write(before)? + self.write(value)? + self.write(after)?)
     }
 
-    /// Manually write a newline and indentation at the proper level. 
-    /// 
-    /// This can be used when the heuristic to line break and indent after any [Event] apart 
+    /// Manually write a newline and indentation at the proper level.
+    ///
+    /// This can be used when the heuristic to line break and indent after any [Event] apart
     /// from [Text] fails such as when a [Start] occurs directly after [Text].
     /// This method will do nothing if `Writer` was not constructed with `new_with_indent`.
     ///
@@ -166,7 +166,6 @@ impl<W: Write> Writer<W> {
         }
         Ok(wrote)
     }
-
 }
 
 #[derive(Clone)]

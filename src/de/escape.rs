@@ -50,7 +50,7 @@ macro_rules! deserialize_num {
 
             visitor.$visit(value)
         }
-    }
+    };
 }
 
 impl<'de> serde::Deserializer<'de> for EscapedDeserializer {

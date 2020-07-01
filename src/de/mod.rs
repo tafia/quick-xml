@@ -247,7 +247,7 @@ macro_rules! deserialize_type {
 
             visitor.$visit(value)
         }
-    }
+    };
 }
 
 impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
