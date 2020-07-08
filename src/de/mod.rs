@@ -121,7 +121,7 @@ use serde::de::{self, DeserializeOwned};
 use serde::forward_to_deserialize_any;
 use std::io::BufRead;
 
-const INNER_VALUE: &str = "$value";
+pub(crate) const INNER_VALUE: &str = "$value";
 
 /// An xml deserializer
 pub struct Deserializer<R: BufRead> {
