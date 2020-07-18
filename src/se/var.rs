@@ -72,7 +72,7 @@ where
 {
     parent: &'w mut Serializer<W>,
     name: &'w str,
-    attrs: Vec<u8>,
+    pub(crate) attrs: Vec<u8>,
     children: Vec<u8>,
     buffer: Vec<u8>,
 }
@@ -99,24 +99,18 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        // 先序列化到一个独立的地方
         let mut serializer = Serializer::new(&mut self.buffer);
         value.serialize(&mut serializer)?;
 
-        // None 序列化后的值长度为 0
-        if self.buffer.len() > 0 {
-            // 如果是复杂类型，必定以 < 打头
-            // 复杂类型当做子节点处理，简单类型当做属性处理
+        if !self.buffer.is_empty() {
             if self.buffer[0] == b'<' {
-                self.children.extend(format!("<{}>", key).bytes());
+                write!(&mut self.children, "<{}>", key).map_err(Error::Io)?;
                 self.children.extend(&self.buffer);
-                self.children.extend(format!("</{}>", key).bytes());
+                write!(&mut self.children, "</{}>", key).map_err(Error::Io)?;
             } else {
-                self.attrs.extend(" ".as_bytes());
-                self.attrs.extend(key.as_bytes());
-                self.attrs.extend("=\"".as_bytes());
+                write!(&mut self.attrs, " {}=\"", key).map_err(Error::Io)?;
                 self.attrs.extend(&self.buffer);
-                self.attrs.extend("\"".as_bytes());
+                write!(&mut self.attrs, "\"").map_err(Error::Io)?;
             }
 
             self.buffer.clear();
@@ -126,7 +120,6 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        // 将属性和子节点写入
         self.parent
             .writer
             .write(&self.attrs)?;
