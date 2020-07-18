@@ -97,7 +97,7 @@ impl<B: BufRead> Reader<B> {
     /// Creates a `Reader` that reads from a reader implementing `BufRead`.
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
-            reader: reader,
+            reader,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
             tag_state: TagState::Closed,
@@ -339,7 +339,7 @@ impl<B: BufRead> Reader<B> {
                         return Err(Error::UnexpectedEof("Comment".to_string()));
                     }
                     Ok(_) => (),
-                    Err(e) => return Err(e.into()),
+                    Err(e) => return Err(e),
                 }
             }
             let len = buf.len();
@@ -394,11 +394,11 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..buf.len()],
                     )))
                 }
-                _ => return Err(Error::UnexpectedBang),
+                _ => Err(Error::UnexpectedBang),
             }
         } else {
             self.buf_position -= buf.len() - buf_start;
-            return Err(Error::UnexpectedBang);
+            Err(Error::UnexpectedBang)
         }
     }
 
@@ -1144,10 +1144,10 @@ impl NamespaceBufferIndex {
                             let start = buffer.len();
                             buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
-                                start: start,
+                                start,
                                 prefix_len: 0,
                                 value_len: v.len(),
-                                level: level,
+                                level,
                             });
                         }
                         Some(&b':') => {
@@ -1155,10 +1155,10 @@ impl NamespaceBufferIndex {
                             buffer.extend_from_slice(&k[6..]);
                             buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
-                                start: start,
+                                start,
                                 prefix_len: k.len() - 6,
                                 value_len: v.len(),
-                                level: level,
+                                level,
                             });
                         }
                         _ => break,

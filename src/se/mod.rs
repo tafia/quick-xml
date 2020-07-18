@@ -272,7 +272,7 @@ mod tests {
             struct_ser.serialize_field("foo", "bar").unwrap();
             let attrs = std::str::from_utf8(&struct_ser.attrs).unwrap();
             assert_eq!(attrs, " foo=\"bar\"");
-            struct_ser.end().unwrap();
+            let _ = struct_ser.end().unwrap();
         }
 
         let got = String::from_utf8(buffer).unwrap();
