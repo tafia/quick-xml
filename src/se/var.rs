@@ -1,6 +1,6 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, BytesStart, Event},
+    events::{BytesEnd, Event},
     se::Serializer,
 };
 use serde::ser::{self, Serialize};
@@ -72,6 +72,9 @@ where
 {
     parent: &'w mut Serializer<W>,
     name: &'w str,
+    pub(crate) attrs: Vec<u8>,
+    children: Vec<u8>,
+    buffer: Vec<u8>,
 }
 
 impl<'w, W> Struct<'w, W>
@@ -80,7 +83,7 @@ where
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
-        Struct { parent, name }
+        Struct { parent, name, attrs: Vec::new(), children: Vec::new(), buffer: Vec::new() }
     }
 }
 
@@ -96,18 +99,36 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let key = key.as_bytes();
-        self.parent
-            .writer
-            .write_event(Event::Start(BytesStart::borrowed_name(key)))?;
-        value.serialize(&mut *self.parent)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(key)))?;
+        let mut serializer = Serializer::new(&mut self.buffer);
+        value.serialize(&mut serializer)?;
+
+        if !self.buffer.is_empty() {
+            if self.buffer[0] == b'<' {
+                write!(&mut self.children, "<{}>", key).map_err(Error::Io)?;
+                self.children.extend(&self.buffer);
+                write!(&mut self.children, "</{}>", key).map_err(Error::Io)?;
+            } else {
+                write!(&mut self.attrs, " {}=\"", key).map_err(Error::Io)?;
+                self.attrs.extend(&self.buffer);
+                write!(&mut self.attrs, "\"").map_err(Error::Io)?;
+            }
+
+            self.buffer.clear();
+        }
+
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
+        self.parent
+            .writer
+            .write(&self.attrs)?;
+        self.parent
+            .writer
+            .write(">".as_bytes())?;
+        self.parent
+            .writer
+            .write(&self.children)?;
         self.parent
             .writer
             .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;

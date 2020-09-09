@@ -190,7 +190,7 @@ impl Indentation {
     }
 
     fn grow(&mut self) {
-        self.indents_len = self.indents_len + self.indent_size;
+        self.indents_len += self.indent_size;
         if self.indents_len > self.indents.len() {
             self.indents.resize(self.indents_len, self.indent_char);
         }

@@ -45,7 +45,7 @@ impl<'a> BytesStart<'a> {
     pub fn borrowed(content: &'a [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
-            name_len: name_len,
+            name_len,
         }
     }
 
@@ -66,7 +66,7 @@ impl<'a> BytesStart<'a> {
     pub fn owned<C: Into<Vec<u8>>>(content: C, name_len: usize) -> BytesStart<'static> {
         BytesStart {
             buf: Cow::Owned(content.into()),
-            name_len: name_len,
+            name_len,
         }
     }
 
