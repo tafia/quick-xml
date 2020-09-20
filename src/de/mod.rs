@@ -332,11 +332,15 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     }
 
     fn deserialize_bytes<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        self.deserialize_string(visitor)
+        let text = self.next_text()?;
+        let value = text.escaped();
+        visitor.visit_bytes(value)
     }
 
     fn deserialize_byte_buf<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        self.deserialize_string(visitor)
+        let text = self.next_text()?;
+        let value = text.into_inner().into_owned();
+        visitor.visit_byte_buf(value)
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {

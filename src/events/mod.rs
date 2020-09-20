@@ -472,6 +472,12 @@ impl<'a> BytesText<'a> {
         }
     }
 
+    /// Extracts the inner `Cow` from the `BytesText` event container.
+    #[inline]
+    pub(crate) fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
     /// gets escaped content
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
