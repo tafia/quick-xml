@@ -570,4 +570,45 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn deserialize_bytes() {
+        #[derive(Debug, PartialEq)]
+        struct Item {
+            bytes: Vec<u8>,
+        }
+
+        impl<'de> Deserialize<'de> for Item {
+            fn deserialize<D>(d: D) -> Result<Self, D::Error>
+            where
+                D: serde::de::Deserializer<'de>,
+            {
+                struct ItemVisitor;
+
+                impl<'de> de::Visitor<'de> for ItemVisitor {
+                    type Value = Item;
+
+                    fn expecting(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        fmt.write_str("byte data")
+                    }
+
+                    fn visit_byte_buf<E: de::Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+                        Ok(Item { bytes: v })
+                    }
+                }
+
+                Ok(d.deserialize_byte_buf(ItemVisitor)?)
+            }
+        }
+
+        let s = r#"<item>bytes</item>"#;
+        let item: Item = from_reader(s.as_bytes()).unwrap();
+
+        assert_eq!(
+            item,
+            Item {
+                bytes: "bytes".as_bytes().to_vec(),
+            }
+        );
+    }
 }
