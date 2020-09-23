@@ -1,25 +1,39 @@
-//! A module to handle `Reader`
+//! A module to handle sync `Reader`
 
 #[cfg(feature = "encoding")]
 use std::borrow::Cow;
+use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::{fs::File, path::Path, str::from_utf8};
 
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
+use encoding_rs::Encoding;
 
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
-use memchr;
+use super::{is_whitespace, Decode, Decoder, NamespaceBufferIndex, TagState};
 
-#[derive(Clone)]
-enum TagState {
-    Opened,
-    Closed,
-    Empty,
-    /// Either Eof or Errored
-    Exit,
+impl<B: BufRead> Decode for Reader<B> {
+    #[cfg(feature = "encoding")]
+    fn read_encoding(&self) -> &'static Encoding {
+        self.encoding
+    }
+
+    #[cfg(feature = "encoding")]
+    fn read_is_encoding_set(&self) -> bool {
+        self.is_encoding_set
+    }
+
+    #[cfg(feature = "encoding")]
+    fn write_encoding(&mut self, val: &'static Encoding) {
+        self.encoding = val;
+    }
+
+    #[cfg(feature = "encoding")]
+    fn write_is_encoding_set(&mut self, val: bool) {
+        self.is_encoding_set = val;
+    }
 }
 
 /// A low level encoding-agnostic XML event reader.
@@ -60,6 +74,7 @@ enum TagState {
 ///     buf.clear();
 /// }
 /// ```
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone)]
 pub struct Reader<R: BufRead> {
     /// reader
@@ -294,8 +309,8 @@ impl<R: BufRead> Reader<R> {
                     b'/' => self.read_end(bytes),
                     b'?' => self.read_question_mark(bytes),
                     _ => unreachable!(
-                        "We checked that `start` must be one of [/?], was {:?} \
-                         instead.",
+                        "We checked that `start` must be one of [/!?], was {:?} \
+                                 instead.",
                         start
                     ),
                 },
@@ -330,12 +345,12 @@ impl<R: BufRead> Reader<R> {
             };
             match self.opened_starts.pop() {
                 Some(start) => {
-                    if name != &self.opened_buffer[start..] {
-                        let expected = &self.opened_buffer[start..];
-                        mismatch_err(expected, name, &mut self.buf_position)
-                    } else {
+                    if name == &self.opened_buffer[start..] {
                         self.opened_buffer.truncate(start);
                         Ok(Event::End(BytesEnd::borrowed(name)))
+                    } else {
+                        let expected = &self.opened_buffer[start..];
+                        mismatch_err(expected, name, &mut self.buf_position)
                     }
                 }
                 None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
@@ -433,6 +448,7 @@ impl<R: BufRead> Reader<R> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
@@ -653,77 +669,6 @@ impl<R: BufRead> Reader<R> {
     #[cfg(feature = "encoding")]
     pub fn encoding(&self) -> &'static Encoding {
         self.encoding
-    }
-
-    /// Decodes a slice using the encoding specified in the XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// If no encoding is specified, defaults to UTF-8.
-    #[inline]
-    #[cfg(feature = "encoding")]
-    pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode(bytes).0
-    }
-
-    /// Decodes a UTF8 slice without BOM (Byte order mark) regardless of XML declaration.
-    ///
-    /// Decode `bytes` without BOM and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// # Note
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode_without_bom<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        if bytes.starts_with(b"\xEF\xBB\xBF") {
-            from_utf8(&bytes[3..]).map_err(Error::Utf8)
-        } else {
-            from_utf8(bytes).map_err(Error::Utf8)
-        }
-    }
-
-    /// Decodes a slice using without BOM (Byte order mark) the encoding specified in the XML declaration.
-    ///
-    /// Decode `bytes` without BOM and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// If no encoding is specified, defaults to UTF-8.
-    #[inline]
-    #[cfg(feature = "encoding")]
-    pub fn decode_without_bom<'b, 'c>(&'b mut self, mut bytes: &'c [u8]) -> Cow<'c, str> {
-        if self.is_encoding_set {
-            return self.encoding.decode_with_bom_removal(bytes).0;
-        }
-        if bytes.starts_with(b"\xEF\xBB\xBF") {
-            self.is_encoding_set = true;
-            bytes = &bytes[3..];
-        } else if bytes.starts_with(b"\xFF\xFE") {
-            self.is_encoding_set = true;
-            self.encoding = UTF_16LE;
-            bytes = &bytes[2..];
-        } else if bytes.starts_with(b"\xFE\xFF") {
-            self.is_encoding_set = true;
-            self.encoding = UTF_16BE;
-            bytes = &bytes[3..];
-        };
-        self.encoding.decode_without_bom_handling(bytes).0
-    }
-
-    /// Decodes a UTF8 slice regardless of XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// # Note
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
     }
 
     /// Get utf8 decoder
@@ -1383,214 +1328,5 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 
     fn input_borrowed(event: Event<'a>) -> Event<'a> {
         return event;
-    }
-}
-
-/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
-#[inline]
-pub(crate) fn is_whitespace(b: u8) -> bool {
-    match b {
-        b' ' | b'\r' | b'\n' | b'\t' => true,
-        _ => false,
-    }
-}
-
-/// A namespace declaration. Can either bind a namespace to a prefix or define the current default
-/// namespace.
-#[derive(Debug, Clone)]
-struct Namespace {
-    /// Index of the namespace in the buffer
-    start: usize,
-    /// Length of the prefix
-    /// * if bigger than start, then binds this namespace to the corresponding slice.
-    /// * else defines the current default namespace.
-    prefix_len: usize,
-    /// The namespace name (the URI) of this namespace declaration.
-    ///
-    /// The XML standard specifies that an empty namespace value 'removes' a namespace declaration
-    /// for the extent of its scope. For prefix declarations that's not very interesting, but it is
-    /// vital for default namespace declarations. With `xmlns=""` you can revert back to the default
-    /// behaviour of leaving unqualified element names unqualified.
-    value_len: usize,
-    /// Level of nesting at which this namespace was declared. The declaring element is included,
-    /// i.e., a declaration on the document root has `level = 1`.
-    /// This is used to pop the namespace when the element gets closed.
-    level: i32,
-}
-
-impl Namespace {
-    /// Gets the value slice out of namespace buffer
-    ///
-    /// Returns `None` if `value_len == 0`
-    #[inline]
-    fn opt_value<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> Option<&'b [u8]> {
-        if self.value_len == 0 {
-            None
-        } else {
-            let start = self.start + self.prefix_len;
-            Some(&ns_buffer[start..start + self.value_len])
-        }
-    }
-
-    /// Check if the namespace matches the potentially qualified name
-    #[inline]
-    fn is_match(&self, ns_buffer: &[u8], qname: &[u8]) -> bool {
-        if self.prefix_len == 0 {
-            !qname.contains(&b':')
-        } else {
-            qname.get(self.prefix_len).map_or(false, |n| *n == b':')
-                && qname.starts_with(&ns_buffer[self.start..self.start + self.prefix_len])
-        }
-    }
-}
-
-/// A namespace management buffer.
-///
-/// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Debug, Default, Clone)]
-struct NamespaceBufferIndex {
-    /// a buffer of namespace ranges
-    slices: Vec<Namespace>,
-    /// The number of open tags at the moment. We need to keep track of this to know which namespace
-    /// declarations to remove when we encounter an `End` event.
-    nesting_level: i32,
-    /// For `Empty` events keep the 'scope' of the element on the stack artificially. That way, the
-    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
-    /// pop as the first operation in the next `next()` call.
-    pending_pop: bool,
-}
-
-impl NamespaceBufferIndex {
-    #[inline]
-    fn find_namespace_value<'a, 'b, 'c>(
-        &'a self,
-        element_name: &'b [u8],
-        buffer: &'c [u8],
-    ) -> Option<&'c [u8]> {
-        self.slices
-            .iter()
-            .rfind(|n| n.is_match(buffer, element_name))
-            .and_then(|n| n.opt_value(buffer))
-    }
-
-    fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
-        if !self.pending_pop {
-            return;
-        }
-        self.pending_pop = false;
-        self.nesting_level -= 1;
-        let current_level = self.nesting_level;
-        // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices.iter().rposition(|n| n.level <= current_level) {
-            // none of the namespaces are valid, remove all of them
-            None => {
-                buffer.clear();
-                self.slices.clear();
-            }
-            // drop all namespaces past the last valid namespace
-            Some(last_valid_pos) => {
-                if let Some(len) = self.slices.get(last_valid_pos + 1).map(|n| n.start) {
-                    buffer.truncate(len);
-                    self.slices.truncate(last_valid_pos + 1);
-                }
-            }
-        }
-    }
-
-    fn push_new_namespaces(&mut self, e: &BytesStart, buffer: &mut Vec<u8>) {
-        self.nesting_level += 1;
-        let level = self.nesting_level;
-        // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
-        // (default namespace) attribute.
-        for a in e.attributes().with_checks(false) {
-            if let Ok(Attribute { key: k, value: v }) = a {
-                if k.starts_with(b"xmlns") {
-                    match k.get(5) {
-                        None => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
-                                start,
-                                prefix_len: 0,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        Some(&b':') => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&k[6..]);
-                            buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
-                                start,
-                                prefix_len: k.len() - 6,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        _ => break,
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
-    ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
-    ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
-    #[inline]
-    fn resolve_namespace<'a, 'b, 'c>(
-        &'a self,
-        qname: &'b [u8],
-        buffer: &'c [u8],
-        use_default: bool,
-    ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.slices
-            .iter()
-            .rfind(|n| n.is_match(buffer, qname))
-            .map_or((None, qname), |n| {
-                let len = n.prefix_len;
-                if len > 0 {
-                    (n.opt_value(buffer), &qname[len + 1..])
-                } else if use_default {
-                    (n.opt_value(buffer), qname)
-                } else {
-                    (None, qname)
-                }
-            })
-    }
-}
-
-/// Utf8 Decoder
-#[cfg(not(feature = "encoding"))]
-#[derive(Clone, Copy, Debug)]
-pub struct Decoder;
-
-/// Utf8 Decoder
-#[cfg(feature = "encoding")]
-#[derive(Clone, Copy, Debug)]
-pub struct Decoder {
-    encoding: &'static Encoding,
-}
-
-impl Decoder {
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode_owned<'c>(&self, bytes: Vec<u8>) -> Result<String> {
-        String::from_utf8(bytes).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
-    #[cfg(feature = "encoding")]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode(bytes).0
     }
 }

@@ -1,6 +1,5 @@
 //! Manage xml character escapes
 
-use memchr;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -1673,7 +1672,7 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
 }
 
 fn push_utf8(out: &mut Vec<u8>, code: char) {
-    let mut buf = [0u8; 4];
+    let mut buf = [0_u8; 4];
     out.extend_from_slice(code.encode_utf8(&mut buf).as_bytes());
 }
 

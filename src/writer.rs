@@ -10,8 +10,9 @@ use std::io::Write;
 ///
 /// # Examples
 ///
-/// ```rust
-/// # fn main() {
+/// ```ignore
+/// extern crate quick_xml;
+/// fn main() {
 /// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
@@ -25,7 +26,7 @@ use std::io::Write;
 ///     match reader.read_event(&mut buf) {
 ///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 ///
-///             // crates a new element ... alternatively we could reuse `e` by calling
+///             // creates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
 ///             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
 ///
@@ -52,7 +53,7 @@ use std::io::Write;
 /// let result = writer.into_inner().into_inner();
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
-/// # }
+/// }
 /// ```
 #[derive(Clone)]
 pub struct Writer<W: Write> {

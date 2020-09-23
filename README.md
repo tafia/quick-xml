@@ -213,8 +213,8 @@ fn crates_io() -> Result<Html, DeError> {
 
 ### Credits
 
-This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
-quick-xml follows its convention for deserialization, including the 
+This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs).
+quick-xml follows its convention for deserialization, including the
 [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
 
 ### Parsing the "value" of a tag
@@ -251,6 +251,7 @@ Note that despite not focusing on performance (there are several unecessary copi
 
 - `encoding`: support non utf8 xmls
 - `serialize`: support serde `Serialize`/`Deserialize`
+- `asynchronous`: support for `AsyncRead`s in `tokio`
 
 ## Performance
 

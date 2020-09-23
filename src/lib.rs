@@ -24,7 +24,7 @@
 //!
 //! ### Reader
 //!
-//! ```rust
+//! ```ignore
 //! use quick_xml::Reader;
 //! use quick_xml::events::Event;
 //!
@@ -39,8 +39,8 @@
 //! reader.trim_text(true);
 //!
 //! let mut count = 0;
-//! let mut txt = Vec::new();
-//! let mut buf = Vec::new();
+//! let mut txt: Vec<String> = Vec::new();
+//! let mut buf: Vec<u8> = Vec::new();
 //!
 //! // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 //! loop {
@@ -72,7 +72,7 @@
 //!
 //! ### Writer
 //!
-//! ```rust
+//! ```ignore
 //! use quick_xml::Writer;
 //! use quick_xml::events::{Event, BytesEnd, BytesStart};
 //! use quick_xml::Reader;
@@ -83,7 +83,7 @@
 //! let mut reader = Reader::from_str(xml);
 //! reader.trim_text(true);
 //! let mut writer = Writer::new(Cursor::new(Vec::new()));
-//! let mut buf = Vec::new();
+//! let mut buf: Vec<u8> = Vec::new();
 //! loop {
 //!     match reader.read_event(&mut buf) {
 //!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
@@ -123,20 +123,13 @@
 //! quick-xml supports 2 additional features, non activated by default:
 //! - `encoding`: support non utf8 XMLs
 //! - `serialize`: support serde `Serialize`/`Deserialize`
+//! - `asynchronous`: support async reading
 //!
 //! [StAX]: https://en.wikipedia.org/wiki/StAX
 //! [Serde]: https://serde.rs/
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
-
-#[cfg(feature = "encoding_rs")]
-extern crate encoding_rs;
-extern crate memchr;
-#[cfg(feature = "serialize")]
-extern crate serde;
-#[cfg(all(test, feature = "serialize"))]
-extern crate serde_value;
 
 #[cfg(feature = "serialize")]
 pub mod de;
@@ -151,11 +144,22 @@ pub mod events;
 mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
+
+mod errors;
+mod escapei;
 mod utils;
 mod writer;
 
+pub mod escape;
+pub mod events;
+pub mod reader;
+
 // reexports
 #[cfg(feature = "serialize")]
-pub use crate::errors::serialize::DeError;
-pub use crate::errors::{Error, Result};
-pub use crate::{reader::Reader, writer::Writer};
+pub use errors::serialize::DeError;
+pub use errors::{Error, Result};
+#[cfg(feature = "asynchronous")]
+pub use reader::asynchronous::Reader;
+#[cfg(not(feature = "asynchronous"))]
+pub use reader::sync::Reader;
+pub use writer::Writer;
