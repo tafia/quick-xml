@@ -3,6 +3,8 @@ extern crate quick_xml;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
 use std::str::from_utf8;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
 
 #[test]
 fn sample_1_short() {
@@ -298,6 +300,9 @@ fn default_namespace_applies_to_end_elem() {
 }
 
 fn test(input: &[u8], output: &[u8], is_short: bool) {
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     let mut reader = Reader::from_reader(input);
     reader
         .trim_text(is_short)
@@ -310,12 +315,26 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
     if !is_short {
         // discard first whitespace
+
+        #[cfg(feature = "asynchronous")]
+        runtime.block_on(async {
+            reader.read_event(&mut buf).await.unwrap();
+        });
+
+        #[cfg(not(feature = "asynchronous"))]
         reader.read_event(&mut buf).unwrap();
     }
 
     loop {
         buf.clear();
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime
+            .block_on(async { reader.read_namespaced_event(&mut buf, &mut ns_buffer).await });
+
+        #[cfg(not(feature = "asynchronous"))]
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+
         let line = xmlrs_display(&event);
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
@@ -341,7 +360,16 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
         if !is_short && line.starts_with("StartDocument") {
             // advance next Characters(empty space) ...
-            if let Ok(Event::Text(ref e)) = reader.read_event(&mut Vec::new()) {
+
+            let mut buf = Vec::new();
+
+            #[cfg(feature = "asynchronous")]
+            let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+            #[cfg(not(feature = "asynchronous"))]
+            let event = reader.read_event(&mut buf);
+
+            if let Ok(Event::Text(ref e)) = event {
                 if e.iter().any(|b| match *b {
                     b' ' | b'\r' | b'\n' | b'\t' => false,
                     _ => true,

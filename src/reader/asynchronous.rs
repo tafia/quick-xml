@@ -1,27 +1,43 @@
-//! A module to handle `Reader`
+//! A module to handle the async `Reader`
 
+use async_recursion::async_recursion;
 #[cfg(feature = "encoding")]
-use std::borrow::Cow;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use encoding_rs::Encoding;
+use std::future::Future;
+use std::io;
+use std::marker::Unpin;
 use std::path::Path;
+use std::pin::Pin;
 use std::str::from_utf8;
+use std::task::{Context, Poll};
+use tokio::fs::File;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
 
-#[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
+use crate::errors::{Error, Result};
+use crate::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
-use errors::{Error, Result};
-use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use super::{is_whitespace, Decode, Decoder, NamespaceBufferIndex, TagState};
 
-use memchr;
+impl<B: AsyncBufRead> Decode for Reader<B> {
+    #[cfg(feature = "encoding")]
+    fn read_encoding(&self) -> &'static Encoding {
+        self.encoding
+    }
 
-#[derive(Clone)]
-enum TagState {
-    Opened,
-    Closed,
-    Empty,
-    /// Either Eof or Errored
-    Exit,
+    #[cfg(feature = "encoding")]
+    fn read_is_encoding_set(&self) -> bool {
+        self.is_encoding_set
+    }
+
+    #[cfg(feature = "encoding")]
+    fn write_encoding(&mut self, val: &'static Encoding) {
+        self.encoding = val;
+    }
+
+    #[cfg(feature = "encoding")]
+    fn write_is_encoding_set(&mut self, val: bool) {
+        self.is_encoding_set = val;
+    }
 }
 
 /// A low level encoding-agnostic XML event reader.
@@ -34,36 +50,38 @@ enum TagState {
 /// use quick_xml::Reader;
 /// use quick_xml::events::Event;
 ///
-/// let xml = r#"<tag1 att1 = "test">
-///                 <tag2><!--Test comment-->Test</tag2>
-///                 <tag2>Test 2</tag2>
-///             </tag1>"#;
-/// let mut reader = Reader::from_str(xml);
-/// reader.trim_text(true);
-/// let mut count = 0;
-/// let mut txt = Vec::new();
-/// let mut buf = Vec::new();
-/// loop {
-///     match reader.read_event(&mut buf) {
-///         Ok(Event::Start(ref e)) => {
-///             match e.name() {
-///                 b"tag1" => println!("attributes values: {:?}",
-///                                     e.attributes().map(|a| a.unwrap().value)
-///                                     .collect::<Vec<_>>()),
-///                 b"tag2" => count += 1,
-///                 _ => (),
-///             }
-///         },
-///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
-///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-///         Ok(Event::Eof) => break,
-///         _ => (),
+/// #[tokio::main]
+/// async fn main() {
+///     let xml = r#"<tag1 att1 = "test">
+///                     <tag2><!--Test comment-->Test</tag2>
+///                     <tag2>Test 2</tag2>
+///                 </tag1>"#;
+///     let mut reader = Reader::from_str(xml);
+///     reader.trim_text(true);
+///     let mut count = 0;
+///     let mut txt = Vec::new();
+///     let mut buf = Vec::new();
+///     loop {
+///         match reader.read_event(&mut buf).await {
+///             Ok(Event::Start(ref e)) => {
+///                 match e.name() {
+///                     b"tag1" => println!("attributes values: {:?}",
+///                                         e.attributes().map(|a| a.unwrap().value)
+///                                         .collect::<Vec<_>>()),
+///                     b"tag2" => count += 1,
+///                     _ => (),
+///                 }
+///             },
+///             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+///             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+///             Ok(Event::Eof) => break,
+///             _ => (),
+///         }
+///         buf.clear();
 ///     }
-///     buf.clear();
 /// }
 /// ```
-#[derive(Clone)]
-pub struct Reader<B: BufRead> {
+pub struct Reader<B: AsyncBufRead> {
     /// reader
     reader: B,
     /// current buffer position, useful for debuging errors
@@ -72,10 +90,8 @@ pub struct Reader<B: BufRead> {
     tag_state: TagState,
     /// expand empty element into an opening and closing element
     expand_empty_elements: bool,
-    /// trims leading whitespace in Text events, skip the element if text is empty
-    trim_text_start: bool,
-    /// trims trailing whitespace in Text events.
-    trim_text_end: bool,
+    /// trims Text events, skip the element if text is empty
+    trim_text: bool,
     /// trims trailing whitespaces from markup names in closing tags `</a >`
     trim_markup_names_in_closing_tags: bool,
     /// check if End nodes match last Start node
@@ -97,7 +113,7 @@ pub struct Reader<B: BufRead> {
     is_encoding_set: bool,
 }
 
-impl<B: BufRead> Reader<B> {
+impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// Creates a `Reader` that reads from a reader implementing `BufRead`.
     pub fn from_reader(reader: B) -> Reader<B> {
         Reader {
@@ -106,8 +122,7 @@ impl<B: BufRead> Reader<B> {
             opened_starts: Vec::new(),
             tag_state: TagState::Closed,
             expand_empty_elements: false,
-            trim_text_start: false,
-            trim_text_end: false,
+            trim_text: false,
             trim_markup_names_in_closing_tags: true,
             check_end_names: true,
             buf_position: 0,
@@ -145,24 +160,11 @@ impl<B: BufRead> Reader<B> {
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
     pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
-        self.trim_text_start = val;
-        self.trim_text_end = val;
+        self.trim_text = val;
         self
     }
 
-    /// Changes whether whitespace after character data should be removed.
-    ///
-    /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
-    ///
-    /// (`false` by default)
-    ///
-    /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text_end(&mut self, val: bool) -> &mut Reader<B> {
-        self.trim_text_end = val;
-        self
-    }
-
-    /// Changes whether trailing whitespaces after the markup name are trimmed in closing tags
+    /// Changes wether trailing whitespaces after the markup name are trimmed in closing tags
     /// `</a >`.
     ///
     /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
@@ -226,30 +228,27 @@ impl<B: BufRead> Reader<B> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    #[async_recursion]
+    async fn read_until_open<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Opened;
         let buf_start = buf.len();
-        match read_until(&mut self.reader, b'<', buf, &mut self.buf_position) {
+
+        match read_until(&mut self.reader, b'<', buf, &mut self.buf_position).await {
             Ok(0) => Ok(Event::Eof),
             Ok(_) => {
-                let (start, len) = (
-                    buf_start
-                        + if self.trim_text_start {
-                            match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
-                                Some(start) => start,
-                                None => return self.read_event(buf),
-                            }
-                        } else {
-                            0
-                        },
-                    if self.trim_text_end {
-                        buf.iter()
-                            .rposition(|&b| !is_whitespace(b))
-                            .map_or_else(|| buf.len(), |p| p + 1)
-                    } else {
-                        buf.len()
-                    },
-                );
+                let (start, len) = if self.trim_text {
+                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
+                        Some(start) => (
+                            buf_start + start,
+                            buf.iter()
+                                .rposition(|&b| !is_whitespace(b))
+                                .map_or_else(|| buf.len(), |p| p + 1),
+                        ),
+                        None => return self.read_event(buf).await,
+                    }
+                } else {
+                    (buf_start, buf.len())
+                };
                 Ok(Event::Text(BytesText::from_escaped(&buf[start..len])))
             }
             Err(e) => Err(e),
@@ -257,26 +256,20 @@ impl<B: BufRead> Reader<B> {
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    async fn read_until_close<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.tag_state = TagState::Closed;
 
         // need to read 1 character to decide whether pay special attention to attribute values
         let buf_start = buf.len();
-        let start = loop {
-            match self.reader.fill_buf() {
-                Ok(n) if n.is_empty() => return Ok(Event::Eof),
-                Ok(n) => {
-                    // We intentionally don't `consume()` the byte, otherwise we would have to
-                    // handle things like '<>' here already.
-                    break n[0];
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Error::Io(e)),
-            }
+
+        let start = match read_one_dont_consume(&mut self.reader).await {
+            Ok(n) if n.is_none() => return Ok(Event::Eof),
+            Ok(n) => n.unwrap(),
+            Err(e) => return Err(Error::Io(e)),
         };
 
         if start != b'/' && start != b'!' && start != b'?' {
-            match read_elem_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
+            match read_elem_until(&mut self.reader, b'>', buf, &mut self.buf_position).await {
                 Ok(0) => Ok(Event::Eof),
                 Ok(_) => {
                     // we already *know* that we are in this case
@@ -285,15 +278,15 @@ impl<B: BufRead> Reader<B> {
                 Err(e) => Err(e),
             }
         } else {
-            match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
+            match read_until(&mut self.reader, b'>', buf, &mut self.buf_position).await {
                 Ok(0) => Ok(Event::Eof),
                 Ok(_) => match start {
                     b'/' => self.read_end(&buf[buf_start..]),
-                    b'!' => self.read_bang(buf_start, buf),
+                    b'!' => self.read_bang(buf_start, buf).await,
                     b'?' => self.read_question_mark(&buf[buf_start..]),
                     _ => unreachable!(
                         "We checked that `start` must be one of [/!?], was {:?} \
-                             instead.",
+                                 instead.",
                         start
                     ),
                 },
@@ -348,7 +341,7 @@ impl<B: BufRead> Reader<B> {
     ///
     /// Note: depending on the start of the Event, we may need to read more
     /// data, thus we need a mutable buffer
-    fn read_bang<'a, 'b>(
+    async fn read_bang<'a, 'b>(
         &'a mut self,
         buf_start: usize,
         buf: &'b mut Vec<u8>,
@@ -356,8 +349,10 @@ impl<B: BufRead> Reader<B> {
         if buf[buf_start..].starts_with(b"!--") {
             while buf.len() < buf_start + 5 || !buf.ends_with(b"--") {
                 buf.push(b'>');
-                match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
+                match read_until(&mut self.reader, b'>', buf, &mut self.buf_position).await {
                     Ok(0) => {
+                        // In sync sometimes the last char is included and sometimes it isn't
+                        self.buf_position -= 1;
                         self.buf_position -= buf.len() - buf_start;
                         return Err(Error::UnexpectedEof("Comment".to_string()));
                     }
@@ -383,7 +378,8 @@ impl<B: BufRead> Reader<B> {
                 b"[CDATA[" => {
                     while buf.len() < 10 || !buf.ends_with(b"]]") {
                         buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
+                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position).await
+                        {
                             Ok(0) => {
                                 self.buf_position -= buf.len() - buf_start;
                                 return Err(Error::UnexpectedEof("CData".to_string()));
@@ -396,11 +392,12 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..buf.len() - 2],
                     )))
                 }
-                x if x.eq_ignore_ascii_case(b"DOCTYPE") => {
+                b"DOCTYPE" => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
-                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position) {
+                        match read_until(&mut self.reader, b'>', buf, &mut self.buf_position).await
+                        {
                             Ok(0) => {
                                 self.buf_position -= buf.len() - buf_start;
                                 return Err(Error::UnexpectedEof("DOCTYPE".to_string()));
@@ -417,11 +414,11 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..buf.len()],
                     )))
                 }
-                _ => Err(Error::UnexpectedBang),
+                _ => return Err(Error::UnexpectedBang),
             }
         } else {
             self.buf_position -= buf.len() - buf_start;
-            Err(Error::UnexpectedBang)
+            return Err(Error::UnexpectedBang);
         }
     }
 
@@ -481,6 +478,7 @@ impl<B: BufRead> Reader<B> {
         // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
@@ -521,32 +519,36 @@ impl<B: BufRead> Reader<B> {
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
-    /// let xml = r#"<tag1 att1 = "test">
-    ///                 <tag2><!--Test comment-->Test</tag2>
-    ///                 <tag2>Test 2</tag2>
-    ///             </tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
-    /// let mut count = 0;
-    /// let mut buf = Vec::new();
-    /// let mut txt = Vec::new();
-    /// loop {
-    ///     match reader.read_event(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok(Event::Eof) => break,
-    ///         _ => (),
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let xml = r#"<tag1 att1 = "test">
+    ///                     <tag2><!--Test comment-->Test</tag2>
+    ///                     <tag2>Test 2</tag2>
+    ///                 </tag1>"#;
+    ///     let mut reader = Reader::from_str(xml);
+    ///     reader.trim_text(true);
+    ///     let mut count = 0;
+    ///     let mut buf = Vec::new();
+    ///     let mut txt = Vec::new();
+    ///     loop {
+    ///         match reader.read_event(&mut buf).await {
+    ///             Ok(Event::Start(ref e)) => count += 1,
+    ///             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
+    ///             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///             Ok(Event::Eof) => break,
+    ///             _ => (),
+    ///         }
+    ///         buf.clear();
     ///     }
-    ///     buf.clear();
+    ///     println!("Found {} start events", count);
+    ///     println!("Text events: {:?}", txt);
     /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
     /// ```
-    pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    #[async_recursion]
+    pub async fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         let event = match self.tag_state {
-            TagState::Opened => self.read_until_close(buf),
-            TagState::Closed => self.read_until_open(buf),
+            TagState::Opened => self.read_until_close(buf).await,
+            TagState::Closed => self.read_until_open(buf).await,
             TagState::Empty => self.close_expanded_empty(),
             TagState::Exit => return Ok(Event::Eof),
         };
@@ -600,46 +602,49 @@ impl<B: BufRead> Reader<B> {
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
-    /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
-    ///                 <y:tag2><!--Test comment-->Test</y:tag2>
-    ///                 <y:tag2>Test 2</y:tag2>
-    ///             </x:tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
-    /// let mut count = 0;
-    /// let mut buf = Vec::new();
-    /// let mut ns_buf = Vec::new();
-    /// let mut txt = Vec::new();
-    /// loop {
-    ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
-    ///         Ok((ref ns, Event::Start(ref e))) => {
-    ///             count += 1;
-    ///             match (*ns, e.local_name()) {
-    ///                 (Some(b"www.xxxx"), b"tag1") => (),
-    ///                 (Some(b"www.yyyy"), b"tag2") => (),
-    ///                 (ns, n) => panic!("Namespace and local name mismatch"),
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
+    ///                     <y:tag2><!--Test comment-->Test</y:tag2>
+    ///                     <y:tag2>Test 2</y:tag2>
+    ///                 </x:tag1>"#;
+    ///     let mut reader = Reader::from_str(xml);
+    ///     reader.trim_text(true);
+    ///     let mut count = 0;
+    ///     let mut buf = Vec::new();
+    ///     let mut ns_buf = Vec::new();
+    ///     let mut txt = Vec::new();
+    ///     loop {
+    ///         match reader.read_namespaced_event(&mut buf, &mut ns_buf).await {
+    ///             Ok((ref ns, Event::Start(ref e))) => {
+    ///                 count += 1;
+    ///                 match (*ns, e.local_name()) {
+    ///                     (Some(b"www.xxxx"), b"tag1") => (),
+    ///                     (Some(b"www.yyyy"), b"tag2") => (),
+    ///                     (ns, n) => panic!("Namespace and local name mismatch"),
+    ///                 }
+    ///                 println!("Resolved namespace: {:?}", ns.and_then(|ns| from_utf8(ns).ok()));
     ///             }
-    ///             println!("Resolved namespace: {:?}", ns.and_then(|ns| from_utf8(ns).ok()));
+    ///             Ok((_, Event::Text(e))) => {
+    ///                 txt.push(e.unescape_and_decode(&reader).expect("Error!"))
+    ///             },
+    ///             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///             Ok((_, Event::Eof)) => break,
+    ///             _ => (),
     ///         }
-    ///         Ok((_, Event::Text(e))) => {
-    ///             txt.push(e.unescape_and_decode(&reader).expect("Error!"))
-    ///         },
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok((_, Event::Eof)) => break,
-    ///         _ => (),
+    ///         buf.clear();
     ///     }
-    ///     buf.clear();
+    ///     println!("Found {} start events", count);
+    ///     println!("Text events: {:?}", txt);
     /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
     /// ```
-    pub fn read_namespaced_event<'a, 'b, 'c>(
+    pub async fn read_namespaced_event<'a, 'b, 'c>(
         &'a mut self,
         buf: &'b mut Vec<u8>,
         namespace_buffer: &'c mut Vec<u8>,
     ) -> Result<(Option<&'c [u8]>, Event<'b>)> {
         self.ns_buffer.pop_empty_namespaces(namespace_buffer);
-        match self.read_event(buf) {
+        match self.read_event(buf).await {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
@@ -692,77 +697,6 @@ impl<B: BufRead> Reader<B> {
         self.encoding
     }
 
-    /// Decodes a slice using the encoding specified in the XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// If no encoding is specified, defaults to UTF-8.
-    #[inline]
-    #[cfg(feature = "encoding")]
-    pub fn decode<'b, 'c>(&'b self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode(bytes).0
-    }
-
-    /// Decodes a UTF8 slice without BOM (Byte order mark) regardless of XML declaration.
-    ///
-    /// Decode `bytes` without BOM and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// # Note
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode_without_bom<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        if bytes.starts_with(b"\xEF\xBB\xBF") {
-            from_utf8(&bytes[3..]).map_err(Error::Utf8)
-        } else {
-            from_utf8(bytes).map_err(Error::Utf8)
-        }
-    }
-
-    /// Decodes a slice using without BOM (Byte order mark) the encoding specified in the XML declaration.
-    ///
-    /// Decode `bytes` without BOM and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// If no encoding is specified, defaults to UTF-8.
-    #[inline]
-    #[cfg(feature = "encoding")]
-    pub fn decode_without_bom<'b, 'c>(&'b mut self, mut bytes: &'c [u8]) -> Cow<'c, str> {
-        if self.is_encoding_set {
-            return self.encoding.decode_with_bom_removal(bytes).0;
-        }
-        if bytes.starts_with(b"\xEF\xBB\xBF") {
-            self.is_encoding_set = true;
-            bytes = &bytes[3..];
-        } else if bytes.starts_with(b"\xFF\xFE") {
-            self.is_encoding_set = true;
-            self.encoding = UTF_16LE;
-            bytes = &bytes[2..];
-        } else if bytes.starts_with(b"\xFE\xFF") {
-            self.is_encoding_set = true;
-            self.encoding = UTF_16BE;
-            bytes = &bytes[3..];
-        };
-        self.encoding.decode_without_bom_handling(bytes).0
-    }
-
-    /// Decodes a UTF8 slice regardless of XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// # Note
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
-    }
-
     /// Get utf8 decoder
     #[cfg(feature = "encoding")]
     pub fn decoder(&self) -> Decoder {
@@ -780,11 +714,11 @@ impl<B: BufRead> Reader<B> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
+    pub async fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
         let end = end.as_ref();
         loop {
-            match self.read_event(buf) {
+            match self.read_event(buf).await {
                 Ok(Event::End(ref e)) if e.name() == end => {
                     if depth == 0 {
                         return Ok(());
@@ -817,34 +751,37 @@ impl<B: BufRead> Reader<B> {
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
-    /// let mut xml = Reader::from_reader(b"
-    ///     <a>&lt;b&gt;</a>
-    ///     <a></a>
-    /// " as &[u8]);
-    /// xml.trim_text(true);
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut xml = Reader::from_reader(b"
+    ///         <a>&lt;b&gt;</a>
+    ///         <a></a>
+    ///     " as &[u8]);
+    ///     xml.trim_text(true);
     ///
-    /// let expected = ["<b>", ""];
-    /// for &content in expected.iter() {
-    ///     match xml.read_event(&mut Vec::new()) {
-    ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), content);
-    ///         },
-    ///         e => panic!("Expecting Start event, found {:?}", e),
+    ///     let expected = ["<b>", ""];
+    ///     for &content in expected.iter() {
+    ///         match xml.read_event(&mut Vec::new()).await {
+    ///             Ok(Event::Start(ref e)) => {
+    ///                 assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).await.unwrap(), content);
+    ///             },
+    ///             e => panic!("Expecting Start event, found {:?}", e),
+    ///         }
     ///     }
     /// }
     /// ```
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event(buf) {
+    pub async fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
+        let s = match self.read_event(buf).await {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
             Ok(Event::End(ref e)) if e.name() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),
         };
-        self.read_to_end(end, buf)?;
+        self.read_to_end(end, buf).await?;
         s
     }
 
@@ -854,17 +791,10 @@ impl<B: BufRead> Reader<B> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use std::{str, io::Cursor};
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
-    ///
-    /// let xml = r#"<tag1 att1 = "test">
-    ///                 <tag2><!--Test comment-->Test</tag2>
-    ///                 <tag3>Test 2</tag3>
-    ///             </tag1>"#;
-    /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
-    /// let mut buf = Vec::new();
     ///
     /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
     ///     let end_pos = reader.buffer_position();
@@ -884,20 +814,30 @@ impl<B: BufRead> Reader<B> {
     ///     (line, column)
     /// }
     ///
-    /// loop {
-    ///     match reader.read_event(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => match e.name() {
-    ///             b"tag1" | b"tag2" => (),
-    ///             tag => {
-    ///                 assert_eq!(b"tag3", tag);
-    ///                 assert_eq!((3, 22), into_line_and_column(reader));
-    ///                 break;
-    ///             }
-    ///         },
-    ///         Ok(Event::Eof) => unreachable!(),
-    ///         _ => (),
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let xml = r#"<tag1 att1 = "test">
+    ///                     <tag2><!--Test comment-->Test</tag2>
+    ///                     <tag3>Test 2</tag3>
+    ///                 </tag1>"#;
+    ///     let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+    ///     let mut buf = Vec::new();
+    ///
+    ///     loop {
+    ///         match reader.read_event(&mut buf).await {
+    ///             Ok(Event::Start(ref e)) => match e.name() {
+    ///                 b"tag1" | b"tag2" => (),
+    ///                 tag => {
+    ///                     assert_eq!(b"tag3", tag);
+    ///                     assert_eq!((3, 22), into_line_and_column(reader));
+    ///                     break;
+    ///                 }
+    ///             },
+    ///             Ok(Event::Eof) => unreachable!(),
+    ///             _ => (),
+    ///         }
+    ///         buf.clear();
     ///     }
-    ///     buf.clear();
     /// }
     /// ```
     pub fn into_underlying_reader(self) -> B {
@@ -907,8 +847,8 @@ impl<B: BufRead> Reader<B> {
 
 impl Reader<BufReader<File>> {
     /// Creates an XML reader from a file path.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
-        let file = File::open(path).map_err(Error::Io)?;
+    pub async fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
+        let file = File::open(path).await.map_err(Error::Io)?;
         let reader = BufReader::new(file);
         Ok(Reader::from_reader(reader))
     }
@@ -921,46 +861,91 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
+/// Container for a future that reads one byte from a reader
+/// but does not consume the byte, so it can be read again.
+#[derive(Debug)]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+pub struct ReadOneDontConsume<'a, R: ?Sized> {
+    reader: &'a mut R,
+}
+
+fn read_one_dont_consume<'a, R>(reader: &'a mut R) -> ReadOneDontConsume<'a, R>
+where
+    R: AsyncBufRead + ?Sized + Unpin,
+{
+    ReadOneDontConsume { reader }
+}
+
+fn read_one_dont_consume_internal<R: AsyncBufRead + ?Sized>(
+    mut reader: Pin<&mut R>,
+    cx: &mut Context<'_>,
+) -> Poll<io::Result<Option<u8>>> {
+    match reader.as_mut().poll_fill_buf(cx) {
+        Poll::Ready(t) => Poll::Ready(t.map(|s| if s.is_empty() { None } else { Some(s[0]) })),
+        Poll::Pending => Poll::Pending,
+    }
+}
+
+impl<R: AsyncBufRead + ?Sized + Unpin> Future for ReadOneDontConsume<'_, R> {
+    type Output = io::Result<Option<u8>>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let Self { reader } = &mut *self;
+        read_one_dont_consume_internal(Pin::new(reader), cx)
+    }
+}
+
 /// read until `byte` is found or end of file
 /// return the position of byte
 #[inline]
-fn read_until<R: BufRead>(
+async fn read_until<R: AsyncBufRead + ?Sized + Unpin>(
     r: &mut R,
     byte: u8,
     buf: &mut Vec<u8>,
-    position: &mut usize,
+    buf_position: &mut usize,
 ) -> Result<usize> {
-    let mut read = 0;
-    let mut done = false;
-    while !done {
-        let used = {
-            let available = match r.fill_buf() {
-                Ok(n) if n.is_empty() => break,
-                Ok(n) => n,
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            };
+    let result = r.read_until(byte, buf).await;
 
-            match memchr::memchr(byte, available) {
-                Some(i) => {
-                    buf.extend_from_slice(&available[..i]);
-                    done = true;
-                    i + 1
-                }
-                None => {
-                    buf.extend_from_slice(available);
-                    available.len()
-                }
-            }
-        };
-        r.consume(used);
-        read += used;
+    if let Ok(size) = result {
+        if buf.len() > 0 && buf[buf.len() - 1] == byte {
+            buf.remove(buf.len() - 1);
+        }
+        *buf_position += size;
     }
-    *position += read;
-    Ok(read)
+
+    result.map_err(Error::Io)
+
+    // let mut read = 0;
+    // let mut done = false;
+    // while !done {
+    //     let used = {
+    //         let available = match r.fill_buf() {
+    //             Ok(n) if n.is_empty() => break,
+    //             Ok(n) => n,
+    //             Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+    //             Err(e) => {
+    //                 *position += read;
+    //                 return Err(Error::Io(e));
+    //             }
+    //         };
+
+    //         match memchr::memchr(byte, available) {
+    //             Some(i) => {
+    //                 buf.extend_from_slice(&available[..i]);
+    //                 done = true;
+    //                 i + 1
+    //             }
+    //             None => {
+    //                 buf.extend_from_slice(available);
+    //                 available.len()
+    //             }
+    //         }
+    //     };
+    //     r.consume(used);
+    //     read += used;
+    // }
+    // *position += read;
+    // Ok(read)
 }
 
 /// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
@@ -974,7 +959,7 @@ fn read_until<R: BufRead>(
 /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
 /// level)
 #[inline]
-fn read_elem_until<R: BufRead>(
+async fn read_elem_until<R: AsyncBufRead + Unpin>(
     r: &mut R,
     end_byte: u8,
     buf: &mut Vec<u8>,
@@ -994,17 +979,23 @@ fn read_elem_until<R: BufRead>(
     let mut done = false;
     while !done {
         let used = {
-            let available = match r.fill_buf() {
-                Ok(n) if n.is_empty() => return Ok(read),
-                Ok(n) => n,
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            let available = match r.read_until(end_byte, buf).await {
+                Ok(n) if n == 0 => {
+                    buf.remove(buf.len() - 1);
+                    return Ok(read);
+                }
+                Ok(n) => {
+                    let len = buf.len();
+                    &buf[len - n..len]
+                }
+                Err(ref e) if e.kind() == tokio::io::ErrorKind::Interrupted => continue,
                 Err(e) => {
                     *position += read;
                     return Err(Error::Io(e));
                 }
             };
 
-            let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
+            let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', &available);
             let used: usize;
             loop {
                 match memiter.next() {
@@ -1012,7 +1003,6 @@ fn read_elem_until<R: BufRead>(
                         state = match (state, available[i]) {
                             (State::Elem, b) if b == end_byte => {
                                 // only allowed to match `end_byte` while we are in state `Elem`
-                                buf.extend_from_slice(&available[..i]);
                                 done = true;
                                 used = i + 1;
                                 break;
@@ -1028,221 +1018,19 @@ fn read_elem_until<R: BufRead>(
                         };
                     }
                     None => {
-                        buf.extend_from_slice(available);
                         used = available.len();
                         break;
                     }
                 }
             }
+
             used
         };
-        r.consume(used);
         read += used;
     }
+
+    buf.remove(buf.len() - 1);
+
     *position += read;
     Ok(read)
-}
-
-/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
-#[inline]
-pub(crate) fn is_whitespace(b: u8) -> bool {
-    match b {
-        b' ' | b'\r' | b'\n' | b'\t' => true,
-        _ => false,
-    }
-}
-
-/// A namespace declaration. Can either bind a namespace to a prefix or define the current default
-/// namespace.
-#[derive(Debug, Clone)]
-struct Namespace {
-    /// Index of the namespace in the buffer
-    start: usize,
-    /// Length of the prefix
-    /// * if bigger than start, then binds this namespace to the corresponding slice.
-    /// * else defines the current default namespace.
-    prefix_len: usize,
-    /// The namespace name (the URI) of this namespace declaration.
-    ///
-    /// The XML standard specifies that an empty namespace value 'removes' a namespace declaration
-    /// for the extent of its scope. For prefix declarations that's not very interesting, but it is
-    /// vital for default namespace declarations. With `xmlns=""` you can revert back to the default
-    /// behaviour of leaving unqualified element names unqualified.
-    value_len: usize,
-    /// Level of nesting at which this namespace was declared. The declaring element is included,
-    /// i.e., a declaration on the document root has `level = 1`.
-    /// This is used to pop the namespace when the element gets closed.
-    level: i32,
-}
-
-impl Namespace {
-    /// Gets the value slice out of namespace buffer
-    ///
-    /// Returns `None` if `value_len == 0`
-    #[inline]
-    fn opt_value<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> Option<&'b [u8]> {
-        if self.value_len == 0 {
-            None
-        } else {
-            let start = self.start + self.prefix_len;
-            Some(&ns_buffer[start..start + self.value_len])
-        }
-    }
-
-    /// Check if the namespace matches the potentially qualified name
-    #[inline]
-    fn is_match(&self, ns_buffer: &[u8], qname: &[u8]) -> bool {
-        if self.prefix_len == 0 {
-            !qname.contains(&b':')
-        } else {
-            qname.get(self.prefix_len).map_or(false, |n| *n == b':')
-                && qname.starts_with(&ns_buffer[self.start..self.start + self.prefix_len])
-        }
-    }
-}
-
-/// A namespace management buffer.
-///
-/// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Debug, Default, Clone)]
-struct NamespaceBufferIndex {
-    /// a buffer of namespace ranges
-    slices: Vec<Namespace>,
-    /// The number of open tags at the moment. We need to keep track of this to know which namespace
-    /// declarations to remove when we encounter an `End` event.
-    nesting_level: i32,
-    /// For `Empty` events keep the 'scope' of the element on the stack artificially. That way, the
-    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
-    /// pop as the first operation in the next `next()` call.
-    pending_pop: bool,
-}
-
-impl NamespaceBufferIndex {
-    #[inline]
-    fn find_namespace_value<'a, 'b, 'c>(
-        &'a self,
-        element_name: &'b [u8],
-        buffer: &'c [u8],
-    ) -> Option<&'c [u8]> {
-        self.slices
-            .iter()
-            .rfind(|n| n.is_match(buffer, element_name))
-            .and_then(|n| n.opt_value(buffer))
-    }
-
-    fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
-        if !self.pending_pop {
-            return;
-        }
-        self.pending_pop = false;
-        self.nesting_level -= 1;
-        let current_level = self.nesting_level;
-        // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices.iter().rposition(|n| n.level <= current_level) {
-            // none of the namespaces are valid, remove all of them
-            None => {
-                buffer.clear();
-                self.slices.clear();
-            }
-            // drop all namespaces past the last valid namespace
-            Some(last_valid_pos) => {
-                if let Some(len) = self.slices.get(last_valid_pos + 1).map(|n| n.start) {
-                    buffer.truncate(len);
-                    self.slices.truncate(last_valid_pos + 1);
-                }
-            }
-        }
-    }
-
-    fn push_new_namespaces(&mut self, e: &BytesStart, buffer: &mut Vec<u8>) {
-        self.nesting_level += 1;
-        let level = self.nesting_level;
-        // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
-        // (default namespace) attribute.
-        for a in e.attributes().with_checks(false) {
-            if let Ok(Attribute { key: k, value: v }) = a {
-                if k.starts_with(b"xmlns") {
-                    match k.get(5) {
-                        None => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
-                                start,
-                                prefix_len: 0,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        Some(&b':') => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&k[6..]);
-                            buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
-                                start,
-                                prefix_len: k.len() - 6,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        _ => break,
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
-    ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
-    ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
-    #[inline]
-    fn resolve_namespace<'a, 'b, 'c>(
-        &'a self,
-        qname: &'b [u8],
-        buffer: &'c [u8],
-        use_default: bool,
-    ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.slices
-            .iter()
-            .rfind(|n| n.is_match(buffer, qname))
-            .map_or((None, qname), |n| {
-                let len = n.prefix_len;
-                if len > 0 {
-                    (n.opt_value(buffer), &qname[len + 1..])
-                } else if use_default {
-                    (n.opt_value(buffer), qname)
-                } else {
-                    (None, qname)
-                }
-            })
-    }
-}
-
-/// Utf8 Decoder
-#[cfg(not(feature = "encoding"))]
-#[derive(Clone, Copy)]
-pub struct Decoder;
-
-/// Utf8 Decoder
-#[cfg(feature = "encoding")]
-#[derive(Clone, Copy)]
-pub struct Decoder {
-    encoding: &'static Encoding,
-}
-
-impl Decoder {
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
-    }
-
-    #[cfg(feature = "encoding")]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode(bytes).0
-    }
 }

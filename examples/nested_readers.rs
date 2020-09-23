@@ -1,6 +1,8 @@
-extern crate quick_xml;
 use quick_xml::events::Event;
 use quick_xml::Reader;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
+
 // a structure to capture the rows we've extracted
 // from a ECMA-376 table in document.xml
 #[derive(Debug, Clone)]
@@ -16,10 +18,26 @@ fn main() -> Result<(), quick_xml::Error> {
     // buffer for nested reader
     let mut skip_buf = Vec::new();
     let mut count = 0;
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let mut reader =
+        runtime.block_on(async { Reader::from_file("tests/documents/document.xml").await })?;
+
+    #[cfg(not(feature = "asynchronous"))]
     let mut reader = Reader::from_file("tests/documents/document.xml")?;
+
     let mut found_tables = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await })?;
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf)?;
+
+        match event {
             Event::Start(element) => match element.name() {
                 b"w:tbl" => {
                     count += 1;
@@ -32,7 +50,15 @@ fn main() -> Result<(), quick_xml::Error> {
                     let mut row_index = 0;
                     loop {
                         skip_buf.clear();
-                        match reader.read_event(&mut skip_buf)? {
+
+                        #[cfg(feature = "asynchronous")]
+                        let event =
+                            runtime.block_on(async { reader.read_event(&mut skip_buf).await })?;
+
+                        #[cfg(not(feature = "asynchronous"))]
+                        let event = reader.read_event(&mut skip_buf)?;
+
+                        match event {
                             Event::Start(element) => match element.name() {
                                 b"w:tr" => {
                                     stats.rows.push(vec![]);

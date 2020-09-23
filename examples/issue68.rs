@@ -1,10 +1,10 @@
 #![allow(unused)]
 
-extern crate quick_xml;
-
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Read;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
 
 struct Resource {
     etag: String,
@@ -81,8 +81,18 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
     let mut depth = 0;
     let mut state = State::MultiStatus;
 
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_namespaced_event(&mut buf, &mut ns_buffer) {
+        #[cfg(feature = "asynchronous")]
+        let event = runtime
+            .block_on(async { reader.read_namespaced_event(&mut buf, &mut ns_buffer).await });
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+
+        match event {
             Ok((namespace_value, Event::Start(e))) => {
                 let namespace_value = namespace_value.unwrap_or_default();
                 match (depth, state, namespace_value, e.local_name()) {

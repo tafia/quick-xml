@@ -6,16 +6,13 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::io::BufRead;
 use std::ops::Deref;
 use std::str::from_utf8;
 
 use self::attributes::{Attribute, Attributes};
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::Reader;
-
-use memchr;
+use crate::errors::{Error, Result};
+use crate::escapei::{do_unescape, escape};
+use crate::reader::Decode;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -190,7 +187,7 @@ impl<'a> BytesStart<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
+        do_unescape(&*self.buf, custom_entities).map_err(Error::Escape)
     }
 
     /// Returns an iterator over the attributes of this tag.
@@ -237,7 +234,7 @@ impl<'a> BytesStart<'a> {
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
     #[inline]
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    pub fn unescape_and_decode(&self, reader: &impl Decode) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
 
@@ -256,9 +253,9 @@ impl<'a> BytesStart<'a> {
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[inline]
-    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
@@ -266,9 +263,9 @@ impl<'a> BytesStart<'a> {
 
     #[cfg(feature = "encoding")]
     #[inline]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
@@ -279,14 +276,13 @@ impl<'a> BytesStart<'a> {
 
     #[cfg(not(feature = "encoding"))]
     #[inline]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -602,7 +598,7 @@ impl<'a> BytesText<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(self, custom_entities).map_err(Error::EscapeError)
+        do_unescape(self, custom_entities).map_err(Error::Escape)
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -613,10 +609,7 @@ impl<'a> BytesText<'a> {
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
     #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-    ) -> Result<String> {
+    pub fn unescape_and_decode_without_bom(&self, reader: &mut impl Decode) -> Result<String> {
         self.do_unescape_and_decode_without_bom(reader, None)
     }
 
@@ -628,10 +621,7 @@ impl<'a> BytesText<'a> {
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
     #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-    ) -> Result<String> {
+    pub fn unescape_and_decode_without_bom(&self, reader: &impl Decode) -> Result<String> {
         self.do_unescape_and_decode_without_bom(reader, None)
     }
 
@@ -647,9 +637,9 @@ impl<'a> BytesText<'a> {
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_without_bom_with_custom_entities(
         &self,
-        reader: &mut Reader<B>,
+        reader: &mut impl Decode,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<String> {
         self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
@@ -667,18 +657,18 @@ impl<'a> BytesText<'a> {
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_without_bom_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<String> {
         self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
     }
 
     #[cfg(feature = "encoding")]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
+    fn do_unescape_and_decode_without_bom(
         &self,
-        reader: &mut Reader<B>,
+        reader: &mut impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self);
@@ -688,14 +678,13 @@ impl<'a> BytesText<'a> {
     }
 
     #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
+    fn do_unescape_and_decode_without_bom(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -705,7 +694,7 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    pub fn unescape_and_decode(&self, reader: &impl Decode) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
 
@@ -719,18 +708,18 @@ impl<'a> BytesText<'a> {
     /// # Pre-condition
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
     #[cfg(feature = "encoding")]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
@@ -740,14 +729,13 @@ impl<'a> BytesText<'a> {
     }
 
     #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities(
         &self,
-        reader: &Reader<B>,
+        reader: &impl Decode,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -786,6 +774,7 @@ pub enum Event<'a> {
     CData(BytesText<'a>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
+    #[allow(clippy::upper_case_acronyms)]
     /// Processing instruction `<?...?>`.
     PI(BytesText<'a>),
     /// Doctype `<!DOCTYPE...>`.
@@ -867,6 +856,8 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    #[cfg(feature = "asynchronous")]
+    use tokio::runtime::Runtime;
 
     #[test]
     fn local_name() {
@@ -877,11 +868,25 @@ mod test {
             <:foo attr='bar'>foobusbar</:foo>
             <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
             "#;
-        let mut rdr = Reader::from_str(xml);
+        let mut rdr = crate::Reader::from_str(xml);
         let mut buf = Vec::new();
         let mut parsed_local_names = Vec::new();
+
+        #[cfg(feature = "asynchronous")]
+        let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
         loop {
-            match rdr.read_event(&mut buf).expect("unable to read xml event") {
+            #[cfg(feature = "asynchronous")]
+            let event = runtime.block_on(async {
+                rdr.read_event(&mut buf)
+                    .await
+                    .expect("unable to read xml event")
+            });
+
+            #[cfg(not(feature = "asynchronous"))]
+            let event = rdr.read_event(&mut buf).expect("unable to read xml event");
+
+            match event {
                 Event::Start(ref e) => parsed_local_names.push(
                     from_utf8(e.local_name())
                         .expect("unable to build str from local_name")
@@ -896,6 +901,7 @@ mod test {
                 _ => {}
             }
         }
+
         assert_eq!(parsed_local_names[0], "bus".to_string());
         assert_eq!(parsed_local_names[1], "bus".to_string());
         assert_eq!(parsed_local_names[2], "".to_string());

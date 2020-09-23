@@ -1,16 +1,25 @@
-extern crate quick_xml;
-
-use std::io::Cursor;
-use std::str::from_utf8;
-
 use quick_xml::events::Event::*;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Result, Writer};
+use std::io::Cursor;
+use std::str::from_utf8;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
 
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf).unwrap() {
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = $r.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { $r.read_event(&mut buf).await });
+
+        match event.unwrap() {
             $t(ref e) if e.name() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -26,7 +35,17 @@ macro_rules! next_eq_name {
 macro_rules! next_eq_content {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf).unwrap() {
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = $r.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { $r.read_event(&mut buf).await });
+
+        match event.unwrap() {
             $t(ref e) if &**e == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -127,7 +146,17 @@ fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf).unwrap() {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event.unwrap() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => assert_eq!(
@@ -207,11 +236,21 @@ fn test_writer() {
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -226,11 +265,21 @@ fn test_writer_borrow() {
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -245,16 +294,25 @@ fn test_writer_indent() {
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
     let result = writer.into_inner().into_inner();
-    // println!("{:?}", String::from_utf8_lossy(&result));
 
     #[cfg(windows)]
     assert!(result.into_iter().eq(txt.bytes().filter(|b| *b != 13)));
@@ -270,11 +328,21 @@ fn test_writer_indent_cdata() {
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -295,11 +363,21 @@ fn test_write_empty_element_attrs() {
     reader.expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -315,8 +393,18 @@ fn test_write_attrs() {
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        let event = match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let ev = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let ev = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        let event = match ev {
             Ok(Eof) => break,
             Ok(Start(elem)) => {
                 let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
@@ -328,7 +416,7 @@ fn test_write_attrs() {
             }
             Ok(End(_)) => End(BytesEnd::borrowed(b"copy")),
             Ok(e) => e,
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         };
         assert!(writer.write_event(event).is_ok());
     }
@@ -421,7 +509,17 @@ fn test_buf_position_err_end_element() {
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
         Err(e) => panic!(
             "expecting buf_pos = 2, found {}, err: {:?}",
@@ -441,7 +539,17 @@ fn test_buf_position_err_comment() {
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Err(_) if r.buffer_position() == 4 => {
             // error at char 5: no closing --> tag found
             assert!(true);
@@ -460,18 +568,34 @@ fn test_buf_position_err_comment_2_buf() {
     let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     let mut buf = Vec::new();
-    let _ = r.read_event(&mut buf).unwrap();
+
+    #[cfg(not(feature = "asynchronous"))]
+    let _ = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let _ = runtime.block_on(async { r.read_event(&mut buf).await });
+
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Err(_) if r.buffer_position() == 4 => {
             // error at char 5: no closing --> tag found
             assert!(true);
         }
         Err(e) => panic!(
-            "expecting buf_pos = 5, found {}, err: {:?}",
+            "expecting buf_pos = 4, found {}, err: {:?}",
             r.buffer_position(),
             e
         ),
@@ -488,7 +612,17 @@ fn test_buf_position_err_comment_trim_text() {
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Err(_) if r.buffer_position() == 7 => {
             // error at char 5: no closing --> tag found
             assert!(true);
@@ -509,12 +643,28 @@ fn test_namespace() {
 
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((None, Start(_))) = event {
     } else {
         assert!(false, "expecting start element with no namespace");
     }
 
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((Some(a), Start(_))) = event {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -530,16 +680,32 @@ fn test_default_namespace() {
     let mut r = Reader::from_str("<a ><b xmlns=\"www1\"></b></a>");
     r.trim_text(true);
 
-    // <a>
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    // <a>
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((None, Start(_))) = event {
     } else {
         assert!(false, "expecting outer start element with no namespace");
     }
 
     // <b>
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((Some(a), Start(_))) = event {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -550,7 +716,14 @@ fn test_default_namespace() {
     }
 
     // </b>
-    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((Some(a), End(_))) = event {
         if &*a == b"www1" {
             assert!(true);
         } else {
@@ -562,7 +735,14 @@ fn test_default_namespace() {
 
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
-    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((None, End(_))) = event {
     } else {
         assert!(false, "expecting outer end element with no namespace");
     }
@@ -575,7 +755,16 @@ fn test_default_namespace_reset() {
 
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    if let Ok((Some(a), Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((Some(a), Start(_))) = event {
         assert_eq!(
             &a[..],
             b"www1",
@@ -585,16 +774,35 @@ fn test_default_namespace_reset() {
         panic!("expecting outer start element with to resolve to 'www1'");
     }
 
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    match event {
         Ok((None, Start(_))) => (),
         e => panic!("expecting inner start element, got {:?}", e),
     }
-    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((None, End(_))) = event {
     } else {
         assert!(false, "expecting inner end element");
     }
 
-    if let Ok((Some(a), End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
+
+    if let Ok((Some(a), End(_))) = event {
         assert_eq!(
             &a[..],
             b"www1",
@@ -611,7 +819,17 @@ fn test_escaped_content() {
     r.trim_text(true);
     next_eq!(r, Start, b"a");
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Ok(Text(e)) => {
             if &*e != b"&lt;test&gt;" {
                 panic!(
@@ -660,11 +878,20 @@ fn test_read_write_roundtrip_results_in_identity() {
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -687,11 +914,20 @@ fn test_read_write_roundtrip() {
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -714,8 +950,17 @@ fn test_read_write_roundtrip_escape() {
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.escaped();
@@ -724,7 +969,7 @@ fn test_read_write_roundtrip_escape() {
                     .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -747,8 +992,17 @@ fn test_read_write_roundtrip_escape_text() {
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Eof) => break,
             Ok(Text(e)) => {
                 let t = e.unescape_and_decode(&reader).unwrap();
@@ -757,7 +1011,7 @@ fn test_read_write_roundtrip_escape_text() {
                     .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -770,7 +1024,17 @@ fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
@@ -793,7 +1057,17 @@ fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str("<a attr=\">\" check=\"2\"></a>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
@@ -816,7 +1090,17 @@ fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str("<a attr=\"'>'\" check=\"'2'\"></a>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
@@ -839,7 +1123,17 @@ fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str("<a attr='\">\"' check='\"2\"'></a>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+
+    #[cfg(not(feature = "asynchronous"))]
+    let event = r.read_event(&mut buf);
+
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    let event = runtime.block_on(async { r.read_event(&mut buf).await });
+
+    match event {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             match attrs.next() {
@@ -867,9 +1161,17 @@ fn test_unescape_and_decode_without_bom_removes_utf8_bom() {
 
     let mut txt = Vec::new();
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
@@ -886,9 +1188,17 @@ fn test_unescape_and_decode_without_bom_removes_utf16be_bom() {
 
     let mut txt = Vec::new();
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
@@ -905,9 +1215,17 @@ fn test_unescape_and_decode_without_bom_removes_utf16le_bom() {
 
     let mut txt = Vec::new();
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),
@@ -926,9 +1244,17 @@ fn test_unescape_and_decode_without_bom_does_nothing_if_no_bom_exists() {
 
     let mut txt = Vec::new();
     let mut buf = Vec::new();
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        match event {
             Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
             Ok(Event::Eof) => break,
             _ => (),

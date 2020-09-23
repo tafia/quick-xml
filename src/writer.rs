@@ -2,8 +2,8 @@
 
 use std::io::Write;
 
-use errors::{Error, Result};
-use events::Event;
+use crate::errors::{Error, Result};
+use crate::events::Event;
 
 /// XML writer.
 ///
@@ -11,9 +11,9 @@ use events::Event;
 ///
 /// # Examples
 ///
-/// ```rust
-/// # extern crate quick_xml;
-/// # fn main() {
+/// ```ignore
+/// extern crate quick_xml;
+/// fn main() {
 /// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
@@ -27,7 +27,7 @@ use events::Event;
 ///     match reader.read_event(&mut buf) {
 ///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 ///
-///             // crates a new element ... alternatively we could reuse `e` by calling
+///             // creates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
 ///             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
 ///
@@ -54,7 +54,7 @@ use events::Event;
 /// let result = writer.into_inner().into_inner();
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
-/// # }
+/// }
 /// ```
 #[derive(Clone)]
 pub struct Writer<W: Write> {
@@ -210,7 +210,7 @@ impl Indentation {
 #[cfg(test)]
 mod indentation {
     use super::*;
-    use events::*;
+    use crate::events::*;
 
     #[test]
     fn self_closed() {

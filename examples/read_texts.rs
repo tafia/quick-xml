@@ -1,4 +1,5 @@
-extern crate quick_xml;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
 
 fn main() {
     use quick_xml::events::Event;
@@ -13,14 +14,32 @@ fn main() {
     let mut txt = Vec::new();
     let mut buf = Vec::new();
 
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        match event {
             Ok(Event::Start(ref e)) if e.name() == b"tag2" => {
-                txt.push(
+                #[cfg(feature = "asynchronous")]
+                let text = runtime.block_on(async {
                     reader
                         .read_text(b"tag2", &mut Vec::new())
-                        .expect("Cannot decode text value"),
-                );
+                        .await
+                        .expect("Cannot decode text value")
+                });
+
+                #[cfg(not(feature = "asynchronous"))]
+                let text = reader
+                    .read_text(b"tag2", &mut Vec::new())
+                    .expect("Cannot decode text value");
+
+                txt.push(text);
                 println!("{:?}", txt);
             }
             Ok(Event::Eof) => break, // exits the loop when reaching end of file

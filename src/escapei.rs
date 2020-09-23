@@ -1,6 +1,5 @@
 //! Manage xml character escapes
 
-use memchr;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -181,7 +180,7 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"amp" => "&",
         b"apos" => "'",
         b"quot" => "\"",
-        _ => return None
+        _ => return None,
     };
     Some(s)
 }
@@ -820,11 +819,9 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"mid" | b"VerticalBar" | b"smid" | b"shortmid" => "\u{2223}",
         b"nmid" | b"NotVerticalBar" | b"nsmid" | b"nshortmid" => "\u{2224}",
         b"par" | b"parallel" | b"DoubleVerticalBar" | b"spar" | b"shortparallel" => "\u{2225}",
-        b"npar"
-        | b"nparallel"
-        | b"NotDoubleVerticalBar"
-        | b"nspar"
-        | b"nshortparallel" => "\u{2226}",
+        b"npar" | b"nparallel" | b"NotDoubleVerticalBar" | b"nspar" | b"nshortparallel" => {
+            "\u{2226}"
+        }
         b"and" | b"wedge" => "\u{2227}",
         b"or" | b"vee" => "\u{2228}",
         b"cap" => "\u{2229}",
@@ -1645,13 +1642,13 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"xopf" => "\u{1D56}",
         b"yopf" => "\u{1D56}",
         b"zopf" => "\u{1D56}",
-        _ => return None
+        _ => return None,
     };
     Some(s)
 }
 
 fn push_utf8(out: &mut Vec<u8>, code: char) {
-    let mut buf = [0u8; 4];
+    let mut buf = [0_u8; 4];
     out.extend_from_slice(code.encode_utf8(&mut buf).as_bytes());
 }
 

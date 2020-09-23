@@ -115,6 +115,7 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     events::{BytesStart, BytesText, Event},
+    reader::Decode,
     Reader,
 };
 use serde::de::{self, DeserializeOwned};

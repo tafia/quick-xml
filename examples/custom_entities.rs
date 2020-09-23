@@ -14,6 +14,8 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::bytes::Regex;
 use std::collections::HashMap;
+#[cfg(feature = "asynchronous")]
+use tokio::runtime::Runtime;
 
 const DATA: &str = r#"
 
@@ -33,8 +35,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut custom_entities = HashMap::new();
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
+    #[cfg(feature = "asynchronous")]
+    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+
     loop {
-        match reader.read_event(&mut buf) {
+        #[cfg(feature = "asynchronous")]
+        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
+
+        #[cfg(not(feature = "asynchronous"))]
+        let event = reader.read_event(&mut buf);
+
+        match event {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
                     custom_entities.insert(cap[1].to_vec(), cap[2].to_vec());
