@@ -8,7 +8,17 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-
+## 0.19.0
+- docs: Add example for nested parsing
+- fix: `buffer_position` not properly set sometimes
+- feat: Make escape module public apart from EscapeError
+- feat: Nake Reader `Clone`able
+- feat: Enable writing manual identation (and fix underflow on shrink)
+- style: Forbid unsafe code
+- fix: Use `write_all` instead of `write`
+- fix: (Serde) Serialize basic types as attributes (breaking change)
+- test: Fix benchmarks on Windows and add trimmed variant
+- feat: deserialize bytes
 
 ## 0.18.0 - 0.18.1
 - feat: add `decode_without_bom` fns for BOM prefixed text fields
