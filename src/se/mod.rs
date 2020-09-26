@@ -209,9 +209,8 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        write!(self.writer.inner(), "<{}", name).map_err(|err| {
-            DeError::Custom(format!("serialize struct {} failed: {}", name, err))
-        })?;
+        write!(self.writer.inner(), "<{}", name)
+            .map_err(|err| DeError::Custom(format!("serialize struct {} failed: {}", name, err)))?;
         Ok(Struct::new(self, name))
     }
 

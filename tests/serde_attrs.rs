@@ -1,39 +1,52 @@
 #![cfg(feature = "serialize")]
 
 extern crate quick_xml;
-extern crate serde;
 extern crate regex;
+extern crate serde;
 
 use quick_xml::se::to_string;
-use serde::Serialize;
 use regex::Regex;
+use serde::Serialize;
 use std::borrow::Cow;
 
 #[derive(Serialize)]
-#[serde(rename="classroom")]
+#[serde(rename = "classroom")]
 struct Classroom {
     pub students: Vec<Person>,
     pub number: String,
-    pub adviser: Person
+    pub adviser: Person,
 }
 
 #[derive(Serialize)]
-#[serde(rename="person")]
+#[serde(rename = "person")]
 struct Person {
     pub name: String,
-    pub age: u32
+    pub age: u32,
 }
 
 #[derive(Serialize)]
-#[serde(rename="empty")]
+#[serde(rename = "empty")]
 struct Empty {}
 
 #[test]
 fn test_nested() {
-    let s1 = Person { name: "sherlock".to_string(), age: 20 };
-    let s2 = Person { name: "harry".to_string(), age: 19 };
-    let t = Person { name: "albus".to_string(), age: 88 };
-    let doc = Classroom { students: vec![s1, s2], number: "3-1".to_string(), adviser: t };
+    let s1 = Person {
+        name: "sherlock".to_string(),
+        age: 20,
+    };
+    let s2 = Person {
+        name: "harry".to_string(),
+        age: 19,
+    };
+    let t = Person {
+        name: "albus".to_string(),
+        age: 88,
+    };
+    let doc = Classroom {
+        students: vec![s1, s2],
+        number: "3-1".to_string(),
+        adviser: t,
+    };
     let xml = quick_xml::se::to_string(&doc).unwrap();
 
     let str = r#"<classroom number="3-1">

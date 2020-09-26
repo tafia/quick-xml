@@ -83,7 +83,13 @@ where
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
-        Struct { parent, name, attrs: Vec::new(), children: Vec::new(), buffer: Vec::new() }
+        Struct {
+            parent,
+            name,
+            attrs: Vec::new(),
+            children: Vec::new(),
+            buffer: Vec::new(),
+        }
     }
 }
 
@@ -120,15 +126,9 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        self.parent
-            .writer
-            .write(&self.attrs)?;
-        self.parent
-            .writer
-            .write(">".as_bytes())?;
-        self.parent
-            .writer
-            .write(&self.children)?;
+        self.parent.writer.write(&self.attrs)?;
+        self.parent.writer.write(">".as_bytes())?;
+        self.parent.writer.write(&self.children)?;
         self.parent
             .writer
             .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;

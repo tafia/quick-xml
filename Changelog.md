@@ -8,7 +8,9 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
-## 0.18.0
+
+
+## 0.18.0 - 0.18.1
 - feat: add `decode_without_bom` fns for BOM prefixed text fields
 - fix: decode then unescape instead of unescape and decode
 

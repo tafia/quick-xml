@@ -136,8 +136,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n").map_err(Error::Io)?;
-                self
-                    .writer
+                self.writer
                     .write_all(&i.indents[..i.indents_len])
                     .map_err(Error::Io)?;
             }
@@ -160,8 +159,7 @@ impl<W: Write> Writer<W> {
     pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").map_err(Error::Io)?;
-            self
-                .writer
+            self.writer
                 .write_all(&i.indents[..i.indents_len])
                 .map_err(Error::Io)?;
         }
