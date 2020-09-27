@@ -1,4 +1,6 @@
 use quick_xml::events::Event;
+#[cfg(feature = "asynchronous")]
+use quick_xml::AsyncReader;
 use quick_xml::Reader;
 #[cfg(feature = "asynchronous")]
 use tokio::runtime::Runtime;
@@ -10,34 +12,18 @@ struct TableStat {
     index: u8,
     rows: Vec<Vec<String>>,
 }
-// demonstrate how to nest readers
-// This is useful for when you need to traverse
-// a few levels of a document to extract things.
-fn main() -> Result<(), quick_xml::Error> {
+
+fn nest_readers() -> Result<(), quick_xml::Error> {
     let mut buf = Vec::new();
     // buffer for nested reader
     let mut skip_buf = Vec::new();
     let mut count = 0;
 
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
-
-    #[cfg(feature = "asynchronous")]
-    let mut reader =
-        runtime.block_on(async { Reader::from_file("tests/documents/document.xml").await })?;
-
-    #[cfg(not(feature = "asynchronous"))]
     let mut reader = Reader::from_file("tests/documents/document.xml")?;
 
     let mut found_tables = Vec::new();
     loop {
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { reader.read_event(&mut buf).await })?;
-
-        #[cfg(not(feature = "asynchronous"))]
-        let event = reader.read_event(&mut buf)?;
-
-        match event {
+        match reader.read_event(&mut buf)? {
             Event::Start(element) => match element.name() {
                 b"w:tbl" => {
                     count += 1;
@@ -51,14 +37,7 @@ fn main() -> Result<(), quick_xml::Error> {
                     loop {
                         skip_buf.clear();
 
-                        #[cfg(feature = "asynchronous")]
-                        let event =
-                            runtime.block_on(async { reader.read_event(&mut skip_buf).await })?;
-
-                        #[cfg(not(feature = "asynchronous"))]
-                        let event = reader.read_event(&mut skip_buf)?;
-
-                        match event {
+                        match reader.read_event(&mut skip_buf)? {
                             Event::Start(element) => match element.name() {
                                 b"w:tr" => {
                                     stats.rows.push(vec![]);
@@ -97,5 +76,87 @@ fn main() -> Result<(), quick_xml::Error> {
     assert_eq!(found_tables[1].rows.len(), 2);
     assert_eq!(found_tables[1].rows[0].len(), 4);
     assert_eq!(found_tables[1].rows[1].len(), 4);
+    Ok(())
+}
+
+#[cfg(feature = "asynchronous")]
+async fn nest_readers_async() -> Result<(), quick_xml::Error> {
+    let mut buf = Vec::new();
+    // buffer for nested reader
+    let mut skip_buf = Vec::new();
+    let mut count = 0;
+
+    let mut reader = AsyncReader::from_file("tests/documents/document.xml").await?;
+
+    let mut found_tables = Vec::new();
+    loop {
+        match reader.read_event(&mut buf).await? {
+            Event::Start(element) => match element.name() {
+                b"w:tbl" => {
+                    count += 1;
+                    let mut stats = TableStat {
+                        index: count,
+                        rows: vec![],
+                    };
+                    // must define stateful variables
+                    // outside the nested loop else they are overwritten
+                    let mut row_index = 0;
+                    loop {
+                        skip_buf.clear();
+
+                        match reader.read_event(&mut skip_buf).await? {
+                            Event::Start(element) => match element.name() {
+                                b"w:tr" => {
+                                    stats.rows.push(vec![]);
+                                    row_index = stats.rows.len() - 1;
+                                }
+                                b"w:tc" => {
+                                    stats.rows[row_index]
+                                        .push(String::from_utf8(element.name().to_vec()).unwrap());
+                                }
+                                _ => {}
+                            },
+                            Event::End(element) => {
+                                if element.name() == b"w:tbl" {
+                                    found_tables.push(stats);
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Event::Eof => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    assert_eq!(found_tables.len(), 2);
+    // pretty print the table
+    println!("{:#?}", found_tables);
+    assert_eq!(found_tables[0].rows.len(), 2);
+    assert_eq!(found_tables[0].rows[0].len(), 4);
+    assert_eq!(found_tables[0].rows[1].len(), 4);
+
+    assert_eq!(found_tables[1].rows.len(), 2);
+    assert_eq!(found_tables[1].rows[0].len(), 4);
+    assert_eq!(found_tables[1].rows[1].len(), 4);
+    Ok(())
+}
+
+// demonstrate how to nest readers
+// This is useful for when you need to traverse
+// a few levels of a document to extract things.
+fn main() -> Result<(), quick_xml::Error> {
+    #[cfg(feature = "asynchronous")]
+    let runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    runtime.block_on(async { nest_readers_async().await })?;
+
+    nest_readers()?;
+
     Ok(())
 }

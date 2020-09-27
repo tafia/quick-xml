@@ -11,7 +11,7 @@ use crate::events::Event;
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```rust
 /// extern crate quick_xml;
 /// fn main() {
 /// use quick_xml::{Reader, Writer};

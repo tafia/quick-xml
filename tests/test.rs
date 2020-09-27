@@ -5,8 +5,6 @@ use quick_xml::Reader;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::Cursor;
-#[cfg(feature = "asynchronous")]
-use tokio::runtime::Runtime;
 
 #[test]
 fn test_sample() {
@@ -15,17 +13,8 @@ fn test_sample() {
     let mut r = Reader::from_reader(src);
     let mut count = 0;
 
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
-
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-        match event.unwrap() {
+        match r.read_event(&mut buf).unwrap() {
             Start(_) => count += 1,
             Decl(e) => println!("{:?}", e.version()),
             Eof => break,
@@ -42,17 +31,9 @@ fn test_sample_async() {
     let mut buf = Vec::new();
     let mut r = Reader::from_reader(src);
     let mut count = 0;
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-        match event.unwrap() {
+        match r.read_event(&mut buf).unwrap() {
             Start(_) => count += 1,
             Decl(e) => println!("{:?}", e.version()),
             Eof => break,
@@ -69,16 +50,8 @@ fn test_attributes_empty() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_event(&mut buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-    match event {
+    match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
@@ -104,23 +77,14 @@ fn test_attributes_empty() {
     }
 }
 
-#[cfg(not(feature = "asynchronous"))]
 #[test]
 fn test_attribute_equal() {
     let src = b"<a att1=\"a=b\"/>";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_event(&mut buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-    match event {
+    match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
             match atts.next() {
@@ -139,24 +103,15 @@ fn test_attribute_equal() {
     }
 }
 
-#[cfg(not(feature = "asynchronous"))]
 #[test]
 fn test_comment_starting_with_gt() {
     let src = b"<a /><!-->-->";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-        match event {
+        match r.read_event(&mut buf) {
             Ok(Comment(ref e)) if &**e == b">" => break,
             Ok(Eof) => panic!("Expecting Comment"),
             _ => (),
@@ -175,16 +130,8 @@ fn test_attributes_empty_ns() {
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    let e = match event {
+    let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((None, Empty(e))) => e,
         e => panic!("Expecting Empty event, got {:?}", e),
     };
@@ -220,7 +167,6 @@ fn test_attributes_empty_ns() {
 /// Single empty element with qualified attributes.
 /// Empty element expansion: enabled
 /// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.
-#[cfg(not(feature = "asynchronous"))]
 #[test]
 fn test_attributes_empty_ns_expanded() {
     let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
@@ -229,18 +175,9 @@ fn test_attributes_empty_ns_expanded() {
     r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        let e = match event {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((None, Start(e))) => e,
             e => panic!("Expecting Empty event, got {:?}", e),
         };
@@ -273,13 +210,7 @@ fn test_attributes_empty_ns_expanded() {
         }
     }
 
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    match event {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((None, End(e))) => assert_eq!(b"a", e.name()),
         e => panic!("Expecting End event, got {:?}", e),
     }
@@ -293,19 +224,10 @@ fn test_default_ns_shadowing_empty() {
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     // <outer xmlns='urn:example:o'>
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        match event {
+        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
@@ -316,14 +238,7 @@ fn test_default_ns_shadowing_empty() {
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        let e = match event {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Empty(e))) => {
                 assert_eq!(::std::str::from_utf8(ns).unwrap(), "urn:example:i");
                 assert_eq!(e.name(), b"e");
@@ -354,14 +269,7 @@ fn test_default_ns_shadowing_empty() {
     }
 
     // </outer>
-
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    match event {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
@@ -370,7 +278,6 @@ fn test_default_ns_shadowing_empty() {
     }
 }
 
-#[cfg(not(feature = "asynchronous"))]
 #[test]
 fn test_default_ns_shadowing_expanded() {
     let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
@@ -379,19 +286,10 @@ fn test_default_ns_shadowing_expanded() {
     r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     // <outer xmlns='urn:example:o'>
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        match event {
+        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:o");
                 assert_eq!(e.name(), b"e");
@@ -403,14 +301,7 @@ fn test_default_ns_shadowing_expanded() {
 
     // <inner att1='a' xmlns='urn:example:i' />
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        let e = match event {
+        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(ns), Start(e))) => {
                 assert_eq!(&ns[..], b"urn:example:i");
                 assert_eq!(e.name(), b"e");
@@ -440,13 +331,7 @@ fn test_default_ns_shadowing_expanded() {
     }
 
     // virtual </inner>
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    match event {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:i");
             assert_eq!(e.name(), b"e");
@@ -455,13 +340,7 @@ fn test_default_ns_shadowing_expanded() {
     }
 
     // </outer>
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    match event {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
             assert_eq!(&ns[..], b"urn:example:o");
             assert_eq!(e.name(), b"e");
@@ -477,17 +356,9 @@ fn test_koi8_r_encoding() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { r.read_event(&mut buf).await });
-
-        match event {
+        match r.read_event(&mut buf) {
             Ok(Text(e)) => {
                 e.unescape_and_decode(&r).unwrap();
             }
@@ -505,24 +376,15 @@ fn fuzz_53() {
     let cursor = Cursor::new(data);
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = reader.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
-
-        match event {
+        match reader.read_event(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
             _ => buf.clear(),
         }
     }
 }
 
-#[cfg(not(feature = "asynchronous"))]
 #[test]
 fn test_issue94() {
     let data = br#"<Run>
@@ -531,17 +393,9 @@ fn test_issue94() {
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
     let mut buf = vec![];
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = reader.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
-
-        match event {
+        match reader.read_event(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
             _ => buf.clear(),
         }
@@ -557,17 +411,9 @@ fn fuzz_101() {
     let cursor = Cursor::new(data);
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
     loop {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = reader.read_event(&mut buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event = runtime.block_on(async { reader.read_event(&mut buf).await });
-
-        match event {
+        match reader.read_event(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
                 if e.unescaped().is_err() {
                     break;
@@ -598,30 +444,15 @@ fn test_default_namespace() {
     // <a>
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
 
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    if let Ok((None, Start(_))) = event {
+    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         panic!("expecting outer start element with no namespace");
     }
 
     // <b>
     {
-        #[cfg(not(feature = "asynchronous"))]
-        let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-        #[cfg(feature = "asynchronous")]
-        let event =
-            runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-        let event = match event {
+        let event = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((Some(b"www1"), Start(event))) => event,
             Ok((Some(_), Start(_))) => panic!("expecting namespace to resolve to 'www1'"),
             _ => panic!("expecting namespace resolution"),
@@ -639,13 +470,7 @@ fn test_default_namespace() {
     }
 
     // </b>
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    match event {
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(b"www1"), End(_))) => (),
         Ok((Some(_), End(_))) => panic!("expecting namespace to resolve to 'www1'"),
         _ => panic!("expecting namespace resolution"),
@@ -653,14 +478,7 @@ fn test_default_namespace() {
 
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
-
-    #[cfg(not(feature = "asynchronous"))]
-    let event = r.read_namespaced_event(&mut buf, &mut ns_buf);
-
-    #[cfg(feature = "asynchronous")]
-    let event = runtime.block_on(async { r.read_namespaced_event(&mut buf, &mut ns_buf).await });
-
-    if let Ok((None, End(_))) = event {
+    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         panic!("expecting outer end element with no namespace");
     }

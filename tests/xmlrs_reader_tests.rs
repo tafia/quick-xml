@@ -1,6 +1,8 @@
 extern crate quick_xml;
 
 use quick_xml::events::{BytesStart, Event};
+#[cfg(feature = "asynchronous")]
+use quick_xml::AsyncReader;
 use quick_xml::{Reader, Result};
 use std::str::from_utf8;
 #[cfg(feature = "asynchronous")]
@@ -299,11 +301,9 @@ fn default_namespace_applies_to_end_elem() {
     );
 }
 
-fn test(input: &[u8], output: &[u8], is_short: bool) {
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
-
+fn test_sync(input: &[u8], output: &[u8], is_short: bool) {
     let mut reader = Reader::from_reader(input);
+
     reader
         .trim_text(is_short)
         .check_comments(true)
@@ -315,24 +315,12 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
     if !is_short {
         // discard first whitespace
-
-        #[cfg(feature = "asynchronous")]
-        runtime.block_on(async {
-            reader.read_event(&mut buf).await.unwrap();
-        });
-
-        #[cfg(not(feature = "asynchronous"))]
         reader.read_event(&mut buf).unwrap();
     }
 
     loop {
         buf.clear();
 
-        #[cfg(feature = "asynchronous")]
-        let event = runtime
-            .block_on(async { reader.read_namespaced_event(&mut buf, &mut ns_buffer).await });
-
-        #[cfg(not(feature = "asynchronous"))]
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
 
         let line = xmlrs_display(&event);
@@ -363,13 +351,7 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
 
             let mut buf = Vec::new();
 
-            #[cfg(feature = "asynchronous")]
-            let event = runtime.block_on(async { reader.read_event(&mut buf).await });
-
-            #[cfg(not(feature = "asynchronous"))]
-            let event = reader.read_event(&mut buf);
-
-            if let Ok(Event::Text(ref e)) = event {
+            if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf) {
                 if e.iter().any(|b| match *b {
                     b' ' | b'\r' | b'\n' | b'\t' => false,
                     _ => true,
@@ -381,6 +363,81 @@ fn test(input: &[u8], output: &[u8], is_short: bool) {
             }
         }
     }
+}
+
+#[cfg(feature = "asynchronous")]
+async fn test_async(input: &[u8], output: &[u8], is_short: bool) {
+    let mut reader = AsyncReader::from_reader(input);
+
+    reader
+        .trim_text(is_short)
+        .check_comments(true)
+        .expand_empty_elements(false);
+
+    let mut spec_lines = SpecIter(output).enumerate();
+    let mut buf = Vec::new();
+    let mut ns_buffer = Vec::new();
+
+    if !is_short {
+        // discard first whitespace
+        reader.read_event(&mut buf).await.unwrap();
+    }
+
+    loop {
+        buf.clear();
+
+        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer).await;
+
+        let line = xmlrs_display(&event);
+        if let Some((n, spec)) = spec_lines.next() {
+            if spec.trim() == "EndDocument" {
+                break;
+            }
+            if line.trim() != spec.trim() {
+                panic!(
+                    "\n-------------------\n\
+                     Unexpected event at line {}:\n\
+                     Expected: {}\nFound: {}\n\
+                     -------------------\n",
+                    n + 1,
+                    spec,
+                    line
+                );
+            }
+        } else {
+            if line == "EndDocument" {
+                break;
+            }
+            panic!("Unexpected event: {}", line);
+        }
+
+        if !is_short && line.starts_with("StartDocument") {
+            // advance next Characters(empty space) ...
+
+            let mut buf = Vec::new();
+
+            if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf).await {
+                if e.iter().any(|b| match *b {
+                    b' ' | b'\r' | b'\n' | b'\t' => false,
+                    _ => true,
+                }) {
+                    panic!("Reader expects empty Text event after a StartDocument");
+                }
+            } else {
+                panic!("Reader expects empty Text event after a StartDocument");
+            }
+        }
+    }
+}
+
+fn test(input: &[u8], output: &[u8], is_short: bool) {
+    test_sync(input, output, is_short);
+
+    #[cfg(feature = "asynchronous")]
+    let runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    runtime.block_on(async { test_async(input, output, is_short).await });
 }
 
 fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
@@ -430,12 +487,16 @@ fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
         Ok((ref n, Event::End(ref e))) => format!("EndElement({})", namespace_name(n, e.name())),
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
         Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
-        Ok((_, Event::Text(ref e))) => match e.unescaped() {
-            Ok(c) => match from_utf8(&*c) {
-                Ok(c) => format!("Characters({})", c),
-                Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
-            },
-            Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
+        Ok((_, Event::Text(ref e))) => {
+            match e.unescaped() {
+                Ok(c) => {
+                    match from_utf8(&*c) {
+                        Ok(c) => format!("Characters({})", c),
+                        Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
+                    }
+                },
+                Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
+            }
         },
         Ok((_, Event::Decl(ref e))) => {
             let version_cow = e.version().unwrap();

@@ -18,7 +18,7 @@ travis-ci = { repository = "tafia/quick-xml" }
 [dependencies]
 async-recursion = { version = "0.3.2", optional = true }
 encoding_rs = { version = "0.8.26", optional = true }
-tokio = { version = "0.2.22", features = ["fs", "io-util"], optional = true }
+tokio = { version = "1.4.0", features = ["fs", "io-util"], optional = true }
 serde = { version = "1.0", optional = true }
 memchr = "2.3.4"
 
@@ -26,7 +26,7 @@ memchr = "2.3.4"
 serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
 regex = "1"
-tokio = { version = "0.2.22", features = ["macros", "rt-threaded"] }
+tokio = { version = "1.4.0", features = ["macros", "rt-multi-thread"] }
 
 [lib]
 bench = false

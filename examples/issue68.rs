@@ -1,6 +1,8 @@
 #![allow(unused)]
 
 use quick_xml::events::Event;
+#[cfg(feature = "asynchronous")]
+use quick_xml::AsyncReader;
 use quick_xml::Reader;
 use std::io::Read;
 #[cfg(feature = "asynchronous")]
@@ -55,6 +57,68 @@ impl Response {
     }
 }
 
+#[derive(Clone, Copy)]
+enum State {
+    Root,
+    MultiStatus,
+    Response,
+    Success,
+    Error,
+}
+
+#[cfg(feature = "asynchronous")]
+async fn parse_report_async(xml_data: &str) -> Vec<Resource> {
+    let result = Vec::<Resource>::new();
+
+    let mut reader = AsyncReader::from_str(xml_data);
+    reader.trim_text(true);
+
+    let mut count = 0;
+    let mut buf = Vec::new();
+    let mut ns_buffer = Vec::new();
+
+    let mut responses = Vec::<Response>::new();
+    let mut current_response = Response::new();
+    let mut current_prop = Prop::new();
+
+    let mut depth = 0;
+    let mut state = State::MultiStatus;
+
+    loop {
+        match reader.read_namespaced_event(&mut buf, &mut ns_buffer).await {
+            Ok((namespace_value, Event::Start(e))) => {
+                let namespace_value = namespace_value.unwrap_or_default();
+                match (depth, state, namespace_value, e.local_name()) {
+                    (0, State::Root, b"DAV:", b"multistatus") => state = State::MultiStatus,
+                    (1, State::MultiStatus, b"DAV:", b"response") => {
+                        state = State::Response;
+                        current_response = Response::new();
+                    }
+                    (2, State::Response, b"DAV:", b"href") => {
+                        current_response.href = e.unescape_and_decode(&reader).unwrap();
+                    }
+                    _ => {}
+                }
+                depth += 1;
+            }
+            Ok((namespace_value, Event::End(e))) => {
+                let namespace_value = namespace_value.unwrap_or_default();
+                let local_name = e.local_name();
+                match (depth, state, &*namespace_value, local_name) {
+                    (1, State::MultiStatus, b"DAV:", b"multistatus") => state = State::Root,
+                    (2, State::MultiStatus, b"DAV:", b"multistatus") => state = State::MultiStatus,
+                    _ => {}
+                }
+                depth -= 1;
+            }
+            Ok((_, Event::Eof)) => break,
+            Err(e) => break,
+            _ => (),
+        }
+    }
+    result
+}
+
 fn parse_report(xml_data: &str) -> Vec<Resource> {
     let result = Vec::<Resource>::new();
 
@@ -65,15 +129,6 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
     let mut buf = Vec::new();
     let mut ns_buffer = Vec::new();
 
-    #[derive(Clone, Copy)]
-    enum State {
-        Root,
-        MultiStatus,
-        Response,
-        Success,
-        Error,
-    };
-
     let mut responses = Vec::<Response>::new();
     let mut current_response = Response::new();
     let mut current_prop = Prop::new();
@@ -81,18 +136,8 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
     let mut depth = 0;
     let mut state = State::MultiStatus;
 
-    #[cfg(feature = "asynchronous")]
-    let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
-
     loop {
-        #[cfg(feature = "asynchronous")]
-        let event = runtime
-            .block_on(async { reader.read_namespaced_event(&mut buf, &mut ns_buffer).await });
-
-        #[cfg(not(feature = "asynchronous"))]
-        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
-
-        match event {
+        match reader.read_namespaced_event(&mut buf, &mut ns_buffer) {
             Ok((namespace_value, Event::Start(e))) => {
                 let namespace_value = namespace_value.unwrap_or_default();
                 match (depth, state, namespace_value, e.local_name()) {
@@ -148,4 +193,10 @@ fn main() {
 "#;
 
     parse_report(test_data);
+
+    #[cfg(feature = "asynchronous")]
+    let runtime = Runtime::new().expect("Runtime cannot be initialized");
+
+    #[cfg(feature = "asynchronous")]
+    runtime.block_on(async { parse_report_async(test_data).await });
 }

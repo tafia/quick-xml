@@ -119,7 +119,7 @@ pub fn unescape_with<'a>(
 }
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using an optional dictionnary of custom entities.
+/// value, using an optional dictionary of custom entities.
 ///
 /// # Pre-condition
 ///

@@ -1,9 +1,10 @@
 //! A module to handle `Reader`
 
-use crate::events::{attributes::Attribute, BytesStart};
-
 #[cfg(not(feature = "encoding"))]
-use crate::errors::{Error, Result};
+use crate::errors::Error;
+#[cfg(not(feature = "encoding"))]
+use crate::errors::Result;
+use crate::events::{attributes::Attribute, BytesStart};
 #[cfg(not(feature = "encoding"))]
 use std::str::from_utf8;
 
@@ -14,7 +15,6 @@ use std::borrow::Cow;
 
 #[cfg(feature = "asynchronous")]
 pub mod asynchronous;
-#[cfg(not(feature = "asynchronous"))]
 pub mod sync;
 
 /// Trait for decoding, which is shared by the sync and async `Reader`

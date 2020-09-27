@@ -1,4 +1,4 @@
-//! A module to handle the async `Reader`
+//! A module to handle the `AsyncReader`
 
 use async_recursion::async_recursion;
 #[cfg(feature = "encoding")]
@@ -18,7 +18,7 @@ use crate::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use super::{is_whitespace, Decode, Decoder, NamespaceBufferIndex, TagState};
 
-impl<B: AsyncBufRead> Decode for Reader<B> {
+impl<B: AsyncBufRead> Decode for AsyncReader<B> {
     #[cfg(feature = "encoding")]
     fn read_encoding(&self) -> &'static Encoding {
         self.encoding
@@ -47,7 +47,7 @@ impl<B: AsyncBufRead> Decode for Reader<B> {
 /// # Examples
 ///
 /// ```
-/// use quick_xml::Reader;
+/// use quick_xml::AsyncReader;
 /// use quick_xml::events::Event;
 ///
 /// #[tokio::main]
@@ -56,7 +56,7 @@ impl<B: AsyncBufRead> Decode for Reader<B> {
 ///                     <tag2><!--Test comment-->Test</tag2>
 ///                     <tag2>Test 2</tag2>
 ///                 </tag1>"#;
-///     let mut reader = Reader::from_str(xml);
+///     let mut reader = AsyncReader::from_str(xml);
 ///     reader.trim_text(true);
 ///     let mut count = 0;
 ///     let mut txt = Vec::new();
@@ -81,7 +81,7 @@ impl<B: AsyncBufRead> Decode for Reader<B> {
 ///     }
 /// }
 /// ```
-pub struct Reader<B: AsyncBufRead> {
+pub struct AsyncReader<B: AsyncBufRead> {
     /// reader
     reader: B,
     /// current buffer position, useful for debuging errors
@@ -113,10 +113,10 @@ pub struct Reader<B: AsyncBufRead> {
     is_encoding_set: bool,
 }
 
-impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
+impl<B: AsyncBufRead + Unpin + Send> AsyncReader<B> {
     /// Creates a `Reader` that reads from a reader implementing `BufRead`.
-    pub fn from_reader(reader: B) -> Reader<B> {
-        Reader {
+    pub fn from_reader(reader: B) -> AsyncReader<B> {
+        AsyncReader {
             reader,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
@@ -146,7 +146,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// [`Empty`]: events/enum.Event.html#variant.Empty
     /// [`Start`]: events/enum.Event.html#variant.Start
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn expand_empty_elements(&mut self, val: bool) -> &mut AsyncReader<B> {
         self.expand_empty_elements = val;
         self
     }
@@ -159,7 +159,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_text(&mut self, val: bool) -> &mut AsyncReader<B> {
         self.trim_text = val;
         self
     }
@@ -175,7 +175,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut AsyncReader<B> {
         self.trim_markup_names_in_closing_tags = val;
         self
     }
@@ -193,7 +193,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn check_end_names(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn check_end_names(&mut self, val: bool) -> &mut AsyncReader<B> {
         self.check_end_names = val;
         self
     }
@@ -208,7 +208,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// (`false` by default)
     ///
     /// [`Comment`]: events/enum.Event.html#variant.Comment
-    pub fn check_comments(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn check_comments(&mut self, val: bool) -> &mut AsyncReader<B> {
         self.check_comments = val;
         self
     }
@@ -392,7 +392,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
                         &buf[buf_start + 8..buf.len() - 2],
                     )))
                 }
-                b"DOCTYPE" => {
+                x if x.eq_ignore_ascii_case(b"DOCTYPE") => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
@@ -516,7 +516,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::Reader;
+    /// use quick_xml::AsyncReader;
     /// use quick_xml::events::Event;
     ///
     /// #[tokio::main]
@@ -525,7 +525,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     ///                     <tag2><!--Test comment-->Test</tag2>
     ///                     <tag2>Test 2</tag2>
     ///                 </tag1>"#;
-    ///     let mut reader = Reader::from_str(xml);
+    ///     let mut reader = AsyncReader::from_str(xml);
     ///     reader.trim_text(true);
     ///     let mut count = 0;
     ///     let mut buf = Vec::new();
@@ -599,7 +599,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     ///
     /// ```
     /// use std::str::from_utf8;
-    /// use quick_xml::Reader;
+    /// use quick_xml::AsyncReader;
     /// use quick_xml::events::Event;
     ///
     /// #[tokio::main]
@@ -608,7 +608,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     ///                     <y:tag2><!--Test comment-->Test</y:tag2>
     ///                     <y:tag2>Test 2</y:tag2>
     ///                 </x:tag1>"#;
-    ///     let mut reader = Reader::from_str(xml);
+    ///     let mut reader = AsyncReader::from_str(xml);
     ///     reader.trim_text(true);
     ///     let mut count = 0;
     ///     let mut buf = Vec::new();
@@ -685,7 +685,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
         }
     }
 
-    /// Returns the `Reader`s encoding.
+    /// Returns the `AsyncReader`s encoding.
     ///
     /// The used encoding may change after parsing the XML declaration.
     ///
@@ -748,12 +748,12 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::Reader;
+    /// use quick_xml::AsyncReader;
     /// use quick_xml::events::Event;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let mut xml = Reader::from_reader(b"
+    ///     let mut xml = AsyncReader::from_reader(b"
     ///         <a>&lt;b&gt;</a>
     ///         <a></a>
     ///     " as &[u8]);
@@ -785,7 +785,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
         s
     }
 
-    /// Consumes `Reader` returning the underlying reader
+    /// Consumes `AsyncReader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
     ///
@@ -793,10 +793,10 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     ///
     /// ```ignore
     /// use std::{str, io::Cursor};
-    /// use quick_xml::Reader;
+    /// use quick_xml::AsyncReader;
     /// use quick_xml::events::Event;
     ///
-    /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
+    /// fn into_line_and_column(reader: AsyncReader<Cursor<&[u8]>>) -> (usize, usize) {
     ///     let end_pos = reader.buffer_position();
     ///     let mut cursor = reader.into_underlying_reader();
     ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
@@ -820,7 +820,7 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     ///                     <tag2><!--Test comment-->Test</tag2>
     ///                     <tag3>Test 2</tag3>
     ///                 </tag1>"#;
-    ///     let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+    ///     let mut reader = AsyncReader::from_reader(Cursor::new(xml.as_bytes()));
     ///     let mut buf = Vec::new();
     ///
     ///     loop {
@@ -845,19 +845,19 @@ impl<B: AsyncBufRead + Unpin + Send> Reader<B> {
     }
 }
 
-impl Reader<BufReader<File>> {
+impl AsyncReader<BufReader<File>> {
     /// Creates an XML reader from a file path.
-    pub async fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
+    pub async fn from_file<P: AsRef<Path>>(path: P) -> Result<AsyncReader<BufReader<File>>> {
         let file = File::open(path).await.map_err(Error::Io)?;
         let reader = BufReader::new(file);
-        Ok(Reader::from_reader(reader))
+        Ok(AsyncReader::from_reader(reader))
     }
 }
 
-impl<'a> Reader<&'a [u8]> {
+impl<'a> AsyncReader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
-    pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
-        Reader::from_reader(s.as_bytes())
+    pub fn from_str(s: &'a str) -> AsyncReader<&'a [u8]> {
+        AsyncReader::from_reader(s.as_bytes())
     }
 }
 
