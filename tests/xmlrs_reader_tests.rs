@@ -385,6 +385,7 @@ async fn test_async(input: &[u8], output: &[u8], is_short: bool) {
 
     loop {
         buf.clear();
+<<<<<<< HEAD
 
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer).await;
 
@@ -416,6 +417,39 @@ async fn test_async(input: &[u8], output: &[u8], is_short: bool) {
 
             let mut buf = Vec::new();
 
+=======
+
+        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer).await;
+
+        let line = xmlrs_display(&event);
+        if let Some((n, spec)) = spec_lines.next() {
+            if spec.trim() == "EndDocument" {
+                break;
+            }
+            if line.trim() != spec.trim() {
+                panic!(
+                    "\n-------------------\n\
+                     Unexpected event at line {}:\n\
+                     Expected: {}\nFound: {}\n\
+                     -------------------\n",
+                    n + 1,
+                    spec,
+                    line
+                );
+            }
+        } else {
+            if line == "EndDocument" {
+                break;
+            }
+            panic!("Unexpected event: {}", line);
+        }
+
+        if !is_short && line.starts_with("StartDocument") {
+            // advance next Characters(empty space) ...
+
+            let mut buf = Vec::new();
+
+>>>>>>> ee5a073... Introduce an AsyncReader instead of overloading the Reader
             if let Ok(Event::Text(ref e)) = reader.read_event(&mut buf).await {
                 if e.iter().any(|b| match *b {
                     b' ' | b'\r' | b'\n' | b'\t' => false,

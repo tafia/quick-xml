@@ -225,7 +225,7 @@ impl<'a> BytesStart<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(&*self.buf, custom_entities).map_err(Error::Escape)
+        do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
     }
 
     /// Returns an iterator over the attributes of this tag.
@@ -307,8 +307,7 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -320,7 +319,7 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -650,7 +649,7 @@ impl<'a> BytesText<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(self, custom_entities).map_err(Error::Escape)
+        do_unescape(self, custom_entities).map_err(Error::EscapeError)
     }
 
     #[cfg(feature = "serialize")]
@@ -774,8 +773,7 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -786,7 +784,7 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -825,8 +823,7 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -837,7 +834,7 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::Escape)?;
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -958,8 +955,6 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[cfg(feature = "asynchronous")]
-    use tokio::runtime::Runtime;
 
     #[test]
     fn local_name() {
@@ -974,19 +969,54 @@ mod test {
         let mut buf = Vec::new();
         let mut parsed_local_names = Vec::new();
 
-        #[cfg(feature = "asynchronous")]
-        let mut runtime = Runtime::new().expect("Runtime cannot be initialized");
+        loop {
+            let event = rdr.read_event(&mut buf).expect("unable to read xml event");
+
+            match event {
+                Event::Start(ref e) => parsed_local_names.push(
+                    from_utf8(e.local_name())
+                        .expect("unable to build str from local_name")
+                        .to_string(),
+                ),
+                Event::End(ref e) => parsed_local_names.push(
+                    from_utf8(e.local_name())
+                        .expect("unable to build str from local_name")
+                        .to_string(),
+                ),
+                Event::Eof => break,
+                _ => {}
+            }
+        }
+
+        assert_eq!(parsed_local_names[0], "bus".to_string());
+        assert_eq!(parsed_local_names[1], "bus".to_string());
+        assert_eq!(parsed_local_names[2], "".to_string());
+        assert_eq!(parsed_local_names[3], "".to_string());
+        assert_eq!(parsed_local_names[4], "foo".to_string());
+        assert_eq!(parsed_local_names[5], "foo".to_string());
+        assert_eq!(parsed_local_names[6], "bus:baz".to_string());
+        assert_eq!(parsed_local_names[7], "bus:baz".to_string());
+    }
+
+    #[cfg(feature = "asynchronous")]
+    #[tokio::test]
+    async fn local_name_async() {
+        use std::str::from_utf8;
+        let xml = r#"
+            <foo:bus attr='bar'>foobusbar</foo:bus>
+            <foo: attr='bar'>foobusbar</foo:>
+            <:foo attr='bar'>foobusbar</:foo>
+            <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
+            "#;
+        let mut rdr = crate::AsyncReader::from_str(xml);
+        let mut buf = Vec::new();
+        let mut parsed_local_names = Vec::new();
 
         loop {
-            #[cfg(feature = "asynchronous")]
-            let event = runtime.block_on(async {
-                rdr.read_event(&mut buf)
-                    .await
-                    .expect("unable to read xml event")
-            });
-
-            #[cfg(not(feature = "asynchronous"))]
-            let event = rdr.read_event(&mut buf).expect("unable to read xml event");
+            let event = rdr
+                .read_event(&mut buf)
+                .await
+                .expect("unable to read xml event");
 
             match event {
                 Event::Start(ref e) => parsed_local_names.push(

@@ -24,7 +24,7 @@
 //!
 //! ### Reader
 //!
-//! ```ignore
+//! ```rust
 //! use quick_xml::Reader;
 //! use quick_xml::events::Event;
 //!
@@ -39,8 +39,8 @@
 //! reader.trim_text(true);
 //!
 //! let mut count = 0;
-//! let mut txt: Vec<String> = Vec::new();
-//! let mut buf: Vec<u8> = Vec::new();
+//! let mut txt = Vec::new();
+//! let mut buf = Vec::new();
 //!
 //! // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 //! loop {
@@ -72,7 +72,7 @@
 //!
 //! ### Writer
 //!
-//! ```ignore
+//! ```rust
 //! use quick_xml::Writer;
 //! use quick_xml::events::{Event, BytesEnd, BytesStart};
 //! use quick_xml::Reader;
@@ -83,7 +83,7 @@
 //! let mut reader = Reader::from_str(xml);
 //! reader.trim_text(true);
 //! let mut writer = Writer::new(Cursor::new(Vec::new()));
-//! let mut buf: Vec<u8> = Vec::new();
+//! let mut buf = Vec::new();
 //! loop {
 //!     match reader.read_event(&mut buf) {
 //!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
@@ -159,7 +159,6 @@ pub mod reader;
 pub use errors::serialize::DeError;
 pub use errors::{Error, Result};
 #[cfg(feature = "asynchronous")]
-pub use reader::asynchronous::Reader;
-#[cfg(not(feature = "asynchronous"))]
+pub use reader::asynchronous::AsyncReader;
 pub use reader::sync::Reader;
 pub use writer::Writer;
