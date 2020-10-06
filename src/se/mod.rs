@@ -114,6 +114,20 @@ impl<'r, W: Write> Serializer<'r, W> {
             .write_event(Event::Empty(BytesStart::borrowed_name(tag_name.as_bytes())))?;
         Ok(())
     }
+
+    /// Writes a serialized `value` surrounded by `<tag_name>...</tag_name>`
+    fn write_paired<T: ?Sized + Serialize>(
+        &mut self,
+        tag_name: &str,
+        value: &T,
+    ) -> Result<(), DeError> {
+        self.writer
+            .write_event(Event::Start(BytesStart::borrowed_name(tag_name.as_bytes())))?;
+        value.serialize(&mut *self)?;
+        self.writer
+            .write_event(Event::End(BytesEnd::borrowed(tag_name.as_bytes())))?;
+        Ok(())
+    }
 }
 
 impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
@@ -223,10 +237,10 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
         self,
-        _name: &'static str,
-        _value: &T,
+        name: &'static str,
+        value: &T,
     ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported("serialize_newtype_struct"))
+        self.write_paired(self.root_tag.unwrap_or(name), value)
     }
 
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
@@ -236,12 +250,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, DeError> {
-        self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(variant.as_bytes())))?;
-        value.serialize(&mut *self)?;
-        self.writer
-            .write_event(Event::End(BytesEnd::borrowed(variant.as_bytes())))?;
-        Ok(())
+        self.write_paired(variant, value)
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, DeError> {
@@ -414,6 +423,24 @@ mod tests {
         assert_eq!(got, should_be);
     }
 
+    #[test]
+    fn newtype() {
+        #[derive(Serialize)]
+        struct Newtype(bool);
+
+        let data = Newtype(true);
+        let should_be = "<root>true</root>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+            data.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
     mod enum_ {
         use super::*;
 
@@ -423,6 +450,7 @@ mod tests {
             #[derive(Serialize)]
             enum Node {
                 Unit,
+                Newtype(bool),
             }
 
             #[test]
@@ -439,6 +467,21 @@ mod tests {
                 let got = String::from_utf8(buffer).unwrap();
                 assert_eq!(got, should_be);
             }
+
+            #[test]
+            fn newtype() {
+                let mut buffer = Vec::new();
+                let should_be = "<Newtype>true</Newtype>";
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Newtype(true);
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
         }
 
         mod internally_tagged {
@@ -448,6 +491,13 @@ mod tests {
             #[serde(tag = "tag")]
             enum Node {
                 Unit,
+                /// Primitives (such as `bool`) are not supported by the serde in the internally tagged mode
+                Newtype(NewtypeContent),
+            }
+
+            #[derive(Serialize)]
+            struct NewtypeContent {
+                value: bool,
             }
 
             #[test]
@@ -458,6 +508,21 @@ mod tests {
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
                     let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn newtype() {
+                let mut buffer = Vec::new();
+                let should_be = r#"<root tag="Newtype" value="true"/>"#;
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Newtype(NewtypeContent { value: true });
                     node.serialize(&mut ser).unwrap();
                 }
 
@@ -473,6 +538,7 @@ mod tests {
             #[serde(tag = "tag", content = "content")]
             enum Node {
                 Unit,
+                Newtype(bool),
             }
 
             #[test]
@@ -489,6 +555,21 @@ mod tests {
                 let got = String::from_utf8(buffer).unwrap();
                 assert_eq!(got, should_be);
             }
+
+            #[test]
+            fn newtype() {
+                let mut buffer = Vec::new();
+                let should_be = r#"<root tag="Newtype" content="true"/>"#;
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Newtype(true);
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
         }
 
         mod untagged {
@@ -498,6 +579,7 @@ mod tests {
             #[serde(untagged)]
             enum Node {
                 Unit,
+                Newtype(bool),
             }
 
             #[test]
@@ -510,6 +592,21 @@ mod tests {
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
                     let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn newtype() {
+                let mut buffer = Vec::new();
+                let should_be = "true";
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Newtype(true);
                     node.serialize(&mut ser).unwrap();
                 }
 

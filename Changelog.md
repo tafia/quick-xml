@@ -16,6 +16,7 @@
   serialize type with serde
 - feat: Add support for serialization of
   - unit enums variants
+  - newtype structs and enum variants
 
 ## 0.19.0
 - docs: Add example for nested parsing
