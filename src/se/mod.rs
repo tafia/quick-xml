@@ -27,16 +27,70 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
 }
 
 /// A Serializer
-pub struct Serializer<W: Write> {
+pub struct Serializer<'r, W: Write> {
     writer: Writer<W>,
+    /// Name of the root tag. If not specified, deduced from the structure name
+    root_tag: Option<&'r str>,
 }
 
-impl<W: Write> Serializer<W> {
-    /// Creates a new `Serializer`
+impl<'r, W: Write> Serializer<'r, W> {
+    /// Creates a new `Serializer` that uses struct name as a root tag name.
+    ///
+    /// Note, that attempt to serialize a non-struct (including unit structs
+    /// and newtype structs) will end up to an error. Use `with_root` to create
+    /// serializer with explicitly defined root element name
     pub fn new(writer: W) -> Self {
-        Serializer {
-            writer: Writer::new(writer),
-        }
+        Self::with_root(Writer::new(writer), None)
+    }
+
+    /// Creates a new `Serializer` that uses specified root tag name
+    ///
+    /// # Examples
+    ///
+    /// When serializing a primitive type, only its representation will be written:
+    ///
+    /// ```edition2018
+    /// # use serde::Serialize;
+    /// use quick_xml::Writer;
+    /// # use quick_xml::se::Serializer;
+    ///
+    /// let mut buffer = Vec::new();
+    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
+    /// let mut ser = Serializer::with_root(writer, Some("root"));
+    ///
+    /// "node".serialize(&mut ser).unwrap();
+    /// assert_eq!(String::from_utf8(buffer).unwrap(), "node");
+    /// ```
+    ///
+    /// When serializing a struct, newtype struct, unit struct or tuple `root_tag`
+    /// is used as tag name of root(s) element(s):
+    ///
+    /// ```edition2018
+    /// # use serde::Serialize;
+    /// use quick_xml::Writer;
+    /// use quick_xml::se::Serializer;
+    ///
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Struct {
+    ///     question: String,
+    ///     answer: u32,
+    /// }
+    ///
+    /// let mut buffer = Vec::new();
+    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
+    /// let mut ser = Serializer::with_root(writer, Some("root"));
+    ///
+    /// Struct {
+    ///     question: "The Ultimate Question of Life, the Universe, and Everything".into(),
+    ///     answer: 42,
+    /// }.serialize(&mut ser).unwrap();
+    /// assert_eq!(
+    ///     String::from_utf8(buffer.clone()).unwrap(),
+    ///     r#"<root question="The Ultimate Question of Life, the Universe, and Everything" answer="42"/>"#
+    /// );
+    /// ```
+    pub fn with_root(writer: Writer<W>, root_tag: Option<&'r str>) -> Self {
+        Self { writer, root_tag }
     }
 
     fn write_primitive<P: std::fmt::Display>(
@@ -55,16 +109,16 @@ impl<W: Write> Serializer<W> {
     }
 }
 
-impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
+impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     type Ok = ();
     type Error = DeError;
 
-    type SerializeSeq = Seq<'w, W>;
+    type SerializeSeq = Seq<'r, 'w, W>;
     type SerializeTuple = Impossible<Self::Ok, DeError>;
     type SerializeTupleStruct = Impossible<Self::Ok, DeError>;
     type SerializeTupleVariant = Impossible<Self::Ok, DeError>;
-    type SerializeMap = Map<'w, W>;
-    type SerializeStruct = Struct<'w, W>;
+    type SerializeMap = Map<'r, 'w, W>;
+    type SerializeStruct = Struct<'r, 'w, W>;
     type SerializeStructVariant = Impossible<Self::Ok, DeError>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, DeError> {
@@ -148,6 +202,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, DeError> {
+        let name = self.root_tag.unwrap_or(name);
         self.writer
             .write_event(Event::Empty(BytesStart::borrowed_name(name.as_bytes())))?;
         Ok(())
@@ -220,7 +275,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        Ok(Struct::new(self, name))
+        Ok(Struct::new(self, self.root_tag.unwrap_or(name)))
     }
 
     fn serialize_struct_variant(

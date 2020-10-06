@@ -7,24 +7,24 @@ use serde::ser::{self, Serialize};
 use std::io::Write;
 
 /// An implementation of `SerializeMap` for serializing to XML.
-pub struct Map<'w, W>
+pub struct Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
+    parent: &'w mut Serializer<'r, W>,
 }
 
-impl<'w, W> Map<'w, W>
+impl<'r, 'w, W> Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new Map
-    pub fn new(parent: &'w mut Serializer<W>) -> Map<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>) -> Self {
         Map { parent }
     }
 }
 
-impl<'w, W> ser::SerializeMap for Map<'w, W>
+impl<'r, 'w, W> ser::SerializeMap for Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
@@ -66,11 +66,11 @@ where
 }
 
 /// An implementation of `SerializeStruct` for serializing to XML.
-pub struct Struct<'w, W>
+pub struct Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
+    parent: &'w mut Serializer<'r, W>,
     /// Buffer for holding fields, serialized as attributes. Doesn't allocate
     /// if there are no fields represented as attributes
     attrs: BytesStart<'w>,
@@ -80,12 +80,12 @@ where
     buffer: Vec<u8>,
 }
 
-impl<'w, W> Struct<'w, W>
+impl<'r, 'w, W> Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new `Struct`
-    pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
         let name = name.as_bytes();
         Struct {
             parent,
@@ -96,7 +96,7 @@ where
     }
 }
 
-impl<'w, W> ser::SerializeStruct for Struct<'w, W>
+impl<'r, 'w, W> ser::SerializeStruct for Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
@@ -139,24 +139,24 @@ where
 }
 
 /// An implementation of `SerializeSeq' for serializing to XML.
-pub struct Seq<'w, W>
+pub struct Seq<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
+    parent: &'w mut Serializer<'r, W>,
 }
 
-impl<'w, W> Seq<'w, W>
+impl<'r, 'w, W> Seq<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new `Seq`
-    pub fn new(parent: &'w mut Serializer<W>) -> Seq<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>) -> Self {
         Seq { parent }
     }
 }
 
-impl<'w, W> ser::SerializeSeq for Seq<'w, W>
+impl<'r, 'w, W> ser::SerializeSeq for Seq<'r, 'w, W>
 where
     W: 'w + Write,
 {
