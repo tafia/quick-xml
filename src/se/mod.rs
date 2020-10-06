@@ -8,6 +8,7 @@ use crate::{
     events::{BytesEnd, BytesStart, BytesText, Event},
     writer::Writer,
 };
+use serde::serde_if_integer128;
 use serde::ser::{self, Impossible, Serialize};
 use std::io::Write;
 
@@ -100,6 +101,16 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, DeError> {
         self.write_primitive(v, true)
+    }
+
+    serde_if_integer128! {
+        fn serialize_i128(self, v: i128) -> Result<Self::Ok, DeError> {
+            self.write_primitive(v, true)
+        }
+
+        fn serialize_u128(self, v: u128) -> Result<Self::Ok, DeError> {
+            self.write_primitive(v, true)
+        }
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, DeError> {

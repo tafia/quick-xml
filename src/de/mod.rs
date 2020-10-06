@@ -118,7 +118,7 @@ use crate::{
     Reader,
 };
 use serde::de::{self, DeserializeOwned};
-use serde::forward_to_deserialize_any;
+use serde::{forward_to_deserialize_any, serde_if_integer128};
 use std::io::BufRead;
 
 const INNER_VALUE: &str = "$value";
@@ -284,6 +284,11 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     deserialize_type!(deserialize_u64 => visit_u64);
     deserialize_type!(deserialize_f32 => visit_f32);
     deserialize_type!(deserialize_f64 => visit_f64);
+
+    serde_if_integer128! {
+        deserialize_type!(deserialize_i128 => visit_i128);
+        deserialize_type!(deserialize_u128 => visit_u128);
+    }
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         let txt = self.next_text()?;
