@@ -203,3 +203,89 @@ where
         Ok(())
     }
 }
+
+/// An implementation of `SerializeTuple`, `SerializeTupleStruct` and
+/// `SerializeTupleVariant` for serializing to XML.
+pub struct Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    parent: &'w mut Serializer<'r, W>,
+    /// Possible qualified name of XML tag surrounding each element
+    name: &'r str,
+}
+
+impl<'r, 'w, W> Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    /// Create a new `Tuple`
+    pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
+        Tuple { parent, name }
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTuple for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        write!(self.parent.writer.inner(), "<{}>", self.name).map_err(Error::Io)?;
+        value.serialize(&mut *self.parent)?;
+        write!(self.parent.writer.inner(), "</{}>", self.name).map_err(Error::Io)?;
+        Ok(())
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTupleStruct for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        <Self as ser::SerializeTuple>::serialize_element(self, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeTuple>::end(self)
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTupleVariant for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        <Self as ser::SerializeTuple>::serialize_element(self, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeTuple>::end(self)
+    }
+}

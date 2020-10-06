@@ -17,6 +17,7 @@
 - feat: Add support for serialization of
   - unit enums variants
   - newtype structs and enum variants
+  - unnamed tuples, tuple structs and enum variants
 - fix: More consistent structs serialization
 
 ## 0.19.0

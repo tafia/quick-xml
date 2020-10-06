@@ -2,14 +2,14 @@
 
 mod var;
 
-use self::var::{Map, Seq, Struct};
+use self::var::{Map, Seq, Struct, Tuple};
 use crate::{
     errors::serialize::DeError,
     events::{BytesEnd, BytesStart, BytesText, Event},
     writer::Writer,
 };
 use serde::serde_if_integer128;
-use serde::ser::{self, Impossible, Serialize};
+use serde::ser::{self, Serialize};
 use std::io::Write;
 
 /// Serialize struct into a `Write`r
@@ -135,9 +135,9 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     type Error = DeError;
 
     type SerializeSeq = Seq<'r, 'w, W>;
-    type SerializeTuple = Impossible<Self::Ok, DeError>;
-    type SerializeTupleStruct = Impossible<Self::Ok, DeError>;
-    type SerializeTupleVariant = Impossible<Self::Ok, DeError>;
+    type SerializeTuple = Tuple<'r, 'w, W>;
+    type SerializeTupleStruct = Tuple<'r, 'w, W>;
+    type SerializeTupleVariant = Tuple<'r, 'w, W>;
     type SerializeMap = Map<'r, 'w, W>;
     type SerializeStruct = Struct<'r, 'w, W>;
     type SerializeStructVariant = Struct<'r, 'w, W>;
@@ -266,25 +266,29 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, DeError> {
-        Err(DeError::Unsupported("serialize_tuple"))
+        let tag = match self.root_tag {
+            Some(tag) => tag,
+            None => return Err(DeError::Custom("root tag name must be specified when serialize unnamed tuple".into())),
+        };
+        Ok(Tuple::new(self, tag))
     }
 
     fn serialize_tuple_struct(
         self,
-        _name: &'static str,
+        name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, DeError> {
-        Err(DeError::Unsupported("serialize_tuple_struct"))
+        Ok(Tuple::new(self, self.root_tag.unwrap_or(name)))
     }
 
     fn serialize_tuple_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, DeError> {
-        Err(DeError::Unsupported("serialize_tuple_variant"))
+        Ok(Tuple::new(self, variant))
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, DeError> {
@@ -455,6 +459,45 @@ mod tests {
     }
 
     #[test]
+    fn tuple() {
+        let data = (42.0, "answer");
+        let should_be = "<root>42</root><root>answer</root>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::with_root(
+                Writer::new_with_indent(&mut buffer, b' ', 4),
+                Some("root")
+            );
+            data.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn tuple_struct() {
+        #[derive(Serialize)]
+        struct Tuple(f32, &'static str);
+
+        let data = Tuple(42.0, "answer");
+        let should_be = "<root>42</root><root>answer</root>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::with_root(
+                Writer::new_with_indent(&mut buffer, b' ', 4),
+                Some("root")
+            );
+            data.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
     fn struct_() {
         #[derive(Serialize)]
         struct Struct {
@@ -559,6 +602,7 @@ mod tests {
             enum Node {
                 Unit,
                 Newtype(bool),
+                Tuple(f64, String),
                 Struct { float: f64, string: String },
                 Holder { nested: Nested, string: String },
                 Flatten {
@@ -609,6 +653,24 @@ mod tests {
                         Some("root")
                     );
                     let node = Node::Struct { float: 42.0, string: "answer".to_string() };
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn tuple_struct() {
+                let mut buffer = Vec::new();
+                let should_be = "<Tuple>42</Tuple><Tuple>answer</Tuple>";
+
+                {
+                    let mut ser = Serializer::with_root(
+                        Writer::new_with_indent(&mut buffer, b' ', 4),
+                        Some("root")
+                    );
+                    let node = Node::Tuple(42.0, "answer".to_string());
                     node.serialize(&mut ser).unwrap();
                 }
 
@@ -669,6 +731,7 @@ mod tests {
                 Unit,
                 /// Primitives (such as `bool`) are not supported by the serde in the internally tagged mode
                 Newtype(NewtypeContent),
+                // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
                 Struct { float: f64, string: String },
                 Holder { nested: Nested, string: String },
                 Flatten {
@@ -783,6 +846,7 @@ mod tests {
             enum Node {
                 Unit,
                 Newtype(bool),
+                Tuple(f64, String),
                 Struct { float: f64, string: String },
                 Holder { nested: Nested, string: String },
                 Flatten {
@@ -815,6 +879,25 @@ mod tests {
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
                     let node = Node::Newtype(true);
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn tuple_struct() {
+                let mut buffer = Vec::new();
+                let should_be = r#"<root tag="Tuple"><content>42</content><content>answer</content>
+</root>"#;
+
+                {
+                    let mut ser = Serializer::with_root(
+                        Writer::new_with_indent(&mut buffer, b' ', 4),
+                        Some("root")
+                    );
+                    let node = Node::Tuple(42.0, "answer".to_string());
                     node.serialize(&mut ser).unwrap();
                 }
 
@@ -894,6 +977,7 @@ mod tests {
             enum Node {
                 Unit,
                 Newtype(bool),
+                Tuple(f64, String),
                 Struct { float: f64, string: String },
                 Holder { nested: Nested, string: String },
                 Flatten {
@@ -928,6 +1012,24 @@ mod tests {
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
                     let node = Node::Newtype(true);
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn tuple_struct() {
+                let mut buffer = Vec::new();
+                let should_be = "<root>42</root><root>answer</root>";
+
+                {
+                    let mut ser = Serializer::with_root(
+                        Writer::new_with_indent(&mut buffer, b' ', 4),
+                        Some("root")
+                    );
+                    let node = Node::Tuple(42.0, "answer".to_string());
                     node.serialize(&mut ser).unwrap();
                 }
 
