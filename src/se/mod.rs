@@ -107,6 +107,13 @@ impl<'r, W: Write> Serializer<'r, W> {
         self.writer.write_event(Event::Text(event))?;
         Ok(())
     }
+
+    /// Writes self-closed tag `<tag_name/>` into inner writer
+    fn write_self_closed(&mut self, tag_name: &str) -> Result<(), DeError> {
+        self.writer
+            .write_event(Event::Empty(BytesStart::borrowed_name(tag_name.as_bytes())))?;
+        Ok(())
+    }
 }
 
 impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
@@ -202,19 +209,16 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, DeError> {
-        let name = self.root_tag.unwrap_or(name);
-        self.writer
-            .write_event(Event::Empty(BytesStart::borrowed_name(name.as_bytes())))?;
-        Ok(())
+        self.write_self_closed(self.root_tag.unwrap_or(name))
     }
 
     fn serialize_unit_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
-        _variant: &'static str,
+        variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported("serialize_unit_variant"))
+        self.write_self_closed(variant)
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -390,5 +394,128 @@ mod tests {
         let got = String::from_utf8(buffer).unwrap();
         println!("{}", got);
         panic!();
+    }
+
+    #[test]
+    fn unit() {
+        #[derive(Serialize)]
+        struct Unit;
+
+        let data = Unit;
+        let should_be = "<root/>";
+        let mut buffer = Vec::new();
+
+        {
+            let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+            data.serialize(&mut ser).unwrap();
+        }
+
+        let got = String::from_utf8(buffer).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    mod enum_ {
+        use super::*;
+
+        mod externally_tagged {
+            use super::*;
+
+            #[derive(Serialize)]
+            enum Node {
+                Unit,
+            }
+
+            #[test]
+            fn unit() {
+                let mut buffer = Vec::new();
+                let should_be = "<Unit/>";
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+        }
+
+        mod internally_tagged {
+            use super::*;
+
+            #[derive(Serialize)]
+            #[serde(tag = "tag")]
+            enum Node {
+                Unit,
+            }
+
+            #[test]
+            fn unit() {
+                let mut buffer = Vec::new();
+                let should_be = r#"<root tag="Unit"/>"#;
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+        }
+
+        mod adjacently_tagged {
+            use super::*;
+
+            #[derive(Serialize)]
+            #[serde(tag = "tag", content = "content")]
+            enum Node {
+                Unit,
+            }
+
+            #[test]
+            fn unit() {
+                let mut buffer = Vec::new();
+                let should_be = r#"<root tag="Unit"/>"#;
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+        }
+
+        mod untagged {
+            use super::*;
+
+            #[derive(Serialize)]
+            #[serde(untagged)]
+            enum Node {
+                Unit,
+            }
+
+            #[test]
+            fn unit() {
+                let mut buffer = Vec::new();
+                // Unit variant consists just from the tag, and because tags
+                // are not written in untagged mode, nothing is written
+                let should_be = "";
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+        }
     }
 }

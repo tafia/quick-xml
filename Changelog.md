@@ -14,6 +14,8 @@
 - feat: Add two new API to the `BytesStart`: `to_borrowed()` and `to_end()`
 - feat: Add ability to specify name of the root tag and indentation settings when
   serialize type with serde
+- feat: Add support for serialization of
+  - unit enums variants
 
 ## 0.19.0
 - docs: Add example for nested parsing
