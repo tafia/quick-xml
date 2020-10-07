@@ -21,6 +21,7 @@
   - unnamed tuples, tuple structs and enum variants
 - fix: More consistent structs serialization
 - fix: Deserialization of newtype structs
+- fix: `unit` deserialization and newtype and struct deserialization in adjacently tagged enums
 
 ## 0.19.0
 - docs: Add example for nested parsing

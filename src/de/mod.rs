@@ -118,7 +118,7 @@ use crate::{
     Reader,
 };
 use serde::de::{self, DeserializeOwned};
-use serde::{forward_to_deserialize_any, serde_if_integer128};
+use serde::serde_if_integer128;
 use std::io::BufRead;
 
 const INNER_VALUE: &str = "$value";
@@ -195,6 +195,13 @@ impl<R: BufRead> Deserializer<R> {
         }
     }
 
+    /// Consumes an one XML element, returns associated text or empty string:
+    ///
+    /// |XML                  |Result     |Comments                    |
+    /// |---------------------|-----------|----------------------------|
+    /// |`<tag ...>text</tag>`|`text`     |Complete tag consumed       |
+    /// |`<tag/>`             |empty slice|Virtual end tag not consumed|
+    /// |`</tag>`             |empty slice|Not consumed                |
     fn next_text<'a>(&mut self) -> Result<BytesText<'static>, DeError> {
         match self.next(&mut Vec::new())? {
             Event::Text(e) | Event::CData(e) => Ok(e),
@@ -252,8 +259,6 @@ macro_rules! deserialize_type {
 
 impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = DeError;
-
-    forward_to_deserialize_any! { identifier }
 
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
@@ -416,6 +421,10 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
             None | Some(Event::Eof) => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
+    }
+
+    fn deserialize_identifier<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
