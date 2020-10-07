@@ -253,7 +253,7 @@ macro_rules! deserialize_type {
 impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = DeError;
 
-    forward_to_deserialize_any! { newtype_struct identifier }
+    forward_to_deserialize_any! { identifier }
 
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
@@ -365,6 +365,14 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         visitor: V,
     ) -> Result<V::Value, DeError> {
         self.deserialize_unit(visitor)
+    }
+
+    fn deserialize_newtype_struct<V: de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DeError> {
+        self.deserialize_tuple(1, visitor)
     }
 
     fn deserialize_tuple<V: de::Visitor<'de>>(
