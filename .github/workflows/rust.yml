@@ -1,6 +1,6 @@
 name: Rust
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -12,4 +12,4 @@ jobs:
     - name: Build
       run: cargo build
     - name: Run tests
-      run: cargo test
+      run: cargo test --features encoding,serialize
