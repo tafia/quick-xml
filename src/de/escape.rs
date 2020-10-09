@@ -15,7 +15,9 @@ use std::borrow::Cow;
 #[derive(Clone)]
 pub(crate) struct EscapedDeserializer {
     decoder: Decoder,
+    /// Possible escaped value of text/CDATA or attribute value
     escaped_value: Vec<u8>,
+    /// If `true`, value requires unescaping before using
     escaped: bool,
 }
 
