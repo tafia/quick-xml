@@ -803,6 +803,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
         fn elements() {
             let data: Struct = from_str(
                 r#"<root><float>42</float><string>answer</string></root>"#
@@ -936,6 +937,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<Flatten><float>42</float><string>answer</string></Flatten>"#
@@ -1014,6 +1016,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><tag>Newtype</tag><value>true</value></root>"#
@@ -1022,6 +1025,7 @@ mod tests {
                 }
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
                     let data: Node = from_str(
                         r#"<root tag="Newtype" value="true"/>"#
@@ -1034,6 +1038,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><tag>Struct</tag><float>42</float><string>answer</string></root>"#
@@ -1060,6 +1065,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><tag>Holder</tag><string>answer</string><nested><float>42</float></nested></root>"#
@@ -1086,6 +1092,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#
@@ -1192,6 +1199,7 @@ mod tests {
                 }
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
                     let data: Workaround = from_str(
                         r#"<root tag="Tuple" content="42"><content>answer</content></root>"#
@@ -1264,6 +1272,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><tag>Flatten</tag><content><float>42</float><string>answer</string></content></root>"#
@@ -1322,6 +1331,7 @@ mod tests {
             }
 
             #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn unit() {
                 // Unit variant consists just from the tag, and because tags
                 // are not written, nothing is written
@@ -1330,12 +1340,14 @@ mod tests {
             }
 
             #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn newtype() {
                 let data: Node = from_str("true").unwrap();
                 assert_eq!(data, Node::Newtype(true));
             }
 
             #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn tuple_struct() {
                 let data: Workaround = from_str(
                     "<root>42</root><root>answer</root>"
@@ -1347,6 +1359,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><float>42</float><string>answer</string></root>"#
@@ -1358,6 +1371,7 @@ mod tests {
                 }
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
                     let data: Node = from_str(
                         r#"<root float="42" string="answer"/>"#
@@ -1373,6 +1387,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><string>answer</string><nested><float>42</float></nested></root>"#
@@ -1399,6 +1414,7 @@ mod tests {
                 use super::*;
 
                 #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
                         r#"<root><float>42</float><string2>answer</string2></root>"#
