@@ -1,7 +1,8 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesStart, Event},
+    events::{BytesEnd, BytesStart, Event},
     se::Serializer,
+    writer::Writer,
 };
 use serde::ser::{self, Serialize};
 use std::io::Write;
@@ -42,6 +43,11 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
+        if let Some(tag) = self.parent.root_tag {
+            self.parent
+                .writer
+                .write_event(Event::End(BytesEnd::borrowed(tag.as_bytes())))?;
+        }
         Ok(())
     }
 
@@ -108,15 +114,15 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let mut serializer = Serializer::new(&mut self.buffer);
+        // TODO: Inherit indentation state from self.parent.writer
+        let writer = Writer::new(&mut self.buffer);
+        let mut serializer = Serializer::with_root(writer, Some(key));
         value.serialize(&mut serializer)?;
 
         if !self.buffer.is_empty() {
             if self.buffer[0] == b'<' {
-                write!(&mut self.children, "<{}>", key).map_err(Error::Io)?;
                 // Drains buffer, moves it to children
                 self.children.append(&mut self.buffer);
-                write!(&mut self.children, "</{}>", key).map_err(Error::Io)?;
             } else {
                 self.attrs.push_attribute((key.as_bytes(), self.buffer.as_ref()));
                 self.buffer.clear();
@@ -135,6 +141,28 @@ where
             self.parent.writer.write_event(Event::End(self.attrs.to_end()))?;
         }
         Ok(())
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeStructVariant for Struct<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        <Self as ser::SerializeStruct>::serialize_field(self, key, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeStruct>::end(self)
     }
 }
 
