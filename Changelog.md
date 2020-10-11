@@ -11,6 +11,7 @@
 ## Unreleased
 - test: Add tests for indentation
 - feat: Use self-closed tags when serialize types without nested elements with serde
+- feat: Add two new API to the `BytesStart`: `to_borrowed()` and `to_end()`
 
 ## 0.19.0
 - docs: Add example for nested parsing

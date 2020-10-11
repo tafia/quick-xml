@@ -1,6 +1,6 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, BytesStart, Event},
+    events::{BytesStart, Event},
     se::Serializer,
 };
 use serde::ser::{self, Serialize};
@@ -71,9 +71,12 @@ where
     W: 'w + Write,
 {
     parent: &'w mut Serializer<W>,
-    name: &'w [u8],
-    pub(crate) attrs: Vec<u8>,
+    /// Buffer for holding fields, serialized as attributes. Doesn't allocate
+    /// if there are no fields represented as attributes
+    attrs: BytesStart<'w>,
+    /// Buffer for holding fields, serialized as elements
     children: Vec<u8>,
+    /// Buffer for serializing one field. Cleared after serialize each field
     buffer: Vec<u8>,
 }
 
@@ -86,8 +89,7 @@ where
         let name = name.as_bytes();
         Struct {
             parent,
-            name,
-            attrs: name.to_vec(),
+            attrs: BytesStart::borrowed_name(name),
             children: Vec::new(),
             buffer: Vec::new(),
         }
@@ -112,30 +114,25 @@ where
         if !self.buffer.is_empty() {
             if self.buffer[0] == b'<' {
                 write!(&mut self.children, "<{}>", key).map_err(Error::Io)?;
-                self.children.extend(&self.buffer);
+                // Drains buffer, moves it to children
+                self.children.append(&mut self.buffer);
                 write!(&mut self.children, "</{}>", key).map_err(Error::Io)?;
             } else {
-                write!(&mut self.attrs, " {}=\"", key).map_err(Error::Io)?;
-                self.attrs.extend(&self.buffer);
-                write!(&mut self.attrs, "\"").map_err(Error::Io)?;
+                self.attrs.push_attribute((key.as_bytes(), self.buffer.as_ref()));
+                self.buffer.clear();
             }
-
-            self.buffer.clear();
         }
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        let start = BytesStart::borrowed(&self.attrs, self.name.len());
         if self.children.is_empty() {
-            self.parent.writer.write_event(Event::Empty(start))?;
+            self.parent.writer.write_event(Event::Empty(self.attrs))?;
         } else {
-            self.parent.writer.write_event(Event::Start(start))?;
+            self.parent.writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
             self.parent.writer.write(&self.children)?;
-            self.parent
-                .writer
-                .write_event(Event::End(BytesEnd::borrowed(self.name)))?;
+            self.parent.writer.write_event(Event::End(self.attrs.to_end()))?;
         }
         Ok(())
     }

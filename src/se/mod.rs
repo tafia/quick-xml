@@ -237,7 +237,7 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::ser::{SerializeMap, SerializeStruct};
+    use serde::ser::SerializeMap;
     use serde::{Serialize, Serializer as SerSerializer};
 
     #[test]
@@ -255,23 +255,6 @@ mod tests {
             let got = String::from_utf8(buffer).unwrap();
             assert_eq!(got, should_be);
         }
-    }
-
-    #[test]
-    fn test_serialize_struct_field() {
-        let mut buffer = Vec::new();
-
-        {
-            let mut ser = Serializer::new(&mut buffer);
-            let mut struct_ser = Struct::new(&mut ser, "baz");
-            struct_ser.serialize_field("foo", "bar").unwrap();
-            let attrs = std::str::from_utf8(&struct_ser.attrs).unwrap();
-            assert_eq!(attrs, "baz foo=\"bar\"");
-            let _ = struct_ser.end().unwrap();
-        }
-
-        let got = String::from_utf8(buffer).unwrap();
-        assert_eq!(got, "<baz foo=\"bar\"/>");
     }
 
     #[test]
