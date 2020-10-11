@@ -545,6 +545,8 @@ mod tests {
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct MyEnums {
+        // TODO: This should be #[serde(flatten)], but right now serde don't support flattening of sequences
+        // See https://github.com/serde-rs/serde/issues/1905
         #[serde(rename = "$value")]
         items: Vec<MyEnum>,
     }
@@ -552,12 +554,12 @@ mod tests {
     #[test]
     fn collection_of_enums() {
         let s = r##"
-	    <enums>
-		<A>test</A>
-		<B name="hello" flag="t" />
-		<C />
-	    </enums>
-	"##;
+        <enums>
+            <A>test</A>
+            <B name="hello" flag="t" />
+            <C />
+        </enums>
+        "##;
 
         let project: MyEnums = from_str(s).unwrap();
 
@@ -615,5 +617,49 @@ mod tests {
                 bytes: "bytes".as_bytes().to_vec(),
             }
         );
+    }
+
+    /// Test for https://github.com/tafia/quick-xml/issues/231
+    #[test]
+    fn implicit_value() {
+        use serde_value::Value;
+
+        let s = r#"<root>content</root>"#;
+        let item: Value = from_str(s).unwrap();
+
+        assert_eq!(
+            item,
+            Value::Map(vec![
+                (Value::String("$value".into()), Value::String("content".into()))
+            ].into_iter().collect())
+        );
+    }
+
+    #[test]
+    fn explicit_value() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item {
+            #[serde(rename = "$value")]
+            content: String,
+        }
+
+        let s = r#"<root>content</root>"#;
+        let item: Item = from_str(s).unwrap();
+
+        assert_eq!(
+            item,
+            Item { content: "content".into() }
+        );
+    }
+
+    #[test]
+    fn without_value() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item;
+
+        let s = r#"<root>content</root>"#;
+        let item: Item = from_str(s).unwrap();
+
+        assert_eq!(item, Item);
     }
 }

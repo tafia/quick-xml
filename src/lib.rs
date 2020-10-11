@@ -117,6 +117,8 @@ extern crate encoding_rs;
 extern crate memchr;
 #[cfg(feature = "serialize")]
 extern crate serde;
+#[cfg(all(test, feature = "serialize"))]
+extern crate serde_value;
 
 #[cfg(feature = "serialize")]
 pub mod de;
