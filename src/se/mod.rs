@@ -220,8 +220,6 @@ impl<'w, W: Write> ser::Serializer for &'w mut Serializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        write!(self.writer.inner(), "<{}", name)
-            .map_err(|err| DeError::Custom(format!("serialize struct {} failed: {}", name, err)))?;
         Ok(Struct::new(self, name))
     }
 
@@ -260,19 +258,6 @@ mod tests {
     }
 
     #[test]
-    fn test_start_serialize_struct() {
-        let mut buffer = Vec::new();
-
-        {
-            let mut ser = Serializer::new(&mut buffer);
-            let _ = ser.serialize_struct("foo", 0).unwrap();
-        }
-
-        let got = String::from_utf8(buffer).unwrap();
-        assert_eq!(got, "<foo");
-    }
-
-    #[test]
     fn test_serialize_struct_field() {
         let mut buffer = Vec::new();
 
@@ -281,12 +266,12 @@ mod tests {
             let mut struct_ser = Struct::new(&mut ser, "baz");
             struct_ser.serialize_field("foo", "bar").unwrap();
             let attrs = std::str::from_utf8(&struct_ser.attrs).unwrap();
-            assert_eq!(attrs, " foo=\"bar\"");
+            assert_eq!(attrs, "baz foo=\"bar\"");
             let _ = struct_ser.end().unwrap();
         }
 
         let got = String::from_utf8(buffer).unwrap();
-        assert_eq!(got, " foo=\"bar\"></baz>");
+        assert_eq!(got, "<baz foo=\"bar\"/>");
     }
 
     #[test]
@@ -301,7 +286,7 @@ mod tests {
             name: "Bob".to_string(),
             age: 42,
         };
-        let should_be = "<Person name=\"Bob\" age=\"42\"></Person>";
+        let should_be = "<Person name=\"Bob\" age=\"42\"/>";
         let mut buffer = Vec::new();
 
         {

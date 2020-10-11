@@ -10,6 +10,7 @@
 
 ## Unreleased
 - test: Add tests for indentation
+- feat: Use self-closed tags when serialize types without nested elements with serde
 
 ## 0.19.0
 - docs: Add example for nested parsing

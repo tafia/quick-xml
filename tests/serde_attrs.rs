@@ -51,11 +51,11 @@ fn test_nested() {
 
     let str = r#"<classroom number="3-1">
                    <students>
-                      <person name="sherlock" age="20"></person>
-                      <person name="harry" age="19"></person>
+                      <person name="sherlock" age="20"/>
+                      <person name="harry" age="19"/>
                    </students>
                    <adviser>
-                     <person name="albus" age="88"></person>
+                     <person name="albus" age="88"/>
                    </adviser>
                  </classroom>"#;
     assert_eq!(xml, inline(str));
@@ -70,5 +70,5 @@ fn inline(str: &str) -> Cow<str> {
 fn test_empty() {
     let e = Empty {};
     let xml = to_string(&e).unwrap();
-    assert_eq!(xml, "<empty></empty>");
+    assert_eq!(xml, "<empty/>");
 }

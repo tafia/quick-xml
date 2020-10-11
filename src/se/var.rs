@@ -1,6 +1,6 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, Event},
+    events::{BytesEnd, BytesStart, Event},
     se::Serializer,
 };
 use serde::ser::{self, Serialize};
@@ -71,7 +71,7 @@ where
     W: 'w + Write,
 {
     parent: &'w mut Serializer<W>,
-    name: &'w str,
+    name: &'w [u8],
     pub(crate) attrs: Vec<u8>,
     children: Vec<u8>,
     buffer: Vec<u8>,
@@ -83,10 +83,11 @@ where
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
+        let name = name.as_bytes();
         Struct {
             parent,
             name,
-            attrs: Vec::new(),
+            attrs: name.to_vec(),
             children: Vec::new(),
             buffer: Vec::new(),
         }
@@ -126,12 +127,16 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        self.parent.writer.write(&self.attrs)?;
-        self.parent.writer.write(">".as_bytes())?;
-        self.parent.writer.write(&self.children)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;
+        let start = BytesStart::borrowed(&self.attrs, self.name.len());
+        if self.children.is_empty() {
+            self.parent.writer.write_event(Event::Empty(start))?;
+        } else {
+            self.parent.writer.write_event(Event::Start(start))?;
+            self.parent.writer.write(&self.children)?;
+            self.parent
+                .writer
+                .write_event(Event::End(BytesEnd::borrowed(self.name)))?;
+        }
         Ok(())
     }
 }
