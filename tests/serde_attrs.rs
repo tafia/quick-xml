@@ -12,13 +12,18 @@ use std::borrow::Cow;
 #[derive(Serialize)]
 #[serde(rename = "classroom")]
 struct Classroom {
-    pub students: Vec<Person>,
+    pub students: Students,
     pub number: String,
     pub adviser: Person,
 }
 
 #[derive(Serialize)]
-#[serde(rename = "person")]
+struct Students {
+    #[serde(rename = "person")]
+    pub persons: Vec<Person>,
+}
+
+#[derive(Serialize)]
 struct Person {
     pub name: String,
     pub age: u32,
@@ -43,7 +48,7 @@ fn test_nested() {
         age: 88,
     };
     let doc = Classroom {
-        students: vec![s1, s2],
+        students: Students { persons: vec![s1, s2] },
         number: "3-1".to_string(),
         adviser: t,
     };
@@ -51,12 +56,10 @@ fn test_nested() {
 
     let str = r#"<classroom number="3-1">
                    <students>
-                      <person name="sherlock" age="20"></person>
-                      <person name="harry" age="19"></person>
+                      <person name="sherlock" age="20"/>
+                      <person name="harry" age="19"/>
                    </students>
-                   <adviser>
-                     <person name="albus" age="88"></person>
-                   </adviser>
+                   <adviser name="albus" age="88"/>
                  </classroom>"#;
     assert_eq!(xml, inline(str));
 }
@@ -70,5 +73,5 @@ fn inline(str: &str) -> Cow<str> {
 fn test_empty() {
     let e = Empty {};
     let xml = to_string(&e).unwrap();
-    assert_eq!(xml, "<empty></empty>");
+    assert_eq!(xml, "<empty/>");
 }

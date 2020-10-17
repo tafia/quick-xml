@@ -8,12 +8,27 @@
   - test: Adding missing tests
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
+## Unreleased
+- test: Add tests for indentation
+- test: Add complete tests for serde deserialization
+- feat: Use self-closed tags when serialize types without nested elements with serde
+- feat: Add two new API to the `BytesStart`: `to_borrowed()` and `to_end()`
+- feat: Add ability to specify name of the root tag and indentation settings when
+  serialize type with serde
+- feat: Add support for serialization of
+  - unit enums variants
+  - newtype structs and enum variants
+  - unnamed tuples, tuple structs and enum variants
+- fix: More consistent structs serialization
+- fix: Deserialization of newtype structs
+- fix: `unit` deserialization and newtype and struct deserialization in adjacently tagged enums
+
 ## 0.19.0
 - docs: Add example for nested parsing
 - fix: `buffer_position` not properly set sometimes
 - feat: Make escape module public apart from EscapeError
 - feat: Nake Reader `Clone`able
-- feat: Enable writing manual identation (and fix underflow on shrink)
+- feat: Enable writing manual indentation (and fix underflow on shrink)
 - style: Forbid unsafe code
 - fix: Use `write_all` instead of `write`
 - fix: (Serde) Serialize basic types as attributes (breaking change)
@@ -41,7 +56,7 @@
 - refactor: move xml-rs bench dependency into another local crate
 
 ## 0.16.0
-- feat: (breaking change) set failure and encoding_rs crates as optional. 
+- feat: (breaking change) set failure and encoding_rs crates as optional.
 You should now use respectively `use-failure` and `encoding` features to get the old behavior
 - perf: improve perf using memchr3 iterator. Reading is 18% better on benches
 
@@ -194,7 +209,7 @@ Major refactoring. Breaks most of existing functionalities
 
 ## 0.2.3
 - fix: do not write attributes on `Event::End`
- 
+
 ## 0.2.2
 - refactor: code refactoring, split largest functions into smaller ones
 - refactor: use `Range` instead of `usize`s in `Element` definition

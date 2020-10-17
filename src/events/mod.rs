@@ -92,6 +92,39 @@ impl<'a> BytesStart<'a> {
         Self::owned(self.buf.to_owned(), self.name_len)
     }
 
+    /// Converts the event into a borrowed event. Most useful when paired with [`to_end`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::{Error, Writer};
+    /// use quick_xml::events::{BytesStart, Event};
+    ///
+    /// struct SomeStruct<'a> {
+    ///     attrs: BytesStart<'a>,
+    ///     // ...
+    /// }
+    /// # impl<'a> SomeStruct<'a> {
+    /// # fn example(&self) -> Result<(), Error> {
+    /// # let mut writer = Writer::new(Vec::new());
+    ///
+    /// writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
+    /// // ...
+    /// writer.write_event(Event::End(self.attrs.to_end()))?;
+    /// # Ok(())
+    /// # }}
+    /// ```
+    ///
+    /// [`to_end`]: #method.to_end
+    pub fn to_borrowed(&self) -> BytesStart {
+        BytesStart::borrowed(&self.buf, self.name_len)
+    }
+
+    /// Creates new paired close tag
+    pub fn to_end(&self) -> BytesEnd {
+        BytesEnd::borrowed(self.name())
+    }
+
     /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.

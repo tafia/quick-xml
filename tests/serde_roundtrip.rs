@@ -37,7 +37,7 @@ fn basic_struct() {
     assert_eq!(item, should_be);
 
     let reserialized_item = to_string(&item).unwrap();
-    let src = "<Item name=\"Banana\" source=\"Store\"></Item>";
+    let src = "<Item name=\"Banana\" source=\"Store\"/>";
     assert_eq!(src, reserialized_item);
 }
 

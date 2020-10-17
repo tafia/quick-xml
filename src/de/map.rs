@@ -17,8 +17,14 @@ enum MapValue {
 
 /// A deserializer for `Attributes`
 pub(crate) struct MapAccess<'a, R: BufRead> {
+    /// Tag -- owner of attributes
     start: BytesStart<'static>,
     de: &'a mut Deserializer<R>,
+    /// Position in flat byte slice of all attributes from which next
+    /// attribute should be parsed. This field is required because we
+    /// do not store reference to `Attributes` itself but instead create
+    /// a new object on each advance of `Attributes` iterator, so we need
+    /// to restore last position before advance.
     position: usize,
     value: MapValue,
 }

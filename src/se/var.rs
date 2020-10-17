@@ -1,30 +1,31 @@
 use crate::{
     errors::{serialize::DeError, Error},
-    events::{BytesEnd, Event},
+    events::{BytesEnd, BytesStart, Event},
     se::Serializer,
+    writer::Writer,
 };
 use serde::ser::{self, Serialize};
 use std::io::Write;
 
 /// An implementation of `SerializeMap` for serializing to XML.
-pub struct Map<'w, W>
+pub struct Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
+    parent: &'w mut Serializer<'r, W>,
 }
 
-impl<'w, W> Map<'w, W>
+impl<'r, 'w, W> Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new Map
-    pub fn new(parent: &'w mut Serializer<W>) -> Map<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>) -> Self {
         Map { parent }
     }
 }
 
-impl<'w, W> ser::SerializeMap for Map<'w, W>
+impl<'r, 'w, W> ser::SerializeMap for Map<'r, 'w, W>
 where
     W: 'w + Write,
 {
@@ -42,6 +43,11 @@ where
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
+        if let Some(tag) = self.parent.root_tag {
+            self.parent
+                .writer
+                .write_event(Event::End(BytesEnd::borrowed(tag.as_bytes())))?;
+        }
         Ok(())
     }
 
@@ -66,34 +72,37 @@ where
 }
 
 /// An implementation of `SerializeStruct` for serializing to XML.
-pub struct Struct<'w, W>
+pub struct Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
-    name: &'w str,
-    pub(crate) attrs: Vec<u8>,
+    parent: &'w mut Serializer<'r, W>,
+    /// Buffer for holding fields, serialized as attributes. Doesn't allocate
+    /// if there are no fields represented as attributes
+    attrs: BytesStart<'w>,
+    /// Buffer for holding fields, serialized as elements
     children: Vec<u8>,
+    /// Buffer for serializing one field. Cleared after serialize each field
     buffer: Vec<u8>,
 }
 
-impl<'w, W> Struct<'w, W>
+impl<'r, 'w, W> Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new `Struct`
-    pub fn new(parent: &'w mut Serializer<W>, name: &'w str) -> Struct<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
+        let name = name.as_bytes();
         Struct {
             parent,
-            name,
-            attrs: Vec::new(),
+            attrs: BytesStart::borrowed_name(name),
             children: Vec::new(),
             buffer: Vec::new(),
         }
     }
 }
 
-impl<'w, W> ser::SerializeStruct for Struct<'w, W>
+impl<'r, 'w, W> ser::SerializeStruct for Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
@@ -105,56 +114,77 @@ where
         key: &'static str,
         value: &T,
     ) -> Result<(), DeError> {
-        let mut serializer = Serializer::new(&mut self.buffer);
+        // TODO: Inherit indentation state from self.parent.writer
+        let writer = Writer::new(&mut self.buffer);
+        let mut serializer = Serializer::with_root(writer, Some(key));
         value.serialize(&mut serializer)?;
 
         if !self.buffer.is_empty() {
             if self.buffer[0] == b'<' {
-                write!(&mut self.children, "<{}>", key).map_err(Error::Io)?;
-                self.children.extend(&self.buffer);
-                write!(&mut self.children, "</{}>", key).map_err(Error::Io)?;
+                // Drains buffer, moves it to children
+                self.children.append(&mut self.buffer);
             } else {
-                write!(&mut self.attrs, " {}=\"", key).map_err(Error::Io)?;
-                self.attrs.extend(&self.buffer);
-                write!(&mut self.attrs, "\"").map_err(Error::Io)?;
+                self.attrs.push_attribute((key.as_bytes(), self.buffer.as_ref()));
+                self.buffer.clear();
             }
-
-            self.buffer.clear();
         }
 
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok, DeError> {
-        self.parent.writer.write(&self.attrs)?;
-        self.parent.writer.write(">".as_bytes())?;
-        self.parent.writer.write(&self.children)?;
-        self.parent
-            .writer
-            .write_event(Event::End(BytesEnd::borrowed(self.name.as_bytes())))?;
+        if self.children.is_empty() {
+            self.parent.writer.write_event(Event::Empty(self.attrs))?;
+        } else {
+            self.parent.writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
+            self.parent.writer.write(&self.children)?;
+            self.parent.writer.write_event(Event::End(self.attrs.to_end()))?;
+        }
         Ok(())
     }
 }
 
-/// An implementation of `SerializeSeq' for serializing to XML.
-pub struct Seq<'w, W>
+impl<'r, 'w, W> ser::SerializeStructVariant for Struct<'r, 'w, W>
 where
     W: 'w + Write,
 {
-    parent: &'w mut Serializer<W>,
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        <Self as ser::SerializeStruct>::serialize_field(self, key, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeStruct>::end(self)
+    }
 }
 
-impl<'w, W> Seq<'w, W>
+/// An implementation of `SerializeSeq' for serializing to XML.
+pub struct Seq<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    parent: &'w mut Serializer<'r, W>,
+}
+
+impl<'r, 'w, W> Seq<'r, 'w, W>
 where
     W: 'w + Write,
 {
     /// Create a new `Seq`
-    pub fn new(parent: &'w mut Serializer<W>) -> Seq<'w, W> {
+    pub fn new(parent: &'w mut Serializer<'r, W>) -> Self {
         Seq { parent }
     }
 }
 
-impl<'w, W> ser::SerializeSeq for Seq<'w, W>
+impl<'r, 'w, W> ser::SerializeSeq for Seq<'r, 'w, W>
 where
     W: 'w + Write,
 {
@@ -171,5 +201,91 @@ where
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
+    }
+}
+
+/// An implementation of `SerializeTuple`, `SerializeTupleStruct` and
+/// `SerializeTupleVariant` for serializing to XML.
+pub struct Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    parent: &'w mut Serializer<'r, W>,
+    /// Possible qualified name of XML tag surrounding each element
+    name: &'r str,
+}
+
+impl<'r, 'w, W> Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    /// Create a new `Tuple`
+    pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
+        Tuple { parent, name }
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTuple for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        write!(self.parent.writer.inner(), "<{}>", self.name).map_err(Error::Io)?;
+        value.serialize(&mut *self.parent)?;
+        write!(self.parent.writer.inner(), "</{}>", self.name).map_err(Error::Io)?;
+        Ok(())
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTupleStruct for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        <Self as ser::SerializeTuple>::serialize_element(self, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeTuple>::end(self)
+    }
+}
+
+impl<'r, 'w, W> ser::SerializeTupleVariant for Tuple<'r, 'w, W>
+where
+    W: 'w + Write,
+{
+    type Ok = ();
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: Serialize
+    {
+        <Self as ser::SerializeTuple>::serialize_element(self, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        <Self as ser::SerializeTuple>::end(self)
     }
 }

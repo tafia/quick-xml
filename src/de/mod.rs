@@ -118,7 +118,7 @@ use crate::{
     Reader,
 };
 use serde::de::{self, DeserializeOwned};
-use serde::{forward_to_deserialize_any, serde_if_integer128};
+use serde::serde_if_integer128;
 use std::io::BufRead;
 
 const INNER_VALUE: &str = "$value";
@@ -195,6 +195,13 @@ impl<R: BufRead> Deserializer<R> {
         }
     }
 
+    /// Consumes an one XML element, returns associated text or empty string:
+    ///
+    /// |XML                  |Result     |Comments                    |
+    /// |---------------------|-----------|----------------------------|
+    /// |`<tag ...>text</tag>`|`text`     |Complete tag consumed       |
+    /// |`<tag/>`             |empty slice|Virtual end tag not consumed|
+    /// |`</tag>`             |empty slice|Not consumed                |
     fn next_text<'a>(&mut self) -> Result<BytesText<'static>, DeError> {
         match self.next(&mut Vec::new())? {
             Event::Text(e) | Event::CData(e) => Ok(e),
@@ -252,8 +259,6 @@ macro_rules! deserialize_type {
 
 impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
     type Error = DeError;
-
-    forward_to_deserialize_any! { newtype_struct identifier }
 
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
@@ -367,6 +372,14 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         self.deserialize_unit(visitor)
     }
 
+    fn deserialize_newtype_struct<V: de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DeError> {
+        self.deserialize_tuple(1, visitor)
+    }
+
     fn deserialize_tuple<V: de::Visitor<'de>>(
         self,
         len: usize,
@@ -408,6 +421,10 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
             None | Some(Event::Eof) => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
+    }
+
+    fn deserialize_identifier<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -661,5 +678,764 @@ mod tests {
         let item: Item = from_str(s).unwrap();
 
         assert_eq!(item, Item);
+    }
+
+    #[test]
+    fn unit() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Unit;
+
+        let data: Unit = from_str("<root/>").unwrap();
+        assert_eq!(data, Unit);
+    }
+
+    #[test]
+    fn newtype() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Newtype(bool);
+
+        let data: Newtype = from_str("<root>true</root>").unwrap();
+        assert_eq!(data, Newtype(true));
+    }
+
+    #[test]
+    fn tuple() {
+        let data: (f32, String) = from_str(
+            "<root>42</root><root>answer</root>"
+        ).unwrap();
+        assert_eq!(data, (42.0, "answer".into()));
+    }
+
+    #[test]
+    fn tuple_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Tuple(f32, String);
+
+        let data: Tuple = from_str(
+            "<root>42</root><root>answer</root>"
+        ).unwrap();
+        assert_eq!(data, Tuple(42.0, "answer".into()));
+    }
+
+    mod struct_ {
+        use super::*;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            float: f64,
+            string: String,
+        }
+
+        #[test]
+        fn elements() {
+            let data: Struct = from_str(
+                r#"<root><float>42</float><string>answer</string></root>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                float: 42.0,
+                string: "answer".into()
+            });
+        }
+
+        #[test]
+        fn attributes() {
+            let data: Struct = from_str(
+                r#"<root float="42" string="answer"/>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                float: 42.0,
+                string: "answer".into()
+            });
+        }
+    }
+
+    mod nested_struct {
+        use super::*;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            nested: Nested,
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            float: f32,
+        }
+
+        #[test]
+        fn elements() {
+            let data: Struct = from_str(
+                r#"<root><string>answer</string><nested><float>42</float></nested></root>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                nested: Nested { float: 42.0 },
+                string: "answer".into()
+            });
+        }
+
+        #[test]
+        fn attributes() {
+            let data: Struct = from_str(
+                r#"<root string="answer"><nested float="42"/></root>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                nested: Nested { float: 42.0 },
+                string: "answer".into()
+            });
+        }
+    }
+
+    mod flatten_struct {
+        use super::*;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            #[serde(flatten)]
+            nested: Nested,
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+            float: String,
+        }
+
+        #[test]
+        #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+        fn elements() {
+            let data: Struct = from_str(
+                r#"<root><float>42</float><string>answer</string></root>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                nested: Nested { float: "42".into() },
+                string: "answer".into()
+            });
+        }
+
+        #[test]
+        fn attributes() {
+            let data: Struct = from_str(
+                r#"<root float="42" string="answer"/>"#
+            ).unwrap();
+            assert_eq!(data, Struct {
+                nested: Nested { float: "42".into() },
+                string: "answer".into()
+            });
+        }
+    }
+
+    mod enum_ {
+        use super::*;
+
+        mod externally_tagged {
+            use super::*;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum Node {
+                Unit,
+                Newtype(bool),
+                //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
+                // Tuple(f64, String),
+                Struct { float: f64, string: String },
+                Holder { nested: Nested, string: String },
+                Flatten {
+                    #[serde(flatten)]
+                    nested: Nested,
+                    string: String
+                },
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Nested {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                float: String,
+            }
+
+            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
+            #[derive(Debug, Deserialize, PartialEq)]
+            enum Workaround {
+                Tuple(f64, String),
+            }
+
+            #[test]
+            fn unit() {
+                let data: Node = from_str("<Unit/>").unwrap();
+                assert_eq!(data, Node::Unit);
+            }
+
+            #[test]
+            fn newtype() {
+                let data: Node = from_str(
+                    "<Newtype>true</Newtype>"
+                ).unwrap();
+                assert_eq!(data, Node::Newtype(true));
+            }
+
+            #[test]
+            fn tuple_struct() {
+                let data: Workaround = from_str(
+                    "<Tuple>42</Tuple><Tuple>answer</Tuple>"
+                ).unwrap();
+                assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+            }
+
+            mod struct_ {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<Struct><float>42</float><string>answer</string></Struct>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<Struct float="42" string="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod nested_struct {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<Holder><string>answer</string><nested><float>42</float></nested></Holder>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<Holder string="answer"><nested float="42"/></Holder>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod flatten_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<Flatten><float>42</float><string>answer</string></Flatten>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<Flatten float="42" string="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+        }
+
+        mod internally_tagged {
+            use super::*;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            #[serde(tag = "tag")]
+            enum Node {
+                Unit,
+                /// Primitives (such as `bool`) are not supported by serde in the internally tagged mode
+                Newtype(NewtypeContent),
+                // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                Struct { float: String, string: String },
+                Holder { nested: Nested, string: String },
+                Flatten {
+                    #[serde(flatten)]
+                    nested: Nested,
+                    string: String
+                },
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct NewtypeContent {
+                value: bool,
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Nested {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                float: String,
+            }
+
+            mod unit {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Unit</tag></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Unit);
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Unit"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Unit);
+                }
+            }
+
+            mod newtype {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Newtype</tag><value>true</value></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
+                }
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Newtype" value="true"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
+                }
+            }
+
+            mod struct_ {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Struct</tag><float>42</float><string>answer</string></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: "42".into(),
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Struct" float="42" string="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: "42".into(),
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod nested_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Holder</tag><string>answer</string><nested><float>42</float></nested></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod flatten_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Flatten" float="42" string="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+        }
+
+        mod adjacently_tagged {
+            use super::*;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            #[serde(tag = "tag", content = "content")]
+            enum Node {
+                Unit,
+                Newtype(bool),
+                //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
+                // Tuple(f64, String),
+                Struct { float: f64, string: String },
+                Holder { nested: Nested, string: String },
+                Flatten {
+                    #[serde(flatten)]
+                    nested: Nested,
+                    string: String
+                },
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Nested {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                float: String,
+            }
+
+            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
+            #[derive(Debug, Deserialize, PartialEq)]
+            #[serde(tag = "tag", content = "content")]
+            enum Workaround {
+                Tuple(f64, String),
+            }
+
+            mod unit {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Unit</tag></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Unit);
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Unit"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Unit);
+                }
+            }
+
+            mod newtype {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Newtype</tag><content>true</content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Newtype(true));
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Newtype" content="true"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Newtype(true));
+                }
+            }
+
+            mod tuple_struct {
+                use super::*;
+                #[test]
+                fn elements() {
+                    let data: Workaround = from_str(
+                        r#"<root><tag>Tuple</tag><content>42</content><content>answer</content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+                }
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn attributes() {
+                    let data: Workaround = from_str(
+                        r#"<root tag="Tuple" content="42"><content>answer</content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+                }
+            }
+
+            mod struct_ {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Struct</tag><content><float>42</float><string>answer</string></content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Struct"><content float="42" string="answer"/></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod nested_struct {
+                use super::*;
+
+                #[test]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root>
+                            <tag>Holder</tag>
+                            <content>
+                                <string>answer</string>
+                                <nested>
+                                    <float>42</float>
+                                </nested>
+                            </content>
+                        </root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Holder"><content string="answer"><nested float="42"/></content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod flatten_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><tag>Flatten</tag><content><float>42</float><string>answer</string></content></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root tag="Flatten"><content float="42" string="answer"/></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+        }
+
+        mod untagged {
+            use super::*;
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            #[serde(untagged)]
+            enum Node {
+                Unit,
+                Newtype(bool),
+                // serde bug https://github.com/serde-rs/serde/issues/1904
+                // Tuple(f64, String),
+                Struct { float: f64, string: String },
+                Holder { nested: Nested, string: String },
+                Flatten {
+                    #[serde(flatten)]
+                    nested: Nested,
+                    // Can't use "string" as name because in that case this variant
+                    // will have no difference from `Struct` variant
+                    string2: String,
+                },
+            }
+
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Nested {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                float: String,
+            }
+
+            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
+            #[derive(Debug, Deserialize, PartialEq)]
+            #[serde(untagged)]
+            enum Workaround {
+                Tuple(f64, String),
+            }
+
+            #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+            fn unit() {
+                // Unit variant consists just from the tag, and because tags
+                // are not written, nothing is written
+                let data: Node = from_str("").unwrap();
+                assert_eq!(data, Node::Unit);
+            }
+
+            #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+            fn newtype() {
+                let data: Node = from_str("true").unwrap();
+                assert_eq!(data, Node::Newtype(true));
+            }
+
+            #[test]
+            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+            fn tuple_struct() {
+                let data: Workaround = from_str(
+                    "<root>42</root><root>answer</root>"
+                ).unwrap();
+                assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+            }
+
+            mod struct_ {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><float>42</float><string>answer</string></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root float="42" string="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod nested_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><string>answer</string><nested><float>42</float></nested></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root string="answer"><nested float="42"/></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Holder {
+                        nested: Nested { float: "42".into() },
+                        string: "answer".into()
+                    });
+                }
+            }
+
+            mod flatten_struct {
+                use super::*;
+
+                #[test]
+                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
+                fn elements() {
+                    let data: Node = from_str(
+                        r#"<root><float>42</float><string2>answer</string2></root>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string2: "answer".into()
+                    });
+                }
+
+                #[test]
+                fn attributes() {
+                    let data: Node = from_str(
+                        r#"<root float="42" string2="answer"/>"#
+                    ).unwrap();
+                    assert_eq!(data, Node::Flatten {
+                        nested: Nested { float: "42".into() },
+                        string2: "answer".into()
+                    });
+                }
+            }
+        }
     }
 }
