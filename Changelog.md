@@ -9,6 +9,8 @@
   - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 ## Unreleased
+
+## 0.20.0
 - test: Add tests for indentation
 - test: Add complete tests for serde deserialization
 - feat: Use self-closed tags when serialize types without nested elements with serde
