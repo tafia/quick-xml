@@ -375,7 +375,7 @@ impl<B: BufRead> Reader<B> {
                         &buf[buf_start + 8..buf.len() - 2],
                     )))
                 }
-                b"DOCTYPE" => {
+                x if x.eq_ignore_ascii_case(b"DOCTYPE") => {
                     let mut count = buf.iter().skip(buf_start).filter(|&&b| b == b'<').count();
                     while count > 0 {
                         buf.push(b'>');
