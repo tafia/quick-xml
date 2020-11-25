@@ -146,7 +146,7 @@ impl<B: BufRead> Reader<B> {
         self
     }
 
-    /// Changes wether trailing whitespaces after the markup name are trimmed in closing tags
+    /// Changes whether trailing whitespaces after the markup name are trimmed in closing tags
     /// `</a >`.
     ///
     /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
