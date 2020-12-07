@@ -371,7 +371,7 @@ impl<B: BufRead> Reader<B> {
                             Err(e) => return Err(e),
                         }
                     }
-                    Ok(Event::CData(BytesText::from_escaped(
+                    Ok(Event::CData(BytesText::from_plain(
                         &buf[buf_start + 8..buf.len() - 2],
                     )))
                 }

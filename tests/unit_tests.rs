@@ -183,7 +183,7 @@ fn test_cdata() {
 fn test_cdata_open_close() {
     let mut r = Reader::from_str("<![CDATA[test <> test]]>");
     r.trim_text(true);
-    next_eq!(r, CData, b"test <> test");
+    next_eq!(r, CData, b"test &lt;&gt; test");
 }
 
 #[test]
