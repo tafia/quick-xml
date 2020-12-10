@@ -123,3 +123,43 @@ fn no_contiguous_fields() {
     // let serialized = to_string(&xml).unwrap();
     // assert_eq!(serialized, source);
 }
+
+#[test]
+fn escapes_in_cdata() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    pub struct Protocols {
+        protocol: Vec<Protocol>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    pub struct Protocol {
+        pub name: String,
+        pub irp: String,
+    }
+
+    // this is from https://github.com/bengtmartensson/IrpTransmogrifier/blob/master/src/main/resources/IrpProtocols.xml
+    // no copyright claimed
+    let source = r###"<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <?xml-stylesheet type="text/xsl" href="IrpProtocols2html.xsl"?>
+
+    <irp:protocols xmlns="http://www.w3.org/1999/xhtml"
+                   xmlns:rm="https://sourceforge.net/projects/controlremote/files/RemoteMaster"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   version="2020-09-10"
+                   xsi:schemaLocation="http://www.harctoolbox.org/irp-protocols http://www.harctoolbox.org/schemas/irp-protocols.xsd"
+                   xmlns:irp="http://www.harctoolbox.org/irp-protocols">
+        <irp:protocol name="Amino">
+            <irp:irp>
+                <![CDATA[{37.3k,268,msb}<-1,1|1,-1>(T=1,(7,-6,3,D:4,1:1,T:1,1:2,0:8,F:8,15:4,C:4,-79m,T=0)+){C =(D:4+4*T+9+F:4+F:4:4+15)&15} [D:0..15,F:0..255]]]>
+            </irp:irp>
+        </irp:protocol>
+    </irp:protocols>"###;
+
+    let protocols: Protocols = from_str(&source).expect("unexpected xml");
+
+    assert_eq!(
+        protocols.protocol[0].irp,
+        r#"{37.3k,268,msb}<-1,1|1,-1>(T=1,(7,-6,3,D:4,1:1,T:1,1:2,0:8,F:8,15:4,C:4,-79m,T=0)+){C =(D:4+4*T+9+F:4+F:4:4+15)&15} [D:0..15,F:0..255]"#
+    );
+}
