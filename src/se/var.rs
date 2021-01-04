@@ -120,7 +120,7 @@ where
         value.serialize(&mut serializer)?;
 
         if !self.buffer.is_empty() {
-            if self.buffer[0] == b'<' {
+            if self.buffer[0] == b'<' || key == "$value" {
                 // Drains buffer, moves it to children
                 self.children.append(&mut self.buffer);
             } else {
