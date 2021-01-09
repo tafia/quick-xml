@@ -33,12 +33,14 @@ where
     type Error = DeError;
 
     fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), DeError> {
-        // Err(DeError::Unsupported(
-        //    "impossible to serialize the key on its own, please use serialize_entry()",
-        //))
-        write!(self.parent.writer.inner(), "<").map_err(Error::Io)?;
+        /*
+        Err(DeError::Unsupported(
+            "impossible to serialize the key on its own, please use serialize_entry()",
+        ))
+        */
+        write!(self.parent.writer.inner(), "<enum key=\"").map_err(Error::Io)?;
         key.serialize(&mut *self.parent)?;
-        write!(self.parent.writer.inner(), "/>").map_err(Error::Io)?;
+        write!(self.parent.writer.inner(), "\"/>").map_err(Error::Io)?;
         Ok(())
     }
 
