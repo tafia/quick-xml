@@ -367,6 +367,42 @@ mod tests {
     }
 
     #[test]
+    fn test_serialize_struct_value_number() {
+        #[derive(Serialize)]
+        struct Person {
+            name: String,
+            #[serde(rename="$value")]
+            age: u32,
+        }
+
+        let bob = Person {
+            name: "Bob".to_string(),
+            age: 42,
+        };
+        let should_be = "<Person name=\"Bob\">42</Person>";
+        let got = to_string(&bob).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn test_serialize_struct_value_string() {
+        #[derive(Serialize)]
+        struct Person {
+            name: String,
+            #[serde(rename="$value")]
+            age: String,
+        }
+
+        let bob = Person {
+            name: "Bob".to_string(),
+            age: "42".to_string(),
+        };
+        let should_be = "<Person name=\"Bob\">42</Person>";
+        let got = to_string(&bob).unwrap();
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
     fn test_serialize_map_entries() {
         let should_be = "<name>Bob</name><age>5</age>";
         let mut buffer = Vec::new();
