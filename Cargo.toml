@@ -7,7 +7,6 @@ description = "High performance xml reader and writer"
 documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
 
-readme = "README.md"
 keywords = ["xml", "reader", "parser", "writer", "html"]
 categories = ["encoding", "parsing", "text-processing"]
 license = "MIT"
