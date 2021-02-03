@@ -259,6 +259,25 @@ fn test_writer_indent() {
 }
 
 #[test]
+fn test_writer_indent_cdata() {
+    let txt = include_str!("../tests/documents/test_writer_indent_cdata.xml");
+    let mut reader = Reader::from_str(txt);
+    reader.trim_text(true);
+    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(Eof) => break,
+            Ok(e) => assert!(writer.write_event(e).is_ok()),
+            Err(e) => panic!(e),
+        }
+    }
+
+    let result = writer.into_inner().into_inner();
+    assert_eq!(result, txt.as_bytes());
+}
+
+#[test]
 fn test_write_empty_element_attrs() {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;
