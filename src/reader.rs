@@ -72,8 +72,10 @@ pub struct Reader<B: BufRead> {
     tag_state: TagState,
     /// expand empty element into an opening and closing element
     expand_empty_elements: bool,
-    /// trims Text events, skip the element if text is empty
-    trim_text: bool,
+    /// trims leading whitespace in Text events, skip the element if text is empty
+    trim_text_start: bool,
+    /// trims trailing whitespace in Text events.
+    trim_text_end: bool,
     /// trims trailing whitespaces from markup names in closing tags `</a >`
     trim_markup_names_in_closing_tags: bool,
     /// check if End nodes match last Start node
@@ -104,7 +106,8 @@ impl<B: BufRead> Reader<B> {
             opened_starts: Vec::new(),
             tag_state: TagState::Closed,
             expand_empty_elements: false,
-            trim_text: false,
+            trim_text_start: false,
+            trim_text_end: false,
             trim_markup_names_in_closing_tags: true,
             check_end_names: true,
             buf_position: 0,
@@ -142,7 +145,20 @@ impl<B: BufRead> Reader<B> {
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
     pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
-        self.trim_text = val;
+        self.trim_text_start = val;
+        self.trim_text_end = val;
+        self
+    }
+
+    /// Changes whether whitespace after character data should be removed.
+    ///
+    /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
+    ///
+    /// (`false` by default)
+    ///
+    /// [`Text`]: events/enum.Event.html#variant.Text
+    pub fn trim_text_end(&mut self, val: bool) -> &mut Reader<B> {
+        self.trim_text_end = val;
         self
     }
 
@@ -216,19 +232,23 @@ impl<B: BufRead> Reader<B> {
         match read_until(&mut self.reader, b'<', buf, &mut self.buf_position) {
             Ok(0) => Ok(Event::Eof),
             Ok(_) => {
-                let (start, len) = if self.trim_text {
-                    match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
-                        Some(start) => (
-                            buf_start + start,
-                            buf.iter()
-                                .rposition(|&b| !is_whitespace(b))
-                                .map_or_else(|| buf.len(), |p| p + 1),
-                        ),
-                        None => return self.read_event(buf),
+                let (start, len) = (
+                    buf_start + if self.trim_text_start {
+                        match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
+                            Some(start) => start,
+                            None => return self.read_event(buf),
+                        }
+                    } else {
+                        0
+                    },
+                    if self.trim_text_end {
+                        buf.iter()
+                            .rposition(|&b| !is_whitespace(b))
+                            .map_or_else(|| buf.len(), |p| p + 1)
+                    } else {
+                        buf.len()
                     }
-                } else {
-                    (buf_start, buf.len())
-                };
+                );
                 Ok(Event::Text(BytesText::from_escaped(&buf[start..len])))
             }
             Err(e) => Err(e),
