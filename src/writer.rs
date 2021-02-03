@@ -113,7 +113,12 @@ impl<W: Write> Writer<W> {
                 self.write(&e.escaped())
             }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
-            Event::CData(ref e) => self.write_wrapped(b"<![CDATA[", e, b"]]>"),
+            Event::CData(ref e) => {
+                next_should_line_break = false;
+                self.write(b"<![CDATA[")?;
+                self.write(e)?;
+                self.write(b"]]>")
+            }
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", e, b">"),
