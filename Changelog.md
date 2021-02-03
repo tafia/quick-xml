@@ -10,6 +10,17 @@
 
 ## Unreleased
 
+## 0.21.0
+
+- feat: Split text trim into start and end
+- fix: `$value` rename should work the same for deserialization and serialization
+- docs: README.md: Replace dead benchmark link
+- style: Cargo.toml: remove "readme" field
+- fix: Parse & in cdata correctly
+- style: Fix reader.rs typo
+- feat: Accept html5 doctype
+- fix: Unescape all existing HTML entities
+
 ## 0.20.0
 - test: Add tests for indentation
 - test: Add complete tests for serde deserialization
