@@ -106,6 +106,64 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value
+#[cfg(not(feature = "escape-html"))]
+pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
+    let mut unescaped = None;
+    let mut last_end = 0;
+    let mut iter = memchr::memchr2_iter(b'&', b';', raw);
+    while let Some(start) = iter.by_ref().find(|p| raw[*p] == b'&') {
+        match iter.next() {
+            Some(end) if raw[end] == b';' => {
+                // append valid data
+                if unescaped.is_none() {
+                    unescaped = Some(Vec::with_capacity(raw.len()));
+                }
+                let unescaped = unescaped.as_mut().expect("initialized");
+                unescaped.extend_from_slice(&raw[last_end..start]);
+
+                // search for character correctness
+                match &raw[start + 1..end] {
+                    b"lt" => unescaped.push(b'<'),
+                    b"gt" => unescaped.push(b'>'),
+                    b"amp" => unescaped.push(b'&'),
+                    b"apos" => unescaped.push(b'\''),
+                    b"quot" => unescaped.push(b'\"'),
+                    bytes => {
+                        let code = if bytes.starts_with(b"#x") {
+                            parse_hexadecimal(&bytes[2..])
+                        } else if bytes.starts_with(b"#") {
+                            parse_decimal(&bytes[1..])
+                        } else {
+                            Err(EscapeError::UnrecognizedSymbol(
+                                    start + 1..end,
+                                    String::from_utf8(bytes.to_vec()),
+                            ))
+                        }?;
+                        if code == 0 {
+                            return Err(EscapeError::EntityWithNull(start..end));
+                        }
+                        push_utf8(unescaped, code);
+                    }
+                }
+                last_end = end + 1;
+            }
+            _ => return Err(EscapeError::UnterminatedEntity(start..raw.len())),
+        }
+    }
+
+    if let Some(mut unescaped) = unescaped {
+        if let Some(raw) = raw.get(last_end..) {
+            unescaped.extend_from_slice(raw);
+        }
+        Ok(Cow::Owned(unescaped))
+    } else {
+        Ok(Cow::Borrowed(raw))
+    }
+}
+
+/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
+/// value
+#[cfg(feature = "escape-html")]
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     let mut unescaped = None;
     let mut last_end = 0;

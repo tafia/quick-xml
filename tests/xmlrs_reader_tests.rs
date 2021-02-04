@@ -40,6 +40,7 @@ fn sample_2_full() {
     );
 }
 
+#[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
     test(
