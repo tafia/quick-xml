@@ -106,7 +106,6 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value
-#[cfg(not(feature = "escape-html"))]
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     let mut unescaped = None;
     let mut last_end = 0;
@@ -122,6 +121,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                 unescaped.extend_from_slice(&raw[last_end..start]);
 
                 // search for character correctness
+                #[cfg(not(feature = "escape-html"))]
                 match &raw[start + 1..end] {
                     b"lt" => unescaped.push(b'<'),
                     b"gt" => unescaped.push(b'>'),
@@ -145,40 +145,8 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                         push_utf8(unescaped, code);
                     }
                 }
-                last_end = end + 1;
-            }
-            _ => return Err(EscapeError::UnterminatedEntity(start..raw.len())),
-        }
-    }
 
-    if let Some(mut unescaped) = unescaped {
-        if let Some(raw) = raw.get(last_end..) {
-            unescaped.extend_from_slice(raw);
-        }
-        Ok(Cow::Owned(unescaped))
-    } else {
-        Ok(Cow::Borrowed(raw))
-    }
-}
-
-/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value
-#[cfg(feature = "escape-html")]
-pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
-    let mut unescaped = None;
-    let mut last_end = 0;
-    let mut iter = memchr::memchr2_iter(b'&', b';', raw);
-    while let Some(start) = iter.by_ref().find(|p| raw[*p] == b'&') {
-        match iter.next() {
-            Some(end) if raw[end] == b';' => {
-                // append valid data
-                if unescaped.is_none() {
-                    unescaped = Some(Vec::with_capacity(raw.len()));
-                }
-                let unescaped = unescaped.as_mut().expect("initialized");
-                unescaped.extend_from_slice(&raw[last_end..start]);
-
-                // search for character correctness
+                #[cfg(feature = "escape-html")]
                 match &raw[start + 1..end] {
                     // imported from https://dev.w3.org/html5/html-author/charref
                     b"Tab" => unescaped.push(b'\x09'),
