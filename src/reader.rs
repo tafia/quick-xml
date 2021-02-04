@@ -233,21 +233,22 @@ impl<B: BufRead> Reader<B> {
             Ok(0) => Ok(Event::Eof),
             Ok(_) => {
                 let (start, len) = (
-                    buf_start + if self.trim_text_start {
-                        match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
-                            Some(start) => start,
-                            None => return self.read_event(buf),
-                        }
-                    } else {
-                        0
-                    },
+                    buf_start
+                        + if self.trim_text_start {
+                            match buf.iter().skip(buf_start).position(|&b| !is_whitespace(b)) {
+                                Some(start) => start,
+                                None => return self.read_event(buf),
+                            }
+                        } else {
+                            0
+                        },
                     if self.trim_text_end {
                         buf.iter()
                             .rposition(|&b| !is_whitespace(b))
                             .map_or_else(|| buf.len(), |p| p + 1)
                     } else {
                         buf.len()
-                    }
+                    },
                 );
                 Ok(Event::Text(BytesText::from_escaped(&buf[start..len])))
             }

@@ -646,9 +646,14 @@ mod tests {
 
         assert_eq!(
             item,
-            Value::Map(vec![
-                (Value::String("$value".into()), Value::String("content".into()))
-            ].into_iter().collect())
+            Value::Map(
+                vec![(
+                    Value::String("$value".into()),
+                    Value::String("content".into())
+                )]
+                .into_iter()
+                .collect()
+            )
         );
     }
 
@@ -665,7 +670,9 @@ mod tests {
 
         assert_eq!(
             item,
-            Item { content: "content".into() }
+            Item {
+                content: "content".into()
+            }
         );
     }
 
@@ -700,9 +707,7 @@ mod tests {
 
     #[test]
     fn tuple() {
-        let data: (f32, String) = from_str(
-            "<root>42</root><root>answer</root>"
-        ).unwrap();
+        let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
         assert_eq!(data, (42.0, "answer".into()));
     }
 
@@ -711,9 +716,7 @@ mod tests {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Tuple(f32, String);
 
-        let data: Tuple = from_str(
-            "<root>42</root><root>answer</root>"
-        ).unwrap();
+        let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
         assert_eq!(data, Tuple(42.0, "answer".into()));
     }
 
@@ -728,24 +731,27 @@ mod tests {
 
         #[test]
         fn elements() {
-            let data: Struct = from_str(
-                r#"<root><float>42</float><string>answer</string></root>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                float: 42.0,
-                string: "answer".into()
-            });
+            let data: Struct =
+                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
         }
 
         #[test]
         fn attributes() {
-            let data: Struct = from_str(
-                r#"<root float="42" string="answer"/>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                float: 42.0,
-                string: "answer".into()
-            });
+            let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
         }
     }
 
@@ -766,23 +772,29 @@ mod tests {
         #[test]
         fn elements() {
             let data: Struct = from_str(
-                r#"<root><string>answer</string><nested><float>42</float></nested></root>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                nested: Nested { float: 42.0 },
-                string: "answer".into()
-            });
+                r#"<root><string>answer</string><nested><float>42</float></nested></root>"#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    nested: Nested { float: 42.0 },
+                    string: "answer".into()
+                }
+            );
         }
 
         #[test]
         fn attributes() {
-            let data: Struct = from_str(
-                r#"<root string="answer"><nested float="42"/></root>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                nested: Nested { float: 42.0 },
-                string: "answer".into()
-            });
+            let data: Struct =
+                from_str(r#"<root string="answer"><nested float="42"/></root>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    nested: Nested { float: 42.0 },
+                    string: "answer".into()
+                }
+            );
         }
     }
 
@@ -805,24 +817,27 @@ mod tests {
         #[test]
         #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
         fn elements() {
-            let data: Struct = from_str(
-                r#"<root><float>42</float><string>answer</string></root>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                nested: Nested { float: "42".into() },
-                string: "answer".into()
-            });
+            let data: Struct =
+                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    nested: Nested { float: "42".into() },
+                    string: "answer".into()
+                }
+            );
         }
 
         #[test]
         fn attributes() {
-            let data: Struct = from_str(
-                r#"<root float="42" string="answer"/>"#
-            ).unwrap();
-            assert_eq!(data, Struct {
-                nested: Nested { float: "42".into() },
-                string: "answer".into()
-            });
+            let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    nested: Nested { float: "42".into() },
+                    string: "answer".into()
+                }
+            );
         }
     }
 
@@ -838,12 +853,18 @@ mod tests {
                 Newtype(bool),
                 //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
                 // Tuple(f64, String),
-                Struct { float: f64, string: String },
-                Holder { nested: Nested, string: String },
+                Struct {
+                    float: f64,
+                    string: String,
+                },
+                Holder {
+                    nested: Nested,
+                    string: String,
+                },
                 Flatten {
                     #[serde(flatten)]
                     nested: Nested,
-                    string: String
+                    string: String,
                 },
             }
 
@@ -867,17 +888,13 @@ mod tests {
 
             #[test]
             fn newtype() {
-                let data: Node = from_str(
-                    "<Newtype>true</Newtype>"
-                ).unwrap();
+                let data: Node = from_str("<Newtype>true</Newtype>").unwrap();
                 assert_eq!(data, Node::Newtype(true));
             }
 
             #[test]
             fn tuple_struct() {
-                let data: Workaround = from_str(
-                    "<Tuple>42</Tuple><Tuple>answer</Tuple>"
-                ).unwrap();
+                let data: Workaround = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
                 assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
             }
 
@@ -886,24 +903,28 @@ mod tests {
 
                 #[test]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<Struct><float>42</float><string>answer</string></Struct>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<Struct><float>42</float><string>answer</string></Struct>"#)
+                            .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<Struct float="42" string="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                    let data: Node = from_str(r#"<Struct float="42" string="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -915,21 +936,27 @@ mod tests {
                     let data: Node = from_str(
                         r#"<Holder><string>answer</string><nested><float>42</float></nested></Holder>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<Holder string="answer"><nested float="42"/></Holder>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<Holder string="answer"><nested float="42"/></Holder>"#)
+                            .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -939,24 +966,28 @@ mod tests {
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<Flatten><float>42</float><string>answer</string></Flatten>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<Flatten><float>42</float><string>answer</string></Flatten>"#)
+                            .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<Flatten float="42" string="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    let data: Node = from_str(r#"<Flatten float="42" string="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
         }
@@ -972,12 +1003,18 @@ mod tests {
                 Newtype(NewtypeContent),
                 // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
                 //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                Struct { float: String, string: String },
-                Holder { nested: Nested, string: String },
+                Struct {
+                    float: String,
+                    string: String,
+                },
+                Holder {
+                    nested: Nested,
+                    string: String,
+                },
                 Flatten {
                     #[serde(flatten)]
                     nested: Nested,
-                    string: String
+                    string: String,
                 },
             }
 
@@ -997,17 +1034,13 @@ mod tests {
 
                 #[test]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Unit</tag></root>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root><tag>Unit</tag></root>"#).unwrap();
                     assert_eq!(data, Node::Unit);
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Unit"/>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
                     assert_eq!(data, Node::Unit);
                 }
             }
@@ -1018,18 +1051,15 @@ mod tests {
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Newtype</tag><value>true</value></root>"#
-                    ).unwrap();
+                    let data: Node =
+                        from_str(r#"<root><tag>Newtype</tag><value>true</value></root>"#).unwrap();
                     assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
                 }
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Newtype" value="true"/>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root tag="Newtype" value="true"/>"#).unwrap();
                     assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
                 }
             }
@@ -1041,23 +1071,29 @@ mod tests {
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
-                        r#"<root><tag>Struct</tag><float>42</float><string>answer</string></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: "42".into(),
-                        string: "answer".into()
-                    });
+                        r#"<root><tag>Struct</tag><float>42</float><string>answer</string></root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: "42".into(),
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Struct" float="42" string="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: "42".into(),
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<root tag="Struct" float="42" string="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: "42".into(),
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1070,21 +1106,28 @@ mod tests {
                     let data: Node = from_str(
                         r#"<root><tag>Holder</tag><string>answer</string><nested><float>42</float></nested></root>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
                     let data: Node = from_str(
-                        r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                        r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1097,21 +1140,26 @@ mod tests {
                     let data: Node = from_str(
                         r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Flatten" float="42" string="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<root tag="Flatten" float="42" string="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
         }
@@ -1126,12 +1174,18 @@ mod tests {
                 Newtype(bool),
                 //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
                 // Tuple(f64, String),
-                Struct { float: f64, string: String },
-                Holder { nested: Nested, string: String },
+                Struct {
+                    float: f64,
+                    string: String,
+                },
+                Holder {
+                    nested: Nested,
+                    string: String,
+                },
                 Flatten {
                     #[serde(flatten)]
                     nested: Nested,
-                    string: String
+                    string: String,
                 },
             }
 
@@ -1153,17 +1207,13 @@ mod tests {
 
                 #[test]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Unit</tag></root>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root><tag>Unit</tag></root>"#).unwrap();
                     assert_eq!(data, Node::Unit);
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Unit"/>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
                     assert_eq!(data, Node::Unit);
                 }
             }
@@ -1173,17 +1223,15 @@ mod tests {
 
                 #[test]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Newtype</tag><content>true</content></root>"#
-                    ).unwrap();
+                    let data: Node =
+                        from_str(r#"<root><tag>Newtype</tag><content>true</content></root>"#)
+                            .unwrap();
                     assert_eq!(data, Node::Newtype(true));
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Newtype" content="true"/>"#
-                    ).unwrap();
+                    let data: Node = from_str(r#"<root tag="Newtype" content="true"/>"#).unwrap();
                     assert_eq!(data, Node::Newtype(true));
                 }
             }
@@ -1202,8 +1250,9 @@ mod tests {
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
                     let data: Workaround = from_str(
-                        r#"<root tag="Tuple" content="42"><content>answer</content></root>"#
-                    ).unwrap();
+                        r#"<root tag="Tuple" content="42"><content>answer</content></root>"#,
+                    )
+                    .unwrap();
                     assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
                 }
             }
@@ -1216,21 +1265,28 @@ mod tests {
                     let data: Node = from_str(
                         r#"<root><tag>Struct</tag><content><float>42</float><string>answer</string></content></root>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
                     let data: Node = from_str(
-                        r#"<root tag="Struct"><content float="42" string="answer"/></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                        r#"<root tag="Struct"><content float="42" string="answer"/></root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1248,12 +1304,16 @@ mod tests {
                                     <float>42</float>
                                 </nested>
                             </content>
-                        </root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                        </root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
@@ -1261,10 +1321,13 @@ mod tests {
                     let data: Node = from_str(
                         r#"<root tag="Holder"><content string="answer"><nested float="42"/></content></root>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1277,21 +1340,28 @@ mod tests {
                     let data: Node = from_str(
                         r#"<root><tag>Flatten</tag><content><float>42</float><string>answer</string></content></root>"#
                     ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
                     let data: Node = from_str(
-                        r#"<root tag="Flatten"><content float="42" string="answer"/></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                        r#"<root tag="Flatten"><content float="42" string="answer"/></root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
         }
@@ -1306,8 +1376,14 @@ mod tests {
                 Newtype(bool),
                 // serde bug https://github.com/serde-rs/serde/issues/1904
                 // Tuple(f64, String),
-                Struct { float: f64, string: String },
-                Holder { nested: Nested, string: String },
+                Struct {
+                    float: f64,
+                    string: String,
+                },
+                Holder {
+                    nested: Nested,
+                    string: String,
+                },
                 Flatten {
                     #[serde(flatten)]
                     nested: Nested,
@@ -1349,9 +1425,7 @@ mod tests {
             #[test]
             #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn tuple_struct() {
-                let data: Workaround = from_str(
-                    "<root>42</root><root>answer</root>"
-                ).unwrap();
+                let data: Workaround = from_str("<root>42</root><root>answer</root>").unwrap();
                 assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
             }
 
@@ -1361,25 +1435,29 @@ mod tests {
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><float>42</float><string>answer</string></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<root><float>42</float><string>answer</string></root>"#)
+                            .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root float="42" string="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Struct {
-                        float: 42.0,
-                        string: "answer".into()
-                    });
+                    let data: Node = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Struct {
+                            float: 42.0,
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1390,23 +1468,29 @@ mod tests {
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
                     let data: Node = from_str(
-                        r#"<root><string>answer</string><nested><float>42</float></nested></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                        r#"<root><string>answer</string><nested><float>42</float></nested></root>"#,
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root string="answer"><nested float="42"/></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Holder {
-                        nested: Nested { float: "42".into() },
-                        string: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<root string="answer"><nested float="42"/></root>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Holder {
+                            nested: Nested { float: "42".into() },
+                            string: "answer".into()
+                        }
+                    );
                 }
             }
 
@@ -1416,24 +1500,28 @@ mod tests {
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
                 fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><float>42</float><string2>answer</string2></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string2: "answer".into()
-                    });
+                    let data: Node =
+                        from_str(r#"<root><float>42</float><string2>answer</string2></root>"#)
+                            .unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string2: "answer".into()
+                        }
+                    );
                 }
 
                 #[test]
                 fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root float="42" string2="answer"/>"#
-                    ).unwrap();
-                    assert_eq!(data, Node::Flatten {
-                        nested: Nested { float: "42".into() },
-                        string2: "answer".into()
-                    });
+                    let data: Node = from_str(r#"<root float="42" string2="answer"/>"#).unwrap();
+                    assert_eq!(
+                        data,
+                        Node::Flatten {
+                            nested: Nested { float: "42".into() },
+                            string2: "answer".into()
+                        }
+                    );
                 }
             }
         }

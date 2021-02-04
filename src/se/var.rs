@@ -124,7 +124,8 @@ where
                 // Drains buffer, moves it to children
                 self.children.append(&mut self.buffer);
             } else {
-                self.attrs.push_attribute((key.as_bytes(), self.buffer.as_ref()));
+                self.attrs
+                    .push_attribute((key.as_bytes(), self.buffer.as_ref()));
                 self.buffer.clear();
             }
         }
@@ -136,9 +137,13 @@ where
         if self.children.is_empty() {
             self.parent.writer.write_event(Event::Empty(self.attrs))?;
         } else {
-            self.parent.writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
+            self.parent
+                .writer
+                .write_event(Event::Start(self.attrs.to_borrowed()))?;
             self.parent.writer.write(&self.children)?;
-            self.parent.writer.write_event(Event::End(self.attrs.to_end()))?;
+            self.parent
+                .writer
+                .write_event(Event::End(self.attrs.to_end()))?;
         }
         Ok(())
     }
@@ -234,7 +239,7 @@ where
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize
+        T: Serialize,
     {
         write!(self.parent.writer.inner(), "<{}>", self.name).map_err(Error::Io)?;
         value.serialize(&mut *self.parent)?;
@@ -258,7 +263,7 @@ where
     #[inline]
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize
+        T: Serialize,
     {
         <Self as ser::SerializeTuple>::serialize_element(self, value)
     }
@@ -279,7 +284,7 @@ where
     #[inline]
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
-        T: Serialize
+        T: Serialize,
     {
         <Self as ser::SerializeTuple>::serialize_element(self, value)
     }
