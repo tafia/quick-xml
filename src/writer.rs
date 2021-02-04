@@ -217,13 +217,16 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let tag = BytesStart::borrowed_name(b"self-closed").with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
-        writer.write_event(Event::Empty(tag)).expect("write tag failed");
+        let tag = BytesStart::borrowed_name(b"self-closed")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        writer
+            .write_event(Event::Empty(tag))
+            .expect("write tag failed");
 
-        assert_eq!(buffer, br#"<self-closed attr1="value1" attr2="value2"/>"#.as_ref());
+        assert_eq!(
+            buffer,
+            br#"<self-closed attr1="value1" attr2="value2"/>"#.as_ref()
+        );
     }
 
     #[test]
@@ -232,16 +235,22 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         let name = b"paired";
-        let start = BytesStart::borrowed_name(name).with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
+        let start = BytesStart::borrowed_name(name)
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
-        writer.write_event(Event::Start(start)).expect("write start tag failed");
-        writer.write_event(Event::End(end)).expect("write end tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag failed");
 
-        assert_eq!(buffer, br#"<paired attr1="value1" attr2="value2">
-</paired>"#.as_ref());
+        assert_eq!(
+            buffer,
+            br#"<paired attr1="value1" attr2="value2">
+</paired>"#
+                .as_ref()
+        );
     }
 
     #[test]
@@ -250,20 +259,28 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         let name = b"paired";
-        let start = BytesStart::borrowed_name(name).with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
+        let start = BytesStart::borrowed_name(name)
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
         let inner = BytesStart::borrowed_name(b"inner");
 
-        writer.write_event(Event::Start(start)).expect("write start tag failed");
-        writer.write_event(Event::Empty(inner)).expect("write inner tag failed");
-        writer.write_event(Event::End(end)).expect("write end tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::Empty(inner))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag failed");
 
-        assert_eq!(buffer, br#"<paired attr1="value1" attr2="value2">
+        assert_eq!(
+            buffer,
+            br#"<paired attr1="value1" attr2="value2">
     <inner/>
-</paired>"#.as_ref());
+</paired>"#
+                .as_ref()
+        );
     }
 
     #[test]
@@ -272,18 +289,25 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         let name = b"paired";
-        let start = BytesStart::borrowed_name(name).with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
+        let start = BytesStart::borrowed_name(name)
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
         let text = BytesText::from_plain(b"text");
 
-        writer.write_event(Event::Start(start)).expect("write start tag failed");
-        writer.write_event(Event::Text(text)).expect("write text failed");
-        writer.write_event(Event::End(end)).expect("write end tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::Text(text))
+            .expect("write text failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag failed");
 
-        assert_eq!(buffer, br#"<paired attr1="value1" attr2="value2">text</paired>"#.as_ref());
+        assert_eq!(
+            buffer,
+            br#"<paired attr1="value1" attr2="value2">text</paired>"#.as_ref()
+        );
     }
 
     #[test]
@@ -292,21 +316,31 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         let name = b"paired";
-        let start = BytesStart::borrowed_name(name).with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
+        let start = BytesStart::borrowed_name(name)
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
         let text = BytesText::from_plain(b"text");
         let inner = BytesStart::borrowed_name(b"inner");
 
-        writer.write_event(Event::Start(start)).expect("write start tag failed");
-        writer.write_event(Event::Text(text)).expect("write text failed");
-        writer.write_event(Event::Empty(inner)).expect("write inner tag failed");
-        writer.write_event(Event::End(end)).expect("write end tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start tag failed");
+        writer
+            .write_event(Event::Text(text))
+            .expect("write text failed");
+        writer
+            .write_event(Event::Empty(inner))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag failed");
 
-        assert_eq!(buffer, br#"<paired attr1="value1" attr2="value2">text<inner/>
-</paired>"#.as_ref());
+        assert_eq!(
+            buffer,
+            br#"<paired attr1="value1" attr2="value2">text<inner/>
+</paired>"#
+                .as_ref()
+        );
     }
 
     #[test]
@@ -315,23 +349,35 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         let name = b"paired";
-        let start = BytesStart::borrowed_name(name).with_attributes(vec![
-            ("attr1", "value1"),
-            ("attr2", "value2"),
-        ].into_iter());
+        let start = BytesStart::borrowed_name(name)
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
         let inner = BytesStart::borrowed_name(b"inner");
 
-        writer.write_event(Event::Start(start.clone())).expect("write start 1 tag failed");
-        writer.write_event(Event::Start(start)).expect("write start 2 tag failed");
-        writer.write_event(Event::Empty(inner)).expect("write inner tag failed");
-        writer.write_event(Event::End(end.clone())).expect("write end tag 2 failed");
-        writer.write_event(Event::End(end)).expect("write end tag 1 failed");
+        writer
+            .write_event(Event::Start(start.clone()))
+            .expect("write start 1 tag failed");
+        writer
+            .write_event(Event::Start(start))
+            .expect("write start 2 tag failed");
+        writer
+            .write_event(Event::Empty(inner))
+            .expect("write inner tag failed");
+        writer
+            .write_event(Event::End(end.clone()))
+            .expect("write end tag 2 failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag 1 failed");
 
-        assert_eq!(buffer, br#"<paired attr1="value1" attr2="value2">
+        assert_eq!(
+            buffer,
+            br#"<paired attr1="value1" attr2="value2">
     <paired attr1="value1" attr2="value2">
         <inner/>
     </paired>
-</paired>"#.as_ref());
+</paired>"#
+                .as_ref()
+        );
     }
 }

@@ -10,6 +10,9 @@
 
 ## Unreleased
 
+- feat: Move html entity escape behind a `'escape-html'` feature to help with compilation
+- style: rustfmt
+
 ## 0.21.0
 
 - feat: Split text trim into start and end

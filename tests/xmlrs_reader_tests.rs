@@ -40,6 +40,7 @@ fn sample_2_full() {
     );
 }
 
+#[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
     test(
@@ -395,9 +396,9 @@ fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
             Ok(c) => match from_utf8(&*c) {
                 Ok(c) => format!("Characters({})", c),
                 Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
-            }
-            Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err)
-        }
+            },
+            Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
+        },
         Ok((_, Event::Decl(ref e))) => {
             let version_cow = e.version().unwrap();
             let version = from_utf8(version_cow.as_ref()).unwrap();

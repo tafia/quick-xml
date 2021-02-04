@@ -48,7 +48,9 @@ fn test_nested() {
         age: 88,
     };
     let doc = Classroom {
-        students: Students { persons: vec![s1, s2] },
+        students: Students {
+            persons: vec![s1, s2],
+        },
         number: "3-1".to_string(),
         adviser: t,
     };
