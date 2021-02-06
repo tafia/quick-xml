@@ -40,7 +40,7 @@ fn sample_2_full() {
     );
 }
 
-#[cfg(feature = "escape-html")]
+#[cfg(all(not(windows), feature = "escape-html"))]
 #[test]
 fn html5() {
     test(
@@ -49,6 +49,17 @@ fn html5() {
         false,
     );
 }
+
+#[cfg(all(windows, feature = "escape-html"))]
+#[test]
+fn html5() {
+    test(
+        include_bytes!("documents/html5.html"),
+        include_bytes!("documents/html5-windows.txt"),
+        false,
+    );
+}
+
 
 // #[test]
 // fn sample_3_short() {
