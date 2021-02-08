@@ -40,7 +40,7 @@ fn sample_2_full() {
     );
 }
 
-#[cfg(feature = "escape-html")]
+#[cfg(all(not(windows), feature = "escape-html"))]
 #[test]
 fn html5() {
     test(
@@ -49,6 +49,17 @@ fn html5() {
         false,
     );
 }
+
+#[cfg(all(windows, feature = "escape-html"))]
+#[test]
+fn html5() {
+    test(
+        include_bytes!("documents/html5.html"),
+        include_bytes!("documents/html5-windows.txt"),
+        false,
+    );
+}
+
 
 // #[test]
 // fn sample_3_short() {
@@ -421,24 +432,23 @@ impl<'a> Iterator for SpecIter<'a> {
         let start = self
             .0
             .iter()
-            .position(|b| match *b {
-                b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' => false,
-                b'0'..=b'9' => false,
-                _ => true,
-            })
+            .position(|b| !matches!(*b, b' ' | b'\r' | b'\n' | b'\t' | b'|' | b':' | b'0'..=b'9'))
             .unwrap_or(0);
-        if let Some(p) = self.0.windows(2).position(|w| w == b")\n") {
+
+        if let Some(p) = self.0.windows(3).position(|w| w == b")\r\n") {
+            let (prev, next) = self.0.split_at(p + 1);
+            self.0 = &next[1..];
+            Some(from_utf8(&prev[start..]).expect("Error decoding to uft8"))
+        } else if let Some(p) = self.0.windows(2).position(|w| w == b")\n") {
             let (prev, next) = self.0.split_at(p + 1);
             self.0 = next;
             Some(from_utf8(&prev[start..]).expect("Error decoding to uft8"))
+        } else if self.0.is_empty() {
+            None
         } else {
-            if self.0.is_empty() {
-                None
-            } else {
-                let p = self.0;
-                self.0 = &[];
-                Some(from_utf8(&p[start..]).unwrap())
-            }
+            let p = self.0;
+            self.0 = &[];
+            Some(from_utf8(&p[start..]).unwrap())
         }
     }
 }
