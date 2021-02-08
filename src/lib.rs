@@ -127,7 +127,7 @@ mod escapei;
 pub mod escape {
     //! Manage xml character escapes
     pub(crate) use escapei::EscapeError;
-    pub use escapei::{escape, unescape};
+    pub use escapei::{escape, unescape, unescape_with};
 }
 pub mod events;
 mod reader;
