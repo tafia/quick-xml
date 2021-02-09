@@ -147,7 +147,7 @@ fn do_unescape_with<'a>(
                     b"amp" => unescaped.push(b'&'),
                     b"apos" => unescaped.push(b'\''),
                     b"quot" => unescaped.push(b'\"'),
-                    bytes if bytes[0] == b'#' => {
+                    bytes if bytes.starts_with(b"#") => {
                         let bytes = &bytes[1..];
                         let code = if bytes.starts_with(b"x") {
                             parse_hexadecimal(&bytes[1..])
@@ -5556,7 +5556,7 @@ fn do_unescape_with<'a>(
                         unescaped.push(b'\x1D');
                         unescaped.push(b'\x56');
                     }
-                    bytes if bytes[0] == b'#' => {
+                    bytes if bytes.starts_with(b"#") => {
                         let bytes = &bytes[1..];
                         let code = if bytes.starts_with(b"x") {
                             parse_hexadecimal(&bytes[1..])
