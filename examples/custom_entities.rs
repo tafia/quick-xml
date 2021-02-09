@@ -2,6 +2,7 @@
 //! and later use to decode text and attribute values.
 //!
 //! NB: this example is deliberately kept simple:
+//! * it assumes that the XML file is UTF-8 encoded (custom_entities must only contain UTF-8 data)
 //! * it only handles internal entities;
 //! * the regex in this example is simple but brittle;
 //! * it does not support the use of entities in entity declaration.
@@ -30,8 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut buf = Vec::new();
     let mut custom_entities = HashMap::new();
-    let entity_re =
-        Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
+    let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
     loop {
         match reader.read_event(&mut buf) {

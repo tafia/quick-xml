@@ -172,6 +172,10 @@ impl<'a> BytesStart<'a> {
     /// "`<`".
     /// Additional entities can be provided in `custom_entities`.
     ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    ///
     /// See also [`unescaped()`](#method.unescaped)
     #[inline]
     pub fn unescaped_with_custom_entities<'s>(
@@ -260,6 +264,10 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped_with_custom_entities()`]: #method.unescaped_with_custom_entities
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
     #[inline]
     pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
@@ -283,6 +291,10 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped_with_custom_entities()`]: #method.unescaped_with_custom_entities
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
     #[inline]
     pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
@@ -592,6 +604,10 @@ impl<'a> BytesText<'a> {
     /// returns Malformed error with index within element if '&' is not followed by ';'
     /// Additional entities can be provided in `custom_entities`.
     ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    ///
     /// See also [`unescaped()`](#method.unescaped)
     pub fn unescaped_with_custom_entities<'s>(
         &'s self,
@@ -641,6 +657,10 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
         &self,
@@ -660,6 +680,14 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
         &self,
@@ -704,6 +732,10 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
@@ -722,6 +754,10 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,

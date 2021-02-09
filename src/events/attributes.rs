@@ -108,6 +108,10 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescaped_value()`](#method.unescaped_value)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     pub fn unescaped_value_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -159,6 +163,10 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value_with_custom_entities()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_value_with_custom_entities<B: BufRead>(
         &self,
@@ -181,6 +189,10 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value_with_custom_entities()`]: #method.unescaped_value_with_custom_entities
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_value_with_custom_entities<B: BufRead>(
         &self,
@@ -234,6 +246,10 @@ impl<'a> Attribute<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
     pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
         &self,
@@ -253,6 +269,10 @@ impl<'a> Attribute<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
         &self,

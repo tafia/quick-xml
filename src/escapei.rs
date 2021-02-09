@@ -113,6 +113,10 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value, using a dictionnary of custom entities.
+///
+/// # Pre-condition
+///
+/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
 pub fn unescape_with<'a>(
     raw: &'a [u8],
     custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -122,7 +126,11 @@ pub fn unescape_with<'a>(
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value, using an optional dictionnary of custom entities.
-fn do_unescape_with<'a>(
+///
+/// # Pre-condition
+///
+/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+pub(crate) fn do_unescape_with<'a>(
     raw: &'a [u8],
     custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
 ) -> Result<Cow<'a, [u8]>, EscapeError> {
