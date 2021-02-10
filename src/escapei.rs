@@ -2,6 +2,7 @@
 
 use memchr;
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum EscapeError {
@@ -107,6 +108,32 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
+    do_unescape(raw, None)
+}
+
+/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
+/// value, using a dictionnary of custom entities.
+///
+/// # Pre-condition
+///
+/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+pub fn unescape_with<'a>(
+    raw: &'a [u8],
+    custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+) -> Result<Cow<'a, [u8]>, EscapeError> {
+    do_unescape(raw, Some(custom_entities))
+}
+
+/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
+/// value, using an optional dictionnary of custom entities.
+///
+/// # Pre-condition
+///
+/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+pub fn do_unescape<'a>(
+    raw: &'a [u8],
+    custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+) -> Result<Cow<'a, [u8]>, EscapeError> {
     let mut unescaped = None;
     let mut last_end = 0;
     let mut iter = memchr::memchr2_iter(b'&', b';', raw);
@@ -128,22 +155,27 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                     b"amp" => unescaped.push(b'&'),
                     b"apos" => unescaped.push(b'\''),
                     b"quot" => unescaped.push(b'\"'),
-                    bytes => {
-                        let code = if bytes.starts_with(b"#x") {
-                            parse_hexadecimal(&bytes[2..])
-                        } else if bytes.starts_with(b"#") {
-                            parse_decimal(&bytes[1..])
+                    bytes if bytes.starts_with(b"#") => {
+                        let bytes = &bytes[1..];
+                        let code = if bytes.starts_with(b"x") {
+                            parse_hexadecimal(&bytes[1..])
                         } else {
-                            Err(EscapeError::UnrecognizedSymbol(
-                                start + 1..end,
-                                String::from_utf8(bytes.to_vec()),
-                            ))
+                            parse_decimal(&bytes)
                         }?;
                         if code == 0 {
                             return Err(EscapeError::EntityWithNull(start..end));
                         }
                         push_utf8(unescaped, code);
                     }
+                    bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
+                        Some(value) => unescaped.extend_from_slice(&value),
+                        None => {
+                            return Err(EscapeError::UnrecognizedSymbol(
+                                start + 1..end,
+                                String::from_utf8(bytes.to_vec()),
+                            ))
+                        }
+                    },
                 }
 
                 #[cfg(feature = "escape-html")]
@@ -5532,22 +5564,27 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
                         unescaped.push(b'\x1D');
                         unescaped.push(b'\x56');
                     }
-                    bytes => {
-                        let code = if bytes.starts_with(b"#x") {
-                            parse_hexadecimal(&bytes[2..])
-                        } else if bytes.starts_with(b"#") {
-                            parse_decimal(&bytes[1..])
+                    bytes if bytes.starts_with(b"#") => {
+                        let bytes = &bytes[1..];
+                        let code = if bytes.starts_with(b"x") {
+                            parse_hexadecimal(&bytes[1..])
                         } else {
-                            Err(EscapeError::UnrecognizedSymbol(
-                                start + 1..end,
-                                String::from_utf8(bytes.to_vec()),
-                            ))
+                            parse_decimal(&bytes)
                         }?;
                         if code == 0 {
                             return Err(EscapeError::EntityWithNull(start..end));
                         }
                         push_utf8(unescaped, code);
                     }
+                    bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
+                        Some(value) => unescaped.extend_from_slice(&value),
+                        None => {
+                            return Err(EscapeError::UnrecognizedSymbol(
+                                start + 1..end,
+                                String::from_utf8(bytes.to_vec()),
+                            ))
+                        }
+                    },
                 }
                 last_end = end + 1;
             }
@@ -5623,6 +5660,23 @@ fn test_unescape() {
     assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
     assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
     assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
+    assert!(unescape(b"&foo;").is_err());
+}
+
+#[test]
+fn test_unescape_with() {
+    let custom_entities = vec![(b"foo".to_vec(), b"BAR".to_vec())]
+        .into_iter()
+        .collect();
+    assert_eq!(&*unescape_with(b"test", &custom_entities).unwrap(), b"test");
+    assert_eq!(
+        &*unescape_with(b"&lt;test&gt;", &custom_entities).unwrap(),
+        b"<test>"
+    );
+    assert_eq!(&*unescape_with(b"&#x30;", &custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(b"&#48;", &custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(b"&foo;", &custom_entities).unwrap(), b"BAR");
+    assert!(unescape_with(b"&fop;", &custom_entities).is_err());
 }
 
 #[test]

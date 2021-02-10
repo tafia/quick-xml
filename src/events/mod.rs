@@ -5,13 +5,14 @@ pub mod attributes;
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::ops::Deref;
 use std::str::from_utf8;
 
 use self::attributes::{Attribute, Attributes};
 use errors::{Error, Result};
-use escape::{escape, unescape};
+use escape::{do_unescape, escape};
 use reader::Reader;
 
 use memchr;
@@ -158,9 +159,38 @@ impl<'a> BytesStart<'a> {
     ///
     /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
     /// "`<`".
+    ///
+    /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
     #[inline]
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(&*self.buf).map_err(Error::EscapeError)
+        self.make_unescaped(None)
+    }
+
+    /// Gets the unescaped tag name, using custom entities.
+    ///
+    /// XML escape sequences like "`&lt;`" will be replaced by their unescaped characters like
+    /// "`<`".
+    /// Additional entities can be provided in `custom_entities`.
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    ///
+    /// See also [`unescaped()`](#method.unescaped)
+    #[inline]
+    pub fn unescaped_with_custom_entities<'s>(
+        &'s self,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<Cow<'s, [u8]>> {
+        self.make_unescaped(Some(custom_entities))
+    }
+
+    #[inline]
+    fn make_unescaped<'s>(
+        &'s self,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<Cow<'s, [u8]>> {
+        do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
     }
 
     /// Returns an iterator over the attributes of this tag.
@@ -206,29 +236,57 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
-    #[cfg(feature = "encoding")]
     #[inline]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        let decoded = reader.decode(&*self);
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
 
-    /// Returns the unescaped and decoded string value.
+    /// Returns the unescaped and decoded string value with custom entities.
     ///
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
-    /// * [`unescaped()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`unescaped_with_custom_entities()`], as it doesn't allocate when no escape sequences are used.
     /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
     ///
-    /// [`unescaped()`]: #method.unescaped
+    /// [`unescaped_with_custom_entities()`]: #method.unescaped_with_custom_entities
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    #[inline]
+    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<String> {
+        self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
+    }
+
+    #[cfg(feature = "encoding")]
+    #[inline]
+    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
+        let decoded = reader.decode(&*self);
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
     #[cfg(not(feature = "encoding"))]
     #[inline]
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -516,8 +574,35 @@ impl<'a> BytesText<'a> {
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
+    ///
+    /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        unescape(self).map_err(Error::EscapeError)
+        self.make_unescaped(None)
+    }
+
+    /// gets escaped content with custom entities
+    ///
+    /// Searches for '&' into content and try to escape the coded character if possible
+    /// returns Malformed error with index within element if '&' is not followed by ';'
+    /// Additional entities can be provided in `custom_entities`.
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    ///
+    /// See also [`unescaped()`](#method.unescaped)
+    pub fn unescaped_with_custom_entities<'s>(
+        &'s self,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<Cow<'s, [u8]>> {
+        self.make_unescaped(Some(custom_entities))
+    }
+
+    fn make_unescaped<'s>(
+        &'s self,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<Cow<'s, [u8]>> {
+        do_unescape(self, custom_entities).map_err(Error::EscapeError)
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -532,9 +617,7 @@ impl<'a> BytesText<'a> {
         &self,
         reader: &mut Reader<B>,
     ) -> Result<String> {
-        let decoded = reader.decode_without_bom(&*self);
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        self.do_unescape_and_decode_without_bom(reader, None)
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -549,21 +632,70 @@ impl<'a> BytesText<'a> {
         &self,
         reader: &Reader<B>,
     ) -> Result<String> {
-        let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        self.do_unescape_and_decode_without_bom(reader, None)
     }
 
-    /// helper method to unescape then decode self using the reader encoding
+    /// helper method to unescape then decode self using the reader encoding with custom entities
+    /// but without BOM (Byte order mark)
     ///
     /// for performance reasons (could avoid allocating a `String`),
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
-        let decoded = reader.decode(&*self);
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &mut Reader<B>,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<String> {
+        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
+    }
+
+    /// helper method to unescape then decode self using the reader encoding with custom entities
+    /// but without BOM (Byte order mark)
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    #[cfg(not(feature = "encoding"))]
+    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<String> {
+        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
+    }
+
+    #[cfg(feature = "encoding")]
+    fn do_unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &mut Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
+        let decoded = reader.decode_without_bom(&*self);
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
+    #[cfg(not(feature = "encoding"))]
+    fn do_unescape_and_decode_without_bom<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
+        let decoded = reader.decode_without_bom(&*self)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -573,10 +705,49 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    #[cfg(not(feature = "encoding"))]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+        self.do_unescape_and_decode_with_custom_entities(reader, None)
+    }
+
+    /// helper method to unescape then decode self using the reader encoding with custom entities
+    ///
+    /// for performance reasons (could avoid allocating a `String`),
+    /// it might be wiser to manually use
+    /// 1. BytesText::unescaped()
+    /// 2. Reader::decode(...)
+    ///
+    /// # Pre-condition
+    ///
+    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<String> {
+        self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
+    }
+
+    #[cfg(feature = "encoding")]
+    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
+        let decoded = reader.decode(&*self);
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+    }
+
+    #[cfg(not(feature = "encoding"))]
+    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+        &self,
+        reader: &Reader<B>,
+        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+    ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = unescape(decoded.as_bytes()).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
