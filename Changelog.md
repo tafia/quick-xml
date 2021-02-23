@@ -10,8 +10,15 @@
 
 ## Unreleased
 
-- feat: Move html entity escape behind a `'escape-html'` feature to help with compilation
+## 0.22.0
+
+- feat (breaking): Move html entity escape behind a `'escape-html'` feature to help with compilation
 - style: rustfmt
+- feat: inline CData when pretty printing
+- test: fix tests (Windows and Html5)
+- feat (breaking): add `*_with_custom_entities` versions of all `unescape_*\ methods
+- test: more robust test for numeric entities
+- refactor: add explicit pre-condition about custom_entities
 
 ## 0.21.0
 
