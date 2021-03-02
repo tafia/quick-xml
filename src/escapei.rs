@@ -3,6 +3,7 @@
 use memchr;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::ops::Range;
 
 #[derive(Debug)]
 pub enum EscapeError {
@@ -23,6 +24,8 @@ pub enum EscapeError {
     TooLongDecimal,
     /// Character is not a valid decimal value
     InvalidDecimal(char),
+    // Not a valid unicode codepoint
+    InvalidCodepoint(u32),
 }
 
 impl std::fmt::Display for EscapeError {
@@ -49,20 +52,12 @@ impl std::fmt::Display for EscapeError {
             }
             EscapeError::TooLongDecimal => write!(f, "Cannot convert decimal to utf8"),
             EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
+            EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
         }
     }
 }
 
 impl std::error::Error for EscapeError {}
-
-// UTF-8 ranges and tags for encoding characters
-const TAG_CONT: u8 = 0b1000_0000;
-const TAG_TWO_B: u8 = 0b1100_0000;
-const TAG_THREE_B: u8 = 0b1110_0000;
-const TAG_FOUR_B: u8 = 0b1111_0000;
-const MAX_ONE_B: u32 = 0x80;
-const MAX_TWO_B: u32 = 0x800;
-const MAX_THREE_B: u32 = 0x10000;
 
 /// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
 /// corresponding xml escaped value.
@@ -147,25 +142,20 @@ pub fn do_unescape<'a>(
                 let unescaped = unescaped.as_mut().expect("initialized");
                 unescaped.extend_from_slice(&raw[last_end..start]);
 
+                let mut push_char = |c: char| {
+                    unescaped.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes());
+                };
+
                 // search for character correctness
                 #[cfg(not(feature = "escape-html"))]
                 match &raw[start + 1..end] {
-                    b"lt" => unescaped.push(b'<'),
-                    b"gt" => unescaped.push(b'>'),
-                    b"amp" => unescaped.push(b'&'),
-                    b"apos" => unescaped.push(b'\''),
-                    b"quot" => unescaped.push(b'\"'),
+                    b"lt" => push_char('<'),
+                    b"gt" => push_char('>'),
+                    b"amp" => push_char('&'),
+                    b"apos" => push_char('\''),
+                    b"quot" => push_char('\"'),
                     bytes if bytes.starts_with(b"#") => {
-                        let bytes = &bytes[1..];
-                        let code = if bytes.starts_with(b"x") {
-                            parse_hexadecimal(&bytes[1..])
-                        } else {
-                            parse_decimal(&bytes)
-                        }?;
-                        if code == 0 {
-                            return Err(EscapeError::EntityWithNull(start..end));
-                        }
-                        push_utf8(unescaped, code);
+                        push_char(parse_number(&bytes[1..], start..end)?);
                     }
                     bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
                         Some(value) => unescaped.extend_from_slice(&value),
@@ -181,5400 +171,4356 @@ pub fn do_unescape<'a>(
                 #[cfg(feature = "escape-html")]
                 match &raw[start + 1..end] {
                     // imported from https://dev.w3.org/html5/html-author/charref
-                    b"Tab" => unescaped.push(b'\x09'),
-                    b"NewLine" => unescaped.push(b'\x0A'),
+                    b"Tab" => push_char('\u{09}'),
+                    b"NewLine" => push_char('\u{0A}'),
                     b"excl" => {
-                        unescaped.push(b'\x21');
+                        push_char('\u{21}');
                     }
                     b"quot" | b"QUOT" => {
-                        unescaped.push(b'\x22');
+                        push_char('\u{22}');
                     }
                     b"num" => {
-                        unescaped.push(b'\x23');
+                        push_char('\u{23}');
                     }
                     b"dollar" => {
-                        unescaped.push(b'\x24');
+                        push_char('\u{24}');
                     }
                     b"percnt" => {
-                        unescaped.push(b'\x25');
+                        push_char('\u{25}');
                     }
                     b"amp" | b"AMP" => {
-                        unescaped.push(b'\x26');
+                        push_char('\u{26}');
                     }
                     b"apos" => {
-                        unescaped.push(b'\x27');
+                        push_char('\u{27}');
                     }
                     b"lpar" => {
-                        unescaped.push(b'\x28');
+                        push_char('\u{28}');
                     }
                     b"rpar" => {
-                        unescaped.push(b'\x29');
+                        push_char('\u{29}');
                     }
                     b"ast" | b"midast" => {
-                        unescaped.push(b'\x2A');
+                        push_char('\u{2A}');
                     }
                     b"plus" => {
-                        unescaped.push(b'\x2B');
+                        push_char('\u{2B}');
                     }
                     b"comma" => {
-                        unescaped.push(b'\x2C');
+                        push_char('\u{2C}');
                     }
                     b"period" => {
-                        unescaped.push(b'\x2E');
+                        push_char('\u{2E}');
                     }
                     b"sol" => {
-                        unescaped.push(b'\x2F');
+                        push_char('\u{2F}');
                     }
                     b"colon" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"semi" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"lt" | b"LT" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"equals" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"gt" | b"GT" => {
-                        unescaped.push(b'\x3E');
+                        push_char('\u{3E}');
                     }
                     b"quest" => {
-                        unescaped.push(b'\x3F');
+                        push_char('\u{3F}');
                     }
                     b"commat" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"lsqb" | b"lbrack" => {
-                        unescaped.push(b'\x5B');
+                        push_char('\u{5B}');
                     }
                     b"bsol" => {
-                        unescaped.push(b'\x5C');
+                        push_char('\u{5C}');
                     }
                     b"rsqb" | b"rbrack" => {
-                        unescaped.push(b'\x5D');
+                        push_char('\u{5D}');
                     }
                     b"Hat" => {
-                        unescaped.push(b'\x5E');
+                        push_char('\u{5E}');
                     }
                     b"lowbar" => {
-                        unescaped.push(b'\x5F');
+                        push_char('\u{5F}');
                     }
                     b"grave" | b"DiacriticalGrave" => {
-                        unescaped.push(b'\x60');
+                        push_char('\u{60}');
                     }
                     b"lcub" | b"lbrace" => {
-                        unescaped.push(b'\x7B');
+                        push_char('\u{7B}');
                     }
                     b"verbar" | b"vert" | b"VerticalLine" => {
-                        unescaped.push(b'\x7C');
+                        push_char('\u{7C}');
                     }
                     b"rcub" | b"rbrace" => {
-                        unescaped.push(b'\x7D');
+                        push_char('\u{7D}');
                     }
                     b"nbsp" | b"NonBreakingSpace" => {
-                        unescaped.push(b'\xA0');
+                        push_char('\u{A0}');
                     }
                     b"iexcl" => {
-                        unescaped.push(b'\xA1');
+                        push_char('\u{A1}');
                     }
                     b"cent" => {
-                        unescaped.push(b'\xA2');
+                        push_char('\u{A2}');
                     }
                     b"pound" => {
-                        unescaped.push(b'\xA3');
+                        push_char('\u{A3}');
                     }
                     b"curren" => {
-                        unescaped.push(b'\xA4');
+                        push_char('\u{A4}');
                     }
                     b"yen" => {
-                        unescaped.push(b'\xA5');
+                        push_char('\u{A5}');
                     }
                     b"brvbar" => {
-                        unescaped.push(b'\xA6');
+                        push_char('\u{A6}');
                     }
                     b"sect" => {
-                        unescaped.push(b'\xA7');
+                        push_char('\u{A7}');
                     }
                     b"Dot" | b"die" | b"DoubleDot" | b"uml" => {
-                        unescaped.push(b'\xA8');
+                        push_char('\u{A8}');
                     }
                     b"copy" | b"COPY" => {
-                        unescaped.push(b'\xA9');
+                        push_char('\u{A9}');
                     }
                     b"ordf" => {
-                        unescaped.push(b'\xAA');
+                        push_char('\u{AA}');
                     }
                     b"laquo" => {
-                        unescaped.push(b'\xAB');
+                        push_char('\u{AB}');
                     }
                     b"not" => {
-                        unescaped.push(b'\xAC');
+                        push_char('\u{AC}');
                     }
                     b"shy" => {
-                        unescaped.push(b'\xAD');
+                        push_char('\u{AD}');
                     }
                     b"reg" | b"circledR" | b"REG" => {
-                        unescaped.push(b'\xAE');
+                        push_char('\u{AE}');
                     }
                     b"macr" | b"OverBar" | b"strns" => {
-                        unescaped.push(b'\xAF');
+                        push_char('\u{AF}');
                     }
                     b"deg" => {
-                        unescaped.push(b'\xB0');
+                        push_char('\u{B0}');
                     }
                     b"plusmn" | b"pm" | b"PlusMinus" => {
-                        unescaped.push(b'\xB1');
+                        push_char('\u{B1}');
                     }
                     b"sup2" => {
-                        unescaped.push(b'\xB2');
+                        push_char('\u{B2}');
                     }
                     b"sup3" => {
-                        unescaped.push(b'\xB3');
+                        push_char('\u{B3}');
                     }
                     b"acute" | b"DiacriticalAcute" => {
-                        unescaped.push(b'\xB4');
+                        push_char('\u{B4}');
                     }
                     b"micro" => {
-                        unescaped.push(b'\xB5');
+                        push_char('\u{B5}');
                     }
                     b"para" => {
-                        unescaped.push(b'\xB6');
+                        push_char('\u{B6}');
                     }
                     b"middot" | b"centerdot" | b"CenterDot" => {
-                        unescaped.push(b'\xB7');
+                        push_char('\u{B7}');
                     }
                     b"cedil" | b"Cedilla" => {
-                        unescaped.push(b'\xB8');
+                        push_char('\u{B8}');
                     }
                     b"sup1" => {
-                        unescaped.push(b'\xB9');
+                        push_char('\u{B9}');
                     }
                     b"ordm" => {
-                        unescaped.push(b'\xBA');
+                        push_char('\u{BA}');
                     }
                     b"raquo" => {
-                        unescaped.push(b'\xBB');
+                        push_char('\u{BB}');
                     }
                     b"frac14" => {
-                        unescaped.push(b'\xBC');
+                        push_char('\u{BC}');
                     }
                     b"frac12" | b"half" => {
-                        unescaped.push(b'\xBD');
+                        push_char('\u{BD}');
                     }
                     b"frac34" => {
-                        unescaped.push(b'\xBE');
+                        push_char('\u{BE}');
                     }
                     b"iquest" => {
-                        unescaped.push(b'\xBF');
+                        push_char('\u{BF}');
                     }
                     b"Agrave" => {
-                        unescaped.push(b'\xC0');
+                        push_char('\u{C0}');
                     }
                     b"Aacute" => {
-                        unescaped.push(b'\xC1');
+                        push_char('\u{C1}');
                     }
                     b"Acirc" => {
-                        unescaped.push(b'\xC2');
+                        push_char('\u{C2}');
                     }
                     b"Atilde" => {
-                        unescaped.push(b'\xC3');
+                        push_char('\u{C3}');
                     }
                     b"Auml" => {
-                        unescaped.push(b'\xC4');
+                        push_char('\u{C4}');
                     }
                     b"Aring" => {
-                        unescaped.push(b'\xC5');
+                        push_char('\u{C5}');
                     }
                     b"AElig" => {
-                        unescaped.push(b'\xC6');
+                        push_char('\u{C6}');
                     }
                     b"Ccedil" => {
-                        unescaped.push(b'\xC7');
+                        push_char('\u{C7}');
                     }
                     b"Egrave" => {
-                        unescaped.push(b'\xC8');
+                        push_char('\u{C8}');
                     }
                     b"Eacute" => {
-                        unescaped.push(b'\xC9');
+                        push_char('\u{C9}');
                     }
                     b"Ecirc" => {
-                        unescaped.push(b'\xCA');
+                        push_char('\u{CA}');
                     }
                     b"Euml" => {
-                        unescaped.push(b'\xCB');
+                        push_char('\u{CB}');
                     }
                     b"Igrave" => {
-                        unescaped.push(b'\xCC');
+                        push_char('\u{CC}');
                     }
                     b"Iacute" => {
-                        unescaped.push(b'\xCD');
+                        push_char('\u{CD}');
                     }
                     b"Icirc" => {
-                        unescaped.push(b'\xCE');
+                        push_char('\u{CE}');
                     }
                     b"Iuml" => {
-                        unescaped.push(b'\xCF');
+                        push_char('\u{CF}');
                     }
                     b"ETH" => {
-                        unescaped.push(b'\xD0');
+                        push_char('\u{D0}');
                     }
                     b"Ntilde" => {
-                        unescaped.push(b'\xD1');
+                        push_char('\u{D1}');
                     }
                     b"Ograve" => {
-                        unescaped.push(b'\xD2');
+                        push_char('\u{D2}');
                     }
                     b"Oacute" => {
-                        unescaped.push(b'\xD3');
+                        push_char('\u{D3}');
                     }
                     b"Ocirc" => {
-                        unescaped.push(b'\xD4');
+                        push_char('\u{D4}');
                     }
                     b"Otilde" => {
-                        unescaped.push(b'\xD5');
+                        push_char('\u{D5}');
                     }
                     b"Ouml" => {
-                        unescaped.push(b'\xD6');
+                        push_char('\u{D6}');
                     }
                     b"times" => {
-                        unescaped.push(b'\xD7');
+                        push_char('\u{D7}');
                     }
                     b"Oslash" => {
-                        unescaped.push(b'\xD8');
+                        push_char('\u{D8}');
                     }
                     b"Ugrave" => {
-                        unescaped.push(b'\xD9');
+                        push_char('\u{D9}');
                     }
                     b"Uacute" => {
-                        unescaped.push(b'\xDA');
+                        push_char('\u{DA}');
                     }
                     b"Ucirc" => {
-                        unescaped.push(b'\xDB');
+                        push_char('\u{DB}');
                     }
                     b"Uuml" => {
-                        unescaped.push(b'\xDC');
+                        push_char('\u{DC}');
                     }
                     b"Yacute" => {
-                        unescaped.push(b'\xDD');
+                        push_char('\u{DD}');
                     }
                     b"THORN" => {
-                        unescaped.push(b'\xDE');
+                        push_char('\u{DE}');
                     }
                     b"szlig" => {
-                        unescaped.push(b'\xDF');
+                        push_char('\u{DF}');
                     }
                     b"agrave" => {
-                        unescaped.push(b'\xE0');
+                        push_char('\u{E0}');
                     }
                     b"aacute" => {
-                        unescaped.push(b'\xE1');
+                        push_char('\u{E1}');
                     }
                     b"acirc" => {
-                        unescaped.push(b'\xE2');
+                        push_char('\u{E2}');
                     }
                     b"atilde" => {
-                        unescaped.push(b'\xE3');
+                        push_char('\u{E3}');
                     }
                     b"auml" => {
-                        unescaped.push(b'\xE4');
+                        push_char('\u{E4}');
                     }
                     b"aring" => {
-                        unescaped.push(b'\xE5');
+                        push_char('\u{E5}');
                     }
                     b"aelig" => {
-                        unescaped.push(b'\xE6');
+                        push_char('\u{E6}');
                     }
                     b"ccedil" => {
-                        unescaped.push(b'\xE7');
+                        push_char('\u{E7}');
                     }
                     b"egrave" => {
-                        unescaped.push(b'\xE8');
+                        push_char('\u{E8}');
                     }
                     b"eacute" => {
-                        unescaped.push(b'\xE9');
+                        push_char('\u{E9}');
                     }
                     b"ecirc" => {
-                        unescaped.push(b'\xEA');
+                        push_char('\u{EA}');
                     }
                     b"euml" => {
-                        unescaped.push(b'\xEB');
+                        push_char('\u{EB}');
                     }
                     b"igrave" => {
-                        unescaped.push(b'\xEC');
+                        push_char('\u{EC}');
                     }
                     b"iacute" => {
-                        unescaped.push(b'\xED');
+                        push_char('\u{ED}');
                     }
                     b"icirc" => {
-                        unescaped.push(b'\xEE');
+                        push_char('\u{EE}');
                     }
                     b"iuml" => {
-                        unescaped.push(b'\xEF');
+                        push_char('\u{EF}');
                     }
                     b"eth" => {
-                        unescaped.push(b'\xF0');
+                        push_char('\u{F0}');
                     }
                     b"ntilde" => {
-                        unescaped.push(b'\xF1');
+                        push_char('\u{F1}');
                     }
                     b"ograve" => {
-                        unescaped.push(b'\xF2');
+                        push_char('\u{F2}');
                     }
                     b"oacute" => {
-                        unescaped.push(b'\xF3');
+                        push_char('\u{F3}');
                     }
                     b"ocirc" => {
-                        unescaped.push(b'\xF4');
+                        push_char('\u{F4}');
                     }
                     b"otilde" => {
-                        unescaped.push(b'\xF5');
+                        push_char('\u{F5}');
                     }
                     b"ouml" => {
-                        unescaped.push(b'\xF6');
+                        push_char('\u{F6}');
                     }
                     b"divide" | b"div" => {
-                        unescaped.push(b'\xF7');
+                        push_char('\u{F7}');
                     }
                     b"oslash" => {
-                        unescaped.push(b'\xF8');
+                        push_char('\u{F8}');
                     }
                     b"ugrave" => {
-                        unescaped.push(b'\xF9');
+                        push_char('\u{F9}');
                     }
                     b"uacute" => {
-                        unescaped.push(b'\xFA');
+                        push_char('\u{FA}');
                     }
                     b"ucirc" => {
-                        unescaped.push(b'\xFB');
+                        push_char('\u{FB}');
                     }
                     b"uuml" => {
-                        unescaped.push(b'\xFC');
+                        push_char('\u{FC}');
                     }
                     b"yacute" => {
-                        unescaped.push(b'\xFD');
+                        push_char('\u{FD}');
                     }
                     b"thorn" => {
-                        unescaped.push(b'\xFE');
+                        push_char('\u{FE}');
                     }
                     b"yuml" => {
-                        unescaped.push(b'\xFF');
+                        push_char('\u{FF}');
                     }
                     b"Amacr" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"amacr" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Abreve" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"abreve" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Aogon" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"aogon" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Cacute" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"cacute" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Ccirc" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"ccirc" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Cdot" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"cdot" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Ccaron" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"ccaron" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Dcaron" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"dcaron" => {
-                        unescaped.push(b'\x10');
+                        push_char('\u{10}');
                     }
                     b"Dstrok" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"dstrok" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Emacr" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"emacr" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Edot" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"edot" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Eogon" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"eogon" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Ecaron" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"ecaron" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Gcirc" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"gcirc" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Gbreve" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"gbreve" => {
-                        unescaped.push(b'\x11');
+                        push_char('\u{11}');
                     }
                     b"Gdot" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"gdot" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Gcedil" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Hcirc" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"hcirc" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Hstrok" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"hstrok" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Itilde" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"itilde" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Imacr" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"imacr" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Iogon" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"iogon" => {
-                        unescaped.push(b'\x12');
+                        push_char('\u{12}');
                     }
                     b"Idot" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"imath" | b"inodot" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"IJlig" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"ijlig" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Jcirc" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"jcirc" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Kcedil" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"kcedil" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"kgreen" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Lacute" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"lacute" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Lcedil" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"lcedil" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Lcaron" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"lcaron" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"Lmidot" => {
-                        unescaped.push(b'\x13');
+                        push_char('\u{13}');
                     }
                     b"lmidot" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Lstrok" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"lstrok" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Nacute" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"nacute" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Ncedil" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"ncedil" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Ncaron" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"ncaron" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"napos" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"ENG" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"eng" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Omacr" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"omacr" => {
-                        unescaped.push(b'\x14');
+                        push_char('\u{14}');
                     }
                     b"Odblac" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"odblac" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"OElig" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"oelig" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Racute" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"racute" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Rcedil" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"rcedil" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Rcaron" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"rcaron" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Sacute" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"sacute" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Scirc" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"scirc" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Scedil" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"scedil" => {
-                        unescaped.push(b'\x15');
+                        push_char('\u{15}');
                     }
                     b"Scaron" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"scaron" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Tcedil" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"tcedil" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Tcaron" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"tcaron" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Tstrok" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"tstrok" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Utilde" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"utilde" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Umacr" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"umacr" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Ubreve" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"ubreve" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Uring" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"uring" => {
-                        unescaped.push(b'\x16');
+                        push_char('\u{16}');
                     }
                     b"Udblac" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"udblac" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Uogon" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"uogon" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Wcirc" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"wcirc" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Ycirc" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"ycirc" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Yuml" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Zacute" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"zacute" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Zdot" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"zdot" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"Zcaron" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"zcaron" => {
-                        unescaped.push(b'\x17');
+                        push_char('\u{17}');
                     }
                     b"fnof" => {
-                        unescaped.push(b'\x19');
+                        push_char('\u{19}');
                     }
                     b"imped" => {
-                        unescaped.push(b'\x1B');
+                        push_char('\u{1B}');
                     }
                     b"gacute" => {
-                        unescaped.push(b'\x1F');
+                        push_char('\u{1F}');
                     }
                     b"jmath" => {
-                        unescaped.push(b'\x23');
+                        push_char('\u{23}');
                     }
                     b"circ" => {
-                        unescaped.push(b'\x2C');
+                        push_char('\u{2C}');
                     }
                     b"caron" | b"Hacek" => {
-                        unescaped.push(b'\x2C');
+                        push_char('\u{2C}');
                     }
                     b"breve" | b"Breve" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"dot" | b"DiacriticalDot" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"ring" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"ogon" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"tilde" | b"DiacriticalTilde" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"dblac" | b"DiacriticalDoubleAcute" => {
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2D}');
                     }
                     b"DownBreve" => {
-                        unescaped.push(b'\x31');
+                        push_char('\u{31}');
                     }
                     b"UnderBar" => {
-                        unescaped.push(b'\x33');
+                        push_char('\u{33}');
                     }
                     b"Alpha" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Beta" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Gamma" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Delta" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Epsilon" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Zeta" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Eta" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Theta" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Iota" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Kappa" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Lambda" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Mu" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Nu" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Xi" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Omicron" => {
-                        unescaped.push(b'\x39');
+                        push_char('\u{39}');
                     }
                     b"Pi" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Rho" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Sigma" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Tau" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Upsilon" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Phi" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Chi" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Psi" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"Omega" => {
-                        unescaped.push(b'\x3A');
+                        push_char('\u{3A}');
                     }
                     b"alpha" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"beta" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"gamma" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"delta" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"epsiv" | b"varepsilon" | b"epsilon" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"zeta" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"eta" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"theta" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"iota" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"kappa" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"lambda" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"mu" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"nu" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"xi" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"omicron" => {
-                        unescaped.push(b'\x3B');
+                        push_char('\u{3B}');
                     }
                     b"pi" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"rho" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"sigmav" | b"varsigma" | b"sigmaf" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"sigma" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"tau" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"upsi" | b"upsilon" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"phi" | b"phiv" | b"varphi" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"chi" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"psi" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"omega" => {
-                        unescaped.push(b'\x3C');
+                        push_char('\u{3C}');
                     }
                     b"thetav" | b"vartheta" | b"thetasym" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"Upsi" | b"upsih" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"straightphi" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"piv" | b"varpi" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"Gammad" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"gammad" | b"digamma" => {
-                        unescaped.push(b'\x3D');
+                        push_char('\u{3D}');
                     }
                     b"kappav" | b"varkappa" => {
-                        unescaped.push(b'\x3F');
+                        push_char('\u{3F}');
                     }
                     b"rhov" | b"varrho" => {
-                        unescaped.push(b'\x3F');
+                        push_char('\u{3F}');
                     }
                     b"epsi" | b"straightepsilon" => {
-                        unescaped.push(b'\x3F');
+                        push_char('\u{3F}');
                     }
                     b"bepsi" | b"backepsilon" => {
-                        unescaped.push(b'\x3F');
+                        push_char('\u{3F}');
                     }
                     b"IOcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"DJcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"GJcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"Jukcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"DScy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"Iukcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"YIcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"Jsercy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"LJcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"NJcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"TSHcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"KJcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"Ubrcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"DZcy" => {
-                        unescaped.push(b'\x40');
+                        push_char('\u{40}');
                     }
                     b"Acy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Bcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Vcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Gcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Dcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"IEcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"ZHcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Zcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Icy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Jcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Kcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Lcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Mcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Ncy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Ocy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Pcy" => {
-                        unescaped.push(b'\x41');
+                        push_char('\u{41}');
                     }
                     b"Rcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Scy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Tcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Ucy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Fcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"KHcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"TScy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"CHcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"SHcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"SHCHcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"HARDcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Ycy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"SOFTcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"Ecy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"YUcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"YAcy" => {
-                        unescaped.push(b'\x42');
+                        push_char('\u{42}');
                     }
                     b"acy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"bcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"vcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"gcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"dcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"iecy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"zhcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"zcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"icy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"jcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"kcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"lcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"mcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"ncy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"ocy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"pcy" => {
-                        unescaped.push(b'\x43');
+                        push_char('\u{43}');
                     }
                     b"rcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"scy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"tcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"ucy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"fcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"khcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"tscy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"chcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"shcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"shchcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"hardcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"ycy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"softcy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"ecy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"yucy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"yacy" => {
-                        unescaped.push(b'\x44');
+                        push_char('\u{44}');
                     }
                     b"iocy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"djcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"gjcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"jukcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"dscy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"iukcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"yicy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"jsercy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"ljcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"njcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"tshcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"kjcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"ubrcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"dzcy" => {
-                        unescaped.push(b'\x45');
+                        push_char('\u{45}');
                     }
                     b"ensp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2002}');
                     }
                     b"emsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x03');
+                        push_char('\u{2003}');
                     }
                     b"emsp13" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x04');
+                        push_char('\u{2004}');
                     }
                     b"emsp14" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2005}');
                     }
                     b"numsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x07');
+                        push_char('\u{2007}');
                     }
                     b"puncsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x08');
+                        push_char('\u{2008}');
                     }
                     b"thinsp" | b"ThinSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x09');
+                        push_char('\u{2009}');
                     }
                     b"hairsp" | b"VeryThinSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0A');
+                        push_char('\u{200A}');
                     }
                     b"ZeroWidthSpace"
                     | b"NegativeVeryThinSpace"
                     | b"NegativeThinSpace"
                     | b"NegativeMediumSpace"
                     | b"NegativeThickSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0B');
+                        push_char('\u{200B}');
                     }
                     b"zwnj" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{200C}');
                     }
                     b"zwj" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0D');
+                        push_char('\u{200D}');
                     }
                     b"lrm" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0E');
+                        push_char('\u{200E}');
                     }
                     b"rlm" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0F');
+                        push_char('\u{200F}');
                     }
                     b"hyphen" | b"dash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2010}');
                     }
                     b"ndash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2013}');
                     }
                     b"mdash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x14');
+                        push_char('\u{2014}');
                     }
                     b"horbar" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x15');
+                        push_char('\u{2015}');
                     }
                     b"Verbar" | b"Vert" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2016}');
                     }
                     b"lsquo" | b"OpenCurlyQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x18');
+                        push_char('\u{2018}');
                     }
                     b"rsquo" | b"rsquor" | b"CloseCurlyQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x19');
+                        push_char('\u{2019}');
                     }
                     b"lsquor" | b"sbquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1A');
+                        push_char('\u{201A}');
                     }
                     b"ldquo" | b"OpenCurlyDoubleQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1C');
+                        push_char('\u{201C}');
                     }
                     b"rdquo" | b"rdquor" | b"CloseCurlyDoubleQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1D');
+                        push_char('\u{201D}');
                     }
                     b"ldquor" | b"bdquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1E');
+                        push_char('\u{201E}');
                     }
                     b"dagger" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x20');
+                        push_char('\u{2020}');
                     }
                     b"Dagger" | b"ddagger" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x21');
+                        push_char('\u{2021}');
                     }
                     b"bull" | b"bullet" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x22');
+                        push_char('\u{2022}');
                     }
                     b"nldr" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x25');
+                        push_char('\u{2025}');
                     }
                     b"hellip" | b"mldr" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x26');
+                        push_char('\u{2026}');
                     }
                     b"permil" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x30');
+                        push_char('\u{2030}');
                     }
                     b"pertenk" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x31');
+                        push_char('\u{2031}');
                     }
                     b"prime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x32');
+                        push_char('\u{2032}');
                     }
                     b"Prime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x33');
+                        push_char('\u{2033}');
                     }
                     b"tprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x34');
+                        push_char('\u{2034}');
                     }
                     b"bprime" | b"backprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x35');
+                        push_char('\u{2035}');
                     }
                     b"lsaquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x39');
+                        push_char('\u{2039}');
                     }
                     b"rsaquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x3A');
+                        push_char('\u{203A}');
                     }
                     b"oline" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x3E');
+                        push_char('\u{203E}');
                     }
                     b"caret" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x41');
+                        push_char('\u{2041}');
                     }
                     b"hybull" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x43');
+                        push_char('\u{2043}');
                     }
                     b"frasl" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x44');
+                        push_char('\u{2044}');
                     }
                     b"bsemi" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x4F');
+                        push_char('\u{204F}');
                     }
                     b"qprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2057}');
                     }
                     b"MediumSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x5F');
+                        push_char('\u{205F}');
                     }
                     b"NoBreak" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x60');
+                        push_char('\u{2060}');
                     }
                     b"ApplyFunction" | b"af" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x61');
+                        push_char('\u{2061}');
                     }
                     b"InvisibleTimes" | b"it" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x62');
+                        push_char('\u{2062}');
                     }
                     b"InvisibleComma" | b"ic" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x63');
+                        push_char('\u{2063}');
                     }
                     b"euro" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xAC');
+                        push_char('\u{20AC}');
                     }
                     b"tdot" | b"TripleDot" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xDB');
+                        push_char('\u{20DB}');
                     }
                     b"DotDot" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xDC');
+                        push_char('\u{20DC}');
                     }
                     b"Copf" | b"complexes" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2102}');
                     }
                     b"incare" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2105}');
                     }
                     b"gscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0A');
+                        push_char('\u{210A}');
                     }
                     b"hamilt" | b"HilbertSpace" | b"Hscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0B');
+                        push_char('\u{210B}');
                     }
                     b"Hfr" | b"Poincareplane" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{210C}');
                     }
                     b"quaternions" | b"Hopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0D');
+                        push_char('\u{210D}');
                     }
                     b"planckh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0E');
+                        push_char('\u{210E}');
                     }
                     b"planck" | b"hbar" | b"plankv" | b"hslash" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0F');
+                        push_char('\u{210F}');
                     }
                     b"Iscr" | b"imagline" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2110}');
                     }
                     b"image" | b"Im" | b"imagpart" | b"Ifr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x11');
+                        push_char('\u{2111}');
                     }
                     b"Lscr" | b"lagran" | b"Laplacetrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x12');
+                        push_char('\u{2112}');
                     }
                     b"ell" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2113}');
                     }
                     b"Nopf" | b"naturals" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x15');
+                        push_char('\u{2115}');
                     }
                     b"numero" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2116}');
                     }
                     b"copysr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x17');
+                        push_char('\u{2117}');
                     }
                     b"weierp" | b"wp" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x18');
+                        push_char('\u{2118}');
                     }
                     b"Popf" | b"primes" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x19');
+                        push_char('\u{2119}');
                     }
                     b"rationals" | b"Qopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1A');
+                        push_char('\u{211A}');
                     }
                     b"Rscr" | b"realine" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1B');
+                        push_char('\u{211B}');
                     }
                     b"real" | b"Re" | b"realpart" | b"Rfr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1C');
+                        push_char('\u{211C}');
                     }
                     b"reals" | b"Ropf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1D');
+                        push_char('\u{211D}');
                     }
                     b"rx" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1E');
+                        push_char('\u{211E}');
                     }
                     b"trade" | b"TRADE" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x22');
+                        push_char('\u{2122}');
                     }
                     b"integers" | b"Zopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x24');
+                        push_char('\u{2124}');
                     }
                     b"ohm" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x26');
+                        push_char('\u{2126}');
                     }
                     b"mho" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x27');
+                        push_char('\u{2127}');
                     }
                     b"Zfr" | b"zeetrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x28');
+                        push_char('\u{2128}');
                     }
                     b"iiota" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x29');
+                        push_char('\u{2129}');
                     }
                     b"angst" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2B');
+                        push_char('\u{212B}');
                     }
                     b"bernou" | b"Bernoullis" | b"Bscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2C');
+                        push_char('\u{212C}');
                     }
                     b"Cfr" | b"Cayleys" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2D');
+                        push_char('\u{212D}');
                     }
                     b"escr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2F');
+                        push_char('\u{212F}');
                     }
                     b"Escr" | b"expectation" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x30');
+                        push_char('\u{2130}');
                     }
                     b"Fscr" | b"Fouriertrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x31');
+                        push_char('\u{2131}');
                     }
                     b"phmmat" | b"Mellintrf" | b"Mscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x33');
+                        push_char('\u{2133}');
                     }
                     b"order" | b"orderof" | b"oscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x34');
+                        push_char('\u{2134}');
                     }
                     b"alefsym" | b"aleph" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x35');
+                        push_char('\u{2135}');
                     }
                     b"beth" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2136}');
                     }
                     b"gimel" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x37');
+                        push_char('\u{2137}');
                     }
                     b"daleth" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x38');
+                        push_char('\u{2138}');
                     }
                     b"CapitalDifferentialD" | b"DD" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x45');
+                        push_char('\u{2145}');
                     }
                     b"DifferentialD" | b"dd" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x46');
+                        push_char('\u{2146}');
                     }
                     b"ExponentialE" | b"exponentiale" | b"ee" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x47');
+                        push_char('\u{2147}');
                     }
                     b"ImaginaryI" | b"ii" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x48');
+                        push_char('\u{2148}');
                     }
                     b"frac13" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x53');
+                        push_char('\u{2153}');
                     }
                     b"frac23" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x54');
+                        push_char('\u{2154}');
                     }
                     b"frac15" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x55');
+                        push_char('\u{2155}');
                     }
                     b"frac25" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x56');
+                        push_char('\u{2156}');
                     }
                     b"frac35" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2157}');
                     }
                     b"frac45" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x58');
+                        push_char('\u{2158}');
                     }
                     b"frac16" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x59');
+                        push_char('\u{2159}');
                     }
                     b"frac56" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5A');
+                        push_char('\u{215A}');
                     }
                     b"frac18" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5B');
+                        push_char('\u{215B}');
                     }
                     b"frac38" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5C');
+                        push_char('\u{215C}');
                     }
                     b"frac58" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5D');
+                        push_char('\u{215D}');
                     }
                     b"frac78" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5E');
+                        push_char('\u{215E}');
                     }
                     b"larr" | b"leftarrow" | b"LeftArrow" | b"slarr" | b"ShortLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x90');
+                        push_char('\u{2190}');
                     }
                     b"uarr" | b"uparrow" | b"UpArrow" | b"ShortUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x91');
+                        push_char('\u{2191}');
                     }
                     b"rarr" | b"rightarrow" | b"RightArrow" | b"srarr" | b"ShortRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x92');
+                        push_char('\u{2192}');
                     }
                     b"darr" | b"downarrow" | b"DownArrow" | b"ShortDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x93');
+                        push_char('\u{2193}');
                     }
                     b"harr" | b"leftrightarrow" | b"LeftRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x94');
+                        push_char('\u{2194}');
                     }
                     b"varr" | b"updownarrow" | b"UpDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x95');
+                        push_char('\u{2195}');
                     }
                     b"nwarr" | b"UpperLeftArrow" | b"nwarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x96');
+                        push_char('\u{2196}');
                     }
                     b"nearr" | b"UpperRightArrow" | b"nearrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x97');
+                        push_char('\u{2197}');
                     }
                     b"searr" | b"searrow" | b"LowerRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x98');
+                        push_char('\u{2198}');
                     }
                     b"swarr" | b"swarrow" | b"LowerLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x99');
+                        push_char('\u{2199}');
                     }
                     b"nlarr" | b"nleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9A');
+                        push_char('\u{219A}');
                     }
                     b"nrarr" | b"nrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9B');
+                        push_char('\u{219B}');
                     }
                     b"rarrw" | b"rightsquigarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9D');
+                        push_char('\u{219D}');
                     }
                     b"Larr" | b"twoheadleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9E');
+                        push_char('\u{219E}');
                     }
                     b"Uarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9F');
+                        push_char('\u{219F}');
                     }
                     b"Rarr" | b"twoheadrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA0');
+                        push_char('\u{21A0}');
                     }
                     b"Darr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA1');
+                        push_char('\u{21A1}');
                     }
                     b"larrtl" | b"leftarrowtail" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA2');
+                        push_char('\u{21A2}');
                     }
                     b"rarrtl" | b"rightarrowtail" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA3');
+                        push_char('\u{21A3}');
                     }
                     b"LeftTeeArrow" | b"mapstoleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA4');
+                        push_char('\u{21A4}');
                     }
                     b"UpTeeArrow" | b"mapstoup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA5');
+                        push_char('\u{21A5}');
                     }
                     b"map" | b"RightTeeArrow" | b"mapsto" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA6');
+                        push_char('\u{21A6}');
                     }
                     b"DownTeeArrow" | b"mapstodown" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA7');
+                        push_char('\u{21A7}');
                     }
                     b"larrhk" | b"hookleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA9');
+                        push_char('\u{21A9}');
                     }
                     b"rarrhk" | b"hookrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAA');
+                        push_char('\u{21AA}');
                     }
                     b"larrlp" | b"looparrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAB');
+                        push_char('\u{21AB}');
                     }
                     b"rarrlp" | b"looparrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAC');
+                        push_char('\u{21AC}');
                     }
                     b"harrw" | b"leftrightsquigarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAD');
+                        push_char('\u{21AD}');
                     }
                     b"nharr" | b"nleftrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAE');
+                        push_char('\u{21AE}');
                     }
                     b"lsh" | b"Lsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB0');
+                        push_char('\u{21B0}');
                     }
                     b"rsh" | b"Rsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB1');
+                        push_char('\u{21B1}');
                     }
                     b"ldsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB2');
+                        push_char('\u{21B2}');
                     }
                     b"rdsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB3');
+                        push_char('\u{21B3}');
                     }
                     b"crarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{21B5}');
                     }
                     b"cularr" | b"curvearrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB6');
+                        push_char('\u{21B6}');
                     }
                     b"curarr" | b"curvearrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB7');
+                        push_char('\u{21B7}');
                     }
                     b"olarr" | b"circlearrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBA');
+                        push_char('\u{21BA}');
                     }
                     b"orarr" | b"circlearrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBB');
+                        push_char('\u{21BB}');
                     }
                     b"lharu" | b"LeftVector" | b"leftharpoonup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBC');
+                        push_char('\u{21BC}');
                     }
                     b"lhard" | b"leftharpoondown" | b"DownLeftVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBD');
+                        push_char('\u{21BD}');
                     }
                     b"uharr" | b"upharpoonright" | b"RightUpVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBE');
+                        push_char('\u{21BE}');
                     }
                     b"uharl" | b"upharpoonleft" | b"LeftUpVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBF');
+                        push_char('\u{21BF}');
                     }
                     b"rharu" | b"RightVector" | b"rightharpoonup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC0');
+                        push_char('\u{21C0}');
                     }
                     b"rhard" | b"rightharpoondown" | b"DownRightVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC1');
+                        push_char('\u{21C1}');
                     }
                     b"dharr" | b"RightDownVector" | b"downharpoonright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC2');
+                        push_char('\u{21C2}');
                     }
                     b"dharl" | b"LeftDownVector" | b"downharpoonleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC3');
+                        push_char('\u{21C3}');
                     }
                     b"rlarr" | b"rightleftarrows" | b"RightArrowLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC4');
+                        push_char('\u{21C4}');
                     }
                     b"udarr" | b"UpArrowDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC5');
+                        push_char('\u{21C5}');
                     }
                     b"lrarr" | b"leftrightarrows" | b"LeftArrowRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC6');
+                        push_char('\u{21C6}');
                     }
                     b"llarr" | b"leftleftarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC7');
+                        push_char('\u{21C7}');
                     }
                     b"uuarr" | b"upuparrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC8');
+                        push_char('\u{21C8}');
                     }
                     b"rrarr" | b"rightrightarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC9');
+                        push_char('\u{21C9}');
                     }
                     b"ddarr" | b"downdownarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCA');
+                        push_char('\u{21CA}');
                     }
                     b"lrhar" | b"ReverseEquilibrium" | b"leftrightharpoons" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCB');
+                        push_char('\u{21CB}');
                     }
                     b"rlhar" | b"rightleftharpoons" | b"Equilibrium" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCC');
+                        push_char('\u{21CC}');
                     }
                     b"nlArr" | b"nLeftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCD');
+                        push_char('\u{21CD}');
                     }
                     b"nhArr" | b"nLeftrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCE');
+                        push_char('\u{21CE}');
                     }
                     b"nrArr" | b"nRightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCF');
+                        push_char('\u{21CF}');
                     }
                     b"lArr" | b"Leftarrow" | b"DoubleLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD0');
+                        push_char('\u{21D0}');
                     }
                     b"uArr" | b"Uparrow" | b"DoubleUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD1');
+                        push_char('\u{21D1}');
                     }
                     b"rArr" | b"Rightarrow" | b"Implies" | b"DoubleRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD2');
+                        push_char('\u{21D2}');
                     }
                     b"dArr" | b"Downarrow" | b"DoubleDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD3');
+                        push_char('\u{21D3}');
                     }
                     b"hArr" | b"Leftrightarrow" | b"DoubleLeftRightArrow" | b"iff" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD4');
+                        push_char('\u{21D4}');
                     }
                     b"vArr" | b"Updownarrow" | b"DoubleUpDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD5');
+                        push_char('\u{21D5}');
                     }
                     b"nwArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD6');
+                        push_char('\u{21D6}');
                     }
                     b"neArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD7');
+                        push_char('\u{21D7}');
                     }
                     b"seArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD8');
+                        push_char('\u{21D8}');
                     }
                     b"swArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD9');
+                        push_char('\u{21D9}');
                     }
                     b"lAarr" | b"Lleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDA');
+                        push_char('\u{21DA}');
                     }
                     b"rAarr" | b"Rrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDB');
+                        push_char('\u{21DB}');
                     }
                     b"zigrarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDD');
+                        push_char('\u{21DD}');
                     }
                     b"larrb" | b"LeftArrowBar" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xE4');
+                        push_char('\u{21E4}');
                     }
                     b"rarrb" | b"RightArrowBar" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xE5');
+                        push_char('\u{21E5}');
                     }
                     b"duarr" | b"DownArrowUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xF5');
+                        push_char('\u{21F5}');
                     }
                     b"loarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFD');
+                        push_char('\u{21FD}');
                     }
                     b"roarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFE');
+                        push_char('\u{21FE}');
                     }
                     b"hoarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFF');
+                        push_char('\u{21FF}');
                     }
                     b"forall" | b"ForAll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x00');
+                        push_char('\u{2200}');
                     }
                     b"comp" | b"complement" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x01');
+                        push_char('\u{2201}');
                     }
                     b"part" | b"PartialD" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2202}');
                     }
                     b"exist" | b"Exists" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x03');
+                        push_char('\u{2203}');
                     }
                     b"nexist" | b"NotExists" | b"nexists" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x04');
+                        push_char('\u{2204}');
                     }
                     b"empty" | b"emptyset" | b"emptyv" | b"varnothing" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2205}');
                     }
                     b"nabla" | b"Del" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x07');
+                        push_char('\u{2207}');
                     }
                     b"isin" | b"isinv" | b"Element" | b"in" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x08');
+                        push_char('\u{2208}');
                     }
                     b"notin" | b"NotElement" | b"notinva" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x09');
+                        push_char('\u{2209}');
                     }
                     b"niv" | b"ReverseElement" | b"ni" | b"SuchThat" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0B');
+                        push_char('\u{220B}');
                     }
                     b"notni" | b"notniva" | b"NotReverseElement" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{220C}');
                     }
                     b"prod" | b"Product" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0F');
+                        push_char('\u{220F}');
                     }
                     b"coprod" | b"Coproduct" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2210}');
                     }
                     b"sum" | b"Sum" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x11');
+                        push_char('\u{2211}');
                     }
                     b"minus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x12');
+                        push_char('\u{2212}');
                     }
                     b"mnplus" | b"mp" | b"MinusPlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2213}');
                     }
                     b"plusdo" | b"dotplus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x14');
+                        push_char('\u{2214}');
                     }
                     b"setmn" | b"setminus" | b"Backslash" | b"ssetmn" | b"smallsetminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2216}');
                     }
                     b"lowast" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x17');
+                        push_char('\u{2217}');
                     }
                     b"compfn" | b"SmallCircle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x18');
+                        push_char('\u{2218}');
                     }
                     b"radic" | b"Sqrt" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1A');
+                        push_char('\u{221A}');
                     }
                     b"prop" | b"propto" | b"Proportional" | b"vprop" | b"varpropto" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1D');
+                        push_char('\u{221D}');
                     }
                     b"infin" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1E');
+                        push_char('\u{221E}');
                     }
                     b"angrt" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1F');
+                        push_char('\u{221F}');
                     }
                     b"ang" | b"angle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x20');
+                        push_char('\u{2220}');
                     }
                     b"angmsd" | b"measuredangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x21');
+                        push_char('\u{2221}');
                     }
                     b"angsph" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x22');
+                        push_char('\u{2222}');
                     }
                     b"mid" | b"VerticalBar" | b"smid" | b"shortmid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x23');
+                        push_char('\u{2223}');
                     }
                     b"nmid" | b"NotVerticalBar" | b"nsmid" | b"nshortmid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x24');
+                        push_char('\u{2224}');
                     }
                     b"par" | b"parallel" | b"DoubleVerticalBar" | b"spar" | b"shortparallel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x25');
+                        push_char('\u{2225}');
                     }
                     b"npar"
                     | b"nparallel"
                     | b"NotDoubleVerticalBar"
                     | b"nspar"
                     | b"nshortparallel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x26');
+                        push_char('\u{2226}');
                     }
                     b"and" | b"wedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x27');
+                        push_char('\u{2227}');
                     }
                     b"or" | b"vee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x28');
+                        push_char('\u{2228}');
                     }
                     b"cap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x29');
+                        push_char('\u{2229}');
                     }
                     b"cup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2A');
+                        push_char('\u{222A}');
                     }
                     b"int" | b"Integral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2B');
+                        push_char('\u{222B}');
                     }
                     b"Int" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2C');
+                        push_char('\u{222C}');
                     }
                     b"tint" | b"iiint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2D');
+                        push_char('\u{222D}');
                     }
                     b"conint" | b"oint" | b"ContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2E');
+                        push_char('\u{222E}');
                     }
                     b"Conint" | b"DoubleContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2F');
+                        push_char('\u{222F}');
                     }
                     b"Cconint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x30');
+                        push_char('\u{2230}');
                     }
                     b"cwint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x31');
+                        push_char('\u{2231}');
                     }
                     b"cwconint" | b"ClockwiseContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x32');
+                        push_char('\u{2232}');
                     }
                     b"awconint" | b"CounterClockwiseContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x33');
+                        push_char('\u{2233}');
                     }
                     b"there4" | b"therefore" | b"Therefore" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x34');
+                        push_char('\u{2234}');
                     }
                     b"becaus" | b"because" | b"Because" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x35');
+                        push_char('\u{2235}');
                     }
                     b"ratio" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2236}');
                     }
                     b"Colon" | b"Proportion" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x37');
+                        push_char('\u{2237}');
                     }
                     b"minusd" | b"dotminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x38');
+                        push_char('\u{2238}');
                     }
                     b"mDDot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3A');
+                        push_char('\u{223A}');
                     }
                     b"homtht" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3B');
+                        push_char('\u{223B}');
                     }
                     b"sim" | b"Tilde" | b"thksim" | b"thicksim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3C');
+                        push_char('\u{223C}');
                     }
                     b"bsim" | b"backsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3D');
+                        push_char('\u{223D}');
                     }
                     b"ac" | b"mstpos" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3E');
+                        push_char('\u{223E}');
                     }
                     b"acd" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3F');
+                        push_char('\u{223F}');
                     }
                     b"wreath" | b"VerticalTilde" | b"wr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x40');
+                        push_char('\u{2240}');
                     }
                     b"nsim" | b"NotTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x41');
+                        push_char('\u{2241}');
                     }
                     b"esim" | b"EqualTilde" | b"eqsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x42');
+                        push_char('\u{2242}');
                     }
                     b"sime" | b"TildeEqual" | b"simeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x43');
+                        push_char('\u{2243}');
                     }
                     b"nsime" | b"nsimeq" | b"NotTildeEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x44');
+                        push_char('\u{2244}');
                     }
                     b"cong" | b"TildeFullEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x45');
+                        push_char('\u{2245}');
                     }
                     b"simne" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x46');
+                        push_char('\u{2246}');
                     }
                     b"ncong" | b"NotTildeFullEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x47');
+                        push_char('\u{2247}');
                     }
                     b"asymp" | b"ap" | b"TildeTilde" | b"approx" | b"thkap" | b"thickapprox" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x48');
+                        push_char('\u{2248}');
                     }
                     b"nap" | b"NotTildeTilde" | b"napprox" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x49');
+                        push_char('\u{2249}');
                     }
                     b"ape" | b"approxeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{224A}');
                     }
                     b"apid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{224B}');
                     }
                     b"bcong" | b"backcong" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{224C}');
                     }
                     b"asympeq" | b"CupCap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4D');
+                        push_char('\u{224D}');
                     }
                     b"bump" | b"HumpDownHump" | b"Bumpeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4E');
+                        push_char('\u{224E}');
                     }
                     b"bumpe" | b"HumpEqual" | b"bumpeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4F');
+                        push_char('\u{224F}');
                     }
                     b"esdot" | b"DotEqual" | b"doteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x50');
+                        push_char('\u{2250}');
                     }
                     b"eDot" | b"doteqdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x51');
+                        push_char('\u{2251}');
                     }
                     b"efDot" | b"fallingdotseq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x52');
+                        push_char('\u{2252}');
                     }
                     b"erDot" | b"risingdotseq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x53');
+                        push_char('\u{2253}');
                     }
                     b"colone" | b"coloneq" | b"Assign" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x54');
+                        push_char('\u{2254}');
                     }
                     b"ecolon" | b"eqcolon" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x55');
+                        push_char('\u{2255}');
                     }
                     b"ecir" | b"eqcirc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x56');
+                        push_char('\u{2256}');
                     }
                     b"cire" | b"circeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2257}');
                     }
                     b"wedgeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x59');
+                        push_char('\u{2259}');
                     }
                     b"veeeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5A');
+                        push_char('\u{225A}');
                     }
                     b"trie" | b"triangleq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5C');
+                        push_char('\u{225C}');
                     }
                     b"equest" | b"questeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5F');
+                        push_char('\u{225F}');
                     }
                     b"ne" | b"NotEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x60');
+                        push_char('\u{2260}');
                     }
                     b"equiv" | b"Congruent" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x61');
+                        push_char('\u{2261}');
                     }
                     b"nequiv" | b"NotCongruent" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x62');
+                        push_char('\u{2262}');
                     }
                     b"le" | b"leq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x64');
+                        push_char('\u{2264}');
                     }
                     b"ge" | b"GreaterEqual" | b"geq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x65');
+                        push_char('\u{2265}');
                     }
                     b"lE" | b"LessFullEqual" | b"leqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x66');
+                        push_char('\u{2266}');
                     }
                     b"gE" | b"GreaterFullEqual" | b"geqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x67');
+                        push_char('\u{2267}');
                     }
                     b"lnE" | b"lneqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x68');
+                        push_char('\u{2268}');
                     }
                     b"gnE" | b"gneqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x69');
+                        push_char('\u{2269}');
                     }
                     b"Lt" | b"NestedLessLess" | b"ll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6A');
+                        push_char('\u{226A}');
                     }
                     b"Gt" | b"NestedGreaterGreater" | b"gg" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6B');
+                        push_char('\u{226B}');
                     }
                     b"twixt" | b"between" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6C');
+                        push_char('\u{226C}');
                     }
                     b"NotCupCap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6D');
+                        push_char('\u{226D}');
                     }
                     b"nlt" | b"NotLess" | b"nless" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6E');
+                        push_char('\u{226E}');
                     }
                     b"ngt" | b"NotGreater" | b"ngtr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6F');
+                        push_char('\u{226F}');
                     }
                     b"nle" | b"NotLessEqual" | b"nleq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x70');
+                        push_char('\u{2270}');
                     }
                     b"nge" | b"NotGreaterEqual" | b"ngeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x71');
+                        push_char('\u{2271}');
                     }
                     b"lsim" | b"LessTilde" | b"lesssim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x72');
+                        push_char('\u{2272}');
                     }
                     b"gsim" | b"gtrsim" | b"GreaterTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x73');
+                        push_char('\u{2273}');
                     }
                     b"nlsim" | b"NotLessTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x74');
+                        push_char('\u{2274}');
                     }
                     b"ngsim" | b"NotGreaterTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x75');
+                        push_char('\u{2275}');
                     }
                     b"lg" | b"lessgtr" | b"LessGreater" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x76');
+                        push_char('\u{2276}');
                     }
                     b"gl" | b"gtrless" | b"GreaterLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x77');
+                        push_char('\u{2277}');
                     }
                     b"ntlg" | b"NotLessGreater" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x78');
+                        push_char('\u{2278}');
                     }
                     b"ntgl" | b"NotGreaterLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x79');
+                        push_char('\u{2279}');
                     }
                     b"pr" | b"Precedes" | b"prec" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7A');
+                        push_char('\u{227A}');
                     }
                     b"sc" | b"Succeeds" | b"succ" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7B');
+                        push_char('\u{227B}');
                     }
                     b"prcue" | b"PrecedesSlantEqual" | b"preccurlyeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7C');
+                        push_char('\u{227C}');
                     }
                     b"sccue" | b"SucceedsSlantEqual" | b"succcurlyeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7D');
+                        push_char('\u{227D}');
                     }
                     b"prsim" | b"precsim" | b"PrecedesTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7E');
+                        push_char('\u{227E}');
                     }
                     b"scsim" | b"succsim" | b"SucceedsTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7F');
+                        push_char('\u{227F}');
                     }
                     b"npr" | b"nprec" | b"NotPrecedes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x80');
+                        push_char('\u{2280}');
                     }
                     b"nsc" | b"nsucc" | b"NotSucceeds" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x81');
+                        push_char('\u{2281}');
                     }
                     b"sub" | b"subset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x82');
+                        push_char('\u{2282}');
                     }
                     b"sup" | b"supset" | b"Superset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x83');
+                        push_char('\u{2283}');
                     }
                     b"nsub" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x84');
+                        push_char('\u{2284}');
                     }
                     b"nsup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x85');
+                        push_char('\u{2285}');
                     }
                     b"sube" | b"SubsetEqual" | b"subseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x86');
+                        push_char('\u{2286}');
                     }
                     b"supe" | b"supseteq" | b"SupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x87');
+                        push_char('\u{2287}');
                     }
                     b"nsube" | b"nsubseteq" | b"NotSubsetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x88');
+                        push_char('\u{2288}');
                     }
                     b"nsupe" | b"nsupseteq" | b"NotSupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x89');
+                        push_char('\u{2289}');
                     }
                     b"subne" | b"subsetneq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8A');
+                        push_char('\u{228A}');
                     }
                     b"supne" | b"supsetneq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8B');
+                        push_char('\u{228B}');
                     }
                     b"cupdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8D');
+                        push_char('\u{228D}');
                     }
                     b"uplus" | b"UnionPlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8E');
+                        push_char('\u{228E}');
                     }
                     b"sqsub" | b"SquareSubset" | b"sqsubset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8F');
+                        push_char('\u{228F}');
                     }
                     b"sqsup" | b"SquareSuperset" | b"sqsupset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x90');
+                        push_char('\u{2290}');
                     }
                     b"sqsube" | b"SquareSubsetEqual" | b"sqsubseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x91');
+                        push_char('\u{2291}');
                     }
                     b"sqsupe" | b"SquareSupersetEqual" | b"sqsupseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x92');
+                        push_char('\u{2292}');
                     }
                     b"sqcap" | b"SquareIntersection" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x93');
+                        push_char('\u{2293}');
                     }
                     b"sqcup" | b"SquareUnion" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x94');
+                        push_char('\u{2294}');
                     }
                     b"oplus" | b"CirclePlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x95');
+                        push_char('\u{2295}');
                     }
                     b"ominus" | b"CircleMinus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x96');
+                        push_char('\u{2296}');
                     }
                     b"otimes" | b"CircleTimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x97');
+                        push_char('\u{2297}');
                     }
                     b"osol" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x98');
+                        push_char('\u{2298}');
                     }
                     b"odot" | b"CircleDot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x99');
+                        push_char('\u{2299}');
                     }
                     b"ocir" | b"circledcirc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9A');
+                        push_char('\u{229A}');
                     }
                     b"oast" | b"circledast" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9B');
+                        push_char('\u{229B}');
                     }
                     b"odash" | b"circleddash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9D');
+                        push_char('\u{229D}');
                     }
                     b"plusb" | b"boxplus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9E');
+                        push_char('\u{229E}');
                     }
                     b"minusb" | b"boxminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9F');
+                        push_char('\u{229F}');
                     }
                     b"timesb" | b"boxtimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA0');
+                        push_char('\u{22A0}');
                     }
                     b"sdotb" | b"dotsquare" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA1');
+                        push_char('\u{22A1}');
                     }
                     b"vdash" | b"RightTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA2');
+                        push_char('\u{22A2}');
                     }
                     b"dashv" | b"LeftTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA3');
+                        push_char('\u{22A3}');
                     }
                     b"top" | b"DownTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA4');
+                        push_char('\u{22A4}');
                     }
                     b"bottom" | b"bot" | b"perp" | b"UpTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA5');
+                        push_char('\u{22A5}');
                     }
                     b"models" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA7');
+                        push_char('\u{22A7}');
                     }
                     b"vDash" | b"DoubleRightTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA8');
+                        push_char('\u{22A8}');
                     }
                     b"Vdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA9');
+                        push_char('\u{22A9}');
                     }
                     b"Vvdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAA');
+                        push_char('\u{22AA}');
                     }
                     b"VDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAB');
+                        push_char('\u{22AB}');
                     }
                     b"nvdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAC');
+                        push_char('\u{22AC}');
                     }
                     b"nvDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAD');
+                        push_char('\u{22AD}');
                     }
                     b"nVdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAE');
+                        push_char('\u{22AE}');
                     }
                     b"nVDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAF');
+                        push_char('\u{22AF}');
                     }
                     b"prurel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB0');
+                        push_char('\u{22B0}');
                     }
                     b"vltri" | b"vartriangleleft" | b"LeftTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB2');
+                        push_char('\u{22B2}');
                     }
                     b"vrtri" | b"vartriangleright" | b"RightTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB3');
+                        push_char('\u{22B3}');
                     }
                     b"ltrie" | b"trianglelefteq" | b"LeftTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB4');
+                        push_char('\u{22B4}');
                     }
                     b"rtrie" | b"trianglerighteq" | b"RightTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{22B5}');
                     }
                     b"origof" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB6');
+                        push_char('\u{22B6}');
                     }
                     b"imof" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB7');
+                        push_char('\u{22B7}');
                     }
                     b"mumap" | b"multimap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB8');
+                        push_char('\u{22B8}');
                     }
                     b"hercon" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB9');
+                        push_char('\u{22B9}');
                     }
                     b"intcal" | b"intercal" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBA');
+                        push_char('\u{22BA}');
                     }
                     b"veebar" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBB');
+                        push_char('\u{22BB}');
                     }
                     b"barvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBD');
+                        push_char('\u{22BD}');
                     }
                     b"angrtvb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBE');
+                        push_char('\u{22BE}');
                     }
                     b"lrtri" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBF');
+                        push_char('\u{22BF}');
                     }
                     b"xwedge" | b"Wedge" | b"bigwedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC0');
+                        push_char('\u{22C0}');
                     }
                     b"xvee" | b"Vee" | b"bigvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC1');
+                        push_char('\u{22C1}');
                     }
                     b"xcap" | b"Intersection" | b"bigcap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC2');
+                        push_char('\u{22C2}');
                     }
                     b"xcup" | b"Union" | b"bigcup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC3');
+                        push_char('\u{22C3}');
                     }
                     b"diam" | b"diamond" | b"Diamond" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC4');
+                        push_char('\u{22C4}');
                     }
                     b"sdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC5');
+                        push_char('\u{22C5}');
                     }
                     b"sstarf" | b"Star" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC6');
+                        push_char('\u{22C6}');
                     }
                     b"divonx" | b"divideontimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC7');
+                        push_char('\u{22C7}');
                     }
                     b"bowtie" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC8');
+                        push_char('\u{22C8}');
                     }
                     b"ltimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC9');
+                        push_char('\u{22C9}');
                     }
                     b"rtimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCA');
+                        push_char('\u{22CA}');
                     }
                     b"lthree" | b"leftthreetimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCB');
+                        push_char('\u{22CB}');
                     }
                     b"rthree" | b"rightthreetimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCC');
+                        push_char('\u{22CC}');
                     }
                     b"bsime" | b"backsimeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCD');
+                        push_char('\u{22CD}');
                     }
                     b"cuvee" | b"curlyvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCE');
+                        push_char('\u{22CE}');
                     }
                     b"cuwed" | b"curlywedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCF');
+                        push_char('\u{22CF}');
                     }
                     b"Sub" | b"Subset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD0');
+                        push_char('\u{22D0}');
                     }
                     b"Sup" | b"Supset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD1');
+                        push_char('\u{22D1}');
                     }
                     b"Cap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD2');
+                        push_char('\u{22D2}');
                     }
                     b"Cup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD3');
+                        push_char('\u{22D3}');
                     }
                     b"fork" | b"pitchfork" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD4');
+                        push_char('\u{22D4}');
                     }
                     b"epar" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD5');
+                        push_char('\u{22D5}');
                     }
                     b"ltdot" | b"lessdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD6');
+                        push_char('\u{22D6}');
                     }
                     b"gtdot" | b"gtrdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD7');
+                        push_char('\u{22D7}');
                     }
                     b"Ll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD8');
+                        push_char('\u{22D8}');
                     }
                     b"Gg" | b"ggg" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD9');
+                        push_char('\u{22D9}');
                     }
                     b"leg" | b"LessEqualGreater" | b"lesseqgtr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDA');
+                        push_char('\u{22DA}');
                     }
                     b"gel" | b"gtreqless" | b"GreaterEqualLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDB');
+                        push_char('\u{22DB}');
                     }
                     b"cuepr" | b"curlyeqprec" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDE');
+                        push_char('\u{22DE}');
                     }
                     b"cuesc" | b"curlyeqsucc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDF');
+                        push_char('\u{22DF}');
                     }
                     b"nprcue" | b"NotPrecedesSlantEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE0');
+                        push_char('\u{22E0}');
                     }
                     b"nsccue" | b"NotSucceedsSlantEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE1');
+                        push_char('\u{22E1}');
                     }
                     b"nsqsube" | b"NotSquareSubsetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE2');
+                        push_char('\u{22E2}');
                     }
                     b"nsqsupe" | b"NotSquareSupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE3');
+                        push_char('\u{22E3}');
                     }
                     b"lnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE6');
+                        push_char('\u{22E6}');
                     }
                     b"gnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE7');
+                        push_char('\u{22E7}');
                     }
                     b"prnsim" | b"precnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE8');
+                        push_char('\u{22E8}');
                     }
                     b"scnsim" | b"succnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE9');
+                        push_char('\u{22E9}');
                     }
                     b"nltri" | b"ntriangleleft" | b"NotLeftTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEA');
+                        push_char('\u{22EA}');
                     }
                     b"nrtri" | b"ntriangleright" | b"NotRightTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEB');
+                        push_char('\u{22EB}');
                     }
                     b"nltrie" | b"ntrianglelefteq" | b"NotLeftTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEC');
+                        push_char('\u{22EC}');
                     }
                     b"nrtrie" | b"ntrianglerighteq" | b"NotRightTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xED');
+                        push_char('\u{22ED}');
                     }
                     b"vellip" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEE');
+                        push_char('\u{22EE}');
                     }
                     b"ctdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEF');
+                        push_char('\u{22EF}');
                     }
                     b"utdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF0');
+                        push_char('\u{22F0}');
                     }
                     b"dtdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF1');
+                        push_char('\u{22F1}');
                     }
                     b"disin" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF2');
+                        push_char('\u{22F2}');
                     }
                     b"isinsv" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF3');
+                        push_char('\u{22F3}');
                     }
                     b"isins" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF4');
+                        push_char('\u{22F4}');
                     }
                     b"isindot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF5');
+                        push_char('\u{22F5}');
                     }
                     b"notinvc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF6');
+                        push_char('\u{22F6}');
                     }
                     b"notinvb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF7');
+                        push_char('\u{22F7}');
                     }
                     b"isinE" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF9');
+                        push_char('\u{22F9}');
                     }
                     b"nisd" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFA');
+                        push_char('\u{22FA}');
                     }
                     b"xnis" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFB');
+                        push_char('\u{22FB}');
                     }
                     b"nis" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFC');
+                        push_char('\u{22FC}');
                     }
                     b"notnivc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFD');
+                        push_char('\u{22FD}');
                     }
                     b"notnivb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFE');
+                        push_char('\u{22FE}');
                     }
                     b"barwed" | b"barwedge" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2305}');
                     }
                     b"Barwed" | b"doublebarwedge" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x06');
+                        push_char('\u{2306}');
                     }
                     b"lceil" | b"LeftCeiling" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x08');
+                        push_char('\u{2308}');
                     }
                     b"rceil" | b"RightCeiling" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x09');
+                        push_char('\u{2309}');
                     }
                     b"lfloor" | b"LeftFloor" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0A');
+                        push_char('\u{230A}');
                     }
                     b"rfloor" | b"RightFloor" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0B');
+                        push_char('\u{230B}');
                     }
                     b"drcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{230C}');
                     }
                     b"dlcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0D');
+                        push_char('\u{230D}');
                     }
                     b"urcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0E');
+                        push_char('\u{230E}');
                     }
                     b"ulcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0F');
+                        push_char('\u{230F}');
                     }
                     b"bnot" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2310}');
                     }
                     b"profline" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x12');
+                        push_char('\u{2312}');
                     }
                     b"profsurf" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2313}');
                     }
                     b"telrec" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x15');
+                        push_char('\u{2315}');
                     }
                     b"target" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2316}');
                     }
                     b"ulcorn" | b"ulcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1C');
+                        push_char('\u{231C}');
                     }
                     b"urcorn" | b"urcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1D');
+                        push_char('\u{231D}');
                     }
                     b"dlcorn" | b"llcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1E');
+                        push_char('\u{231E}');
                     }
                     b"drcorn" | b"lrcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1F');
+                        push_char('\u{231F}');
                     }
                     b"frown" | b"sfrown" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x22');
+                        push_char('\u{2322}');
                     }
                     b"smile" | b"ssmile" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x23');
+                        push_char('\u{2323}');
                     }
                     b"cylcty" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x2D');
+                        push_char('\u{232D}');
                     }
                     b"profalar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x2E');
+                        push_char('\u{232E}');
                     }
                     b"topbot" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2336}');
                     }
                     b"ovbar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x3D');
+                        push_char('\u{233D}');
                     }
                     b"solbar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x3F');
+                        push_char('\u{233F}');
                     }
                     b"angzarr" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x7C');
+                        push_char('\u{237C}');
                     }
                     b"lmoust" | b"lmoustache" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB0');
+                        push_char('\u{23B0}');
                     }
                     b"rmoust" | b"rmoustache" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB1');
+                        push_char('\u{23B1}');
                     }
                     b"tbrk" | b"OverBracket" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB4');
+                        push_char('\u{23B4}');
                     }
                     b"bbrk" | b"UnderBracket" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{23B5}');
                     }
                     b"bbrktbrk" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB6');
+                        push_char('\u{23B6}');
                     }
                     b"OverParenthesis" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDC');
+                        push_char('\u{23DC}');
                     }
                     b"UnderParenthesis" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDD');
+                        push_char('\u{23DD}');
                     }
                     b"OverBrace" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDE');
+                        push_char('\u{23DE}');
                     }
                     b"UnderBrace" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDF');
+                        push_char('\u{23DF}');
                     }
                     b"trpezium" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xE2');
+                        push_char('\u{23E2}');
                     }
                     b"elinters" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xE7');
+                        push_char('\u{23E7}');
                     }
                     b"blank" => {
-                        unescaped.push(b'\x24');
-                        unescaped.push(b'\x23');
+                        push_char('\u{2423}');
                     }
                     b"oS" | b"circledS" => {
-                        unescaped.push(b'\x24');
-                        unescaped.push(b'\xC8');
+                        push_char('\u{24C8}');
                     }
                     b"boxh" | b"HorizontalLine" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x00');
+                        push_char('\u{2500}');
                     }
                     b"boxv" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2502}');
                     }
                     b"boxdr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{250C}');
                     }
                     b"boxdl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2510}');
                     }
                     b"boxur" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x14');
+                        push_char('\u{2514}');
                     }
                     b"boxul" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x18');
+                        push_char('\u{2518}');
                     }
                     b"boxvr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x1C');
+                        push_char('\u{251C}');
                     }
                     b"boxvl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x24');
+                        push_char('\u{2524}');
                     }
                     b"boxhd" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x2C');
+                        push_char('\u{252C}');
                     }
                     b"boxhu" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x34');
+                        push_char('\u{2534}');
                     }
                     b"boxvh" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x3C');
+                        push_char('\u{253C}');
                     }
                     b"boxH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x50');
+                        push_char('\u{2550}');
                     }
                     b"boxV" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x51');
+                        push_char('\u{2551}');
                     }
                     b"boxdR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x52');
+                        push_char('\u{2552}');
                     }
                     b"boxDr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x53');
+                        push_char('\u{2553}');
                     }
                     b"boxDR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x54');
+                        push_char('\u{2554}');
                     }
                     b"boxdL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x55');
+                        push_char('\u{2555}');
                     }
                     b"boxDl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x56');
+                        push_char('\u{2556}');
                     }
                     b"boxDL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2557}');
                     }
                     b"boxuR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x58');
+                        push_char('\u{2558}');
                     }
                     b"boxUr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x59');
+                        push_char('\u{2559}');
                     }
                     b"boxUR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5A');
+                        push_char('\u{255A}');
                     }
                     b"boxuL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5B');
+                        push_char('\u{255B}');
                     }
                     b"boxUl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5C');
+                        push_char('\u{255C}');
                     }
                     b"boxUL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5D');
+                        push_char('\u{255D}');
                     }
                     b"boxvR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5E');
+                        push_char('\u{255E}');
                     }
                     b"boxVr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5F');
+                        push_char('\u{255F}');
                     }
                     b"boxVR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x60');
+                        push_char('\u{2560}');
                     }
                     b"boxvL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x61');
+                        push_char('\u{2561}');
                     }
                     b"boxVl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x62');
+                        push_char('\u{2562}');
                     }
                     b"boxVL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x63');
+                        push_char('\u{2563}');
                     }
                     b"boxHd" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x64');
+                        push_char('\u{2564}');
                     }
                     b"boxhD" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x65');
+                        push_char('\u{2565}');
                     }
                     b"boxHD" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x66');
+                        push_char('\u{2566}');
                     }
                     b"boxHu" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x67');
+                        push_char('\u{2567}');
                     }
                     b"boxhU" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x68');
+                        push_char('\u{2568}');
                     }
                     b"boxHU" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x69');
+                        push_char('\u{2569}');
                     }
                     b"boxvH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6A');
+                        push_char('\u{256A}');
                     }
                     b"boxVh" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6B');
+                        push_char('\u{256B}');
                     }
                     b"boxVH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6C');
+                        push_char('\u{256C}');
                     }
                     b"uhblk" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x80');
+                        push_char('\u{2580}');
                     }
                     b"lhblk" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x84');
+                        push_char('\u{2584}');
                     }
                     b"block" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x88');
+                        push_char('\u{2588}');
                     }
                     b"blk14" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x91');
+                        push_char('\u{2591}');
                     }
                     b"blk12" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x92');
+                        push_char('\u{2592}');
                     }
                     b"blk34" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x93');
+                        push_char('\u{2593}');
                     }
                     b"squ" | b"square" | b"Square" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xA1');
+                        push_char('\u{25A1}');
                     }
                     b"squf" | b"squarf" | b"blacksquare" | b"FilledVerySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAA');
+                        push_char('\u{25AA}');
                     }
                     b"EmptyVerySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAB');
+                        push_char('\u{25AB}');
                     }
                     b"rect" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAD');
+                        push_char('\u{25AD}');
                     }
                     b"marker" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAE');
+                        push_char('\u{25AE}');
                     }
                     b"fltns" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB1');
+                        push_char('\u{25B1}');
                     }
                     b"xutri" | b"bigtriangleup" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB3');
+                        push_char('\u{25B3}');
                     }
                     b"utrif" | b"blacktriangle" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB4');
+                        push_char('\u{25B4}');
                     }
                     b"utri" | b"triangle" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{25B5}');
                     }
                     b"rtrif" | b"blacktriangleright" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB8');
+                        push_char('\u{25B8}');
                     }
                     b"rtri" | b"triangleright" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB9');
+                        push_char('\u{25B9}');
                     }
                     b"xdtri" | b"bigtriangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBD');
+                        push_char('\u{25BD}');
                     }
                     b"dtrif" | b"blacktriangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBE');
+                        push_char('\u{25BE}');
                     }
                     b"dtri" | b"triangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBF');
+                        push_char('\u{25BF}');
                     }
                     b"ltrif" | b"blacktriangleleft" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xC2');
+                        push_char('\u{25C2}');
                     }
                     b"ltri" | b"triangleleft" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xC3');
+                        push_char('\u{25C3}');
                     }
                     b"loz" | b"lozenge" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xCA');
+                        push_char('\u{25CA}');
                     }
                     b"cir" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xCB');
+                        push_char('\u{25CB}');
                     }
                     b"tridot" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xEC');
+                        push_char('\u{25EC}');
                     }
                     b"xcirc" | b"bigcirc" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xEF');
+                        push_char('\u{25EF}');
                     }
                     b"ultri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xF8');
+                        push_char('\u{25F8}');
                     }
                     b"urtri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xF9');
+                        push_char('\u{25F9}');
                     }
                     b"lltri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFA');
+                        push_char('\u{25FA}');
                     }
                     b"EmptySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFB');
+                        push_char('\u{25FB}');
                     }
                     b"FilledSmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFC');
+                        push_char('\u{25FC}');
                     }
                     b"starf" | b"bigstar" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2605}');
                     }
                     b"star" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x06');
+                        push_char('\u{2606}');
                     }
                     b"phone" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x0E');
+                        push_char('\u{260E}');
                     }
                     b"female" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x40');
+                        push_char('\u{2640}');
                     }
                     b"male" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x42');
+                        push_char('\u{2642}');
                     }
                     b"spades" | b"spadesuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x60');
+                        push_char('\u{2660}');
                     }
                     b"clubs" | b"clubsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x63');
+                        push_char('\u{2663}');
                     }
                     b"hearts" | b"heartsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x65');
+                        push_char('\u{2665}');
                     }
                     b"diams" | b"diamondsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x66');
+                        push_char('\u{2666}');
                     }
                     b"sung" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6A');
+                        push_char('\u{266A}');
                     }
                     b"flat" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6D');
+                        push_char('\u{266D}');
                     }
                     b"natur" | b"natural" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6E');
+                        push_char('\u{266E}');
                     }
                     b"sharp" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6F');
+                        push_char('\u{266F}');
                     }
                     b"check" | b"checkmark" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2713}');
                     }
                     b"cross" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x17');
+                        push_char('\u{2717}');
                     }
                     b"malt" | b"maltese" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x20');
+                        push_char('\u{2720}');
                     }
                     b"sext" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2736}');
                     }
                     b"VerticalSeparator" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x58');
+                        push_char('\u{2758}');
                     }
                     b"lbbrk" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x72');
+                        push_char('\u{2772}');
                     }
                     b"rbbrk" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x73');
+                        push_char('\u{2773}');
                     }
                     b"lobrk" | b"LeftDoubleBracket" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE6');
+                        push_char('\u{27E6}');
                     }
                     b"robrk" | b"RightDoubleBracket" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE7');
+                        push_char('\u{27E7}');
                     }
                     b"lang" | b"LeftAngleBracket" | b"langle" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE8');
+                        push_char('\u{27E8}');
                     }
                     b"rang" | b"RightAngleBracket" | b"rangle" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE9');
+                        push_char('\u{27E9}');
                     }
                     b"Lang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEA');
+                        push_char('\u{27EA}');
                     }
                     b"Rang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEB');
+                        push_char('\u{27EB}');
                     }
                     b"loang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEC');
+                        push_char('\u{27EC}');
                     }
                     b"roang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xED');
+                        push_char('\u{27ED}');
                     }
                     b"xlarr" | b"longleftarrow" | b"LongLeftArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF5');
+                        push_char('\u{27F5}');
                     }
                     b"xrarr" | b"longrightarrow" | b"LongRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF6');
+                        push_char('\u{27F6}');
                     }
                     b"xharr" | b"longleftrightarrow" | b"LongLeftRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF7');
+                        push_char('\u{27F7}');
                     }
                     b"xlArr" | b"Longleftarrow" | b"DoubleLongLeftArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF8');
+                        push_char('\u{27F8}');
                     }
                     b"xrArr" | b"Longrightarrow" | b"DoubleLongRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF9');
+                        push_char('\u{27F9}');
                     }
                     b"xhArr" | b"Longleftrightarrow" | b"DoubleLongLeftRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFA');
+                        push_char('\u{27FA}');
                     }
                     b"xmap" | b"longmapsto" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFC');
+                        push_char('\u{27FC}');
                     }
                     b"dzigrarr" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFF');
+                        push_char('\u{27FF}');
                     }
                     b"nvlArr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2902}');
                     }
                     b"nvrArr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x03');
+                        push_char('\u{2903}');
                     }
                     b"nvHarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x04');
+                        push_char('\u{2904}');
                     }
                     b"Map" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x05');
+                        push_char('\u{2905}');
                     }
                     b"lbarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{290C}');
                     }
                     b"rbarr" | b"bkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0D');
+                        push_char('\u{290D}');
                     }
                     b"lBarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0E');
+                        push_char('\u{290E}');
                     }
                     b"rBarr" | b"dbkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0F');
+                        push_char('\u{290F}');
                     }
                     b"RBarr" | b"drbkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2910}');
                     }
                     b"DDotrahd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x11');
+                        push_char('\u{2911}');
                     }
                     b"UpArrowBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x12');
+                        push_char('\u{2912}');
                     }
                     b"DownArrowBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2913}');
                     }
                     b"Rarrtl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2916}');
                     }
                     b"latail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x19');
+                        push_char('\u{2919}');
                     }
                     b"ratail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1A');
+                        push_char('\u{291A}');
                     }
                     b"lAtail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1B');
+                        push_char('\u{291B}');
                     }
                     b"rAtail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1C');
+                        push_char('\u{291C}');
                     }
                     b"larrfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1D');
+                        push_char('\u{291D}');
                     }
                     b"rarrfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1E');
+                        push_char('\u{291E}');
                     }
                     b"larrbfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1F');
+                        push_char('\u{291F}');
                     }
                     b"rarrbfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x20');
+                        push_char('\u{2920}');
                     }
                     b"nwarhk" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x23');
+                        push_char('\u{2923}');
                     }
                     b"nearhk" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x24');
+                        push_char('\u{2924}');
                     }
                     b"searhk" | b"hksearow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x25');
+                        push_char('\u{2925}');
                     }
                     b"swarhk" | b"hkswarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x26');
+                        push_char('\u{2926}');
                     }
                     b"nwnear" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x27');
+                        push_char('\u{2927}');
                     }
                     b"nesear" | b"toea" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x28');
+                        push_char('\u{2928}');
                     }
                     b"seswar" | b"tosa" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x29');
+                        push_char('\u{2929}');
                     }
                     b"swnwar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x2A');
+                        push_char('\u{292A}');
                     }
                     b"rarrc" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x33');
+                        push_char('\u{2933}');
                     }
                     b"cudarrr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x35');
+                        push_char('\u{2935}');
                     }
                     b"ldca" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2936}');
                     }
                     b"rdca" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x37');
+                        push_char('\u{2937}');
                     }
                     b"cudarrl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x38');
+                        push_char('\u{2938}');
                     }
                     b"larrpl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x39');
+                        push_char('\u{2939}');
                     }
                     b"curarrm" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x3C');
+                        push_char('\u{293C}');
                     }
                     b"cularrp" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x3D');
+                        push_char('\u{293D}');
                     }
                     b"rarrpl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x45');
+                        push_char('\u{2945}');
                     }
                     b"harrcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x48');
+                        push_char('\u{2948}');
                     }
                     b"Uarrocir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x49');
+                        push_char('\u{2949}');
                     }
                     b"lurdshar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{294A}');
                     }
                     b"ldrushar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{294B}');
                     }
                     b"LeftRightVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4E');
+                        push_char('\u{294E}');
                     }
                     b"RightUpDownVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4F');
+                        push_char('\u{294F}');
                     }
                     b"DownLeftRightVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x50');
+                        push_char('\u{2950}');
                     }
                     b"LeftUpDownVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x51');
+                        push_char('\u{2951}');
                     }
                     b"LeftVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x52');
+                        push_char('\u{2952}');
                     }
                     b"RightVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x53');
+                        push_char('\u{2953}');
                     }
                     b"RightUpVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x54');
+                        push_char('\u{2954}');
                     }
                     b"RightDownVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x55');
+                        push_char('\u{2955}');
                     }
                     b"DownLeftVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x56');
+                        push_char('\u{2956}');
                     }
                     b"DownRightVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2957}');
                     }
                     b"LeftUpVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x58');
+                        push_char('\u{2958}');
                     }
                     b"LeftDownVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x59');
+                        push_char('\u{2959}');
                     }
                     b"LeftTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5A');
+                        push_char('\u{295A}');
                     }
                     b"RightTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5B');
+                        push_char('\u{295B}');
                     }
                     b"RightUpTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5C');
+                        push_char('\u{295C}');
                     }
                     b"RightDownTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5D');
+                        push_char('\u{295D}');
                     }
                     b"DownLeftTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5E');
+                        push_char('\u{295E}');
                     }
                     b"DownRightTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5F');
+                        push_char('\u{295F}');
                     }
                     b"LeftUpTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x60');
+                        push_char('\u{2960}');
                     }
                     b"LeftDownTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x61');
+                        push_char('\u{2961}');
                     }
                     b"lHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x62');
+                        push_char('\u{2962}');
                     }
                     b"uHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x63');
+                        push_char('\u{2963}');
                     }
                     b"rHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x64');
+                        push_char('\u{2964}');
                     }
                     b"dHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x65');
+                        push_char('\u{2965}');
                     }
                     b"luruhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x66');
+                        push_char('\u{2966}');
                     }
                     b"ldrdhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x67');
+                        push_char('\u{2967}');
                     }
                     b"ruluhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x68');
+                        push_char('\u{2968}');
                     }
                     b"rdldhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x69');
+                        push_char('\u{2969}');
                     }
                     b"lharul" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6A');
+                        push_char('\u{296A}');
                     }
                     b"llhard" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6B');
+                        push_char('\u{296B}');
                     }
                     b"rharul" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6C');
+                        push_char('\u{296C}');
                     }
                     b"lrhard" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6D');
+                        push_char('\u{296D}');
                     }
                     b"udhar" | b"UpEquilibrium" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6E');
+                        push_char('\u{296E}');
                     }
                     b"duhar" | b"ReverseUpEquilibrium" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6F');
+                        push_char('\u{296F}');
                     }
                     b"RoundImplies" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x70');
+                        push_char('\u{2970}');
                     }
                     b"erarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x71');
+                        push_char('\u{2971}');
                     }
                     b"simrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x72');
+                        push_char('\u{2972}');
                     }
                     b"larrsim" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x73');
+                        push_char('\u{2973}');
                     }
                     b"rarrsim" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x74');
+                        push_char('\u{2974}');
                     }
                     b"rarrap" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x75');
+                        push_char('\u{2975}');
                     }
                     b"ltlarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x76');
+                        push_char('\u{2976}');
                     }
                     b"gtrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x78');
+                        push_char('\u{2978}');
                     }
                     b"subrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x79');
+                        push_char('\u{2979}');
                     }
                     b"suplarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7B');
+                        push_char('\u{297B}');
                     }
                     b"lfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7C');
+                        push_char('\u{297C}');
                     }
                     b"rfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7D');
+                        push_char('\u{297D}');
                     }
                     b"ufisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7E');
+                        push_char('\u{297E}');
                     }
                     b"dfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7F');
+                        push_char('\u{297F}');
                     }
                     b"lopar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x85');
+                        push_char('\u{2985}');
                     }
                     b"ropar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x86');
+                        push_char('\u{2986}');
                     }
                     b"lbrke" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8B');
+                        push_char('\u{298B}');
                     }
                     b"rbrke" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8C');
+                        push_char('\u{298C}');
                     }
                     b"lbrkslu" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8D');
+                        push_char('\u{298D}');
                     }
                     b"rbrksld" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8E');
+                        push_char('\u{298E}');
                     }
                     b"lbrksld" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8F');
+                        push_char('\u{298F}');
                     }
                     b"rbrkslu" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x90');
+                        push_char('\u{2990}');
                     }
                     b"langd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x91');
+                        push_char('\u{2991}');
                     }
                     b"rangd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x92');
+                        push_char('\u{2992}');
                     }
                     b"lparlt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x93');
+                        push_char('\u{2993}');
                     }
                     b"rpargt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x94');
+                        push_char('\u{2994}');
                     }
                     b"gtlPar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x95');
+                        push_char('\u{2995}');
                     }
                     b"ltrPar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x96');
+                        push_char('\u{2996}');
                     }
                     b"vzigzag" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9A');
+                        push_char('\u{299A}');
                     }
                     b"vangrt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9C');
+                        push_char('\u{299C}');
                     }
                     b"angrtvbd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9D');
+                        push_char('\u{299D}');
                     }
                     b"ange" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA4');
+                        push_char('\u{29A4}');
                     }
                     b"range" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA5');
+                        push_char('\u{29A5}');
                     }
                     b"dwangle" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA6');
+                        push_char('\u{29A6}');
                     }
                     b"uwangle" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA7');
+                        push_char('\u{29A7}');
                     }
                     b"angmsdaa" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA8');
+                        push_char('\u{29A8}');
                     }
                     b"angmsdab" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA9');
+                        push_char('\u{29A9}');
                     }
                     b"angmsdac" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAA');
+                        push_char('\u{29AA}');
                     }
                     b"angmsdad" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAB');
+                        push_char('\u{29AB}');
                     }
                     b"angmsdae" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAC');
+                        push_char('\u{29AC}');
                     }
                     b"angmsdaf" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAD');
+                        push_char('\u{29AD}');
                     }
                     b"angmsdag" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAE');
+                        push_char('\u{29AE}');
                     }
                     b"angmsdah" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAF');
+                        push_char('\u{29AF}');
                     }
                     b"bemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB0');
+                        push_char('\u{29B0}');
                     }
                     b"demptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB1');
+                        push_char('\u{29B1}');
                     }
                     b"cemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB2');
+                        push_char('\u{29B2}');
                     }
                     b"raemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB3');
+                        push_char('\u{29B3}');
                     }
                     b"laemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB4');
+                        push_char('\u{29B4}');
                     }
                     b"ohbar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{29B5}');
                     }
                     b"omid" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB6');
+                        push_char('\u{29B6}');
                     }
                     b"opar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB7');
+                        push_char('\u{29B7}');
                     }
                     b"operp" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB9');
+                        push_char('\u{29B9}');
                     }
                     b"olcross" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBB');
+                        push_char('\u{29BB}');
                     }
                     b"odsold" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBC');
+                        push_char('\u{29BC}');
                     }
                     b"olcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBE');
+                        push_char('\u{29BE}');
                     }
                     b"ofcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBF');
+                        push_char('\u{29BF}');
                     }
                     b"olt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC0');
+                        push_char('\u{29C0}');
                     }
                     b"ogt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC1');
+                        push_char('\u{29C1}');
                     }
                     b"cirscir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC2');
+                        push_char('\u{29C2}');
                     }
                     b"cirE" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC3');
+                        push_char('\u{29C3}');
                     }
                     b"solb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC4');
+                        push_char('\u{29C4}');
                     }
                     b"bsolb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC5');
+                        push_char('\u{29C5}');
                     }
                     b"boxbox" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC9');
+                        push_char('\u{29C9}');
                     }
                     b"trisb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCD');
+                        push_char('\u{29CD}');
                     }
                     b"rtriltri" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCE');
+                        push_char('\u{29CE}');
                     }
                     b"LeftTriangleBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCF');
+                        push_char('\u{29CF}');
                     }
                     b"RightTriangleBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xD0');
+                        push_char('\u{29D0}');
                     }
                     b"race" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDA');
+                        push_char('\u{29DA}');
                     }
                     b"iinfin" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDC');
+                        push_char('\u{29DC}');
                     }
                     b"infintie" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDD');
+                        push_char('\u{29DD}');
                     }
                     b"nvinfin" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDE');
+                        push_char('\u{29DE}');
                     }
                     b"eparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE3');
+                        push_char('\u{29E3}');
                     }
                     b"smeparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE4');
+                        push_char('\u{29E4}');
                     }
                     b"eqvparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE5');
+                        push_char('\u{29E5}');
                     }
                     b"lozf" | b"blacklozenge" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xEB');
+                        push_char('\u{29EB}');
                     }
                     b"RuleDelayed" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xF4');
+                        push_char('\u{29F4}');
                     }
                     b"dsol" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xF6');
+                        push_char('\u{29F6}');
                     }
                     b"xodot" | b"bigodot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x00');
+                        push_char('\u{2A00}');
                     }
                     b"xoplus" | b"bigoplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x01');
+                        push_char('\u{2A01}');
                     }
                     b"xotime" | b"bigotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x02');
+                        push_char('\u{2A02}');
                     }
                     b"xuplus" | b"biguplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x04');
+                        push_char('\u{2A04}');
                     }
                     b"xsqcup" | b"bigsqcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x06');
+                        push_char('\u{2A06}');
                     }
                     b"qint" | b"iiiint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x0C');
+                        push_char('\u{2A0C}');
                     }
                     b"fpartint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x0D');
+                        push_char('\u{2A0D}');
                     }
                     b"cirfnint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x10');
+                        push_char('\u{2A10}');
                     }
                     b"awint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x11');
+                        push_char('\u{2A11}');
                     }
                     b"rppolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x12');
+                        push_char('\u{2A12}');
                     }
                     b"scpolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x13');
+                        push_char('\u{2A13}');
                     }
                     b"npolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x14');
+                        push_char('\u{2A14}');
                     }
                     b"pointint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x15');
+                        push_char('\u{2A15}');
                     }
                     b"quatint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x16');
+                        push_char('\u{2A16}');
                     }
                     b"intlarhk" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x17');
+                        push_char('\u{2A17}');
                     }
                     b"pluscir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x22');
+                        push_char('\u{2A22}');
                     }
                     b"plusacir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x23');
+                        push_char('\u{2A23}');
                     }
                     b"simplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x24');
+                        push_char('\u{2A24}');
                     }
                     b"plusdu" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x25');
+                        push_char('\u{2A25}');
                     }
                     b"plussim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x26');
+                        push_char('\u{2A26}');
                     }
                     b"plustwo" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x27');
+                        push_char('\u{2A27}');
                     }
                     b"mcomma" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x29');
+                        push_char('\u{2A29}');
                     }
                     b"minusdu" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2A');
+                        push_char('\u{2A2A}');
                     }
                     b"loplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2D');
+                        push_char('\u{2A2D}');
                     }
                     b"roplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2E');
+                        push_char('\u{2A2E}');
                     }
                     b"Cross" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2F');
+                        push_char('\u{2A2F}');
                     }
                     b"timesd" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x30');
+                        push_char('\u{2A30}');
                     }
                     b"timesbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x31');
+                        push_char('\u{2A31}');
                     }
                     b"smashp" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x33');
+                        push_char('\u{2A33}');
                     }
                     b"lotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x34');
+                        push_char('\u{2A34}');
                     }
                     b"rotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x35');
+                        push_char('\u{2A35}');
                     }
                     b"otimesas" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x36');
+                        push_char('\u{2A36}');
                     }
                     b"Otimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x37');
+                        push_char('\u{2A37}');
                     }
                     b"odiv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x38');
+                        push_char('\u{2A38}');
                     }
                     b"triplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x39');
+                        push_char('\u{2A39}');
                     }
                     b"triminus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3A');
+                        push_char('\u{2A3A}');
                     }
                     b"tritime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3B');
+                        push_char('\u{2A3B}');
                     }
                     b"iprod" | b"intprod" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3C');
+                        push_char('\u{2A3C}');
                     }
                     b"amalg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3F');
+                        push_char('\u{2A3F}');
                     }
                     b"capdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x40');
+                        push_char('\u{2A40}');
                     }
                     b"ncup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x42');
+                        push_char('\u{2A42}');
                     }
                     b"ncap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x43');
+                        push_char('\u{2A43}');
                     }
                     b"capand" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x44');
+                        push_char('\u{2A44}');
                     }
                     b"cupor" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x45');
+                        push_char('\u{2A45}');
                     }
                     b"cupcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x46');
+                        push_char('\u{2A46}');
                     }
                     b"capcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x47');
+                        push_char('\u{2A47}');
                     }
                     b"cupbrcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x48');
+                        push_char('\u{2A48}');
                     }
                     b"capbrcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x49');
+                        push_char('\u{2A49}');
                     }
                     b"cupcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{2A4A}');
                     }
                     b"capcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{2A4B}');
                     }
                     b"ccups" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{2A4C}');
                     }
                     b"ccaps" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4D');
+                        push_char('\u{2A4D}');
                     }
                     b"ccupssm" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x50');
+                        push_char('\u{2A50}');
                     }
                     b"And" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x53');
+                        push_char('\u{2A53}');
                     }
                     b"Or" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x54');
+                        push_char('\u{2A54}');
                     }
                     b"andand" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x55');
+                        push_char('\u{2A55}');
                     }
                     b"oror" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x56');
+                        push_char('\u{2A56}');
                     }
                     b"orslope" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x57');
+                        push_char('\u{2A57}');
                     }
                     b"andslope" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x58');
+                        push_char('\u{2A58}');
                     }
                     b"andv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5A');
+                        push_char('\u{2A5A}');
                     }
                     b"orv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5B');
+                        push_char('\u{2A5B}');
                     }
                     b"andd" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5C');
+                        push_char('\u{2A5C}');
                     }
                     b"ord" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5D');
+                        push_char('\u{2A5D}');
                     }
                     b"wedbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5F');
+                        push_char('\u{2A5F}');
                     }
                     b"sdote" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x66');
+                        push_char('\u{2A66}');
                     }
                     b"simdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6A');
+                        push_char('\u{2A6A}');
                     }
                     b"congdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6D');
+                        push_char('\u{2A6D}');
                     }
                     b"easter" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6E');
+                        push_char('\u{2A6E}');
                     }
                     b"apacir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6F');
+                        push_char('\u{2A6F}');
                     }
                     b"apE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x70');
+                        push_char('\u{2A70}');
                     }
                     b"eplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x71');
+                        push_char('\u{2A71}');
                     }
                     b"pluse" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x72');
+                        push_char('\u{2A72}');
                     }
                     b"Esim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x73');
+                        push_char('\u{2A73}');
                     }
                     b"Colone" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x74');
+                        push_char('\u{2A74}');
                     }
                     b"Equal" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x75');
+                        push_char('\u{2A75}');
                     }
                     b"eDDot" | b"ddotseq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x77');
+                        push_char('\u{2A77}');
                     }
                     b"equivDD" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x78');
+                        push_char('\u{2A78}');
                     }
                     b"ltcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x79');
+                        push_char('\u{2A79}');
                     }
                     b"gtcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7A');
+                        push_char('\u{2A7A}');
                     }
                     b"ltquest" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7B');
+                        push_char('\u{2A7B}');
                     }
                     b"gtquest" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7C');
+                        push_char('\u{2A7C}');
                     }
                     b"les" | b"LessSlantEqual" | b"leqslant" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7D');
+                        push_char('\u{2A7D}');
                     }
                     b"ges" | b"GreaterSlantEqual" | b"geqslant" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7E');
+                        push_char('\u{2A7E}');
                     }
                     b"lesdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7F');
+                        push_char('\u{2A7F}');
                     }
                     b"gesdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x80');
+                        push_char('\u{2A80}');
                     }
                     b"lesdoto" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x81');
+                        push_char('\u{2A81}');
                     }
                     b"gesdoto" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x82');
+                        push_char('\u{2A82}');
                     }
                     b"lesdotor" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x83');
+                        push_char('\u{2A83}');
                     }
                     b"gesdotol" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x84');
+                        push_char('\u{2A84}');
                     }
                     b"lap" | b"lessapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x85');
+                        push_char('\u{2A85}');
                     }
                     b"gap" | b"gtrapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x86');
+                        push_char('\u{2A86}');
                     }
                     b"lne" | b"lneq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x87');
+                        push_char('\u{2A87}');
                     }
                     b"gne" | b"gneq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x88');
+                        push_char('\u{2A88}');
                     }
                     b"lnap" | b"lnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x89');
+                        push_char('\u{2A89}');
                     }
                     b"gnap" | b"gnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8A');
+                        push_char('\u{2A8A}');
                     }
                     b"lEg" | b"lesseqqgtr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8B');
+                        push_char('\u{2A8B}');
                     }
                     b"gEl" | b"gtreqqless" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8C');
+                        push_char('\u{2A8C}');
                     }
                     b"lsime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8D');
+                        push_char('\u{2A8D}');
                     }
                     b"gsime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8E');
+                        push_char('\u{2A8E}');
                     }
                     b"lsimg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8F');
+                        push_char('\u{2A8F}');
                     }
                     b"gsiml" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x90');
+                        push_char('\u{2A90}');
                     }
                     b"lgE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x91');
+                        push_char('\u{2A91}');
                     }
                     b"glE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x92');
+                        push_char('\u{2A92}');
                     }
                     b"lesges" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x93');
+                        push_char('\u{2A93}');
                     }
                     b"gesles" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x94');
+                        push_char('\u{2A94}');
                     }
                     b"els" | b"eqslantless" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x95');
+                        push_char('\u{2A95}');
                     }
                     b"egs" | b"eqslantgtr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x96');
+                        push_char('\u{2A96}');
                     }
                     b"elsdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x97');
+                        push_char('\u{2A97}');
                     }
                     b"egsdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x98');
+                        push_char('\u{2A98}');
                     }
                     b"el" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x99');
+                        push_char('\u{2A99}');
                     }
                     b"eg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9A');
+                        push_char('\u{2A9A}');
                     }
                     b"siml" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9D');
+                        push_char('\u{2A9D}');
                     }
                     b"simg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9E');
+                        push_char('\u{2A9E}');
                     }
                     b"simlE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9F');
+                        push_char('\u{2A9F}');
                     }
                     b"simgE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA0');
+                        push_char('\u{2AA0}');
                     }
                     b"LessLess" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA1');
+                        push_char('\u{2AA1}');
                     }
                     b"GreaterGreater" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA2');
+                        push_char('\u{2AA2}');
                     }
                     b"glj" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA4');
+                        push_char('\u{2AA4}');
                     }
                     b"gla" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA5');
+                        push_char('\u{2AA5}');
                     }
                     b"ltcc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA6');
+                        push_char('\u{2AA6}');
                     }
                     b"gtcc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA7');
+                        push_char('\u{2AA7}');
                     }
                     b"lescc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA8');
+                        push_char('\u{2AA8}');
                     }
                     b"gescc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA9');
+                        push_char('\u{2AA9}');
                     }
                     b"smt" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAA');
+                        push_char('\u{2AAA}');
                     }
                     b"lat" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAB');
+                        push_char('\u{2AAB}');
                     }
                     b"smte" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAC');
+                        push_char('\u{2AAC}');
                     }
                     b"late" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAD');
+                        push_char('\u{2AAD}');
                     }
                     b"bumpE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAE');
+                        push_char('\u{2AAE}');
                     }
                     b"pre" | b"preceq" | b"PrecedesEqual" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAF');
+                        push_char('\u{2AAF}');
                     }
                     b"sce" | b"succeq" | b"SucceedsEqual" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB0');
+                        push_char('\u{2AB0}');
                     }
                     b"prE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB3');
+                        push_char('\u{2AB3}');
                     }
                     b"scE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB4');
+                        push_char('\u{2AB4}');
                     }
                     b"prnE" | b"precneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB5');
+                        push_char('\u{2AB5}');
                     }
                     b"scnE" | b"succneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB6');
+                        push_char('\u{2AB6}');
                     }
                     b"prap" | b"precapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB7');
+                        push_char('\u{2AB7}');
                     }
                     b"scap" | b"succapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB8');
+                        push_char('\u{2AB8}');
                     }
                     b"prnap" | b"precnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB9');
+                        push_char('\u{2AB9}');
                     }
                     b"scnap" | b"succnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBA');
+                        push_char('\u{2ABA}');
                     }
                     b"Pr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBB');
+                        push_char('\u{2ABB}');
                     }
                     b"Sc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBC');
+                        push_char('\u{2ABC}');
                     }
                     b"subdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBD');
+                        push_char('\u{2ABD}');
                     }
                     b"supdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBE');
+                        push_char('\u{2ABE}');
                     }
                     b"subplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBF');
+                        push_char('\u{2ABF}');
                     }
                     b"supplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC0');
+                        push_char('\u{2AC0}');
                     }
                     b"submult" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC1');
+                        push_char('\u{2AC1}');
                     }
                     b"supmult" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC2');
+                        push_char('\u{2AC2}');
                     }
                     b"subedot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC3');
+                        push_char('\u{2AC3}');
                     }
                     b"supedot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC4');
+                        push_char('\u{2AC4}');
                     }
                     b"subE" | b"subseteqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC5');
+                        push_char('\u{2AC5}');
                     }
                     b"supE" | b"supseteqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC6');
+                        push_char('\u{2AC6}');
                     }
                     b"subsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC7');
+                        push_char('\u{2AC7}');
                     }
                     b"supsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC8');
+                        push_char('\u{2AC8}');
                     }
                     b"subnE" | b"subsetneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCB');
+                        push_char('\u{2ACB}');
                     }
                     b"supnE" | b"supsetneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCC');
+                        push_char('\u{2ACC}');
                     }
                     b"csub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCF');
+                        push_char('\u{2ACF}');
                     }
                     b"csup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD0');
+                        push_char('\u{2AD0}');
                     }
                     b"csube" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD1');
+                        push_char('\u{2AD1}');
                     }
                     b"csupe" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD2');
+                        push_char('\u{2AD2}');
                     }
                     b"subsup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD3');
+                        push_char('\u{2AD3}');
                     }
                     b"supsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD4');
+                        push_char('\u{2AD4}');
                     }
                     b"subsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD5');
+                        push_char('\u{2AD5}');
                     }
                     b"supsup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD6');
+                        push_char('\u{2AD6}');
                     }
                     b"suphsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD7');
+                        push_char('\u{2AD7}');
                     }
                     b"supdsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD8');
+                        push_char('\u{2AD8}');
                     }
                     b"forkv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD9');
+                        push_char('\u{2AD9}');
                     }
                     b"topfork" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xDA');
+                        push_char('\u{2ADA}');
                     }
                     b"mlcp" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xDB');
+                        push_char('\u{2ADB}');
                     }
                     b"Dashv" | b"DoubleLeftTee" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE4');
+                        push_char('\u{2AE4}');
                     }
                     b"Vdashl" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE6');
+                        push_char('\u{2AE6}');
                     }
                     b"Barv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE7');
+                        push_char('\u{2AE7}');
                     }
                     b"vBar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE8');
+                        push_char('\u{2AE8}');
                     }
                     b"vBarv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE9');
+                        push_char('\u{2AE9}');
                     }
                     b"Vbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEB');
+                        push_char('\u{2AEB}');
                     }
                     b"Not" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEC');
+                        push_char('\u{2AEC}');
                     }
                     b"bNot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xED');
+                        push_char('\u{2AED}');
                     }
                     b"rnmid" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEE');
+                        push_char('\u{2AEE}');
                     }
                     b"cirmid" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEF');
+                        push_char('\u{2AEF}');
                     }
                     b"midcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF0');
+                        push_char('\u{2AF0}');
                     }
                     b"topcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF1');
+                        push_char('\u{2AF1}');
                     }
                     b"nhpar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF2');
+                        push_char('\u{2AF2}');
                     }
                     b"parsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF3');
+                        push_char('\u{2AF3}');
                     }
                     b"parsl" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xFD');
+                        push_char('\u{2AFD}');
                     }
                     b"fflig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x00');
+                        push_char('\u{FB00}');
                     }
                     b"filig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x01');
+                        push_char('\u{FB01}');
                     }
                     b"fllig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x02');
+                        push_char('\u{FB02}');
                     }
                     b"ffilig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x03');
+                        push_char('\u{FB03}');
                     }
                     b"ffllig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x04');
+                        push_char('\u{FB04}');
                     }
                     b"Ascr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
+                        push_char('\u{1D49}');
                     }
                     b"Cscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
+                        push_char('\u{1D49}');
                     }
                     b"Dscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
+                        push_char('\u{1D49}');
                     }
                     b"Gscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Jscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Kscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Nscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Oscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Pscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Qscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Sscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Tscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
+                        push_char('\u{1D4A}');
                     }
                     b"Uscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"Vscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"Wscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"Xscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"Yscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"Zscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"ascr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"bscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"cscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"dscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"fscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"hscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"iscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"jscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
+                        push_char('\u{1D4B}');
                     }
                     b"kscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"lscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"mscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"nscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"pscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"qscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"rscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"sscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"tscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"uscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"vscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"wscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"xscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"yscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"zscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
+                        push_char('\u{1D4C}');
                     }
                     b"Afr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Bfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Dfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Efr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Ffr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Gfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Jfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Kfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Lfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
+                        push_char('\u{1D50}');
                     }
                     b"Mfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Nfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Ofr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Pfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Qfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Sfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Tfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Ufr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Vfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Wfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Xfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"Yfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"afr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"bfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
+                        push_char('\u{1D51}');
                     }
                     b"cfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"dfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"efr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"ffr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"gfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"hfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"ifr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"jfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"kfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"lfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"mfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"nfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"ofr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"pfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"qfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"rfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
+                        push_char('\u{1D52}');
                     }
                     b"sfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"tfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"ufr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"vfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"wfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"xfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"yfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"zfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Aopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Bopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Dopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Eopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Fopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Gopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
+                        push_char('\u{1D53}');
                     }
                     b"Iopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Jopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Kopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Lopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Mopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Oopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Sopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Topf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Uopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Vopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Wopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Xopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
+                        push_char('\u{1D54}');
                     }
                     b"Yopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"aopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"bopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"copf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"dopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"eopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"fopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"gopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"hopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"iopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"jopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"kopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"lopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"mopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"nopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
+                        push_char('\u{1D55}');
                     }
                     b"oopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"popf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"qopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"ropf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"sopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"topf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"uopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"vopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"wopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"xopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"yopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     b"zopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
+                        push_char('\u{1D56}');
                     }
                     bytes if bytes.starts_with(b"#") => {
-                        let bytes = &bytes[1..];
-                        let code = if bytes.starts_with(b"x") {
-                            parse_hexadecimal(&bytes[1..])
-                        } else {
-                            parse_decimal(&bytes)
-                        }?;
-                        if code == 0 {
-                            return Err(EscapeError::EntityWithNull(start..end));
-                        }
-                        push_utf8(unescaped, code);
+                        push_char(parse_number(&bytes[1..], start..end)?);
                     }
                     bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
                         Some(value) => unescaped.extend_from_slice(&value),
@@ -5602,21 +4548,18 @@ pub fn do_unescape<'a>(
     }
 }
 
-fn push_utf8(buf: &mut Vec<u8>, code: u32) {
-    if code < MAX_ONE_B {
-        buf.push(code as u8);
-    } else if code < MAX_TWO_B {
-        buf.push((code >> 6 & 0x1F) as u8 | TAG_TWO_B);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
-    } else if code < MAX_THREE_B {
-        buf.push((code >> 12 & 0x0F) as u8 | TAG_THREE_B);
-        buf.push((code >> 6 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
+fn parse_number(bytes: &[u8], range: Range<usize>) -> Result<char, EscapeError> {
+    let code = if bytes.starts_with(b"x") {
+        parse_hexadecimal(&bytes[1..])
     } else {
-        buf.push((code >> 18 & 0x07) as u8 | TAG_FOUR_B);
-        buf.push((code >> 12 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code >> 6 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
+        parse_decimal(&bytes)
+    }?;
+    if code == 0 {
+        return Err(EscapeError::EntityWithNull(range));
+    }
+    match std::char::from_u32(code) {
+        Some(c) => Ok(c),
+        None => Err(EscapeError::InvalidCodepoint(code)),
     }
 }
 
