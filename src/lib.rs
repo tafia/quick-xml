@@ -126,8 +126,8 @@ mod errors;
 mod escapei;
 pub mod escape {
     //! Manage xml character escapes
-    pub(crate) use escapei::{do_unescape, EscapeError};
-    pub use escapei::{escape, unescape, unescape_with};
+    pub(crate) use crate::escapei::{do_unescape, EscapeError};
+    pub use crate::escapei::{escape, unescape, unescape_with};
 }
 pub mod events;
 mod reader;
@@ -138,7 +138,7 @@ mod writer;
 
 // reexports
 #[cfg(feature = "serialize")]
-pub use errors::serialize::DeError;
-pub use errors::{Error, Result};
-pub use reader::Reader;
-pub use writer::Writer;
+pub use crate::errors::serialize::DeError;
+pub use crate::errors::{Error, Result};
+pub use crate::reader::Reader;
+pub use crate::writer::Writer;
