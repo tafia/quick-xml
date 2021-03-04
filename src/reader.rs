@@ -2,10 +2,8 @@
 
 #[cfg(feature = "encoding")]
 use std::borrow::Cow;
-use std::fs::File;
 use std::io::{self, BufRead, BufReader};
-use std::path::Path;
-use std::str::from_utf8;
+use std::{fs::File, path::Path, str::from_utf8};
 
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
