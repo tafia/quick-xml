@@ -1,9 +1,7 @@
 //! A module to handle `Writer`
 
+use crate::{errors::Error, errors::Result, events::Event};
 use std::io::Write;
-
-use crate::errors::{Error, Result};
-use crate::events::Event;
 
 /// XML writer.
 ///

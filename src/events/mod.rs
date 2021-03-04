@@ -39,16 +39,11 @@ pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::ops::Deref;
-use std::str::from_utf8;
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
-use attributes::{Attribute, Attributes};
-use crate::errors::{Error, Result};
 use crate::escape::{do_unescape, escape};
-use crate::reader::Reader;
+use crate::{errors::Error, errors::Result, reader::Reader};
+use attributes::{Attribute, Attributes};
 
 use memchr;
 
@@ -359,7 +354,7 @@ impl<'a> BytesStart<'a> {
         for a in self.attributes() {
             let a = a?;
             if a.key == attr_name {
-                return Ok(Some(a))
+                return Ok(Some(a));
             }
         }
         Ok(None)
