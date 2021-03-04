@@ -318,6 +318,17 @@ impl<'a> BytesStart<'a> {
         self.buf.to_mut().truncate(self.name_len);
         self
     }
+
+    /// Try to get an attribute
+    pub fn try_attribute(&'a self, attr_name: &[u8]) -> Result<Option<Attribute<'a>>> {
+        for a in self.attributes() {
+            let a = a?;
+            if a.key == attr_name {
+                return Ok(Some(a))
+            }
+        }
+        Ok(None)
+    }
 }
 
 impl<'a> std::fmt::Debug for BytesStart<'a> {
