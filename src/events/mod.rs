@@ -350,7 +350,7 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Try to get an attribute
-    pub fn try_attribute(&'a self, attr_name: &[u8]) -> Result<Option<Attribute<'a>>> {
+    pub fn try_get_attribute(&'a self, attr_name: &[u8]) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes() {
             let a = a?;
             if a.key == attr_name {

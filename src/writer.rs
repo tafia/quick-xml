@@ -1,6 +1,6 @@
 //! A module to handle `Writer`
 
-use crate::{errors::Error, errors::Result, events::Event};
+use crate::{errors::Error, errors::Result, events::BytesEnd, events::BytesStart, events::Event};
 use std::io::Write;
 
 /// XML writer.
@@ -166,6 +166,22 @@ impl<W: Write> Writer<W> {
                 .write_all(&i.indents[..i.indents_len])
                 .map_err(Error::Io)?;
         }
+        Ok(())
+    }
+
+    /// Write event nested in another level:
+    /// ```xml
+    /// <parent_name>{event}</parent_name>
+    /// ```
+    pub fn write_nested_event<'a, N: AsRef<[u8]>, E: AsRef<Event<'a>>>(
+        &mut self,
+        parent_name: N,
+        event: E,
+    ) -> Result<()> {
+        let name = parent_name.as_ref();
+        self.write_event(Event::Start(BytesStart::borrowed(name, name.len())))?;
+        self.write_event(event)?;
+        self.write_event(Event::End(BytesEnd::borrowed(name)))?;
         Ok(())
     }
 }
