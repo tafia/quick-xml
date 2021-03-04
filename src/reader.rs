@@ -10,8 +10,8 @@ use std::str::from_utf8;
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
-use errors::{Error, Result};
-use events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::errors::{Error, Result};
+use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 

@@ -45,10 +45,10 @@ use std::io::BufRead;
 use std::ops::Deref;
 use std::str::from_utf8;
 
-use self::attributes::{Attribute, Attributes};
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::Reader;
+use attributes::{Attribute, Attributes};
+use crate::errors::{Error, Result};
+use crate::escape::{do_unescape, escape};
+use crate::reader::Reader;
 
 use memchr;
 

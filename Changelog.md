@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- style: convert to rust edition 2018
+
 ## 0.22.0
 
 - feat (breaking): Move html entity escape behind a `'escape-html'` feature to help with compilation
