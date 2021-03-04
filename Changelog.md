@@ -11,6 +11,7 @@
 ## Unreleased
 
 - style: convert to rust edition 2018
+- fix: don't encode multi byte escape characters as big endian
 
 ## 0.22.0
 
