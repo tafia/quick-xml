@@ -12,6 +12,9 @@
 
 - style: convert to rust edition 2018
 - fix: don't encode multi byte escape characters as big endian
+- feat: add `Writer::write_nested_event`
+- feat: add `BytesStart::try_get_attribute`
+- test: add more test on github actions
 
 ## 0.22.0
 
