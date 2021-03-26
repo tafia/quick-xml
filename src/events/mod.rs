@@ -315,10 +315,13 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Try to get an attribute
-    pub fn try_get_attribute(&'a self, attr_name: &[u8]) -> Result<Option<Attribute<'a>>> {
+    pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
+        &'a self,
+        attr_name: N,
+    ) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes() {
             let a = a?;
-            if a.key == attr_name {
+            if a.key == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
