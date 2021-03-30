@@ -92,7 +92,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust
     /// # use quick_xml::{Error, Writer};
     /// use quick_xml::events::{BytesStart, Event};
     ///
@@ -315,10 +315,13 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Try to get an attribute
-    pub fn try_get_attribute(&'a self, attr_name: &[u8]) -> Result<Option<Attribute<'a>>> {
+    pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
+        &'a self,
+        attr_name: N,
+    ) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes() {
             let a = a?;
-            if a.key == attr_name {
+            if a.key == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
@@ -802,7 +805,7 @@ pub enum Event<'a> {
 
 impl<'a> Event<'a> {
     /// Converts the event to an owned version, untied to the lifetime of
-    /// buffer used when reading but incurring a new, seperate allocation.
+    /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
         match self {
             Event::Start(e) => Event::Start(e.into_owned()),
