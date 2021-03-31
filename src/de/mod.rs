@@ -130,9 +130,14 @@ pub struct Deserializer<R: BufRead> {
     has_value_field: bool,
 }
 
-/// Deserialize a xml string
+/// Deserialize an instance of type T from a string of XML text.
 pub fn from_str<T: DeserializeOwned>(s: &str) -> Result<T, DeError> {
     from_reader(s.as_bytes())
+}
+
+/// Deserialize an instance of type T from bytes of XML text.
+pub fn from_slice<T: DeserializeOwned>(b: &[u8]) -> Result<T, DeError> {
+    from_reader(b)
 }
 
 /// Deserialize from a reader
