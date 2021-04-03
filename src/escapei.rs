@@ -63,6 +63,7 @@ impl std::error::Error for EscapeError {}
 /// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
 /// corresponding xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
     fn to_escape(b: u8) -> bool {
         match b {
             b'<' | b'>' | b'\'' | b'&' | b'"' => true,
@@ -70,10 +71,32 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
         }
     }
 
+    _escape(raw, to_escape)
+}
+
+/// Should only be used for escaping text content. In xml text content, it is allowed
+/// (though not recommended) to leave the quote special characters " and ' unescaped.
+/// This function escapes a `&[u8]` and replaces xml special characters (<, >, &) with
+/// their corresponding xml escaped value, but does not escape quote characters.
+pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
+    fn to_escape(b: u8) -> bool {
+        match b {
+            b'<' | b'>' | b'&' => true,
+            _ => false,
+        }
+    }
+
+    _escape(raw, to_escape)
+}
+
+/// Escapes a `&[u8]` and replaces a subset of xml special characters (<, >, &, ', ") with their
+/// corresponding xml escaped value.
+fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     let mut escaped = None;
     let mut bytes = raw.iter();
     let mut pos = 0;
-    while let Some(i) = bytes.position(|&b| to_escape(b)) {
+    while let Some(i) = bytes.position(|&b| escape_chars(b)) {
         if escaped.is_none() {
             escaped = Some(Vec::with_capacity(raw.len()));
         }
@@ -121,7 +144,7 @@ pub fn unescape_with<'a>(
 }
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using an optional dictionnary of custom entities.
+/// value, using an optional dictionary of custom entities.
 ///
 /// # Pre-condition
 ///
@@ -1737,5 +1760,17 @@ fn test_escape() {
     assert_eq!(
         &*escape(b"prefix_\"a\"b&<>c"),
         "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
+    );
+}
+
+#[test]
+fn test_partial_escape() {
+    assert_eq!(&*partial_escape(b"test"), b"test");
+    assert_eq!(&*partial_escape(b"<test>"), b"&lt;test&gt;");
+    assert_eq!(&*partial_escape(b"\"a\"bc"), b"\"a\"bc");
+    assert_eq!(&*partial_escape(b"\"a\"b&c"), b"\"a\"b&amp;c");
+    assert_eq!(
+        &*partial_escape(b"prefix_\"a\"b&<>c"),
+        "prefix_\"a\"b&amp;&lt;&gt;c".as_bytes()
     );
 }
