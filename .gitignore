@@ -1,3 +1,5 @@
 target
 .project
 Cargo.lock
+# macOS hidden files
+.DS_Store
