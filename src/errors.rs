@@ -33,7 +33,7 @@ pub enum Error {
     /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
     /// Escape error
-    EscapeError(::escape::EscapeError),
+    Escape(crate::escape::EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
@@ -101,7 +101,7 @@ impl std::fmt::Display for Error {
                  Duplicate attribute at position {1} and {0}",
                 pos1, pos2
             ),
-            Error::EscapeError(e) => write!(f, "{}", e),
+            Error::Escape(e) => write!(f, "{}", e),
         }
     }
 }
@@ -111,7 +111,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(e) => Some(e),
             Error::Utf8(e) => Some(e),
-            Error::EscapeError(e) => Some(e),
+            Error::Escape(e) => Some(e),
             _ => None,
         }
     }

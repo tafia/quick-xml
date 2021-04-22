@@ -105,40 +105,33 @@
 //!
 //! # Features
 //!
-//! quick-xml supports 2 additional features, non activated by default:
+//! quick-xml supports 3 additional features, non activated by default:
 //! - `encoding`: support non utf8 xmls
 //! - `serialize`: support serde `Serialize`/`Deserialize`
+//! - `asynchronous`: support async reading
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 
-#[cfg(feature = "encoding_rs")]
-extern crate encoding_rs;
-extern crate memchr;
-#[cfg(feature = "serialize")]
-extern crate serde;
-#[cfg(all(test, feature = "serialize"))]
-extern crate serde_value;
-
 #[cfg(feature = "serialize")]
 pub mod de;
-mod errors;
-mod escapei;
-pub mod escape {
-    //! Manage xml character escapes
-    pub(crate) use escapei::{do_unescape, EscapeError};
-    pub use escapei::{escape, unescape, unescape_with};
-}
-pub mod events;
-mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
+
+mod errors;
+mod escapei;
 mod utils;
 mod writer;
+
+pub mod escape;
+pub mod events;
+pub mod reader;
 
 // reexports
 #[cfg(feature = "serialize")]
 pub use errors::serialize::DeError;
 pub use errors::{Error, Result};
-pub use reader::Reader;
+#[cfg(feature = "asynchronous")]
+pub use reader::asynchronous::AsyncReader;
+pub use reader::sync::Reader;
 pub use writer::Writer;

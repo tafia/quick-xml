@@ -1,15 +1,10 @@
-extern crate quick_xml;
-#[cfg(feature = "serialize")]
-extern crate serde;
-
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::Reader;
-use std::borrow::Cow;
-use std::io::Cursor;
-
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::io::Cursor;
 
 #[test]
 fn test_sample() {
@@ -17,6 +12,26 @@ fn test_sample() {
     let mut buf = Vec::new();
     let mut r = Reader::from_reader(src);
     let mut count = 0;
+
+    loop {
+        match r.read_event(&mut buf).unwrap() {
+            Start(_) => count += 1,
+            Decl(e) => println!("{:?}", e.version()),
+            Eof => break,
+            _ => (),
+        }
+        buf.clear();
+    }
+    println!("{}", count);
+}
+
+#[test]
+fn test_sample_async() {
+    let src: &[u8] = include_bytes!("sample_rss.xml");
+    let mut buf = Vec::new();
+    let mut r = Reader::from_reader(src);
+    let mut count = 0;
+
     loop {
         match r.read_event(&mut buf).unwrap() {
             Start(_) => count += 1,
@@ -35,6 +50,7 @@ fn test_attributes_empty() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
@@ -67,6 +83,7 @@ fn test_attribute_equal() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
             let mut atts = e.attributes();
@@ -92,6 +109,7 @@ fn test_comment_starting_with_gt() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+
     loop {
         match r.read_event(&mut buf) {
             Ok(Comment(ref e)) if &**e == b">" => break,
@@ -157,6 +175,7 @@ fn test_attributes_empty_ns_expanded() {
     r.trim_text(true).expand_empty_elements(true);
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
+
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((None, Start(e))) => e,
@@ -319,6 +338,7 @@ fn test_default_ns_shadowing_expanded() {
         }
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
+
     // </outer>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((Some(ns), End(e))) => {
@@ -336,6 +356,7 @@ fn test_koi8_r_encoding() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
+
     loop {
         match r.read_event(&mut buf) {
             Ok(Text(e)) => {
@@ -355,6 +376,7 @@ fn fuzz_53() {
     let cursor = Cursor::new(data);
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
+
     loop {
         match reader.read_event(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
@@ -371,6 +393,7 @@ fn test_issue94() {
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
     let mut buf = vec![];
+
     loop {
         match reader.read_event(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
@@ -388,6 +411,7 @@ fn fuzz_101() {
     let cursor = Cursor::new(data);
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
+
     loop {
         match reader.read_event(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
@@ -420,6 +444,7 @@ fn test_default_namespace() {
     // <a>
     let mut buf = Vec::new();
     let mut ns_buf = Vec::new();
+
     if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
     } else {
         panic!("expecting outer start element with no namespace");
