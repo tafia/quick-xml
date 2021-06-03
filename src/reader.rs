@@ -142,7 +142,7 @@ impl<R: BufRead> Reader<R> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_text(&mut self, val: bool) -> &mut Reader<R> {
         self.trim_text_start = val;
         self.trim_text_end = val;
         self
@@ -155,7 +155,7 @@ impl<R: BufRead> Reader<R> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text_end(&mut self, val: bool) -> &mut Reader<B> {
+    pub fn trim_text_end(&mut self, val: bool) -> &mut Reader<R> {
         self.trim_text_end = val;
         self
     }
@@ -358,8 +358,8 @@ impl<R: BufRead> Reader<R> {
     /// Note: depending on the start of the Event, we may need to read more
     /// data, thus we need a mutable buffer
     fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let uncased_starts_with = |string, prefix| {
-            string.len() => prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
+        let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
+            string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
         };
 
         let len = buf.len();
@@ -379,7 +379,7 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
         } else if uncased_starts_with(buf, b"![CDATA[") {
             debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
-            Ok(Event::CData(BytesText::from_escaped(
+            Ok(Event::CData(BytesText::from_plain(
                 &buf[8..buf.len() - 2],
             )))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
@@ -1029,7 +1029,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         let bang_type = match self.peek_one()? {
             Some(b'[') => BangType::CData,
             Some(b'-') => BangType::Comment,
-            Some(b'D') => BangType::DocType,
+            Some(b'D') | Some(b'd') => BangType::DocType,
             Some(_) => return Err(Error::UnexpectedBang),
             None => return Err(Error::UnexpectedEof("Bang".to_string())),
         };

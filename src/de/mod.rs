@@ -319,7 +319,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         #[cfg(feature = "encoding")]
         {
             #[cfg(feature = "encoding")]
-            let value = self.reader.decode(&*txt);
+            let value = self.reader.decoder().decode(&*txt);
 
             match value.as_ref() {
                 "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
@@ -350,10 +350,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 
     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         let text = self.next_text()?;
-        let unescaped = text.unescaped()?;
-        let decoded = self.reader.decoder().decode(&unescaped)?;
-
-        visitor.visit_string(decoded.to_string())
+        let string = text.decode_and_escape(self.reader.decoder())?;
+        visitor.visit_string(string.into_owned())
     }
 
     fn deserialize_char<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -362,21 +360,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 
     fn deserialize_str<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         let text = self.next_text()?;
-        let unescaped = text.into_unescaped()?;
-
-        match unescaped {
-            Cow::Borrowed(unescaped) => {
-                // FIXME: Encoding has Cow instead
-                let decoded = self.reader.decoder().decode(unescaped)?;
-
-                visitor.visit_borrowed_str(decoded)
-            },
-            Cow::Owned(unescaped) => {
-                // FIXME: Encoding has Cow instead
-                let decoded = self.reader.decoder().decode_owned(unescaped)?;
-
-                visitor.visit_string(decoded)
-            },
+        let string = text.decode_and_escape(self.reader.decoder())?;
+        match string {
+            Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
+            Cow::Owned(string) => visitor.visit_string(string)
         }
     }
 
@@ -495,9 +482,7 @@ pub trait BorrowingReader<'i> where Self: 'i {
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError>;
 
     /// A copy of the reader's decoder used to decode strings.
-    fn decoder(&self) -> Decoder {
-        Decoder
-    }
+    fn decoder(&self) -> Decoder;
 }
 
 struct IoReader<R: BufRead> {
@@ -525,6 +510,10 @@ impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         Ok(self.reader.read_to_end(name, &mut self.buf)?)
     }
+
+    fn decoder(&self) -> Decoder {
+        self.reader.decoder()
+    }
 }
 
 struct SliceReader<'de> {
@@ -546,6 +535,10 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         Ok(self.reader.read_to_end_unbuffered(name)?)
+    }
+
+    fn decoder(&self) -> Decoder {
+        self.reader.decoder()
     }
 }
 

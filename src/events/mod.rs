@@ -42,7 +42,7 @@ use encoding_rs::Encoding;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
 use crate::escape::{do_unescape, escape};
-use crate::{errors::Error, errors::Result, reader::Reader};
+use crate::{errors::Error, errors::Result, reader::Reader, reader::Decoder};
 use attributes::{Attribute, Attributes};
 
 use memchr;
@@ -649,19 +649,35 @@ impl<'a> BytesText<'a> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
     }
 
-    /// gets escaped content
-    ///
-    /// Same as `unescaped()`, but will reuse the internal buffer when possible.
-    pub fn into_unescaped(self) -> Result<Cow<'a, [u8]>> {
-        match self.content {
-            Cow::Owned(bytes) => {
-                // TODO: Make unescape accept a Cow and reuse the owned string
-                unescape(&bytes)
-                    .map(|b| b.into_owned().into())
-                    .map_err(Error::EscapeError)
-            },
+    pub(crate) fn decode_and_escape(&self, decoder: Decoder) -> Result<Cow<'a, str>> {
+        let decoded = match &self.content {
             Cow::Borrowed(bytes) => {
-                unescape(bytes).map_err(Error::EscapeError)
+                #[cfg(feature = "encoding")] { decoder.decode(bytes) }
+                #[cfg(not(feature = "encoding"))] { decoder.decode(bytes)? }
+            }
+            Cow::Owned(bytes) => {
+                let decoded = decoder.decode(&bytes);
+                decoded.into_owned().into()
+            }
+        };
+
+        match decoded {
+            Cow::Borrowed(decoded) => {
+                let unescaped = do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                match unescaped {
+                    Cow::Borrowed(unescaped) => from_utf8(unescaped)
+                        .map(|s| s.into())
+                        .map_err(Error::Utf8),
+                    Cow::Owned(unescaped) => String::from_utf8(unescaped)
+                        .map(|s| s.into())
+                        .map_err(|e| Error::Utf8(e.utf8_error()))
+                }
+            }
+            Cow::Owned(decoded) => {
+                let unescaped = do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                String::from_utf8(unescaped.into_owned())
+                    .map(|s| s.into())
+                    .map_err(|e| Error::Utf8(e.utf8_error()))
             }
         }
     }
