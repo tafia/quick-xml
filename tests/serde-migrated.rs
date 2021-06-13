@@ -953,12 +953,12 @@ fn futile2() {
     #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
     struct Object {
         field: Option<Null>,
-    };
+    }
 
     #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
     struct Stuff {
         stuff_field: Option<Object>,
-    };
+    }
 
     test_parse_ok(&[
         (
