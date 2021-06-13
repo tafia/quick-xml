@@ -4,12 +4,21 @@ on: [push, pull_request]
 
 jobs:
   build:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, windows-latest]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform }}
 
     steps:
     - uses: actions/checkout@v1
     - name: Build
       run: cargo build
-    - name: Run tests
+    - name: Run tests (no features)
+      run: cargo test
+    - name: Run tests (serialize)
+      run: cargo test --features serialize
+    - name: Run tests (encoding+serialize)
       run: cargo test --features encoding,serialize
+    - name: Run tests (escape-html+serialize)
+      run: cargo test --features escape-html,serialize
