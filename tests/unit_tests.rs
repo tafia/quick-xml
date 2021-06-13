@@ -211,7 +211,7 @@ fn test_writer() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -230,7 +230,7 @@ fn test_writer_borrow() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -249,7 +249,7 @@ fn test_writer_indent() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -274,7 +274,7 @@ fn test_writer_indent_cdata() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -299,7 +299,7 @@ fn test_write_empty_element_attrs() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -328,7 +328,7 @@ fn test_write_attrs() {
             }
             Ok(End(_)) => End(BytesEnd::borrowed(b"copy")),
             Ok(e) => e,
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         };
         assert!(writer.write_event(event).is_ok());
     }
@@ -664,7 +664,7 @@ fn test_read_write_roundtrip_results_in_identity() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -691,7 +691,7 @@ fn test_read_write_roundtrip() {
         match reader.read_event(&mut buf) {
             Ok(Eof) => break,
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -724,7 +724,7 @@ fn test_read_write_roundtrip_escape() {
                     .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -757,7 +757,7 @@ fn test_read_write_roundtrip_escape_text() {
                     .is_ok());
             }
             Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         }
     }
 
