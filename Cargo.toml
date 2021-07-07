@@ -3,6 +3,7 @@ name = "quick-xml"
 version = "0.22.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
+edition = "2018"
 
 documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"

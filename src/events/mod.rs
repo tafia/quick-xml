@@ -39,16 +39,11 @@ pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::ops::Deref;
-use std::str::from_utf8;
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
-use self::attributes::{Attribute, Attributes};
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::Reader;
+use crate::escape::{do_unescape, escape};
+use crate::{errors::Error, errors::Result, reader::Reader};
+use attributes::{Attribute, Attributes};
 
 use memchr;
 
@@ -132,7 +127,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust
     /// # use quick_xml::{Error, Writer};
     /// use quick_xml::events::{BytesStart, Event};
     ///
@@ -352,6 +347,20 @@ impl<'a> BytesStart<'a> {
     pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
         self.buf.to_mut().truncate(self.name_len);
         self
+    }
+
+    /// Try to get an attribute
+    pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
+        &'a self,
+        attr_name: N,
+    ) -> Result<Option<Attribute<'a>>> {
+        for a in self.attributes() {
+            let a = a?;
+            if a.key == attr_name.as_ref() {
+                return Ok(Some(a));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -831,7 +840,7 @@ pub enum Event<'a> {
 
 impl<'a> Event<'a> {
     /// Converts the event to an owned version, untied to the lifetime of
-    /// buffer used when reading but incurring a new, seperate allocation.
+    /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
         match self {
             Event::Start(e) => Event::Start(e.into_owned()),
