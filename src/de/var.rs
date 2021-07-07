@@ -1,35 +1,34 @@
 use crate::{
-    de::{escape::EscapedDeserializer, Deserializer},
+    de::{escape::EscapedDeserializer, Deserializer, BorrowingReader},
     errors::serialize::DeError,
     events::Event,
 };
 use serde::de::{self, Deserializer as SerdeDeserializer};
-use std::io::BufRead;
 
 /// An enum access
-pub struct EnumAccess<'a, R: BufRead> {
-    de: &'a mut Deserializer<R>,
+pub struct EnumAccess<'de, 'a, R: BorrowingReader<'de>> {
+    de: &'a mut Deserializer<'de, R>,
 }
 
-impl<'a, R: BufRead> EnumAccess<'a, R> {
-    pub fn new(de: &'a mut Deserializer<R>) -> Self {
+impl<'de, 'a, R: BorrowingReader<'de>> EnumAccess<'de, 'a, R> {
+    pub fn new(de: &'a mut Deserializer<'de, R>) -> Self {
         EnumAccess { de }
     }
 }
 
-impl<'de, 'a, R: 'a + BufRead> de::EnumAccess<'de> for EnumAccess<'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de>> de::EnumAccess<'de> for EnumAccess<'de, 'a, R> {
     type Error = DeError;
-    type Variant = VariantAccess<'a, R>;
+    type Variant = VariantAccess<'de, 'a, R>;
 
     fn variant_seed<V: de::DeserializeSeed<'de>>(
         self,
         seed: V,
-    ) -> Result<(V::Value, VariantAccess<'a, R>), DeError> {
+    ) -> Result<(V::Value, VariantAccess<'de, 'a, R>), DeError> {
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
             Some(Event::Text(t)) => EscapedDeserializer::new(t.to_vec(), decoder, true),
             Some(Event::Start(e)) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
-            Some(e) => return Err(DeError::InvalidEnum(e.to_owned())),
+            Some(e) => return Err(DeError::InvalidEnum(e.clone().into_owned())),
             None => return Err(DeError::Eof),
         };
         let name = seed.deserialize(de)?;
@@ -37,15 +36,15 @@ impl<'de, 'a, R: 'a + BufRead> de::EnumAccess<'de> for EnumAccess<'a, R> {
     }
 }
 
-pub struct VariantAccess<'a, R: BufRead> {
-    de: &'a mut Deserializer<R>,
+pub struct VariantAccess<'de, 'a, R: BorrowingReader<'de>> {
+    de: &'a mut Deserializer<'de, R>,
 }
 
-impl<'de, 'a, R: BufRead> de::VariantAccess<'de> for VariantAccess<'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de>> de::VariantAccess<'de> for VariantAccess<'de, 'a, R> {
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), DeError> {
-        match self.de.next(&mut Vec::new())? {
+        match self.de.next()? {
             Event::Start(e) => self.de.read_to_end(e.name()),
             Event::Text(_) => Ok(()),
             _ => unreachable!(),

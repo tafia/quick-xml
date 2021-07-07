@@ -241,6 +241,10 @@ fn test_writer_borrow() {
 #[test]
 fn test_writer_indent() {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
+    // Normalize newlines on Windows to just \n, which is what the reader and
+    // writer use.
+    let normalized_txt = txt.replace("\r\n", "\n");
+    let txt = normalized_txt.as_str();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
