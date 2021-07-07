@@ -1,4 +1,39 @@
 //! Defines zero-copy XML events used throughout this library.
+//!
+//! A XML event often represents part of a XML element.
+//! They occur both during reading and writing and are
+//! usually used with the stream-oriented API.
+//!
+//! For example, the XML element
+//! ```xml
+//! <name attr="value">Inner text</name>
+//! ```
+//! consists of the three events `Start`, `Text` and `End`.
+//! They can also represent other parts in an XML document like the
+//! XML declaration. Each Event usually contains further information,
+//! like the tag name, the attribute or the inner text.
+//!
+//! See [`Event`] for a list of all possible events.
+//!
+//! # Reading
+//! When reading a XML stream, the events are emitted by
+//! [`Reader::read_event`]. You must listen
+//! for the different types of events you are interested in.
+//!
+//! See [`Reader`] for further information.
+//!
+//! # Writing
+//! When writing the XML document, you must create the XML element
+//! by constructing the events it consists of and pass them to the writer
+//! sequentially.
+//!
+//! See [`Writer`] for further information.
+//!
+//! [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
+//! [`Reader`]: ../reader/struct.Reader.html
+//! [`Writer`]: ../writer/struct.Writer.html
+//! [`Event`]: enum.Event.html
+
 
 pub mod attributes;
 

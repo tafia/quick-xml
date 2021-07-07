@@ -2,8 +2,23 @@
 //!
 //! ## Description
 //!
-//! - `Reader`: a low level xml pull-reader where buffer allocation/clearing is left to user
-//! - `Writer`: a xml writer. Can be nested with readers if you want to transform xmls
+//! quick-xml contains two modes of operation:
+//!
+//! A streaming API based on the [StAX] model. This is suited for larger XML documents which
+//! cannot completely read into memory at once.
+//!
+//! The user has to expicitely _ask_ for the next XML event, similar
+//! to a database cursor.
+//! This is achieved by the following two structs:
+//!
+//! - [`Reader`]: A low level XML pull-reader where buffer allocation/clearing is left to user.
+//! - [`Writer`]: A XML writer. Can be nested with readers if you want to transform XMLs.
+//!
+//! Especially for nested XML elements, the user must keep track _where_ (how deep) in the XML document
+//! the current event is located. This is needed as the
+//!
+//! Furthermore, quick-xml also contains optional [Serde] support to directly serialize and deserialize from
+//! structs, without having to deal with the XML events.
 //!
 //! ## Examples
 //!
@@ -106,8 +121,11 @@
 //! # Features
 //!
 //! quick-xml supports 2 additional features, non activated by default:
-//! - `encoding`: support non utf8 xmls
+//! - `encoding`: support non utf8 XMLs
 //! - `serialize`: support serde `Serialize`/`Deserialize`
+//!
+//! [StAX]: https://en.wikipedia.org/wiki/StAX
+//! [Serde]: https://serde.rs/
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
