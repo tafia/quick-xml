@@ -22,12 +22,8 @@
 - test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
 - fix: CDATA was not handled in many cases where it should
 - fix: do not unescape CDATA content because it never escaped by design
-  ([#311](https://github.com/tafia/quick-xml/issues/311)).
-
-  NOTE: now text content when deserialized into bytes (`Vec<u8>` / `&[u8]`), also unescaped.
-  It is impossible to get a raw XML data in bytes buffer. Actually, deserializing of bytes
-  should be prohibited, because XML cannot store raw byte data. You should store binary
-  data in a string hex- or base64- or any-other-schema-encoded.
+  ([#311](https://github.com/tafia/quick-xml/issues/311))
+- feat: add support for XML Schema `xs:list` ([#376](https://github.com/tafia/quick-xml/pull/376))
 
 ## 0.23.0-alpha3
 

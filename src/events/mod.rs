@@ -598,6 +598,12 @@ impl<'a> BytesText<'a> {
         Self::from_plain(content.as_bytes())
     }
 
+    /// Extracts the inner `Cow` from the `BytesText` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
     /// Ensures that all data is owned to extend the object's lifetime if
     /// necessary.
     #[inline]

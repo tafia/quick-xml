@@ -2,6 +2,7 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
+    de::simple_type::SimpleTypeDeserializer,
     de::{BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::Attribute,
@@ -18,12 +19,23 @@ enum State {
     /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
     /// Next call to the `next_value_seed` will deserialize type from the attribute value
     Attribute,
-    /// The same as `InnerValue`
+    /// Next event returned will be a [`DeEvent::Start`], which represents a key.
+    /// Value should be deserialized from that XML node:
+    ///
+    /// ```xml
+    /// <any-tag>
+    ///     <key>...</key>
+    /// <!--^^^^^^^^^^^^^^ - this node will be used to deserialize map value -->
+    /// </any-tag>
+    /// ```
     Nested,
     /// Value should be deserialized from the text content of the XML node:
     ///
     /// ```xml
-    /// <...>text content for field value<...>
+    /// <any-tag>
+    ///     <key>text content</key>
+    /// <!--     ^^^^^^^^^^^^ - this will be used to deserialize map value -->
+    /// </any-tag>
     /// ```
     InnerValue,
 }
@@ -124,7 +136,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
-                    self.state = State::InnerValue;
+                    self.state = State::Nested;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
@@ -144,7 +156,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.state = State::InnerValue;
+                        self.state = State::Nested;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name());
@@ -166,12 +178,36 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
             State::Attribute => {
                 let decoder = self.de.reader.decoder();
                 match self.next_attr()? {
-                    Some(a) => seed.deserialize(EscapedDeserializer::new(a.value, decoder, true)),
+                    Some(a) => {
+                        //FIXME: we have to clone value because of wrong lifetimes on `a`
+                        // It should be bound to the input lifetime, but it instead bound
+                        // to a deserializer lifetime
+                        let value: Vec<_> = a.value.into_owned();
+                        seed.deserialize(SimpleTypeDeserializer::new(value.into(), true, decoder))
+                    }
                     // We set `Attribute` state only when we are sure that `next_attr()` returns a value
                     None => unreachable!(),
                 }
             }
-            State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
+            // This case are checked by "de::tests::xml_schema_lists::element" tests
+            State::InnerValue => {
+                let decoder = self.de.reader.decoder();
+                match self.de.next()? {
+                    DeEvent::Text(e) => {
+                        //TODO: It is better to store event content as part of state
+                        seed.deserialize(SimpleTypeDeserializer::new(e.into_inner(), true, decoder))
+                    }
+                    // It is better to format similar code similarly, but rustfmt disagree
+                    #[rustfmt::skip]
+                    DeEvent::CData(e) => {
+                        //TODO: It is better to store event content as part of state
+                        seed.deserialize(SimpleTypeDeserializer::new(e.into_inner(), false, decoder))
+                    }
+                    // SAFETY: We set `InnerValue` only when we seen `Text` or `CData`
+                    _ => unreachable!(),
+                }
+            }
+            State::Nested => seed.deserialize(&mut *self.de),
             State::Empty => Err(DeError::EndOfAttributes),
         }
     }
