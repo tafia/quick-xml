@@ -9,8 +9,14 @@ use serde::de::{self, DeserializeSeed, IntoDeserializer};
 
 enum MapValue {
     Empty,
+    /// Value should be deserialized from the attribute value
     Attribute { value: Vec<u8> },
     Nested,
+    /// Value should be deserialized from the text content of the XML node:
+    ///
+    /// ```xml
+    /// <...>text content for field value<...>
+    /// ```
     InnerValue,
 }
 
@@ -68,6 +74,9 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
             match self.de.peek()? {
                 Some(Event::Text(_)) => {
                     self.value = MapValue::InnerValue;
+                    // Deserialize `key` from special attribute name which means
+                    // that value should be taken from the text content of the
+                    // XML node
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 // Used to deserialize collections of enums, like:
