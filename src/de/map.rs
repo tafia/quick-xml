@@ -3,6 +3,7 @@
 use crate::{
     de::escape::EscapedDeserializer,
     de::seq::{not_in, TagFilter},
+    de::simple_type::SimpleTypeDeserializer,
     de::{deserialize_bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::IterState,
@@ -35,7 +36,10 @@ enum ValueSource {
     /// represented or by an ordinary text node, or by a CDATA node:
     ///
     /// ```xml
-    /// <...>text content for field value<...>
+    /// <any-tag>
+    ///     <key>text content</key>
+    /// <!--     ^^^^^^^^^^^^ - this will be used to deserialize map value -->
+    /// </any-tag>
     /// ```
     /// ```xml
     /// <any-tag>
@@ -200,8 +204,8 @@ where
     ) -> Result<Self, DeError> {
         Ok(MapAccess {
             de,
+            iter: IterState::new(start.name().as_ref().len(), false),
             start,
-            iter: IterState::new(0, false),
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&INNER_VALUE),
@@ -226,8 +230,8 @@ where
     ) -> Result<Option<K::Value>, Self::Error> {
         debug_assert_eq!(self.source, ValueSource::Unknown);
 
-        // FIXME: There error positions counted from end of tag name - need global position
-        let slice = self.start.attributes_raw();
+        // FIXME: There error positions counted from the start of tag name - need global position
+        let slice = &self.start.buf;
         let decoder = self.de.reader.decoder();
 
         if let Some(a) = self.iter.next(slice).transpose()? {
@@ -305,16 +309,12 @@ where
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.source, ValueSource::Unknown) {
-            ValueSource::Attribute(value) => {
-                let slice = self.start.attributes_raw();
-                let decoder = self.de.reader.decoder();
-
-                seed.deserialize(EscapedDeserializer::new(
-                    Cow::Borrowed(&slice[value]),
-                    decoder,
-                    true,
-                ))
-            }
+            ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_part(
+                &self.start.buf,
+                value,
+                true,
+                self.de.reader.decoder(),
+            )),
             // This arm processes the following XML shape:
             // <any-tag>
             //   text value
@@ -323,10 +323,21 @@ where
             // is implicit and equals to the `INNER_VALUE` constant, and the value
             // is a `Text` or a `CData` event (the value deserializer will see one
             // of that events)
-            ValueSource::Text => seed.deserialize(MapValueDeserializer {
-                map: self,
-                allow_start: false,
-            }),
+            // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
+            ValueSource::Text => match self.de.next()? {
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
+                    e.into_inner(),
+                    true,
+                    self.de.reader.decoder(),
+                )),
+                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
+                    e.into_inner(),
+                    false,
+                    self.de.reader.decoder(),
+                )),
+                // SAFETY: We set `Text` only when we seen `Text` or `CData`
+                _ => unreachable!(),
+            },
             // This arm processes the following XML shape:
             // <any-tag>
             //   <any>...</any>

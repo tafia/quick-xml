@@ -22,6 +22,7 @@
   way to access decoding functionality is via this struct
 - [#191]: New event variant `StartText` emitted for bytes before the XML declaration
   or a start comment or a tag. For streams with BOM this event will contain a BOM
+- [#395]: Add support for XML Schema `xs:list`
 
 ### Bug Fixes
 
@@ -104,6 +105,7 @@
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
 [#393]: https://github.com/tafia/quick-xml/pull/393
+[#395]: https://github.com/tafia/quick-xml/pull/395
 
 ## 0.23.0 -- 2022-05-08
 
