@@ -13,7 +13,7 @@ use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// [`with_checks(false)`]: #method.with_checks
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],

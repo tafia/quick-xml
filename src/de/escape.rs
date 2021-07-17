@@ -12,7 +12,7 @@ use std::borrow::Cow;
 /// Escaping the value is actually not always necessary, for instance
 /// when converting to float, we don't expect any escapable character
 /// anyway
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct EscapedDeserializer {
     decoder: Decoder,
     /// Possible escaped value of text/CDATA or attribute value
