@@ -578,7 +578,7 @@ mod tests {
                 break;
             }
 
-            assert_eq!(format!("{:?}", event1), format!("{:?}", event2));
+            assert_eq!(event1, event2);
         }
     }
 

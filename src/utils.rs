@@ -1,4 +1,21 @@
-pub fn write_byte_string(f: &mut std::fmt::Formatter<'_>, byte_string: &[u8]) -> std::fmt::Result {
+use std::borrow::Cow;
+use std::fmt::{Formatter, Result};
+
+pub fn write_cow_string(f: &mut Formatter<'_>, cow_string: &Cow<[u8]>) -> Result {
+    match cow_string {
+        Cow::Owned(s) => {
+            write!(f, "Owned(")?;
+            write_byte_string(f, &s)?;
+        }
+        Cow::Borrowed(s) => {
+            write!(f, "Borrowed(")?;
+            write_byte_string(f, s)?;
+        }
+    }
+    write!(f, ")")
+}
+
+pub fn write_byte_string(f: &mut Formatter<'_>, byte_string: &[u8]) -> Result {
     write!(f, "\"")?;
     for b in byte_string {
         match *b {
