@@ -318,7 +318,6 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 
         #[cfg(feature = "encoding")]
         {
-            #[cfg(feature = "encoding")]
             let value = self.reader.decoder().decode(&*txt);
 
             match value.as_ref() {
