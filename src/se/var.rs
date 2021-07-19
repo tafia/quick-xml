@@ -4,7 +4,9 @@ use crate::{
     se::Serializer,
     writer::Writer,
 };
-use serde::ser::{self, Serialize};
+use de::{INNER_VALUE, UNFLATTEN_PREFIX};
+use serde::ser::{self, Serialize, SerializeMap};
+use serde::Serializer as _;
 use std::io::Write;
 
 /// An implementation of `SerializeMap` for serializing to XML.
@@ -116,17 +118,24 @@ where
     ) -> Result<(), DeError> {
         // TODO: Inherit indentation state from self.parent.writer
         let writer = Writer::new(&mut self.buffer);
-        let mut serializer = Serializer::with_root(writer, Some(key));
-        value.serialize(&mut serializer)?;
+        if key.starts_with(UNFLATTEN_PREFIX) {
+            let key = key.split_at(UNFLATTEN_PREFIX.len()).1;
+            let mut serializer = Serializer::with_root(writer, Some(key));
+            serializer.serialize_newtype_struct(key, value);
+            self.children.append(&mut self.buffer);
+        } else {
+            let mut serializer = Serializer::with_root(writer, Some(key));
+            value.serialize(&mut serializer)?;
 
-        if !self.buffer.is_empty() {
-            if self.buffer[0] == b'<' || key == "$value" {
-                // Drains buffer, moves it to children
-                self.children.append(&mut self.buffer);
-            } else {
-                self.attrs
-                    .push_attribute((key.as_bytes(), self.buffer.as_ref()));
-                self.buffer.clear();
+            if !self.buffer.is_empty() {
+                if self.buffer[0] == b'<' || key == INNER_VALUE {
+                    // Drains buffer, moves it to children
+                    self.children.append(&mut self.buffer);
+                } else {
+                    self.attrs
+                        .push_attribute((key.as_bytes(), self.buffer.as_ref()));
+                    self.buffer.clear();
+                }
             }
         }
 

@@ -226,6 +226,20 @@ struct Foo {
 }
 ```
 
+### Unflattening structs into verbose XML
+
+If your XML files look like `<root><first>value</first><second>value</second></root>`, you can
+(de)serialize them with the special name prefix `$unflatten=`:
+
+```rust,ignore
+struct Root {
+    #[serde(rename = "$unflatten=first")]
+    first: String,
+    #[serde(rename = "$unflatten=second")]
+    other_field: String,
+}
+```
+
 ### Performance
 
 Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
