@@ -2,6 +2,7 @@ extern crate quick_xml;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
+use std::borrow::Cow;
 use std::str::from_utf8;
 
 #[test]
@@ -71,6 +72,55 @@ fn html5() {
     );
 }
 
+#[test]
+fn escaped_characters() {
+    test(
+        r#"<e attr="&quot;Hello&quot;">&apos;a&apos; &lt; &apos;&amp;&apos;</e>"#,
+        r#"
+            |StartElement(e [attr=""Hello""])
+            |Characters('a' < '&')
+            |EndElement(e)
+            |EndDocument
+        "#,
+        true,
+    )
+}
+
+#[cfg(feature = "escape-html")]
+#[test]
+fn escaped_characters_html() {
+    test(
+        r#"<e attr="&planck;&Egrave;&ell;&#x1D55D;&bigodot;">&boxDR;&boxDL;&#x02554;&#x02557;&#9556;&#9559;</e>"#,
+        r#"
+            |StartElement(e [attr="ℏÈℓ𝕝⨀"])
+            |Characters(╔╗╔╗╔╗)
+            |EndElement(e)
+            |EndDocument
+        "#,
+        true,
+    )
+}
+
+#[cfg(feature = "encoding")]
+#[test]
+fn encoded_characters() {
+    test_bytes(
+        b"\
+            <?xml version = \"1.0\" encoding = \"Shift_JIS\" ?>\n\
+            <a>\x82\xA0\x82\xA2\x82\xA4</a>\
+        ",
+        "
+            |StartDocument(1.0, Shift_JIS)
+            |StartElement(a)
+            |Characters(あいう)
+            |EndElement(a)
+            |EndDocument
+        "
+        .as_bytes(),
+        true,
+    )
+}
+
 // #[test]
 // fn sample_3_short() {
 //     test(
@@ -107,6 +157,19 @@ fn html5() {
 //     );
 //
 // }
+
+#[test]
+// FIXME: Trips on the first byte-order-mark byte
+// Expected: StartDocument(1.0, utf-16)
+// Found: InvalidUtf8([255, 254]; invalid utf-8 sequence of 1 bytes from index 0)
+#[ignore]
+fn sample_5_short() {
+    test_bytes(
+        include_bytes!("documents/sample_5_utf16bom.xml"),
+        include_bytes!("documents/sample_5_short.txt"),
+        true,
+    );
+}
 
 #[test]
 fn sample_ns_short() {
@@ -308,19 +371,23 @@ fn default_namespace_applies_to_end_elem() {
 }
 
 fn test(input: &str, output: &str, is_short: bool) {
+    test_bytes(input.as_bytes(), output.as_bytes(), is_short);
+}
+
+fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     // Normalize newlines on Windows to just \n, which is what the reader and
     // writer use.
     // let input = input.replace("\r\n", "\n");
     // let input = input.as_bytes();
     // let output = output.replace("\r\n", "\n");
     // let output = output.as_bytes();
-    let mut reader = Reader::from_reader(input.as_bytes());
+    let mut reader = Reader::from_reader(input);
     reader
         .trim_text(is_short)
         .check_comments(true)
         .expand_empty_elements(false);
 
-    let mut spec_lines = SpecIter(output.as_bytes()).enumerate();
+    let mut spec_lines = SpecIter(output).enumerate();
     let mut buf = Vec::new();
     let mut ns_buffer = Vec::new();
 
@@ -332,7 +399,7 @@ fn test(input: &str, output: &str, is_short: bool) {
     loop {
         buf.clear();
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
-        let line = xmlrs_display(&event);
+        let line = xmlrs_display(&event, &reader);
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
                 break;
@@ -397,10 +464,21 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     Ok(atts.join(", "))
 }
 
-fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
+// FIXME: The public API differs based on the "encoding" feature
+fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
+    #[cfg(feature = "encoding")]
+    let decoded = reader.decode(text);
+
+    #[cfg(not(feature = "encoding"))]
+    let decoded = Cow::Borrowed(reader.decode(text).unwrap());
+
+    decoded
+}
+
+fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>, reader: &Reader<&[u8]>) -> String {
     match opt_event {
         Ok((ref n, Event::Start(ref e))) => {
-            let name = namespace_name(n, e.name());
+            let name = namespace_name(n, decode(e.name(), reader).as_bytes());
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                 Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
@@ -408,18 +486,21 @@ fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
             }
         }
         Ok((ref n, Event::Empty(ref e))) => {
-            let name = namespace_name(n, e.name());
+            let name = namespace_name(n, decode(e.name(), reader).as_bytes());
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                 Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
                 Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
             }
         }
-        Ok((ref n, Event::End(ref e))) => format!("EndElement({})", namespace_name(n, e.name())),
+        Ok((ref n, Event::End(ref e))) => {
+            let name = namespace_name(n, decode(e.name(), reader).as_bytes());
+            format!("EndElement({})", name)
+        }
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
         Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
         Ok((_, Event::Text(ref e))) => match e.unescaped() {
-            Ok(c) => match from_utf8(&*c) {
+            Ok(c) => match from_utf8(decode(&*c, reader).as_bytes()) {
                 Ok(c) => format!("Characters({})", c),
                 Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
             },
