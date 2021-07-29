@@ -1,7 +1,7 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, Deserializer, INNER_VALUE},
+    de::{escape::EscapedDeserializer, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::{attributes::Attribute, BytesStart, Event},
 };
@@ -62,6 +62,7 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
             .map(|a| (a.key.to_owned(), a.value.into_owned()));
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
+        let has_unflatten_field = self.de.has_unflatten_field;
         if let Some((key, value)) = attr_key_val {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
@@ -94,8 +95,15 @@ impl<'a, 'de, R: BufRead> de::MapAccess<'de> for MapAccess<'a, R> {
                     self.value = MapValue::InnerValue;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
+                Some(Event::Start(e)) if has_unflatten_field => {
+                    self.value = MapValue::InnerValue;
+                    let key = format!("{}{}", UNFLATTEN_PREFIX, String::from_utf8(e.local_name().to_vec())
+                                      .expect("$unflatten= did not contain valid Rust identifier"));
+                    seed.deserialize(key.into_deserializer()).map(Some)
+                }
                 Some(Event::Start(e)) => {
                     let name = e.local_name().to_owned();
+
                     self.value = MapValue::Nested;
                     seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                         .map(Some)

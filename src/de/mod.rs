@@ -121,13 +121,15 @@ use serde::de::{self, DeserializeOwned};
 use serde::serde_if_integer128;
 use std::io::BufRead;
 
-const INNER_VALUE: &str = "$value";
+pub(crate) const INNER_VALUE: &str = "$value";
+pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
 /// An xml deserializer
 pub struct Deserializer<R: BufRead> {
     reader: Reader<R>,
     peek: Option<Event<'static>>,
     has_value_field: bool,
+    has_unflatten_field: bool,
 }
 
 /// Deserialize an instance of type T from a string of XML text.
@@ -153,6 +155,7 @@ impl<R: BufRead> Deserializer<R> {
             reader,
             peek: None,
             has_value_field: false,
+            has_unflatten_field: false,
         }
     }
 
@@ -274,9 +277,11 @@ impl<'de, 'a, R: BufRead> de::Deserializer<'de> for &'a mut Deserializer<R> {
         if let Some(e) = self.next_start(&mut Vec::new())? {
             let name = e.name().to_vec();
             self.has_value_field = fields.contains(&INNER_VALUE);
+            self.has_unflatten_field = fields.iter().any(|elem| elem.starts_with(UNFLATTEN_PREFIX));
             let map = map::MapAccess::new(self, e)?;
             let value = visitor.visit_map(map)?;
             self.has_value_field = false;
+            self.has_unflatten_field = false;
             self.read_to_end(&name)?;
             Ok(value)
         } else {
