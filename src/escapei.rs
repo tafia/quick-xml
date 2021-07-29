@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 
+/// Error for XML escape/unescqpe.
 #[derive(Debug)]
 pub enum EscapeError {
     /// Entity with Null character
@@ -24,7 +25,7 @@ pub enum EscapeError {
     TooLongDecimal,
     /// Character is not a valid decimal value
     InvalidDecimal(char),
-    // Not a valid unicode codepoint
+    /// Not a valid unicode codepoint
     InvalidCodepoint(u32),
 }
 
