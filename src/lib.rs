@@ -145,7 +145,7 @@ mod escapei;
 pub mod escape {
     //! Manage xml character escapes
     pub(crate) use crate::escapei::{do_unescape, EscapeError};
-    pub use crate::escapei::{escape, unescape, unescape_with};
+    pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
 }
 pub mod events;
 mod reader;
