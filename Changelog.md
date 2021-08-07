@@ -19,6 +19,7 @@
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
+- test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
 
 ## 0.23.0-alpha3
 

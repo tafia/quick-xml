@@ -722,6 +722,8 @@ mod tests {
     where
         T: Deserialize<'de>,
     {
+        // Log XM that we try to deserialize to see it in the failed tests output
+        dbg!(s);
         let mut de = Deserializer::from_str(s);
         let result = T::deserialize(&mut de);
 
@@ -904,6 +906,173 @@ mod tests {
     struct Item {
         name: String,
         source: String,
+    }
+
+    /// Tests for trivial XML documents: empty or contains only primitive type
+    /// on a top level; all of them should be considered invalid
+    mod trivial {
+        use super::*;
+
+        #[rustfmt::skip] // excess spaces used for readability
+        macro_rules! eof {
+            ($name:ident: $type:ty = $value:expr) => {
+                #[test]
+                fn $name() {
+                    let item = from_str::<$type>($value).unwrap_err();
+
+                    match item {
+                        DeError::Eof => (),
+                        _ => panic!("Expected `Eof`, found {:?}", item),
+                    }
+                }
+            };
+            ($value:expr) => {
+                eof!(i8_:    i8    = $value);
+                eof!(i16_:   i16   = $value);
+                eof!(i32_:   i32   = $value);
+                eof!(i64_:   i64   = $value);
+                eof!(isize_: isize = $value);
+
+                eof!(u8_:    u8    = $value);
+                eof!(u16_:   u16   = $value);
+                eof!(u32_:   u32   = $value);
+                eof!(u64_:   u64   = $value);
+                eof!(usize_: usize = $value);
+
+                serde_if_integer128! {
+                    eof!(u128_: u128 = $value);
+                    eof!(i128_: i128 = $value);
+                }
+
+                eof!(f32_: f32 = $value);
+                eof!(f64_: f64 = $value);
+
+                eof!(false_: bool = $value);
+                eof!(true_: bool = $value);
+                eof!(char_: char = $value);
+
+                eof!(string: String = $value);
+                eof!(byte_buf: ByteBuf = $value);
+
+                #[test]
+                fn unit() {
+                    let item = from_str::<()>($value).unwrap_err();
+
+                    match item {
+                        DeError::Eof => (),
+                        _ => panic!("Expected `Eof`, found {:?}", item),
+                    }
+                }
+            };
+        }
+
+        /// Empty document should considered invalid no matter which type we try to deserialize
+        mod empty_doc {
+            use super::*;
+            eof!("");
+        }
+
+        /// Document that contains only comment should be handles as if it is empty
+        mod only_comment {
+            use super::*;
+            eof!("<!--comment-->");
+        }
+
+        /// Tests deserialization from top-level tag content: `<root>...content...</root>`
+        mod struct_ {
+            use super::*;
+
+            /// Well-formed XML must have a single tag at the root level.
+            /// Any XML tag can be modeled as a struct, and content of this tag are modeled as
+            /// fields of this struct.
+            ///
+            /// Because we want to get access to unnamed content of the tag (usually, this internal
+            /// XML node called `#text`) we use a rename to a special name `$value`
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct Trivial<T> {
+                #[serde(rename = "$value")]
+                value: T,
+            }
+
+            macro_rules! in_struct {
+                ($name:ident: $type:ty = $value:expr, $expected:expr) => {
+                    #[test]
+                    fn $name() {
+                        let item: Trivial<$type> = from_str($value).unwrap();
+
+                        assert_eq!(item, Trivial { value: $expected });
+                    }
+                };
+            }
+
+            /// Tests deserialization from text content in a tag
+            #[rustfmt::skip] // tests formatted in a table
+            mod text {
+                use super::*;
+
+                in_struct!(i8_:  i8  = "<root>-42</root>", -42i8);
+                in_struct!(i16_: i16 = "<root>-4200</root>", -4200i16);
+                in_struct!(i32_: i32 = "<root>-42000000</root>", -42000000i32);
+                in_struct!(i64_: i64 = "<root>-42000000000000</root>", -42000000000000i64);
+                in_struct!(isize_: isize = "<root>-42000000000000</root>", -42000000000000isize);
+
+                in_struct!(u8_:  u8  = "<root>42</root>", 42u8);
+                in_struct!(u16_: u16 = "<root>4200</root>", 4200u16);
+                in_struct!(u32_: u32 = "<root>42000000</root>", 42000000u32);
+                in_struct!(u64_: u64 = "<root>42000000000000</root>", 42000000000000u64);
+                in_struct!(usize_: usize = "<root>42000000000000</root>", 42000000000000usize);
+
+                serde_if_integer128! {
+                    in_struct!(u128_: u128 = "<root>420000000000000000000000000000</root>", 420000000000000000000000000000u128);
+                    in_struct!(i128_: i128 = "<root>-420000000000000000000000000000</root>", -420000000000000000000000000000i128);
+                }
+
+                in_struct!(f32_: f32 = "<root>4.2</root>", 4.2f32);
+                in_struct!(f64_: f64 = "<root>4.2</root>", 4.2f64);
+
+                in_struct!(false_: bool = "<root>false</root>", false);
+                in_struct!(true_: bool = "<root>true</root>", true);
+                in_struct!(char_: char = "<root>r</root>", 'r');
+
+                in_struct!(string:   String  = "<root>escaped&#x20;string</root>", "escaped string".into());
+                in_struct!(byte_buf: ByteBuf = "<root>escaped&#x20;byte_buf</root>", ByteBuf(r"escaped byte_buf".into()));
+            }
+
+            /// Tests deserialization from CDATA content in a tag.
+            /// CDATA handling similar to text handling except that strings does not unescapes
+            #[rustfmt::skip] // tests formatted in a table
+            mod cdata {
+                use super::*;
+
+                in_struct!(i8_:  i8  = "<root><![CDATA[-42]]></root>", -42i8);
+                in_struct!(i16_: i16 = "<root><![CDATA[-4200]]></root>", -4200i16);
+                in_struct!(i32_: i32 = "<root><![CDATA[-42000000]]></root>", -42000000i32);
+                in_struct!(i64_: i64 = "<root><![CDATA[-42000000000000]]></root>", -42000000000000i64);
+                in_struct!(isize_: isize = "<root><![CDATA[-42000000000000]]></root>", -42000000000000isize);
+
+                in_struct!(u8_:  u8  = "<root><![CDATA[42]]></root>", 42u8);
+                in_struct!(u16_: u16 = "<root><![CDATA[4200]]></root>", 4200u16);
+                in_struct!(u32_: u32 = "<root><![CDATA[42000000]]></root>", 42000000u32);
+                in_struct!(u64_: u64 = "<root><![CDATA[42000000000000]]></root>", 42000000000000u64);
+                in_struct!(usize_: usize = "<root><![CDATA[42000000000000]]></root>", 42000000000000usize);
+
+                serde_if_integer128! {
+                    in_struct!(u128_: u128 = "<root><![CDATA[420000000000000000000000000000]]></root>", 420000000000000000000000000000u128);
+                    in_struct!(i128_: i128 = "<root><![CDATA[-420000000000000000000000000000]]></root>", -420000000000000000000000000000i128);
+                }
+
+                in_struct!(f32_: f32 = "<root><![CDATA[4.2]]></root>", 4.2f32);
+                in_struct!(f64_: f64 = "<root><![CDATA[4.2]]></root>", 4.2f64);
+
+                in_struct!(false_: bool = "<root><![CDATA[false]]></root>", false);
+                in_struct!(true_: bool = "<root><![CDATA[true]]></root>", true);
+                in_struct!(char_: char = "<root><![CDATA[r]]></root>", 'r');
+
+                // Escape sequences does not processed inside CDATA section
+                in_struct!(string:   String  = "<root><![CDATA[escaped&#x20;string]]></root>", "escaped&#x20;string".into());
+                in_struct!(byte_buf: ByteBuf = "<root><![CDATA[escaped&#x20;byte_buf]]></root>", ByteBuf(r"escaped&#x20;byte_buf".into()));
+            }
+        }
     }
 
     #[test]
