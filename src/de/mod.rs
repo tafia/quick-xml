@@ -676,23 +676,6 @@ mod tests {
     }
 
     #[test]
-    fn simple_struct_from_attributes() {
-        let s = r##"
-	    <item name="hello" source="world.rs" />
-	"##;
-
-        let item: Item = from_reader(s.as_bytes()).unwrap();
-
-        assert_eq!(
-            item,
-            Item {
-                name: "hello".to_string(),
-                source: "world.rs".to_string(),
-            }
-        );
-    }
-
-    #[test]
     fn multiple_roots_attributes() {
         let s = r##"
 	    <item name="hello" source="world.rs" />
