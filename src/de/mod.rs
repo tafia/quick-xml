@@ -699,25 +699,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn simple_struct_from_attribute_and_child() {
-        let s = r##"
-	    <item name="hello">
-            <source>world.rs</source>
-            </item>
-        "##;
-
-        let item: Item = from_str(s).unwrap();
-
-        assert_eq!(
-            item,
-            Item {
-                name: "hello".to_string(),
-                source: "world.rs".to_string(),
-            }
-        );
-    }
-
     #[derive(Debug, Deserialize, PartialEq)]
     struct Project {
         name: String,
@@ -947,6 +928,26 @@ mod tests {
         #[test]
         fn attributes() {
             let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        #[test]
+        fn attribute_and_element() {
+            let data: Struct = from_str(
+                r#"
+                <root float="42">
+                    <string>answer</string>
+                </root>
+            "#,
+            )
+            .unwrap();
+
             assert_eq!(
                 data,
                 Struct {
