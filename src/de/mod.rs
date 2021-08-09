@@ -963,6 +963,127 @@ mod tests {
         }
     }
 
+    macro_rules! maplike_errors {
+        ($type:ty) => {
+            mod non_closed {
+                use super::*;
+
+                #[test]
+                fn attributes() {
+                    let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_root() {
+                    let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_child() {
+                    let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+            }
+
+            mod mismatched_end {
+                use super::*;
+                use crate::errors::Error::EndEventMismatch;
+
+                #[test]
+                fn attributes() {
+                    let data =
+                        from_str::<$type>(r#"<root float="42" string="answer"></mismatched>"#);
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_root() {
+                    let data = from_str::<$type>(
+                        r#"<root float="42"><string>answer</string></mismatched>"#,
+                    );
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_child() {
+                    let data =
+                        from_str::<$type>(r#"<root float="42"><string>answer</mismatched></root>"#);
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+            }
+        };
+    }
+
+    mod map {
+        use super::*;
+        use std::collections::HashMap;
+        use std::iter::FromIterator;
+
+        #[test]
+        fn elements() {
+            let data: HashMap<(), ()> =
+                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        #[test]
+        fn attributes() {
+            let data: HashMap<(), ()> = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        #[test]
+        fn attribute_and_element() {
+            let data: HashMap<(), ()> = from_str(
+                r#"
+                <root float="42">
+                    <string>answer</string>
+                </root>
+            "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        maplike_errors!(HashMap<(), ()>);
+    }
+
     mod struct_ {
         use super::*;
 
@@ -1053,6 +1174,8 @@ mod tests {
                 }
             );
         }
+
+        maplike_errors!(Struct);
     }
 
     mod nested_struct {
