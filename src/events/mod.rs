@@ -42,7 +42,7 @@ use encoding_rs::Encoding;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
 use crate::escape::{do_unescape, escape};
-use crate::{errors::Error, errors::Result, reader::Reader, reader::Decoder};
+use crate::{errors::Error, errors::Result, reader::Reader};
 use attributes::{Attribute, Attributes};
 
 use memchr;

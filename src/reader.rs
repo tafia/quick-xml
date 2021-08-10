@@ -230,35 +230,28 @@ impl<R: BufRead> Reader<R> {
     {
         self.tag_state = TagState::Opened;
 
-        let skip_text = if self.trim_text_start {
+        if self.trim_text_start {
             self.reader.skip_whitespace(&mut self.buf_position)?;
-            self.reader.skip_one(b'<', &mut self.buf_position)?
-        } else {
-            false
-        };
+            if self.reader.skip_one(b'<', &mut self.buf_position)? {
+                return self.read_event_buffered(buf);
+            }
+        }
 
-        if skip_text {
-            return self.read_event_buffered(buf);
-        } else {
-            return match self
-                .reader
-                .read_bytes_until(b'<', buf, &mut self.buf_position)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => {
-                    // Skip the ending '<
-                    let len = if self.trim_text_end {
-                        bytes
-                            .iter()
-                            .rposition(|&b| !is_whitespace(b))
-                            .map_or_else(|| bytes.len(), |p| p + 1)
-                    } else {
-                        bytes.len()
-                    };
-                    Ok(Event::Text(BytesText::from_escaped(&bytes[0..len])))
-                }
-                Err(e) => Err(e),
-            };
+        match self
+            .reader
+            .read_bytes_until(b'<', buf, &mut self.buf_position)
+        {
+            Ok(Some(bytes)) if self.trim_text_end => {
+                // Skip the ending '<
+                let len = bytes
+                    .iter()
+                    .rposition(|&b| !is_whitespace(b))
+                    .map_or_else(|| bytes.len(), |p| p + 1);
+                Ok(Event::Text(BytesText::from_escaped(&bytes[..len])))
+            }
+            Ok(Some(bytes)) => Ok(Event::Text(BytesText::from_escaped(bytes))),
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
         }
     }
 
@@ -354,9 +347,6 @@ impl<R: BufRead> Reader<R> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    ///
-    /// Note: depending on the start of the Event, we may need to read more
-    /// data, thus we need a mutable buffer
     fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
@@ -371,8 +361,7 @@ impl<R: BufRead> Reader<R> {
                 if let Some(p) =
                     memchr::memchr_iter(b'-', &buf[3..len - 2]).position(|p| buf[3 + p + 1] == b'-')
                 {
-                    // FIXME: Should be `- p`
-                    self.buf_position -= buf.len() + p;
+                    self.buf_position += buf.len() - p;
                     return Err(Error::UnexpectedToken("--".to_string()));
                 }
             }
@@ -508,6 +497,7 @@ impl<R: BufRead> Reader<R> {
     /// println!("Found {} start events", count);
     /// println!("Text events: {:?}", txt);
     /// ```
+    #[inline]
     pub fn read_event<'a, 'b>(&'a mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.read_event_buffered(buf)
     }
@@ -901,6 +891,7 @@ impl<'a> Reader<&'a [u8]> {
     }
 
     /// Read an event that borrows from the input rather than a buffer.
+    #[inline]
     pub fn read_event_unbuffered(&mut self) -> Result<Event<'a>> {
         self.read_event_buffered(())
     }
@@ -1065,10 +1056,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                         BangType::Comment => read >= 5 && buf.ends_with(b"--"),
                         BangType::CData => buf.ends_with(b"]]"),
                         BangType::DocType => {
-                            // Inefficient, but unlikely to happen often
-                            let open = buf.iter().skip(start).filter(|b| **b == b'<').count();
-                            let closed = buf.iter().skip(start).filter(|b| **b == b'>').count();
-                            open == closed
+                            memchr::memchr2_iter(b'<', b'>', buf).map(|p| if buf[p] == b'<' { 1i32 } else { -1 }).sum::<i32>() == 0
                         }
                     };
 
@@ -1521,10 +1509,10 @@ impl NamespaceBufferIndex {
                             let start = buffer.len();
                             buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
-                                start: start,
+                                start,
                                 prefix_len: 0,
                                 value_len: v.len(),
-                                level: level,
+                                level,
                             });
                         }
                         Some(&b':') => {
@@ -1532,10 +1520,10 @@ impl NamespaceBufferIndex {
                             buffer.extend_from_slice(&k[6..]);
                             buffer.extend_from_slice(&*v);
                             self.slices.push(Namespace {
-                                start: start,
+                                start,
                                 prefix_len: k.len() - 6,
                                 value_len: v.len(),
-                                level: level,
+                                level,
                             });
                         }
                         _ => break,
