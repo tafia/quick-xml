@@ -5,7 +5,7 @@ use crate::{
     writer::Writer,
 };
 use de::{INNER_VALUE, UNFLATTEN_PREFIX};
-use serde::ser::{self, Serialize, SerializeMap};
+use serde::ser::{self, Serialize};
 use serde::Serializer as _;
 use std::io::Write;
 
@@ -127,7 +127,7 @@ where
         if key.starts_with(UNFLATTEN_PREFIX) {
             let key = key.split_at(UNFLATTEN_PREFIX.len()).1;
             let mut serializer = Serializer::with_root(writer, Some(key));
-            serializer.serialize_newtype_struct(key, value);
+            serializer.serialize_newtype_struct(key, value)?;
             self.children.append(&mut self.buffer);
         } else {
             let mut serializer = Serializer::with_root(writer, Some(key));
