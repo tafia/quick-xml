@@ -129,11 +129,13 @@ fn test_parse_unflatten_field() {
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     struct Unflatten {
         #[serde(rename = "$unflatten=NewKey")]
-        field: String
+        field: String,
     }
 
     let source = "<Unflatten><NewKey>Foo</NewKey></Unflatten>";
-    let expected = Unflatten { field: "Foo".to_string() };
+    let expected = Unflatten {
+        field: "Foo".to_string(),
+    };
 
     let parsed: Unflatten = ::quick_xml::de::from_str(source).unwrap();
     assert_eq!(&parsed, &expected);

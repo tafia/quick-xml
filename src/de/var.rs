@@ -1,5 +1,5 @@
 use crate::{
-    de::{escape::EscapedDeserializer, Deserializer, BorrowingReader},
+    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer},
     errors::serialize::DeError,
     events::Event,
 };

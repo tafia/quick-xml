@@ -115,12 +115,13 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     events::{BytesStart, BytesText, Event},
-    Reader, reader::Decoder,
+    reader::Decoder,
+    Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned};
 use serde::serde_if_integer128;
-use std::io::BufRead;
 use std::borrow::Cow;
+use std::io::BufRead;
 
 pub(crate) const INNER_VALUE: &str = "$value";
 pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
@@ -145,9 +146,7 @@ pub fn from_bytes<'de, T: Deserialize<'de>>(s: &'de [u8]) -> Result<T, DeError> 
         .expand_empty_elements(true)
         .check_end_names(true)
         .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(
-        SliceReader { reader }
-    );
+    let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
     T::deserialize(&mut de)
 }
 
@@ -163,9 +162,10 @@ pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeEr
         .expand_empty_elements(true)
         .check_end_names(true)
         .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(
-        IoReader { reader, buf: Vec::new() }
-    );
+    let mut de = Deserializer::from_borrowing_reader(IoReader {
+        reader,
+        buf: Vec::new(),
+    });
     T::deserialize(&mut de)
 }
 
@@ -342,7 +342,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
                     visitor.visit_bool(false)
                 }
                 e => Err(DeError::InvalidBoolean(
-                    self.reader.decoder().decode(e)?.into()
+                    self.reader.decoder().decode(e)?.into(),
                 )),
             }
         }
@@ -363,7 +363,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         let string = text.decode_and_escape(self.reader.decoder())?;
         match string {
             Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
-            Cow::Owned(string) => visitor.visit_string(string)
+            Cow::Owned(string) => visitor.visit_string(string),
         }
     }
 
@@ -473,7 +473,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 /// A trait that borrows an XML reader that borrows from the input. For a &[u8]
 /// input the events will borrow from that input, whereas with a BufRead input
 /// all events will be converted to 'static, allocating whenever necessary.
-pub trait BorrowingReader<'i> where Self: 'i {
+pub trait BorrowingReader<'i>
+where
+    Self: 'i,
+{
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<Event<'i>, DeError>;
 
@@ -553,11 +556,12 @@ mod tests {
             <item name="hello" source="world.rs">Some text</item>
             <item2/>
             <item3 value="world" />
-    	"##.as_bytes();
+    	"##
+        .as_bytes();
 
         let mut reader1 = IoReader {
             reader: Reader::from_reader(s),
-            buf: Vec::new()
+            buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
             reader: Reader::from_bytes(s),
@@ -582,13 +586,15 @@ mod tests {
             <item2></item2>
             <item3/>
             <item4 value="world" />
-        "##.as_bytes();
+        "##
+        .as_bytes();
 
         let mut reader = SliceReader {
             reader: Reader::from_bytes(s),
         };
 
-        reader.reader
+        reader
+            .reader
             .trim_text(true)
             .expand_empty_elements(true)
             .check_end_names(true);
@@ -603,19 +609,25 @@ mod tests {
             events.push(event);
         }
 
-        use crate::events::{BytesStart, BytesText, BytesEnd, Event::*};
+        use crate::events::{BytesEnd, BytesStart, BytesText, Event::*};
 
-        assert_eq!(events, vec![
-            Start(BytesStart::borrowed(br#"item name="hello" source="world.rs""#, 4)),
-            Text(BytesText::from_escaped(b"Some text".as_ref())),
-            End(BytesEnd::borrowed(b"item")),
-            Start(BytesStart::borrowed(b"item2", 5)),
-            End(BytesEnd::borrowed(b"item2")),
-            Start(BytesStart::borrowed(b"item3", 5)),
-            End(BytesEnd::borrowed(b"item3")),
-            Start(BytesStart::borrowed(br#"item4 value="world" "#, 5)),
-            End(BytesEnd::borrowed(b"item4")),
-        ])
+        assert_eq!(
+            events,
+            vec![
+                Start(BytesStart::borrowed(
+                    br#"item name="hello" source="world.rs""#,
+                    4
+                )),
+                Text(BytesText::from_escaped(b"Some text".as_ref())),
+                End(BytesEnd::borrowed(b"item")),
+                Start(BytesStart::borrowed(b"item2", 5)),
+                End(BytesEnd::borrowed(b"item2")),
+                Start(BytesStart::borrowed(b"item3", 5)),
+                End(BytesEnd::borrowed(b"item3")),
+                Start(BytesStart::borrowed(br#"item4 value="world" "#, 5)),
+                End(BytesEnd::borrowed(b"item4")),
+            ]
+        )
     }
 
     #[test]
@@ -625,12 +637,16 @@ mod tests {
             reader: Reader::from_str(s),
         };
 
-        reader.reader
+        reader
+            .reader
             .trim_text(true)
             .expand_empty_elements(true)
             .check_end_names(true);
 
-        assert_eq!(reader.next().unwrap(), Event::Start(BytesStart::borrowed(b"item ", 4)));
+        assert_eq!(
+            reader.next().unwrap(),
+            Event::Start(BytesStart::borrowed(b"item ", 4))
+        );
         reader.read_to_end(b"item").unwrap();
         assert_eq!(reader.next().unwrap(), Event::Eof);
     }

@@ -1,4 +1,4 @@
-use crate::de::{DeError, Deserializer, BorrowingReader};
+use crate::de::{BorrowingReader, DeError, Deserializer};
 use crate::{
     events::{BytesStart, Event},
     reader::Decoder,

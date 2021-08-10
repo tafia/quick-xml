@@ -47,7 +47,7 @@ fn sample_2_full() {
 // Unexpected event at line 6:
 // Expected: InvalidUtf8([10, 38, 110, 98, 115, 112, 59, 10]; invalid utf-8 sequence of 1 bytes from index 1)
 // Found: Characters(
-// 
+//
 // )
 // ```
 #[ignore]

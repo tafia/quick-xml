@@ -226,7 +226,7 @@ impl<R: BufRead> Reader<R> {
     /// return a `Text` event
     fn read_until_open<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>
+        R: BufferedInput<'i, 'r, B>,
     {
         self.tag_state = TagState::Opened;
 
@@ -258,7 +258,7 @@ impl<R: BufRead> Reader<R> {
     /// private function to read until '>' is found
     fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>
+        R: BufferedInput<'i, 'r, B>,
     {
         self.tag_state = TagState::Closed;
 
@@ -368,9 +368,7 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
         } else if uncased_starts_with(buf, b"![CDATA[") {
             debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
-            Ok(Event::CData(BytesText::from_plain(
-                &buf[8..buf.len() - 2],
-            )))
+            Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
             debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
             Ok(Event::DocType(BytesText::from_escaped(&buf[8..])))
@@ -507,7 +505,7 @@ impl<R: BufRead> Reader<R> {
     /// reader.
     fn read_event_buffered<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>
+        R: BufferedInput<'i, 'r, B>,
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -923,7 +921,7 @@ impl<'a> Reader<&'a [u8]> {
 
 trait BufferedInput<'r, 'i, B>
 where
-    Self: 'i
+    Self: 'i,
 {
     fn read_bytes_until(
         &mut self,
@@ -1056,7 +1054,10 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                         BangType::Comment => read >= 5 && buf.ends_with(b"--"),
                         BangType::CData => buf.ends_with(b"]]"),
                         BangType::DocType => {
-                            memchr::memchr2_iter(b'<', b'>', buf).map(|p| if buf[p] == b'<' { 1i32 } else { -1 }).sum::<i32>() == 0
+                            memchr::memchr2_iter(b'<', b'>', buf)
+                                .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
+                                .sum::<i32>()
+                                == 0
                         }
                     };
 
@@ -1205,7 +1206,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                 *position += 1;
                 self.consume(1);
                 Ok(true)
-            },
+            }
             _ => Ok(false),
         }
     }
@@ -1295,7 +1296,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
                 *position += i;
                 let bytes = &self[..i];
                 // Skip the '>' too.
-                *self = &self[i+1..];
+                *self = &self[i + 1..];
                 return Ok(Some(bytes));
             }
         }
@@ -1585,8 +1586,7 @@ impl Decoder {
 
     #[cfg(not(feature = "encoding"))]
     pub fn decode_owned<'c>(&self, bytes: Vec<u8>) -> Result<String> {
-        String::from_utf8(bytes)
-            .map_err(|e| Error::Utf8(e.utf8_error()))
+        String::from_utf8(bytes).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
     #[cfg(feature = "encoding")]

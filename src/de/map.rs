@@ -1,7 +1,7 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, Deserializer, BorrowingReader, INNER_VALUE},
+    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE},
     errors::serialize::DeError,
     events::{BytesStart, Event},
 };
@@ -92,8 +92,12 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                 }
                 Some(Event::Start(e)) if has_unflatten_field => {
                     self.value = MapValue::InnerValue;
-                    let key = format!("{}{}", UNFLATTEN_PREFIX, String::from_utf8(e.local_name().to_vec())
-                                      .expect("$unflatten= did not contain valid Rust identifier"));
+                    let key = format!(
+                        "{}{}",
+                        UNFLATTEN_PREFIX,
+                        String::from_utf8(e.local_name().to_vec())
+                            .expect("$unflatten= did not contain valid Rust identifier")
+                    );
                     seed.deserialize(key.into_deserializer()).map(Some)
                 }
                 Some(Event::Start(e)) => {

@@ -34,7 +34,6 @@
 //! [`Writer`]: ../writer/struct.Writer.html
 //! [`Event`]: enum.Event.html
 
-
 pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
@@ -652,12 +651,18 @@ impl<'a> BytesText<'a> {
     #[cfg(feature = "serialize")]
     pub(crate) fn decode_and_escape(
         &self,
-        decoder: crate::reader::Decoder
+        decoder: crate::reader::Decoder,
     ) -> Result<Cow<'a, str>> {
         let decoded: Cow<str> = match &self.content {
             Cow::Borrowed(bytes) => {
-                #[cfg(feature = "encoding")] { decoder.decode(bytes) }
-                #[cfg(not(feature = "encoding"))] { decoder.decode(bytes)?.into() }
+                #[cfg(feature = "encoding")]
+                {
+                    decoder.decode(bytes)
+                }
+                #[cfg(not(feature = "encoding"))]
+                {
+                    decoder.decode(bytes)?.into()
+                }
             }
             Cow::Owned(bytes) => {
                 #[cfg(feature = "encoding")]
@@ -672,18 +677,20 @@ impl<'a> BytesText<'a> {
 
         match decoded {
             Cow::Borrowed(decoded) => {
-                let unescaped = do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
                 match unescaped {
-                    Cow::Borrowed(unescaped) => from_utf8(unescaped)
-                        .map(|s| s.into())
-                        .map_err(Error::Utf8),
+                    Cow::Borrowed(unescaped) => {
+                        from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
+                    }
                     Cow::Owned(unescaped) => String::from_utf8(unescaped)
                         .map(|s| s.into())
-                        .map_err(|e| Error::Utf8(e.utf8_error()))
+                        .map_err(|e| Error::Utf8(e.utf8_error())),
                 }
             }
             Cow::Owned(decoded) => {
-                let unescaped = do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
                 String::from_utf8(unescaped.into_owned())
                     .map(|s| s.into())
                     .map_err(|e| Error::Utf8(e.utf8_error()))
