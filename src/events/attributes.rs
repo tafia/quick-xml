@@ -2,13 +2,10 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::{is_whitespace, Reader};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::ops::Range;
+use crate::errors::{Error, Result};
+use crate::escape::{do_unescape, escape};
+use crate::reader::{is_whitespace, Reader};
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 
 /// Iterator over XML attributes.
 ///

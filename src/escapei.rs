@@ -63,6 +63,7 @@ impl std::error::Error for EscapeError {}
 /// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
 /// corresponding xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
     fn to_escape(b: u8) -> bool {
         match b {
             b'<' | b'>' | b'\'' | b'&' | b'"' => true,
@@ -70,10 +71,32 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
         }
     }
 
+    _escape(raw, to_escape)
+}
+
+/// Should only be used for escaping text content. In xml text content, it is allowed
+/// (though not recommended) to leave the quote special characters " and ' unescaped.
+/// This function escapes a `&[u8]` and replaces xml special characters (<, >, &) with
+/// their corresponding xml escaped value, but does not escape quote characters.
+pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
+    fn to_escape(b: u8) -> bool {
+        match b {
+            b'<' | b'>' | b'&' => true,
+            _ => false,
+        }
+    }
+
+    _escape(raw, to_escape)
+}
+
+/// Escapes a `&[u8]` and replaces a subset of xml special characters (<, >, &, ', ") with their
+/// corresponding xml escaped value.
+fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     let mut escaped = None;
     let mut bytes = raw.iter();
     let mut pos = 0;
-    while let Some(i) = bytes.position(|&b| to_escape(b)) {
+    while let Some(i) = bytes.position(|&b| escape_chars(b)) {
         if escaped.is_none() {
             escaped = Some(Vec::with_capacity(raw.len()));
         }
@@ -121,7 +144,7 @@ pub fn unescape_with<'a>(
 }
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using an optional dictionnary of custom entities.
+/// value, using an optional dictionary of custom entities.
 ///
 /// # Pre-condition
 ///
@@ -182,7 +205,7 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"amp" => "&",
         b"apos" => "'",
         b"quot" => "\"",
-        _ => return None
+        _ => return None,
     };
     Some(s)
 }
@@ -821,11 +844,9 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"mid" | b"VerticalBar" | b"smid" | b"shortmid" => "\u{2223}",
         b"nmid" | b"NotVerticalBar" | b"nsmid" | b"nshortmid" => "\u{2224}",
         b"par" | b"parallel" | b"DoubleVerticalBar" | b"spar" | b"shortparallel" => "\u{2225}",
-        b"npar"
-        | b"nparallel"
-        | b"NotDoubleVerticalBar"
-        | b"nspar"
-        | b"nshortparallel" => "\u{2226}",
+        b"npar" | b"nparallel" | b"NotDoubleVerticalBar" | b"nspar" | b"nshortparallel" => {
+            "\u{2226}"
+        }
         b"and" | b"wedge" => "\u{2227}",
         b"or" | b"vee" => "\u{2228}",
         b"cap" => "\u{2229}",
@@ -1646,7 +1667,7 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
         b"xopf" => "\u{1D56}",
         b"yopf" => "\u{1D56}",
         b"zopf" => "\u{1D56}",
-        _ => return None
+        _ => return None,
     };
     Some(s)
 }
@@ -1739,5 +1760,17 @@ fn test_escape() {
     assert_eq!(
         &*escape(b"prefix_\"a\"b&<>c"),
         "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
+    );
+}
+
+#[test]
+fn test_partial_escape() {
+    assert_eq!(&*partial_escape(b"test"), b"test");
+    assert_eq!(&*partial_escape(b"<test>"), b"&lt;test&gt;");
+    assert_eq!(&*partial_escape(b"\"a\"bc"), b"\"a\"bc");
+    assert_eq!(&*partial_escape(b"\"a\"b&c"), b"\"a\"b&amp;c");
+    assert_eq!(
+        &*partial_escape(b"prefix_\"a\"b&<>c"),
+        "prefix_\"a\"b&amp;&lt;&gt;c".as_bytes()
     );
 }

@@ -33,7 +33,7 @@ pub enum Error {
     /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
     /// Escape error
-    EscapeError(::escape::EscapeError),
+    EscapeError(crate::escape::EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
@@ -52,10 +52,10 @@ impl From<::std::str::Utf8Error> for Error {
     }
 }
 
-impl From<::escape::EscapeError> for Error {
+impl From<crate::escape::EscapeError> for Error {
     /// Creates a new `Error::EscapeError` from the given error
     #[inline]
-    fn from(error: ::escape::EscapeError) -> Error {
+    fn from(error: crate::escape::EscapeError) -> Error {
         Error::EscapeError(error)
     }
 }
@@ -63,7 +63,7 @@ impl From<::escape::EscapeError> for Error {
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 ///
 /// [`Error`]: enum.Error.html
-pub type Result<T> = ::std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
