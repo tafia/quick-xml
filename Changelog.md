@@ -10,11 +10,18 @@
 
 ## Unreleased
 
+
+## 0.23.0-alpha1
+
 - style: convert to rust edition 2018
 - fix: don't encode multi byte escape characters as big endian
 - feat: add `Writer::write_nested_event`
 - feat: add `BytesStart::try_get_attribute`
 - test: add more test on github actions
+- feat: allow unbuffered deserialization (!!)
+- style: use edition 2018
+- feat: add a function for partially escaping an element
+- feat: higher level api to write xmls
 
 ## 0.22.0
 
