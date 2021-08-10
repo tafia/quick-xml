@@ -34,7 +34,6 @@
 //! [`Writer`]: ../writer/struct.Writer.html
 //! [`Event`]: enum.Event.html
 
-
 pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
@@ -58,7 +57,7 @@ use memchr;
 /// [`local_name`]: #method.local_name
 /// [`unescaped`]: #method.unescaped
 /// [`attributes`]: #method.attributes
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
@@ -225,7 +224,7 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self, self.name_len)
+        Attributes::new(&self.buf, self.name_len)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
@@ -377,7 +376,7 @@ impl<'a> std::fmt::Debug for BytesStart<'a> {
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
     element: BytesStart<'a>,
 }
@@ -499,7 +498,7 @@ impl<'a> BytesDecl<'a> {
 }
 
 /// A struct to manage `Event::End` events
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>,
 }
@@ -558,7 +557,7 @@ impl<'a> std::fmt::Debug for BytesEnd<'a> {
 }
 
 /// Data from various events (most notably, `Event::Text`).
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     // Invariant: The content is always escaped.
     content: Cow<'a, [u8]>,
@@ -647,6 +646,56 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
+    }
+
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode_and_escape(
+        &self,
+        decoder: crate::reader::Decoder,
+    ) -> Result<Cow<'a, str>> {
+        let decoded: Cow<str> = match &self.content {
+            Cow::Borrowed(bytes) => {
+                #[cfg(feature = "encoding")]
+                {
+                    decoder.decode(bytes)
+                }
+                #[cfg(not(feature = "encoding"))]
+                {
+                    decoder.decode(bytes)?.into()
+                }
+            }
+            Cow::Owned(bytes) => {
+                #[cfg(feature = "encoding")]
+                let decoded = decoder.decode(bytes).into_owned();
+
+                #[cfg(not(feature = "encoding"))]
+                let decoded = decoder.decode(bytes)?.to_string();
+
+                decoded.into()
+            }
+        };
+
+        match decoded {
+            Cow::Borrowed(decoded) => {
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                match unescaped {
+                    Cow::Borrowed(unescaped) => {
+                        from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
+                    }
+                    Cow::Owned(unescaped) => String::from_utf8(unescaped)
+                        .map(|s| s.into())
+                        .map_err(|e| Error::Utf8(e.utf8_error())),
+                }
+            }
+            Cow::Owned(decoded) => {
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                String::from_utf8(unescaped.into_owned())
+                    .map(|s| s.into())
+                    .map_err(|e| Error::Utf8(e.utf8_error()))
+            }
+        }
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -814,7 +863,7 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
 /// Event emitted by [`Reader::read_event`].
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
