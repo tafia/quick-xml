@@ -1,10 +1,10 @@
 use crate::{
+    de::{INNER_VALUE, UNFLATTEN_PREFIX},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
     se::Serializer,
     writer::Writer,
 };
-use de::{INNER_VALUE, UNFLATTEN_PREFIX};
 use serde::ser::{self, Serialize};
 use serde::Serializer as _;
 use std::io::Write;

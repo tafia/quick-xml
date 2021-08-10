@@ -1,7 +1,9 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE},
+    de::{
+        escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX,
+    },
     errors::serialize::DeError,
     events::{BytesStart, Event},
 };
@@ -64,6 +66,7 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
     ) -> Result<Option<K::Value>, Self::Error> {
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
+        let has_unflatten_field = self.de.has_unflatten_field;
         if let Some((key, value)) = self.next_attr()? {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
