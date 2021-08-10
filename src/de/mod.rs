@@ -870,37 +870,97 @@ mod tests {
         assert_eq!(item, Item);
     }
 
-    #[test]
-    fn unit() {
+    mod unit {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Unit;
 
-        let data: Unit = from_str("<root/>").unwrap();
-        assert_eq!(data, Unit);
+        #[test]
+        fn simple() {
+            let data: Unit = from_str("<root/>").unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Unit = from_str(r#"<root excess="attribute"/>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_element() {
+            let data: Unit = from_str(r#"<root><excess>element</excess></root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_text() {
+            let data: Unit = from_str(r#"<root>excess text</root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_cdata() {
+            let data: Unit = from_str(r#"<root><![CDATA[excess CDATA]]></root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
     }
 
-    #[test]
-    fn newtype() {
+    mod newtype {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Newtype(bool);
 
-        let data: Newtype = from_str("<root>true</root>").unwrap();
-        assert_eq!(data, Newtype(true));
+        #[test]
+        fn simple() {
+            let data: Newtype = from_str("<root>true</root>").unwrap();
+            assert_eq!(data, Newtype(true));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Newtype = from_str(r#"<root excess="attribute">true</root>"#).unwrap();
+            assert_eq!(data, Newtype(true));
+        }
     }
 
-    #[test]
-    fn tuple() {
-        let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
-        assert_eq!(data, (42.0, "answer".into()));
+    mod tuple {
+        use super::*;
+
+        #[test]
+        fn simple() {
+            let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
+            assert_eq!(data, (42.0, "answer".into()));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: (f32, String) =
+                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
+            assert_eq!(data, (42.0, "answer".into()));
+        }
     }
 
-    #[test]
-    fn tuple_struct() {
+    mod tuple_struct {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Tuple(f32, String);
 
-        let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
-        assert_eq!(data, Tuple(42.0, "answer".into()));
+        #[test]
+        fn simple() {
+            let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
+            assert_eq!(data, Tuple(42.0, "answer".into()));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Tuple =
+                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
+            assert_eq!(data, Tuple(42.0, "answer".into()));
+        }
     }
 
     mod struct_ {
@@ -926,8 +986,45 @@ mod tests {
         }
 
         #[test]
+        fn excess_elements() {
+            let data: Struct = from_str(
+                r#"
+                <root>
+                    <before/>
+                    <float>42</float>
+                    <in-the-middle/>
+                    <string>answer</string>
+                    <after/>
+                </root>"#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        #[test]
         fn attributes() {
             let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        #[test]
+        fn excess_attributes() {
+            let data: Struct = from_str(
+                r#"<root before="1" float="42" in-the-middle="2" string="answer" after="3"/>"#,
+            )
+            .unwrap();
             assert_eq!(
                 data,
                 Struct {
