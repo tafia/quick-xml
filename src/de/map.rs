@@ -12,7 +12,9 @@ use serde::de::{self, DeserializeSeed, IntoDeserializer};
 enum MapValue {
     Empty,
     /// Value should be deserialized from the attribute value
-    Attribute { value: Vec<u8> },
+    Attribute {
+        value: Vec<u8>,
+    },
     Nested,
     /// Value should be deserialized from the text content of the XML node:
     ///
