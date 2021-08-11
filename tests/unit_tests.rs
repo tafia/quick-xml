@@ -336,7 +336,10 @@ fn test_write_attrs() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, expected.as_bytes());
+    assert_eq!(
+        std::str::from_utf8(&result).unwrap(),
+        std::str::from_utf8(expected.as_bytes()).unwrap()
+    );
 
     Ok(())
 }

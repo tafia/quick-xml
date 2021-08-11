@@ -78,6 +78,27 @@ fn round_trip_list_of_enums() {
 }
 
 #[test]
+#[ignore]
+fn roundtrip_struct_containing_list_strings() {
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    pub struct NamesList {
+        pub names: Vec<String>,
+    }
+
+    let names = NamesList {
+        names: ["pickaxe", "torch", "bow"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    };
+
+    let serialized = to_string(&names).unwrap();
+    let deserialized: NamesList = from_str(&serialized).unwrap();
+
+    assert_eq!(names, deserialized);
+}
+
+#[test]
 fn no_contiguous_fields() {
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Xml {
