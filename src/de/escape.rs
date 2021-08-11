@@ -145,13 +145,7 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     where
         V: Visitor<'de>,
     {
-        if self.escaped_value.is_empty() {
-            visitor.visit_unit()
-        } else {
-            Err(DeError::InvalidUnit(
-                "Expecting unit, got non empty attribute".into(),
-            ))
-        }
+        visitor.visit_unit()
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
