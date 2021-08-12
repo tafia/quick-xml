@@ -53,8 +53,8 @@ fn sample_2_full() {
 #[ignore]
 fn html5() {
     test(
-        include_bytes!("documents/html5.html"),
-        include_bytes!("documents/html5.txt"),
+        include_str!("documents/html5.html"),
+        include_str!("documents/html5.txt"),
         false,
     );
 }
@@ -65,8 +65,8 @@ fn html5() {
 #[ignore]
 fn html5() {
     test(
-        include_bytes!("documents/html5.html"),
-        include_bytes!("documents/html5-windows.txt"),
+        include_str!("documents/html5.html"),
+        include_str!("documents/html5-windows.txt"),
         false,
     );
 }
