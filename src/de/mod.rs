@@ -187,6 +187,41 @@ pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeEr
     T::deserialize(&mut de)
 }
 
+// TODO: According to the https://www.w3.org/TR/xmlschema-2/#boolean,
+// valid boolean representations are only "true", "false", "1", and "0"
+fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
+where
+    V: de::Visitor<'de>,
+{
+    #[cfg(feature = "encoding")]
+    {
+        let value = decoder.decode(value);
+
+        match value.as_ref() {
+            "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
+                visitor.visit_bool(true)
+            }
+            "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
+                visitor.visit_bool(false)
+            }
+            _ => Err(DeError::InvalidBoolean(value.into())),
+        }
+    }
+
+    #[cfg(not(feature = "encoding"))]
+    {
+        match value {
+            b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
+                visitor.visit_bool(true)
+            }
+            b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
+                visitor.visit_bool(false)
+            }
+            e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
+        }
+    }
+}
+
 impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
     /// Get a new deserializer
     pub fn new(reader: R) -> Self {
@@ -338,35 +373,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         let txt = self.next_text()?;
 
-        #[cfg(feature = "encoding")]
-        {
-            let value = self.reader.decoder().decode(&*txt);
-
-            match value.as_ref() {
-                "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-                    visitor.visit_bool(true)
-                }
-                "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-                    visitor.visit_bool(false)
-                }
-                _ => Err(DeError::InvalidBoolean(value.into())),
-            }
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        {
-            match txt.as_ref() {
-                b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                    visitor.visit_bool(true)
-                }
-                b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                    visitor.visit_bool(false)
-                }
-                e => Err(DeError::InvalidBoolean(
-                    self.reader.decoder().decode(e)?.into(),
-                )),
-            }
-        }
+        deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
     }
 
     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {

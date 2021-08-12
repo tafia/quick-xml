@@ -1,5 +1,6 @@
 //! Serde `Deserializer` module
 
+use crate::de::deserialize_bool;
 use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
 use serde::de::{self, Visitor};
 use serde::{self, forward_to_deserialize_any};
@@ -104,34 +105,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        #[cfg(feature = "encoding")]
-        {
-            #[cfg(feature = "encoding")]
-            let value = self.decoder.decode(self.escaped_value.as_ref());
-
-            match value.as_ref() {
-                "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-                    visitor.visit_bool(true)
-                }
-                "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-                    visitor.visit_bool(false)
-                }
-                _ => Err(DeError::InvalidBoolean(value.into())),
-            }
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        {
-            match &*self.escaped_value {
-                b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                    visitor.visit_bool(true)
-                }
-                b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                    visitor.visit_bool(false)
-                }
-                e => Err(DeError::InvalidBoolean(self.decoder.decode(e)?.into())),
-            }
-        }
+        deserialize_bool(self.escaped_value.as_ref(), self.decoder, visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
