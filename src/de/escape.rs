@@ -3,7 +3,7 @@
 use crate::de::deserialize_bool;
 use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
-use serde::{self, forward_to_deserialize_any};
+use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
 
 /// A deserializer for a xml escaped and encoded value
@@ -166,6 +166,11 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     deserialize_num!(deserialize_u8, visit_u8);
     deserialize_num!(deserialize_f64, visit_f64);
     deserialize_num!(deserialize_f32, visit_f32);
+
+    serde_if_integer128! {
+        deserialize_num!(deserialize_i128, visit_i128);
+        deserialize_num!(deserialize_u128, visit_u128);
+    }
 
     forward_to_deserialize_any! {
         unit_struct seq tuple tuple_struct map struct identifier ignored_any
