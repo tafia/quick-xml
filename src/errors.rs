@@ -1,12 +1,15 @@
 //! Error management module
 
+use crate::escape::EscapeError;
+use std::str::Utf8Error;
+
 /// The error type used by this crate.
 #[derive(Debug)]
 pub enum Error {
     /// IO error
     Io(::std::io::Error),
     /// Utf8 error
-    Utf8(::std::str::Utf8Error),
+    Utf8(Utf8Error),
     /// Unexpected End of File
     UnexpectedEof(String),
     /// End event mismatch
@@ -33,7 +36,7 @@ pub enum Error {
     /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
     /// Escape error
-    EscapeError(crate::escape::EscapeError),
+    EscapeError(EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
@@ -44,18 +47,18 @@ impl From<::std::io::Error> for Error {
     }
 }
 
-impl From<::std::str::Utf8Error> for Error {
+impl From<Utf8Error> for Error {
     /// Creates a new `Error::Utf8` from the given error
     #[inline]
-    fn from(error: ::std::str::Utf8Error) -> Error {
+    fn from(error: Utf8Error) -> Error {
         Error::Utf8(error)
     }
 }
 
-impl From<crate::escape::EscapeError> for Error {
+impl From<EscapeError> for Error {
     /// Creates a new `Error::EscapeError` from the given error
     #[inline]
-    fn from(error: crate::escape::EscapeError) -> Error {
+    fn from(error: EscapeError) -> Error {
         Error::EscapeError(error)
     }
 }
@@ -131,6 +134,7 @@ pub mod serialize {
 
     use super::Error;
     use std::fmt;
+    use std::num::{ParseFloatError, ParseIntError};
 
     /// (De)serialization error
     #[derive(Debug)]
@@ -138,9 +142,9 @@ pub mod serialize {
         /// Serde custom error
         Custom(String),
         /// Cannot parse to integer
-        Int(std::num::ParseIntError),
+        Int(ParseIntError),
         /// Cannot parse to float
-        Float(std::num::ParseFloatError),
+        Float(ParseFloatError),
         /// Xml parsing error
         Xml(Error),
         /// Unexpected end of attributes.
@@ -221,14 +225,14 @@ pub mod serialize {
         }
     }
 
-    impl From<std::num::ParseIntError> for DeError {
-        fn from(e: std::num::ParseIntError) -> Self {
+    impl From<ParseIntError> for DeError {
+        fn from(e: ParseIntError) -> Self {
             DeError::Int(e)
         }
     }
 
-    impl From<std::num::ParseFloatError> for DeError {
-        fn from(e: std::num::ParseFloatError) -> Self {
+    impl From<ParseFloatError> for DeError {
+        fn from(e: ParseFloatError) -> Self {
             DeError::Float(e)
         }
     }

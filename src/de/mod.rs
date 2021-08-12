@@ -119,7 +119,7 @@ use crate::{
     reader::Decoder,
     Reader,
 };
-use serde::de::{self, Deserialize, DeserializeOwned};
+use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::io::BufRead;
@@ -144,7 +144,10 @@ pub enum DeEvent<'a> {
 }
 
 /// An xml deserializer
-pub struct Deserializer<'de, R: BorrowingReader<'de>> {
+pub struct Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     reader: R,
     peek: Option<DeEvent<'de>>,
     /// Special sing that deserialized struct have a field with the special
@@ -158,23 +161,36 @@ pub struct Deserializer<'de, R: BorrowingReader<'de>> {
 }
 
 /// Deserialize an instance of type T from a string of XML text.
-pub fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
     from_bytes(s.as_bytes())
 }
 
 /// Deserialize a xml slice of bytes
-pub fn from_bytes<'de, T: Deserialize<'de>>(s: &'de [u8]) -> Result<T, DeError> {
+pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
     let mut de = Deserializer::from_bytes(s);
     T::deserialize(&mut de)
 }
 
 /// Deserialize an instance of type T from bytes of XML text.
-pub fn from_slice<T: DeserializeOwned>(b: &[u8]) -> Result<T, DeError> {
+pub fn from_slice<T>(b: &[u8]) -> Result<T, DeError>
+where
+    T: DeserializeOwned,
+{
     from_reader(b)
 }
 
 /// Deserialize from a reader
-pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeError> {
+pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
+where
+    R: BufRead,
+    T: DeserializeOwned,
+{
     let mut reader = Reader::from_reader(reader);
     reader
         .expand_empty_elements(true)
@@ -191,7 +207,7 @@ pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeEr
 // valid boolean representations are only "true", "false", "1", and "0"
 fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
 where
-    V: de::Visitor<'de>,
+    V: Visitor<'de>,
 {
     #[cfg(feature = "encoding")]
     {
@@ -223,7 +239,10 @@ where
     }
 }
 
-impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
+impl<'de, R> Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     /// Get a new deserializer
     pub fn new(reader: R) -> Self {
         Deserializer {
@@ -334,7 +353,10 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
 
 macro_rules! deserialize_type {
     ($deserialize:ident => $visit:ident) => {
-        fn $deserialize<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+        fn $deserialize<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
             let txt = self.next_text()?;
             // No need to unescape because valid integer representations cannot be escaped
             let string = txt.decode(self.reader.decoder())?;
@@ -343,15 +365,21 @@ macro_rules! deserialize_type {
     };
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deserializer<'de, R> {
+impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     type Error = DeError;
 
-    fn deserialize_struct<V: de::Visitor<'de>>(
+    fn deserialize_struct<V>(
         self,
         _name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
@@ -366,23 +394,35 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let txt = self.next_text()?;
 
         deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
     }
 
-    fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let string = text.decode_and_escape(self.reader.decoder())?;
         visitor.visit_string(string.into_owned())
     }
 
-    fn deserialize_char<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_string(visitor)
     }
 
-    fn deserialize_str<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let string = text.decode_and_escape(self.reader.decoder())?;
         match string {
@@ -391,19 +431,28 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_bytes<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let value = text.escaped();
         visitor.visit_bytes(value)
     }
 
-    fn deserialize_byte_buf<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let value = text.into_inner().into_owned();
         visitor.visit_byte_buf(value)
     }
 
-    fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.next()? {
             DeEvent::Start(s) => {
                 self.read_to_end(s.name())?;
@@ -413,60 +462,80 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_unit_struct<V: de::Visitor<'de>>(
+    fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_unit(visitor)
     }
 
-    fn deserialize_newtype_struct<V: de::Visitor<'de>>(
+    fn deserialize_newtype_struct<V>(
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_tuple(1, visitor)
     }
 
     /// Representation of tuples the same as [sequences](#method.deserialize_seq).
-    fn deserialize_tuple<V: de::Visitor<'de>>(
-        self,
-        _len: usize,
-        visitor: V,
-    ) -> Result<V::Value, DeError> {
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_seq(visitor)
     }
 
     /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
-    fn deserialize_tuple_struct<V: de::Visitor<'de>>(
+    fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
         len: usize,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_enum<V: de::Visitor<'de>>(
+    fn deserialize_enum<V>(
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let value = visitor.visit_enum(var::EnumAccess::new(self))?;
         Ok(value)
     }
 
-    fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         visitor.visit_seq(seq::SeqAccess::new(self)?)
     }
 
-    fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_struct("", &[], visitor)
     }
 
-    fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.peek()? {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
@@ -474,7 +543,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_identifier<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_string(visitor)
     }
 
@@ -485,7 +557,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     /// be consumed.
     ///
     /// This method returns error if current event is [`End`][DeEvent::End] or [`Eof`][DeEvent::Eof]
-    fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.next()? {
             DeEvent::Start(e) => self.read_to_end(e.name())?,
             DeEvent::End(_) => return Err(DeError::End),
@@ -495,7 +570,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         visitor.visit_unit()
     }
 
-    fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.peek()? {
             DeEvent::Start(_) => self.deserialize_map(visitor),
             DeEvent::End(_) => self.deserialize_unit(visitor),
@@ -615,7 +693,10 @@ mod tests {
 
     /// Deserialize an instance of type T from a string of XML text.
     /// If deserialization was succeeded checks that all XML events was consumed
-    fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+    fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
+    where
+        T: Deserialize<'de>,
+    {
         let mut de = Deserializer::from_str(s);
         let result = T::deserialize(&mut de);
 

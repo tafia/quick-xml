@@ -2,7 +2,7 @@
 
 use crate::de::deserialize_bool;
 use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
-use serde::de::{self, Visitor};
+use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any};
 use std::borrow::Cow;
 
@@ -133,12 +133,15 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
         }
     }
 
-    fn deserialize_enum<V: de::Visitor<'de>>(
+    fn deserialize_enum<V>(
         self,
         _name: &str,
         _variants: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, Self::Error> {
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
         visitor.visit_enum(self)
     }
 
@@ -169,46 +172,48 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> de::EnumAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'a> EnumAccess<'de> for EscapedDeserializer<'a> {
     type Error = DeError;
     type Variant = Self;
 
-    fn variant_seed<V: de::DeserializeSeed<'de>>(
-        self,
-        seed: V,
-    ) -> Result<(V::Value, Self), DeError> {
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
         let name = seed.deserialize(self.clone())?;
         Ok((name, self))
     }
 }
 
-impl<'de, 'a> de::VariantAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'a> VariantAccess<'de> for EscapedDeserializer<'a> {
     type Error = DeError;
 
-    fn unit_variant(self) -> Result<(), DeError> {
+    fn unit_variant(self) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn newtype_variant_seed<T: de::DeserializeSeed<'de>>(
-        self,
-        seed: T,
-    ) -> Result<T::Value, DeError> {
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
         seed.deserialize(self)
     }
 
-    fn tuple_variant<V: de::Visitor<'de>>(
-        self,
-        _len: usize,
-        _visitor: V,
-    ) -> Result<V::Value, DeError> {
+    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
         unimplemented!()
     }
 
-    fn struct_variant<V: de::Visitor<'de>>(
+    fn struct_variant<V>(
         self,
         _fields: &'static [&'static str],
         _visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
         unimplemented!()
     }
 }

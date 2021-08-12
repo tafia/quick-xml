@@ -1,6 +1,6 @@
 use crate::de::{BorrowingReader, DeError, DeEvent, Deserializer};
 use crate::{events::BytesStart, reader::Decoder};
-use serde::de;
+use serde::de::{self, DeserializeSeed};
 
 #[derive(Debug)]
 enum Names {
@@ -23,12 +23,18 @@ impl Names {
 }
 
 /// A SeqAccess
-pub struct SeqAccess<'de, 'a, R: BorrowingReader<'de>> {
+pub struct SeqAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     de: &'a mut Deserializer<'de, R>,
     names: Names,
 }
 
-impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
+impl<'a, 'de, R> SeqAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     /// Get a new SeqAccess
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
         let decoder = de.reader.decoder();
@@ -49,13 +55,16 @@ impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
     }
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> de::SeqAccess<'de> for SeqAccess<'de, 'a, R> {
+impl<'de, 'a, R> de::SeqAccess<'de> for SeqAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     type Error = DeError;
 
-    fn next_element_seed<T: de::DeserializeSeed<'de>>(
-        &mut self,
-        seed: T,
-    ) -> Result<Option<T::Value>, DeError> {
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
+    where
+        T: DeserializeSeed<'de>,
+    {
         let decoder = self.de.reader.decoder();
         match self.de.peek()? {
             DeEvent::Eof | DeEvent::End(_) => Ok(None),
