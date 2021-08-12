@@ -10,6 +10,7 @@
 
 ## Unreleased
 
+- feat: add support for `i128` / `u128` in attributes or text/CDATA content
 - test: add tests for malformed inputs for serde deserializer
 - fix: allow to deserialize `unit`s from any data in attribute values and text nodes
 - refactor: unify errors when EOF encountered during serde deserialization
