@@ -232,7 +232,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        self.write_self_closed(variant)
+        self.write_primitive(variant, false)
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -654,7 +654,7 @@ mod tests {
             #[test]
             fn unit() {
                 let mut buffer = Vec::new();
-                let should_be = "<Unit/>";
+                let should_be = "Unit";
 
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
