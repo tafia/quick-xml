@@ -133,8 +133,10 @@ pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
     use super::Error;
+    use crate::escape::EscapeError;
     use std::fmt;
     use std::num::{ParseFloatError, ParseIntError};
+    use std::string::FromUtf8Error;
 
     /// (De)serialization error
     #[derive(Debug)]
@@ -217,6 +219,19 @@ pub mod serialize {
     impl From<Error> for DeError {
         fn from(e: Error) -> Self {
             DeError::Xml(e)
+        }
+    }
+
+    impl From<EscapeError> for DeError {
+        #[inline]
+        fn from(e: EscapeError) -> Self {
+            Self::Xml(e.into())
+        }
+    }
+
+    impl From<FromUtf8Error> for DeError {
+        fn from(e: FromUtf8Error) -> Self {
+            Self::Xml(e.utf8_error().into())
         }
     }
 

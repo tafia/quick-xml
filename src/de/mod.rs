@@ -112,6 +112,7 @@ mod byte_buf;
 mod escape;
 mod map;
 mod seq;
+mod simple_type;
 mod var;
 
 pub use crate::errors::serialize::DeError;
@@ -208,6 +209,21 @@ where
 
 // TODO: According to the https://www.w3.org/TR/xmlschema-2/#boolean,
 // valid boolean representations are only "true", "false", "1", and "0"
+fn str2bool<'de, V>(value: &str, visitor: V) -> Result<V::Value, DeError>
+where
+    V: de::Visitor<'de>,
+{
+    match value {
+        "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
+            visitor.visit_bool(true)
+        }
+        "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
+            visitor.visit_bool(false)
+        }
+        _ => Err(DeError::InvalidBoolean(value.into())),
+    }
+}
+
 fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
 where
     V: Visitor<'de>,
@@ -216,15 +232,7 @@ where
     {
         let value = decoder.decode(value);
         // No need to unescape because valid boolean representations cannot be escaped
-        match value.as_ref() {
-            "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-                visitor.visit_bool(true)
-            }
-            "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-                visitor.visit_bool(false)
-            }
-            _ => Err(DeError::InvalidBoolean(value.into())),
-        }
+        str2bool(value.as_ref(), visitor)
     }
 
     #[cfg(not(feature = "encoding"))]
