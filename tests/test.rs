@@ -1175,32 +1175,29 @@ fn test_issue299() -> Result<(), Error> {
 
 #[cfg(feature = "serialize")]
 #[test]
-fn test_issue305_namespace() -> Result<(), quick_xml::DeError> {
-
+fn test_issue305_unflatten_namespace() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
     #[derive(Deserialize, Debug)]
     struct NamespaceBug {
-        #[serde(rename = "xmlns:d")]
-        test: String,
-
-        #[serde(rename = "$unflatten=d:test2")] // remove "d:" and it works
-        test2: String
+        #[serde(rename = "$unflatten=d:test2")]
+        test2: String,
     }
 
-    let _namespace_bug: NamespaceBug = from_str(r#"
+    let _namespace_bug: NamespaceBug = from_str(
+        r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <d:test xmlns:d="works">
         <d:test2>doesntwork</d:test2>
-    </d:test>"#)?;
+    </d:test>"#,
+    )?;
 
     Ok(())
 }
 
 #[cfg(feature = "serialize")]
 #[test]
-fn test_issue305_nesting() -> Result<(), quick_xml::DeError> {
-
+fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
     #[derive(Deserialize, Debug)]
@@ -1213,15 +1210,17 @@ fn test_issue305_nesting() -> Result<(), quick_xml::DeError> {
         outer1: InnerNestingBug,
 
         #[serde(rename = "$unflatten=outer2")]
-        outer2: String
+        outer2: String,
     }
 
-    let _nesting_bug: NestingBug = from_str::<NestingBug>(r#"
+    let _nesting_bug: NestingBug = from_str::<NestingBug>(
+        r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <root>
         <outer1></outer1>
         <outer2></outer2>
-    </root>"#)?;
+    </root>"#,
+    )?;
 
     Ok(())
 }

@@ -294,7 +294,12 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
             let name = e.name().to_vec();
             self.has_value_field = fields.contains(&INNER_VALUE);
             self.has_unflatten_field = fields.iter().any(|elem| elem.starts_with(UNFLATTEN_PREFIX));
-            let map = map::MapAccess::new(self, e)?;
+            let size_hint = if fields.is_empty() {
+                None
+            } else {
+                Some(fields.len())
+            };
+            let map = map::MapAccess::new(self, e, size_hint)?;
             let value = visitor.visit_map(map)?;
             self.has_value_field = false;
             self.has_unflatten_field = false;
@@ -303,22 +308,6 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         } else {
             Err(DeError::Start)
         }
-    }
-
-    deserialize_type!(deserialize_i8 => visit_i8);
-    deserialize_type!(deserialize_i16 => visit_i16);
-    deserialize_type!(deserialize_i32 => visit_i32);
-    deserialize_type!(deserialize_i64 => visit_i64);
-    deserialize_type!(deserialize_u8 => visit_u8);
-    deserialize_type!(deserialize_u16 => visit_u16);
-    deserialize_type!(deserialize_u32 => visit_u32);
-    deserialize_type!(deserialize_u64 => visit_u64);
-    deserialize_type!(deserialize_f32 => visit_f32);
-    deserialize_type!(deserialize_f64 => visit_f64);
-
-    serde_if_integer128! {
-        deserialize_type!(deserialize_i128 => visit_i128);
-        deserialize_type!(deserialize_u128 => visit_u128);
     }
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
@@ -387,7 +376,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        match self.next()? {
+        match dbg!(self.next()?) {
             Event::Start(s) => {
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
@@ -474,6 +463,22 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
             Event::End(_) => self.deserialize_unit(visitor),
             _ => self.deserialize_string(visitor),
         }
+    }
+
+    deserialize_type!(deserialize_i8 => visit_i8);
+    deserialize_type!(deserialize_i16 => visit_i16);
+    deserialize_type!(deserialize_i32 => visit_i32);
+    deserialize_type!(deserialize_i64 => visit_i64);
+    deserialize_type!(deserialize_u8 => visit_u8);
+    deserialize_type!(deserialize_u16 => visit_u16);
+    deserialize_type!(deserialize_u32 => visit_u32);
+    deserialize_type!(deserialize_u64 => visit_u64);
+    deserialize_type!(deserialize_f32 => visit_f32);
+    deserialize_type!(deserialize_f64 => visit_f64);
+
+    serde_if_integer128! {
+        deserialize_type!(deserialize_i128 => visit_i128);
+        deserialize_type!(deserialize_u128 => visit_u128);
     }
 }
 

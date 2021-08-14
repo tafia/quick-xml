@@ -36,17 +36,19 @@ pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de> + 'a> {
     /// to restore last position before advance.
     position: usize,
     value: MapValue,
+    size_hint: Option<usize>,
 }
 
 impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
     /// Create a new MapAccess
-    pub fn new(de: &'a mut Deserializer<'de, R>, start: BytesStart<'de>) -> Result<Self, DeError> {
+    pub fn new(de: &'a mut Deserializer<'de, R>, start: BytesStart<'de>, size_hint: Option<usize>) -> Result<Self, DeError> {
         let position = start.attributes().position;
         Ok(MapAccess {
             de,
             start,
             position,
             value: MapValue::Empty,
+            size_hint,
         })
     }
 
@@ -61,6 +63,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
 
 impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
     type Error = DeError;
+
+    fn size_hint(&self) -> Option<usize> {
+        self.size_hint.clone()
+    }
 
     fn next_key_seed<K: DeserializeSeed<'de>>(
         &mut self,
@@ -104,10 +110,9 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                     self.value = MapValue::InnerValue;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
-                // Used to deserialize collections of enums, like:
+                // Used to deserialize elements, like:
                 // <root>
-                //   <xxx>
-                //   </xxx>
+                //   <xxx>test</xxx>
                 // </root>
                 //
                 // into
@@ -116,15 +121,10 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                 //     #[serde(rename = "$unflatten=xxx")]
                 //     xxx: String,
                 // }
-                // TODO: This should be handled by #[serde(flatten)]
-                // See https://github.com/serde-rs/serde/issues/1905
                 Some(Event::Start(e)) if has_unflatten_field => {
                     self.value = MapValue::InnerValue;
-                    let key = format!(
-                        "{}{}",
-                        UNFLATTEN_PREFIX,
-                        decoder.decode(e.name())?
-                    );
+                    let key = format!("{}{}", UNFLATTEN_PREFIX, decoder.decode(e.name())?);
+                    dbg!(&key);
                     seed.deserialize(key.into_deserializer()).map(Some)
                 }
                 Some(Event::Start(e)) => {

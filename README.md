@@ -38,6 +38,9 @@ let mut buf = Vec::new();
 
 // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
+    // NOTE: this is the generic case when we don't know about the input BufRead.
+    // when the input is a &str or a &[u8], we don't actually need to use another
+    // buffer, we could directly call `reader.read_event_unbuffered()`
     match reader.read_event(&mut buf) {
         Ok(Event::Start(ref e)) => {
             match e.name() {
