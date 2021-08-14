@@ -124,7 +124,6 @@ use std::borrow::Cow;
 use std::io::BufRead;
 
 pub(crate) const INNER_VALUE: &str = "$value";
-pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
 /// An xml deserializer
 pub struct Deserializer<'de, R: BorrowingReader<'de>> {
@@ -138,7 +137,6 @@ pub struct Deserializer<'de, R: BorrowingReader<'de>> {
     /// <tag>value for INNER_VALUE field<tag>
     /// ```
     has_value_field: bool,
-    has_unflatten_field: bool,
 }
 
 /// Deserialize an instance of type T from a string of XML text.
@@ -183,7 +181,6 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
             reader,
             peek: None,
             has_value_field: false,
-            has_unflatten_field: false,
         }
     }
 
@@ -293,16 +290,9 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
             self.has_value_field = fields.contains(&INNER_VALUE);
-            self.has_unflatten_field = fields.iter().any(|elem| elem.starts_with(UNFLATTEN_PREFIX));
-            let size_hint = if fields.is_empty() {
-                None
-            } else {
-                Some(fields.len())
-            };
-            let map = map::MapAccess::new(self, e, size_hint)?;
+            let map = map::MapAccess::new(self, e, fields)?;
             let value = visitor.visit_map(map)?;
             self.has_value_field = false;
-            self.has_unflatten_field = false;
             self.read_to_end(&name)?;
             Ok(value)
         } else {
@@ -376,7 +366,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        match dbg!(self.next()?) {
+        match self.next()? {
             Event::Start(s) => {
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
