@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.23.0-alpha1"
+version = "0.23.0-alpha2"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 edition = "2018"

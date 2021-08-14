@@ -10,6 +10,9 @@
 
 ## Unreleased
 
+## 0.23.0-alpha2
+
+- fix: failing tests with features
 
 ## 0.23.0-alpha1
 
