@@ -1162,8 +1162,8 @@ fn test_issue299() -> Result<(), Error> {
                 assert_eq!(
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
-                    "mismatch att count on '{}'",
-                    reader.decoder().decode(e.name())?
+                    "mismatch att count on '{:?}'",
+                    reader.decoder().decode(e.name())
                 );
             }
             Eof => break,
