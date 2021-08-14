@@ -1,6 +1,6 @@
 # quick-xml
 
-![example workflow](https://github.com/tafia/quick-xml/actions/workflows/master.yml/badge.svg)
+![example workflow](https://github.com/tafia/quick-xml/actions/workflows/rust.yml/badge.svg)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
 
 High performance xml pull reader/writer.
