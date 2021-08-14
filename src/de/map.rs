@@ -1,7 +1,9 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE},
+    de::{
+        escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX,
+    },
     errors::serialize::DeError,
     events::{BytesStart, Event},
 };
@@ -9,8 +11,16 @@ use serde::de::{self, DeserializeSeed, IntoDeserializer};
 
 enum MapValue {
     Empty,
-    Attribute { value: Vec<u8> },
+    /// Value should be deserialized from the attribute value
+    Attribute {
+        value: Vec<u8>,
+    },
     Nested,
+    /// Value should be deserialized from the text content of the XML node:
+    ///
+    /// ```xml
+    /// <...>text content for field value<...>
+    /// ```
     InnerValue,
 }
 
@@ -58,6 +68,7 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
     ) -> Result<Option<K::Value>, Self::Error> {
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
+        let has_unflatten_field = self.de.has_unflatten_field;
         if let Some((key, value)) = self.next_attr()? {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
@@ -68,6 +79,9 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
             match self.de.peek()? {
                 Some(Event::Text(_)) => {
                     self.value = MapValue::InnerValue;
+                    // Deserialize `key` from special attribute name which means
+                    // that value should be taken from the text content of the
+                    // XML node
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 // Used to deserialize collections of enums, like:

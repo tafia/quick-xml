@@ -130,6 +130,13 @@ pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 pub struct Deserializer<'de, R: BorrowingReader<'de>> {
     reader: R,
     peek: Option<Event<'de>>,
+    /// Special sing that deserialized struct have a field with the special
+    /// name (see constant `INNER_VALUE`). That field should be deserialized
+    /// from the text content of the XML node:
+    ///
+    /// ```xml
+    /// <tag>value for INNER_VALUE field<tag>
+    /// ```
     has_value_field: bool,
     has_unflatten_field: bool,
 }
@@ -282,6 +289,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, DeError> {
+        // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
             self.has_value_field = fields.contains(&INNER_VALUE);
@@ -318,7 +326,6 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 
         #[cfg(feature = "encoding")]
         {
-            #[cfg(feature = "encoding")]
             let value = self.reader.decoder().decode(&*txt);
 
             match value.as_ref() {
