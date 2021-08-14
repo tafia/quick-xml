@@ -2,11 +2,8 @@ extern crate quick_xml;
 #[cfg(feature = "serialize")]
 extern crate serde;
 
-use quick_xml::events::attributes::Attribute;
-use quick_xml::events::Event::*;
-use quick_xml::Reader;
-use std::borrow::Cow;
-use std::io::Cursor;
+use quick_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
+use std::{borrow::Cow, io::Cursor};
 
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
@@ -1140,4 +1137,91 @@ fn players() {
     };
 
     assert_eq!(res, expected);
+}
+
+#[test]
+fn test_issue299() -> Result<(), Error> {
+    let xml = r#"
+<?xml version="1.0" encoding="utf8"?>
+<MICEX_DOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <SECURITY SecurityId="PLZL" ISIN="RU000A0JNAA8" SecShortName="Short Name" PriceType="CASH">
+    <RECORDS RecNo="1" TradeNo="1111" TradeDate="2021-07-08" TradeTime="15:00:00" BuySell="S" SettleCode="Y1Dt" Decimals="3" Price="13057.034" Quantity="766" Value="10001688.29" AccInt="0" Amount="10001688.29" Balance="766" TrdAccId="X0011" ClientDetails="2222" CPFirmId="3333" CPFirmShortName="Firm Short Name" Price2="13057.034" RepoPart="2" ReportTime="16:53:27" SettleTime="17:47:06" ClientCode="4444" DueDate="2021-07-09" EarlySettleStatus="N" RepoRate="5.45" RateType="FIX"/>
+  </SECURITY>
+</MICEX_DOC>
+"#;
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event_unbuffered()? {
+            Start(e) | Empty(e) => {
+                let attr_count = match e.name() {
+                    b"MICEX_DOC" => 1,
+                    b"SECURITY" => 4,
+                    b"RECORDS" => 26,
+                    _ => unreachable!(),
+                };
+                assert_eq!(
+                    attr_count,
+                    e.attributes().filter(Result::is_ok).count(),
+                    "mismatch att count on '{}'",
+                    reader.decoder().decode(e.name())?
+                );
+            }
+            Eof => break,
+            _ => (),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "serialize")]
+#[test]
+fn test_issue305_namespace() -> Result<(), quick_xml::DeError> {
+
+    use quick_xml::de::from_str;
+
+    #[derive(Deserialize, Debug)]
+    struct NamespaceBug {
+        #[serde(rename = "xmlns:d")]
+        test: String,
+
+        #[serde(rename = "$unflatten=d:test2")] // remove "d:" and it works
+        test2: String
+    }
+
+    let _namespace_bug: NamespaceBug = from_str(r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <d:test xmlns:d="works">
+        <d:test2>doesntwork</d:test2>
+    </d:test>"#)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "serialize")]
+#[test]
+fn test_issue305_nesting() -> Result<(), quick_xml::DeError> {
+
+    use quick_xml::de::from_str;
+
+    #[derive(Deserialize, Debug)]
+    struct InnerNestingBug {}
+
+    #[derive(Deserialize, Debug)]
+    struct NestingBug {
+        // comment out one of these fields and it works
+        #[serde(rename = "$unflatten=outer1")]
+        outer1: InnerNestingBug,
+
+        #[serde(rename = "$unflatten=outer2")]
+        outer2: String
+    }
+
+    let _nesting_bug: NestingBug = from_str::<NestingBug>(r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <root>
+        <outer1></outer1>
+        <outer2></outer2>
+    </root>"#)?;
+
+    Ok(())
 }

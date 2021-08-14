@@ -104,13 +104,26 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                     self.value = MapValue::InnerValue;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
+                // Used to deserialize collections of enums, like:
+                // <root>
+                //   <xxx>
+                //   </xxx>
+                // </root>
+                //
+                // into
+                //
+                // struct Root {
+                //     #[serde(rename = "$unflatten=xxx")]
+                //     xxx: String,
+                // }
+                // TODO: This should be handled by #[serde(flatten)]
+                // See https://github.com/serde-rs/serde/issues/1905
                 Some(Event::Start(e)) if has_unflatten_field => {
                     self.value = MapValue::InnerValue;
                     let key = format!(
                         "{}{}",
                         UNFLATTEN_PREFIX,
-                        String::from_utf8(e.local_name().to_vec())
-                            .expect("$unflatten= did not contain valid Rust identifier")
+                        decoder.decode(e.name())?
                     );
                     seed.deserialize(key.into_deserializer()).map(Some)
                 }
