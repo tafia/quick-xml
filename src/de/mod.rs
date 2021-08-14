@@ -124,6 +124,7 @@ use std::borrow::Cow;
 use std::io::BufRead;
 
 pub(crate) const INNER_VALUE: &str = "$value";
+pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
 /// An xml deserializer
 pub struct Deserializer<'de, R: BorrowingReader<'de>> {

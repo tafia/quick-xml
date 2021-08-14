@@ -1,13 +1,12 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer, INNER_VALUE},
+    de::escape::EscapedDeserializer,
+    de::{BorrowingReader, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::{BytesStart, Event},
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
-
-const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
 enum MapValue {
     Empty,
