@@ -6,7 +6,8 @@
 use crate::de::str2bool;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use serde::de::{DeserializeSeed, Deserializer, EnumAccess, VariantAccess, Visitor};
+use memchr::memchr;
+use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};
 use std::borrow::Cow;
 
@@ -123,6 +124,9 @@ impl<'de, 'a> Content<'de, 'a> {
 /// Identifiers represented as strings and deserialized accordingly.
 ///
 /// Deserialization of all other types returns [`Unsupported`][DeError::Unsupported] error.
+///
+/// The `Owned` variant of the content acts as a storage for data, allocated by
+/// an external deserializer that pass it via [`ListIter`].
 ///
 /// [item]: https://www.w3.org/TR/xmlschema11-1/#std-item_type_definition
 /// [simple type]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
@@ -351,6 +355,98 @@ impl<'de, 'a> VariantAccess<'de> for AtomicDeserializer<'de, 'a> {
 
 //-----------------------------------------------------------------------------
 
+/// Iterator over string sub-slices delimited by one or several spaces.
+/// Contains decoded value of the `simpleType`.
+/// Iteration ends when list contains `None`.
+struct ListIter<'de, 'a> {
+    content: Option<Content<'de, 'a>>,
+    /// If `true`, `content` in escaped form and should be unescaped before use
+    escaped: bool,
+}
+impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
+    type Error = DeError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if let Some(mut content) = self.content.take() {
+            const DELIMITER: u8 = b' ';
+
+            loop {
+                let string = content.as_str();
+                if string.is_empty() {
+                    return Ok(None);
+                }
+                return match memchr(DELIMITER, string.as_bytes()) {
+                    // No delimiters in the `content`, deserialize it as a whole atomic
+                    None => seed.deserialize(AtomicDeserializer {
+                        content,
+                        escaped: self.escaped,
+                    }),
+                    // `content` started with a space, skip them all
+                    Some(0) => {
+                        // Skip all spaces
+                        let start = string.as_bytes().iter().position(|ch| *ch != DELIMITER);
+                        content = match (start, content) {
+                            // We cannot find any non-space character, so string contains only spaces
+                            (None, _) => return Ok(None),
+                            // Borrow result from input or deserializer depending on the initial borrowing
+                            (Some(start), Content::Input(s)) => Content::Input(s.split_at(start).1),
+                            (Some(start), Content::Slice(s)) => Content::Slice(s.split_at(start).1),
+                            // Skip additional bytes if we own data
+                            (Some(start), Content::Owned(s, skip)) => {
+                                Content::Owned(s, skip + start)
+                            }
+                        };
+                        continue;
+                    }
+                    // `content` started from an atomic
+                    Some(end) => match content {
+                        // Borrow for the next iteration from input or deserializer depending on
+                        // the initial borrowing
+                        Content::Input(s) => {
+                            let (item, rest) = s.split_at(end);
+                            self.content = Some(Content::Input(rest));
+
+                            seed.deserialize(AtomicDeserializer {
+                                content: Content::Input(item),
+                                escaped: self.escaped,
+                            })
+                        }
+                        Content::Slice(s) => {
+                            let (item, rest) = s.split_at(end);
+                            self.content = Some(Content::Slice(rest));
+
+                            seed.deserialize(AtomicDeserializer {
+                                content: Content::Slice(item),
+                                escaped: self.escaped,
+                            })
+                        }
+                        // Skip additional bytes if we own data for next iteration, but deserialize from
+                        // the borrowed data from our buffer
+                        Content::Owned(s, skip) => {
+                            let item = s.split_at(skip + end).0;
+                            let result = seed.deserialize(AtomicDeserializer {
+                                content: Content::Slice(item),
+                                escaped: self.escaped,
+                            });
+
+                            self.content = Some(Content::Owned(s, skip + end));
+
+                            result
+                        }
+                    },
+                }
+                .map(Some);
+            }
+        }
+        Ok(None)
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,6 +633,93 @@ mod tests {
 
             let data: String = Deserialize::deserialize(de).unwrap();
             assert_eq!(data, "string slice");
+        }
+    }
+
+    /// Module for testing list accessor
+    mod list {
+        use super::*;
+
+        #[test]
+        fn empty() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn only_spaces() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("  ")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn one_item() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("abc")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn two_items() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("abc def")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("def"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn leading_spaces() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("  def")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("def"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn trailing_spaces() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("abc  ")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
+
+        #[test]
+        fn mixed_types() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("string 1.23 42 true false h Unit")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("string"));
+            assert_eq!(seq.next_element::<f32>().unwrap(), Some(1.23));
+            assert_eq!(seq.next_element::<u32>().unwrap(), Some(42));
+            assert_eq!(seq.next_element::<bool>().unwrap(), Some(true));
+            assert_eq!(seq.next_element::<bool>().unwrap(), Some(false));
+            assert_eq!(seq.next_element::<char>().unwrap(), Some('h'));
+            assert_eq!(seq.next_element::<Enum>().unwrap(), Some(Enum::Unit));
+            assert_eq!(seq.next_element::<()>().unwrap(), None);
         }
     }
 }
