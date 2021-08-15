@@ -41,33 +41,12 @@ fn sample_2_full() {
     );
 }
 
-#[cfg(all(not(windows), feature = "escape-html"))]
+#[cfg(feature = "escape-html")]
 #[test]
-// FIXME: Fails with:
-// ```
-// Unexpected event at line 6:
-// Expected: InvalidUtf8([10, 38, 110, 98, 115, 112, 59, 10]; invalid utf-8 sequence of 1 bytes from index 1)
-// Found: Characters(
-//
-// )
-// ```
-#[ignore]
 fn html5() {
     test(
         include_str!("documents/html5.html"),
         include_str!("documents/html5.txt"),
-        false,
-    );
-}
-
-#[cfg(all(windows, feature = "escape-html"))]
-#[test]
-// FIXME: Fails the same way as the one above
-#[ignore]
-fn html5() {
-    test(
-        include_str!("documents/html5.html"),
-        include_str!("documents/html5-windows.txt"),
         false,
     );
 }
