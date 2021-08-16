@@ -3,9 +3,10 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::str2bool;
+use crate::de::{deserialize_bool, str2bool};
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
+use crate::reader::Decoder;
 use memchr::memchr;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};
@@ -18,6 +19,15 @@ macro_rules! deserialize_num {
             V: Visitor<'de>,
         {
             visitor.$visit(self.content.as_str().parse()?)
+        }
+    };
+    ($method:ident => $visit:ident) => {
+        fn $method<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+        where
+            V: Visitor<'de>,
+        {
+            let string = self.decode()?;
+            visitor.$visit(string.as_str().parse()?)
         }
     };
 }
@@ -447,6 +457,312 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 
 //-----------------------------------------------------------------------------
 
+/// A deserializer for an xml probably escaped and encoded value of XSD [simple types].
+/// This deserializer will borrow from the input as much as possible.
+///
+/// When asking for any date, deserializer always return a whole string that
+/// it contain.
+///
+/// Escaping the value is actually are not always necessary, for instance when
+/// converting to a float, we don't expect any escapable character anyway.
+/// In that cases deserializer skips unescaping step.
+///
+/// Used for deserialize values from:
+/// - attribute values (`<... ...="value" ...>`)
+/// - text content (`<...>text</...>`)
+/// - CDATA content (`<...><![CDATA[cdata]]></...>`)
+///
+/// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
+#[derive(Clone)]
+pub struct SimpleTypeDeserializer<'de> {
+    /// - In case of attribute contains escaped attribute value
+    /// - In case of text contains escaped text value
+    /// - In case of CData contains unescaped cdata value
+    content: Cow<'de, [u8]>,
+    /// If `true`, `content` in escaped form and should be unescaped before use
+    escaped: bool,
+    /// Decoder used to deserialize string data, numeric and boolean data.
+    /// Not used for deserializing raw byte buffers
+    decoder: Decoder,
+}
+
+impl<'de> SimpleTypeDeserializer<'de> {
+    pub fn new(content: Cow<'de, [u8]>, escaped: bool, decoder: Decoder) -> Self {
+        Self {
+            content,
+            escaped,
+            decoder,
+        }
+    }
+    /// Decodes raw bytes using the encoding specified.
+    /// The method will borrow if has the UTF-8 compatible representation.
+    #[inline]
+    fn decode<'a>(&'a self) -> Result<Content<'de, 'a>, DeError> {
+        #[cfg(not(feature = "encoding"))]
+        let value = match self.content {
+            Cow::Borrowed(content) => Content::Input(self.decoder.decode(content)?),
+            Cow::Owned(ref content) => Content::Slice(self.decoder.decode(content)?),
+        };
+
+        #[cfg(feature = "encoding")]
+        let value = match self.content {
+            Cow::Borrowed(content) => match self.decoder.decode(content) {
+                Cow::Borrowed(content) => Content::Input(content),
+                Cow::Owned(content) => Content::Owned(content, 0),
+            },
+            Cow::Owned(ref content) => match self.decoder.decode(content) {
+                Cow::Borrowed(content) => Content::Slice(content),
+                Cow::Owned(content) => Content::Owned(content, 0),
+            },
+        };
+
+        Ok(value)
+    }
+}
+
+impl<'de> Deserializer<'de> for SimpleTypeDeserializer<'de> {
+    type Error = DeError;
+
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        deserialize_bool(&self.content, self.decoder, visitor)
+    }
+
+    deserialize_num!(deserialize_i8  => visit_i8);
+    deserialize_num!(deserialize_i16 => visit_i16);
+    deserialize_num!(deserialize_i32 => visit_i32);
+    deserialize_num!(deserialize_i64 => visit_i64);
+
+    deserialize_num!(deserialize_u8  => visit_u8);
+    deserialize_num!(deserialize_u16 => visit_u16);
+    deserialize_num!(deserialize_u32 => visit_u32);
+    deserialize_num!(deserialize_u64 => visit_u64);
+
+    serde_if_integer128! {
+        deserialize_num!(deserialize_i128 => visit_i128);
+        deserialize_num!(deserialize_u128 => visit_u128);
+    }
+
+    deserialize_num!(deserialize_f32 => visit_f32);
+    deserialize_num!(deserialize_f64 => visit_f64);
+
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let content = self.decode()?;
+        if self.escaped {
+            match unescape(content.as_str().as_bytes())? {
+                Cow::Borrowed(_) => content.deserialize_all(visitor),
+                Cow::Owned(buf) => visitor.visit_string(String::from_utf8(buf)?),
+            }
+        } else {
+            content.deserialize_all(visitor)
+        }
+    }
+
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.content {
+            Cow::Borrowed(content) => visitor.visit_borrowed_bytes(content),
+            Cow::Owned(content) => visitor.visit_byte_buf(content),
+        }
+    }
+
+    /// Forwards deserialization to the [`Self::deserialize_bytes`]
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_bytes(visitor)
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if self.content.is_empty() {
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
+    }
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
+    /// Forwards deserialization to the [`Self::deserialize_unit`]
+    fn deserialize_unit_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_unit(visitor)
+    }
+
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_seq(ListIter {
+            content: Some(self.decode()?),
+            escaped: self.escaped,
+        })
+    }
+
+    /// Representation of tuples the same as [sequences][Self::deserialize_seq].
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    /// Representation of named tuples the same as [unnamed tuples][Self::deserialize_tuple].
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    unsupported!(deserialize_map => "maps are not supported for XSD `simpleType`s");
+    unsupported!(deserialize_struct(&'static str, &'static [&'static str])
+                 => "structures are not supported for XSD `simpleType`s");
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_enum(self)
+    }
+
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+}
+
+impl<'de> EnumAccess<'de> for SimpleTypeDeserializer<'de> {
+    type Error = DeError;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self), DeError>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let name = seed.deserialize(self.clone())?;
+        Ok((name, self))
+    }
+}
+
+impl<'de> VariantAccess<'de> for SimpleTypeDeserializer<'de> {
+    type Error = DeError;
+
+    fn unit_variant(self) -> Result<(), DeError> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value, DeError>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        Err(DeError::Unsupported(
+            "enum newtype variants are not supported for XSD `simpleType`s",
+        ))
+    }
+
+    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        Err(DeError::Unsupported(
+            "enum tuple variants are not supported for XSD `simpleType`s",
+        ))
+    }
+
+    fn struct_variant<V>(
+        self,
+        _fields: &'static [&'static str],
+        _visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        Err(DeError::Unsupported(
+            "enum struct variants are not supported for XSD `simpleType`s",
+        ))
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -454,6 +770,42 @@ mod tests {
     use serde::de::IgnoredAny;
     use serde::Deserialize;
     use std::collections::HashMap;
+
+    macro_rules! simple {
+        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
+            #[test]
+            fn $name() {
+                let decoder = Decoder::$encoding();
+                let xml = $xml;
+                let de = SimpleTypeDeserializer::new(Cow::Borrowed(xml.as_ref()), true, decoder);
+                let data: $type = Deserialize::deserialize(de).unwrap();
+
+                assert_eq!(data, $result);
+            }
+        };
+    }
+
+    macro_rules! err {
+        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $kind:ident($reason:literal)) => {
+            #[test]
+            fn $name() {
+                let decoder = Decoder::$encoding();
+                let xml = $xml;
+                let de = SimpleTypeDeserializer::new(Cow::Borrowed(xml.as_ref()), true, decoder);
+                let err = <$type as Deserialize>::deserialize(de).unwrap_err();
+
+                match err {
+                    DeError::$kind(e) => assert_eq!(e, $reason),
+                    _ => panic!(
+                        "Expected `{}({})`, found `{:?}`",
+                        stringify!($kind),
+                        $reason,
+                        err
+                    ),
+                }
+            }
+        };
+    }
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct Unit;
@@ -721,5 +1073,146 @@ mod tests {
             assert_eq!(seq.next_element::<Enum>().unwrap(), Some(Enum::Unit));
             assert_eq!(seq.next_element::<()>().unwrap(), None);
         }
+    }
+
+    mod utf8 {
+        use super::*;
+
+        simple!(utf8, i8_:  i8  = "-2" => -2);
+        simple!(utf8, i16_: i16 = "-2" => -2);
+        simple!(utf8, i32_: i32 = "-2" => -2);
+        simple!(utf8, i64_: i64 = "-2" => -2);
+
+        simple!(utf8, u8_:  u8  = "3" => 3);
+        simple!(utf8, u16_: u16 = "3" => 3);
+        simple!(utf8, u32_: u32 = "3" => 3);
+        simple!(utf8, u64_: u64 = "3" => 3);
+
+        serde_if_integer128! {
+            simple!(utf8, i128_: i128 = "-2" => -2);
+            simple!(utf8, u128_: u128 = "2" => 2);
+        }
+
+        simple!(utf8, f32_: f32 = "1.23" => 1.23);
+        simple!(utf8, f64_: f64 = "1.23" => 1.23);
+
+        simple!(utf8, false_: bool = "false" => false);
+        simple!(utf8, true_: bool  = "true" => true);
+        simple!(utf8, char_unescaped: char = "h" => 'h');
+        simple!(utf8, char_escaped: char = "&lt;" => '<');
+
+        simple!(utf8, string: String = "&lt;escaped&#x20;string" => "<escaped string");
+        simple!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string" => ByteBuf(b"&lt;escaped&#x20;string".to_vec()));
+
+        simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
+        simple!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string" => Bytes(b"&lt;escaped&#x20;string"));
+
+        simple!(utf8, option_none: Option<&str> = "" => None);
+        simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
+
+        simple!(utf8, unit: () = "any data" => ());
+        simple!(utf8, unit_struct: Unit = "any data" => Unit);
+
+        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        simple!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+
+        err!(utf8, map: HashMap<(), ()> = "any data"
+             => Unsupported("maps are not supported for XSD `simpleType`s"));
+        err!(utf8, struct_: Struct = "any data"
+             => Unsupported("structures are not supported for XSD `simpleType`s"));
+
+        simple!(utf8, enum_unit: Enum = "Unit" => Enum::Unit);
+        err!(utf8, enum_newtype: Enum = "Newtype"
+             => Unsupported("enum newtype variants are not supported for XSD `simpleType`s"));
+        err!(utf8, enum_tuple: Enum = "Tuple"
+             => Unsupported("enum tuple variants are not supported for XSD `simpleType`s"));
+        err!(utf8, enum_struct: Enum = "Struct"
+             => Unsupported("enum struct variants are not supported for XSD `simpleType`s"));
+        err!(utf8, enum_other: Enum = "any data"
+             => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
+
+        simple!(utf8, identifier: Id = "Field" => Id::Field);
+        simple!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
+    }
+
+    #[cfg(feature = "encoding")]
+    mod utf16 {
+        use super::*;
+
+        fn to_utf16(string: &str) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            for ch in string.encode_utf16() {
+                bytes.extend(&ch.to_le_bytes());
+            }
+            bytes
+        }
+
+        macro_rules! utf16 {
+            ($name:ident: $type:ty = $xml:literal => $result:expr) => {
+                simple!(utf16, $name: $type = to_utf16($xml) => $result);
+            };
+        }
+
+        macro_rules! unsupported {
+            ($name:ident: $type:ty = $xml:literal => $err:literal) => {
+                err!(utf16, $name: $type = to_utf16($xml) => Unsupported($err));
+            };
+        }
+
+        utf16!(i8_:  i8  = "-2" => -2);
+        utf16!(i16_: i16 = "-2" => -2);
+        utf16!(i32_: i32 = "-2" => -2);
+        utf16!(i64_: i64 = "-2" => -2);
+
+        utf16!(u8_:  u8  = "3" => 3);
+        utf16!(u16_: u16 = "3" => 3);
+        utf16!(u32_: u32 = "3" => 3);
+        utf16!(u64_: u64 = "3" => 3);
+
+        serde_if_integer128! {
+            utf16!(i128_: i128 = "-2" => -2);
+            utf16!(u128_: u128 = "2" => 2);
+        }
+
+        utf16!(f32_: f32 = "1.23" => 1.23);
+        utf16!(f64_: f64 = "1.23" => 1.23);
+
+        utf16!(false_: bool = "false" => false);
+        utf16!(true_: bool  = "true" => true);
+        utf16!(char_unescaped: char = "h" => 'h');
+        utf16!(char_escaped: char = "&lt;" => '<');
+
+        utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
+        utf16!(byte_buf: ByteBuf = "&lt;escaped&#x20;string" => ByteBuf(to_utf16("&lt;escaped&#x20;string")));
+
+        utf16!(option_none: Option<()> = "" => None);
+        utf16!(option_some: Option<()> = "any data" => Some(()));
+
+        utf16!(unit: () = "any data" => ());
+        utf16!(unit_struct: Unit = "any data" => Unit);
+
+        utf16!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+
+        // UTF-16 data never borrow because data was decoded not in-place
+        err!(utf16, newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")
+             => Custom("invalid type: string \"non-escaped string\", expected a borrowed string"));
+
+        unsupported!(map: HashMap<(), ()> = "any data"
+                     => "maps are not supported for XSD `simpleType`s");
+        unsupported!(struct_: Struct = "any data"
+                     => "structures are not supported for XSD `simpleType`s");
+
+        utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
+        err!(utf16, enum_newtype: Enum = to_utf16("Newtype")
+             => Unsupported("enum newtype variants are not supported for XSD `simpleType`s"));
+        err!(utf16, enum_tuple: Enum = to_utf16("Tuple")
+             => Unsupported("enum tuple variants are not supported for XSD `simpleType`s"));
+        err!(utf16, enum_struct: Enum = to_utf16("Struct")
+             => Unsupported("enum struct variants are not supported for XSD `simpleType`s"));
+        err!(utf16, enum_other: Enum = to_utf16("any data")
+             => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
+
+        utf16!(identifier: Id = "Field" => Id::Field);
+        utf16!(ignored_any: Any = "any data" => Any(IgnoredAny));
     }
 }
