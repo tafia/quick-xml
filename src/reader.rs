@@ -1549,14 +1549,21 @@ impl Decoder {
     }
 }
 
+/// This implementation is required for tests of other parts of the library
+#[cfg(test)]
+#[cfg(feature = "serialize")]
 impl Decoder {
-    /// This implementation is required for tests of other parts of the library
-    #[cfg(test)]
-    #[cfg(feature = "serialize")]
     pub(crate) fn utf8() -> Self {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: encoding_rs::UTF_8,
+        }
+    }
+
+    #[cfg(feature = "encoding")]
+    pub(crate) fn utf16() -> Self {
+        Decoder {
+            encoding: encoding_rs::UTF_16LE,
         }
     }
 }
