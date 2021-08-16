@@ -240,6 +240,23 @@ struct Root {
 }
 ```
 
+### Serializing unit variants as primitives
+
+The `$primitive` prefix lets you serialize enum variants without associated values (internally referred to as _unit variants_) as primitive strings rather than self-closing tags. Consider the following definitions:
+
+```rust,ignore
+enum Foo {
+    #[serde(rename = "$primitive=Bar")]
+    Bar
+}
+
+struct Root {
+    foo: Foo
+}
+```
+
+Serializing `Root { foo: Foo::Bar }` will then yield `<Root foo="Bar"/>` instead of `<Root><Bar/></Root>`.
+
 ### Performance
 
 Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
