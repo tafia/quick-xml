@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+## 0.23.0-alpha3
+
 - fix: use element name (with namespace) when unflattening (serialize feature)
 
 ## 0.23.0-alpha2
