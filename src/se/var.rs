@@ -125,7 +125,7 @@ where
         // TODO: Inherit indentation state from self.parent.writer
         let writer = Writer::new(&mut self.buffer);
         if key.starts_with(UNFLATTEN_PREFIX) {
-            let key = key.split_at(UNFLATTEN_PREFIX.len()).1;
+            let key = &key[UNFLATTEN_PREFIX.len()..];
             let mut serializer = Serializer::with_root(writer, Some(key));
             serializer.serialize_newtype_struct(key, value)?;
             self.children.append(&mut self.buffer);

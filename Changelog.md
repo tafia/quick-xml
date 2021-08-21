@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- fix: use element name (with namespace) when unflattening (serialize feature)
+
 ## 0.23.0-alpha2
 
 - fix: failing tests with features

@@ -1,6 +1,6 @@
 # quick-xml
 
-[![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/tafia/quick-xml)
+![status](https://github.com/tafia/quick-xml/actions/workflows/rust.yml/badge.svg)
 [![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
 
 High performance xml pull reader/writer.
@@ -38,6 +38,9 @@ let mut buf = Vec::new();
 
 // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
+    // NOTE: this is the generic case when we don't know about the input BufRead.
+    // when the input is a &str or a &[u8], we don't actually need to use another
+    // buffer, we could directly call `reader.read_event_unbuffered()`
     match reader.read_event(&mut buf) {
         Ok(Event::Start(ref e)) => {
             match e.name() {
