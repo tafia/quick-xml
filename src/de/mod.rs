@@ -114,6 +114,7 @@ mod var;
 
 pub use crate::errors::serialize::DeError;
 use crate::{
+    errors::Error,
     events::{BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
@@ -514,7 +515,10 @@ impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
-        Ok(self.reader.read_to_end(name, &mut self.buf)?)
+        match self.reader.read_to_end(name, &mut self.buf) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            other => Ok(other?),
+        }
     }
 
     fn decoder(&self) -> Decoder {
@@ -540,7 +544,10 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
-        Ok(self.reader.read_to_end_unbuffered(name)?)
+        match self.reader.read_to_end_unbuffered(name) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            other => Ok(other?),
+        }
     }
 
     fn decoder(&self) -> Decoder {
