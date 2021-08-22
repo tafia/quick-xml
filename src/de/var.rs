@@ -1,7 +1,6 @@
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, Deserializer},
+    de::{escape::EscapedDeserializer, BorrowingReader, DeEvent, Deserializer},
     errors::serialize::DeError,
-    events::Event,
 };
 use serde::de::{self, Deserializer as SerdeDeserializer};
 
@@ -26,9 +25,13 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::EnumAccess<'de> for EnumAccess<'de, '
     ) -> Result<(V::Value, VariantAccess<'de, 'a, R>), DeError> {
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
-            Some(Event::Text(t)) => EscapedDeserializer::new(t.to_vec(), decoder, true),
-            Some(Event::Start(e)) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
-            Some(e) => return Err(DeError::InvalidEnum(e.clone().into_owned())),
+            Some(DeEvent::Text(t)) => EscapedDeserializer::new(t.to_vec(), decoder, true),
+            Some(DeEvent::Start(e)) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
+            Some(_) => {
+                return Err(DeError::Unsupported(
+                    "Invalid event for Enum, expecting `Text` or `Start`",
+                ))
+            }
             None => return Err(DeError::Eof),
         };
         let name = seed.deserialize(de)?;
@@ -45,8 +48,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::VariantAccess<'de> for VariantAccess<
 
     fn unit_variant(self) -> Result<(), DeError> {
         match self.de.next()? {
-            Event::Start(e) => self.de.read_to_end(e.name()),
-            Event::Text(_) => Ok(()),
+            DeEvent::Start(e) => self.de.read_to_end(e.name()),
+            DeEvent::Text(_) => Ok(()),
             _ => unreachable!(),
         }
     }
