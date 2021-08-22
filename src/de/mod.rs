@@ -452,10 +452,18 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         self.deserialize_string(visitor)
     }
 
+    /// Always call `visitor.visit_unit()` because returned value ignored in any case.
+    ///
+    /// This method consumes any single [event][Event] except the [`Start`][Event::Start]
+    /// event. in which case all events up to corresponding [`End`][Event::End] event will
+    /// be consumed.
+    ///
+    /// This method returns error if current event is [`End`][Event::End] or [`Eof`][Event::Eof]
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         match self.next()? {
             Event::Start(e) => self.read_to_end(e.name())?,
             Event::End(_) => return Err(DeError::End),
+            Event::Eof => return Err(DeError::Eof),
             _ => (),
         }
         visitor.visit_unit()
@@ -570,6 +578,7 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::de::IgnoredAny;
     use serde::Deserialize;
 
     /// Deserialize an instance of type T from a string of XML text.
@@ -953,6 +962,22 @@ mod tests {
         let item: Item = from_str(s).unwrap();
 
         assert_eq!(item, Item);
+    }
+
+    /// Tests calling `deserialize_ignored_any`
+    #[test]
+    fn ignored_any() {
+        let err = from_str::<IgnoredAny>("");
+        match err {
+            Err(DeError::Eof) => {}
+            other => panic!("Expected `Eof`, found {:?}", other),
+        }
+
+        from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<with-attributes key="value"/>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested>text</nested>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested><![CDATA[cdata]]></nested>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested><nested/></nested>"#).unwrap();
     }
 
     mod unit {
