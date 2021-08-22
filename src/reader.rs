@@ -349,13 +349,10 @@ impl<R: BufRead> Reader<R> {
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
     fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
-            string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
-        };
-
         let len = buf.len();
-        if buf.starts_with(b"!--") {
-            // FIXME: actually, isn't, it misses <!-->
+        // Note: A proper prefix is guaranteed by read_bang_elem(); it's enough
+        // to check the first character here.
+        if buf[1] == b'-' {
             debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_elem");
             if self.check_comments {
                 // search if '--' not in comments
@@ -367,10 +364,10 @@ impl<R: BufRead> Reader<R> {
                 }
             }
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
-        } else if uncased_starts_with(buf, b"![CDATA[") {
+        } else if buf[1] == b'[' {
             debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
             Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
-        } else if uncased_starts_with(buf, b"!DOCTYPE") {
+        } else if buf[1] == b'D' || buf[1] == b'd' {
             debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
             Ok(Event::DocType(BytesText::from_escaped(&buf[8..])))
         } else {
@@ -952,13 +949,14 @@ fn read_until_done<'b, R, F1, F2>(
     buf_reader: &mut R,
     buf: &'b mut Vec<u8>,
     position: &mut usize,
+    allow_eof: bool,
     mut bytes_to_consume: F1,
     mut is_done: F2,
 ) -> Result<Option<Range<usize>>>
 where
     R: BufRead,
     F1: FnMut(&[u8]) -> Option<usize>,
-    F2: FnMut(&[u8], &[u8]) -> Option<Range<usize>>,
+    F2: FnMut(&[u8], &[u8]) -> Result<Option<Range<usize>>>,
 {
     let mut read = 0;
     let start = buf.len();
@@ -968,11 +966,19 @@ where
             Ok(n) if n.is_empty() => {
                 return if read == 0 {
                     Ok(None)
-                } else {
-                    // FIXME: Both old and new implementation might return
-                    // an invalid end tag in case of an unexpected EOF
+                } else if allow_eof {
+                    // Text tag that has no '<' after it, i.e. at EOF
                     *position += read;
                     Ok(Some(start..start + read))
+                } else {
+                    let tag_type = match buf.get(start) {
+                        None => "empty element",
+                        Some(b'?') => "XmlDecl",
+                        Some(b'!') => "bang element",
+                        Some(_) => "element",
+                    };
+
+                    return Err(Error::UnexpectedEof(tag_type.to_string()));
                 };
             }
             Ok(n) => n,
@@ -984,12 +990,10 @@ where
         };
 
         let consumed_bytes = bytes_to_consume(available);
-
-        debug_assert_ne!(available.len(), 0);
-
         let len = consumed_bytes.unwrap_or(available.len());
 
-        debug_assert_ne!(len, 0);
+        debug_assert_ne!(available.len(), 0, "the fill_buf match returns early");
+        debug_assert_ne!(len, 0, "bytes_to_consume() won't ever return 0");
 
         buf.extend_from_slice(&available[..len]);
         buf_reader.consume(len);
@@ -1003,9 +1007,9 @@ where
         let new_bytes = &buf[start_new..];
         let all_bytes = &buf[start..];
 
-        debug_assert!(!all_bytes.is_empty());
+        debug_assert!(!all_bytes.is_empty(), "the fill_buf match returns early");
 
-        let bytes_range = is_done(all_bytes, new_bytes);
+        let bytes_range = is_done(all_bytes, new_bytes)?;
 
         if let Some(range) = bytes_range {
             *position += read;
@@ -1036,10 +1040,12 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
 
         let is_done = |all_bytes: &[u8], _new_bytes: &[u8]| {
             // Skip the ending '<' or '>'
-            Some(0..all_bytes.len() - 1)
+            Ok(Some(0..all_bytes.len() - 1))
         };
 
-        let bytes_range = read_until_done(self, buf, position, bytes_to_consume, is_done);
+        let allow_eof = byte == b'<';
+        let bytes_range =
+            read_until_done(self, buf, position, allow_eof, bytes_to_consume, is_done);
 
         match bytes_range {
             Ok(Some(range)) => Ok(Some(&buf[range])),
@@ -1053,89 +1059,114 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         buf: &'b mut Vec<u8>,
         position: &mut usize,
     ) -> Result<Option<&'b [u8]>> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        let start = buf.len();
-        let mut read = 1;
-        buf.push(b'!');
-        self.consume(1);
-
         enum BangType {
             // <![CDATA[...]]>
             CData,
             // <!--...-->
             Comment,
-            // <!DOCTYPE...>
-            DocType,
+            // <!DOCTYPE...>, uncased, with the number of inner '<' and '>' characters
+            DocType(usize, usize),
         }
 
-        let bang_type = match self.peek_one()? {
-            Some(b'[') => BangType::CData,
-            Some(b'-') => BangType::Comment,
-            Some(b'D') | Some(b'd') => BangType::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
+        let bytes_to_consume = move |available: &[u8]| {
+            if available.len() < 2 {
+                // Not enough to determine the bang element type
+                return None;
+            }
+
+            // Consume everything until the next '>'
+            // Note that this '>' might be inside a comment/cdata, need a final
+            // check in `is_done` to confirm
+            memchr::memchr(b'>', available).map(|index| index + 1)
         };
 
-        loop {
-            let available = match self.fill_buf() {
-                Ok(n) if n.is_empty() => {
-                    // Note: Do not update position, so the error points to
-                    // somewhere sane rather than at the EOF
-                    let bang_str = match bang_type {
-                        BangType::CData => "CData",
-                        BangType::Comment => "Comment",
-                        BangType::DocType => "DOCTYPE",
-                    };
-                    return Err(Error::UnexpectedEof(bang_str.to_string()));
-                }
-                Ok(n) => n,
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
+        let is_done = |all_bytes: &[u8], new_bytes: &[u8]| {
+            // Peeked one character before `read_bang_element` was called, and
+            // all_bytes[0] is guaranteed to be a `!`.
+            debug_assert!(all_bytes[0] == b'!');
+
+            let mut bang_type = match all_bytes[1] {
+                b'[' => BangType::CData,
+                b'-' => BangType::Comment,
+                b'D' => BangType::DocType(1, 0),
+                _ => return Err(Error::UnexpectedBang),
             };
 
-            match memchr::memchr(b'>', available) {
-                Some(i) => {
-                    buf.extend_from_slice(&available[..i]);
-                    let used = i + 1;
-                    self.consume(used);
-                    read += used;
+            // Note that '<' is not part of `all_bytes` but '>' is
+            let (shortest_len, prefix, cased) = match bang_type {
+                BangType::CData => (b"![CDATA[".len(), b"[CDATA".as_ref(), true),
+                BangType::Comment => (b"!---->".len(), b"--".as_ref(), true),
+                BangType::DocType(_, _) => (b"!DOCTYPE>".len(), b"DOCTYPE".as_ref(), false),
+            };
 
-                    let finished = match bang_type {
-                        BangType::Comment => read >= 5 && buf.ends_with(b"--"),
-                        BangType::CData => buf.ends_with(b"]]"),
-                        BangType::DocType => {
-                            memchr::memchr2_iter(b'<', b'>', buf)
-                                .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
-                                .sum::<i32>()
-                                == 0
-                        }
-                    };
+            if all_bytes.len() < shortest_len {
+                // Not enough to make a decision; read more bytes.
+                return Ok(None);
+            }
 
-                    if finished {
-                        break;
-                    } else {
-                        // '>' was omitted in the extend_from_slice above
-                        buf.push(b'>');
+            debug_assert!(shortest_len > prefix.len() + 1);
+
+            let prefix_matches = if cased {
+                &all_bytes[1..prefix.len() + 1] == prefix
+            } else {
+                // See https://github.com/tafia/quick-xml/pull/242
+                all_bytes[1..prefix.len() + 1].eq_ignore_ascii_case(prefix)
+            };
+
+            if !prefix_matches {
+                // E.g. starts with "<![" but not with "<![CDATA["
+                return Err(Error::UnexpectedBang);
+            }
+
+            let len = all_bytes.len();
+
+            // Check if this '>' ends the element, or if more bytes are needed.
+            match bang_type {
+                BangType::CData => {
+                    if &all_bytes[len - 3..len - 1] != b"]]" {
+                        // This '>' is not an ending "]]>".
+                        return Ok(None);
                     }
                 }
-                None => {
-                    buf.extend_from_slice(available);
-                    let used = available.len();
-                    self.consume(used);
-                    read += used;
+                BangType::Comment => {
+                    if &all_bytes[len - 3..len - 1] != b"--" {
+                        // This '>' is not an ending "-->".
+                        return Ok(None);
+                    }
                 }
-            }
-        }
-        *position += read;
+                BangType::DocType(ref mut opened, ref mut closed) => {
+                    for index in memchr::memchr2_iter(b'<', b'>', new_bytes) {
+                        if new_bytes[index] == b'<' {
+                            *opened += 1;
+                        } else {
+                            *closed += 1;
+                        }
+                    }
 
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
+                    // The bytes_to_consume() closure ensures closing '>' bytes
+                    // are provided one by one, and is_done stops before going
+                    // below 0.
+                    debug_assert!(closed <= opened);
+
+                    if closed != opened {
+                        // This '>' is not a closing byte, as there are still
+                        // some '<' unmatched by '>' inside the doctype element.
+                        return Ok(None);
+                    }
+                }
+            };
+            // Skip the ending '>'
+            Ok(Some(0..all_bytes.len() - 1))
+        };
+
+        let allow_eof = false;
+        let bytes_range =
+            read_until_done(self, buf, position, allow_eof, bytes_to_consume, is_done);
+
+        match bytes_range {
+            Ok(Some(range)) => Ok(Some(&buf[range])),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -1194,10 +1225,12 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
 
         let is_done = |all_bytes: &[u8], _new_bytes: &[u8]| {
             // Skip the ending '>'
-            Some(0..all_bytes.len() - 1)
+            Ok(Some(0..all_bytes.len() - 1))
         };
 
-        let bytes_range = read_until_done(self, buf, position, bytes_to_consume, is_done);
+        let allow_eof = false;
+        let bytes_range =
+            read_until_done(self, buf, position, allow_eof, bytes_to_consume, is_done);
 
         match bytes_range {
             Ok(Some(range)) => Ok(Some(&buf[range])),
