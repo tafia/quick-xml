@@ -3,6 +3,7 @@
 #[cfg(feature = "encoding")]
 use std::borrow::Cow;
 use std::io::{self, BufRead, BufReader};
+use std::ops::Range;
 use std::{fs::File, path::Path, str::from_utf8};
 
 #[cfg(feature = "encoding")]
@@ -943,9 +944,84 @@ where
     fn input_borrowed(event: Event<'r>) -> Event<'i>;
 }
 
+// Keep consuming and copying bytes from a BufRead into a user buffer until the
+// user buffer contains a complete element. The type of element is given by the
+// is_done function.
+#[inline(always)]
+fn read_until_done<'b, R, F1, F2>(
+    buf_reader: &mut R,
+    buf: &'b mut Vec<u8>,
+    position: &mut usize,
+    mut bytes_to_consume: F1,
+    mut is_done: F2,
+) -> Result<Option<Range<usize>>>
+where
+    R: BufRead,
+    F1: FnMut(&[u8]) -> Option<usize>,
+    F2: FnMut(&[u8], &[u8]) -> Option<Range<usize>>,
+{
+    let mut read = 0;
+    let start = buf.len();
+
+    loop {
+        let available = match buf_reader.fill_buf() {
+            Ok(n) if n.is_empty() => {
+                return if read == 0 {
+                    Ok(None)
+                } else {
+                    // FIXME: Both old and new implementation might return
+                    // an invalid end tag in case of an unexpected EOF
+                    *position += read;
+                    Ok(Some(start..start + read))
+                };
+            }
+            Ok(n) => n,
+            Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => {
+                *position += read;
+                return Err(Error::Io(e));
+            }
+        };
+
+        let consumed_bytes = bytes_to_consume(available);
+
+        debug_assert_ne!(available.len(), 0);
+
+        let len = consumed_bytes.unwrap_or(available.len());
+
+        debug_assert_ne!(len, 0);
+
+        buf.extend_from_slice(&available[..len]);
+        buf_reader.consume(len);
+        let start_new = start + read;
+        read += len;
+
+        if consumed_bytes.is_none() {
+            continue;
+        }
+
+        let new_bytes = &buf[start_new..];
+        let all_bytes = &buf[start..];
+
+        debug_assert!(!all_bytes.is_empty());
+
+        let bytes_range = is_done(all_bytes, new_bytes);
+
+        if let Some(range) = bytes_range {
+            *position += read;
+            // Note: A range is used here because of a limitation of Rust's NLL:
+            // https://rust-lang.github.io/rfcs/2094-nll.html#problem-case-3-conditional-control-flow-across-functions
+            // If this is fixed, having is_done and this function work with
+            // slices will make things much cleaner, and possibly faster.
+            return Ok(Some((range.start + start)..(range.end + start)));
+        }
+    }
+}
+
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
 impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
+    /// read until the `is_done` function returns a buffer
     /// read until `byte` is found or end of file
     /// return the position of byte
     #[inline]
@@ -955,42 +1031,20 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         buf: &'b mut Vec<u8>,
         position: &mut usize,
     ) -> Result<Option<&'b [u8]>> {
-        let mut read = 0;
-        let mut done = false;
-        let start = buf.len();
-        while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e));
-                    }
-                };
+        let bytes_to_consume =
+            |available: &[u8]| memchr::memchr(byte, available).map(|index| index + 1);
 
-                match memchr::memchr(byte, available) {
-                    Some(i) => {
-                        buf.extend_from_slice(&available[..i]);
-                        done = true;
-                        i + 1
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-                        available.len()
-                    }
-                }
-            };
-            self.consume(used);
-            read += used;
-        }
-        *position += read;
+        let is_done = |all_bytes: &[u8], _new_bytes: &[u8]| {
+            // Skip the ending '<' or '>'
+            Some(0..all_bytes.len() - 1)
+        };
 
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
+        let bytes_range = read_until_done(self, buf, position, bytes_to_consume, is_done);
+
+        match bytes_range {
+            Ok(Some(range)) => Ok(Some(&buf[range])),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 
@@ -1111,69 +1165,44 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
             DoubleQ,
         }
         let mut state = State::Elem;
-        let mut read = 0;
-        let mut done = false;
         let end_byte = b'>';
-        let start = buf.len();
-        while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => {
-                        if read == 0 {
-                            return Ok(None);
-                        } else {
-                            return Ok(Some(&buf[start..]));
-                        }
+
+        let bytes_to_consume = move |available: &[u8]| {
+            let mut indexes = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
+
+            while let Some(index) = indexes.next() {
+                state = match (state, available[index]) {
+                    (State::Elem, b) if b == end_byte => {
+                        // Consume everything so far, including the '>'
+                        return Some(index + 1);
                     }
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e));
-                    }
+
+                    // Opening quotes
+                    (State::Elem, b'\'') => State::SingleQ,
+                    (State::Elem, b'\"') => State::DoubleQ,
+
+                    // Closing quotes matching the opening one
+                    (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+
+                    // all other bytes: no state change
+                    _ => state,
                 };
+            }
+            // Don't have enough for an element, read more bytes
+            None
+        };
 
-                let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
-                let used: usize;
-                loop {
-                    match memiter.next() {
-                        Some(i) => {
-                            state = match (state, available[i]) {
-                                (State::Elem, b) if b == end_byte => {
-                                    // only allowed to match `end_byte` while we are in state `Elem`
-                                    buf.extend_from_slice(&available[..i]);
-                                    done = true;
-                                    used = i + 1;
-                                    break;
-                                }
-                                (State::Elem, b'\'') => State::SingleQ,
-                                (State::Elem, b'\"') => State::DoubleQ,
+        let is_done = |all_bytes: &[u8], _new_bytes: &[u8]| {
+            // Skip the ending '>'
+            Some(0..all_bytes.len() - 1)
+        };
 
-                                // the only end_byte that gets us out if the same character
-                                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+        let bytes_range = read_until_done(self, buf, position, bytes_to_consume, is_done);
 
-                                // all other bytes: no state change
-                                _ => state,
-                            };
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            used = available.len();
-                            break;
-                        }
-                    }
-                }
-                used
-            };
-            self.consume(used);
-            read += used;
-        }
-        *position += read;
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
+        match bytes_range {
+            Ok(Some(range)) => Ok(Some(&buf[range])),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 

@@ -670,6 +670,25 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
+    struct BorrowedCow<'a> {
+        #[serde(rename = "$value")]
+        #[serde(borrow)]
+        cow: Cow<'a, str>,
+    }
+
+    #[test]
+    fn cow_borrow() {
+        let s = "<cow>Bessie</cow>";
+
+        let borrowed_item: BorrowedCow = from_str(s).unwrap();
+
+        match borrowed_item.cow {
+            Cow::Borrowed(_) => (), // Ok!
+            Cow::Owned(_) => panic!("Expected borrowed Cow, not owned"),
+        }
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
     struct Item {
         name: String,
         source: String,
