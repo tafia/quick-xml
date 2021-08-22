@@ -451,6 +451,24 @@ where
         visitor.visit_byte_buf(value)
     }
 
+    /// Unit represented in XML as a `xs:element` or text/CDATA content.
+    /// Any content inside `xs:element` is ignored and skipped.
+    ///
+    /// Produces unit struct from any of following inputs:
+    /// - any `<tag ...>...</tag>`
+    /// - any `<tag .../>`
+    /// - any text content
+    /// - any CDATA content
+    ///
+    /// # Events handling
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|-------------------------------------------
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to corresponding `End` event
+    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`DeError::End`]
+    /// |[`DeEvent::Text`] |`text content`             |Calls `visitor.visit_unit()`. Text content is ignored
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Calls `visitor.visit_unit()`. CDATA content is ignored
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -460,10 +478,13 @@ where
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            e => Err(DeError::InvalidUnit(format!("{:?}", e))),
+            DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
+            DeEvent::End(_) => Err(DeError::End),
+            DeEvent::Eof => Err(DeError::Eof),
         }
     }
 
+    /// Representation of the names units the same as [unnamed units](#method.deserialize_unit)
     fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
@@ -578,7 +599,8 @@ where
     {
         match self.peek()? {
             DeEvent::Start(_) => self.deserialize_map(visitor),
-            DeEvent::End(_) => self.deserialize_unit(visitor),
+            // Redirect to deserialize_unit in order to consume an event and return an appropriate error
+            DeEvent::End(_) | DeEvent::Eof => self.deserialize_unit(visitor),
             _ => self.deserialize_string(visitor),
         }
     }

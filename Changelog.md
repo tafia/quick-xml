@@ -17,6 +17,8 @@
 - feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
 - refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
   from the attribute and element names and attribute values
+- fix: allow to deserialize `unit`s from text and CDATA content.
+  `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
 
 ## 0.23.0-alpha3
 
