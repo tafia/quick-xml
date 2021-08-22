@@ -148,12 +148,7 @@ pub fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
 
 /// Deserialize a xml slice of bytes
 pub fn from_bytes<'de, T: Deserialize<'de>>(s: &'de [u8]) -> Result<T, DeError> {
-    let mut reader = Reader::from_bytes(s);
-    reader
-        .expand_empty_elements(true)
-        .check_end_names(true)
-        .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
+    let mut de = Deserializer::from_bytes(s);
     T::deserialize(&mut de)
 }
 
@@ -260,6 +255,23 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
             _ => (),
         }
         self.reader.read_to_end(name)
+    }
+}
+
+impl<'de> Deserializer<'de, SliceReader<'de>> {
+    /// Create new deserializer that will borrow data from the specified string
+    pub fn from_str(s: &'de str) -> Self {
+        Self::from_bytes(s.as_bytes())
+    }
+
+    /// Create new deserializer that will borrow data from the specified byte array
+    pub fn from_bytes(bytes: &'de [u8]) -> Self {
+        let mut reader = Reader::from_bytes(bytes);
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+        Self::from_borrowing_reader(SliceReader { reader })
     }
 }
 
@@ -559,6 +571,20 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 mod tests {
     use super::*;
     use serde::Deserialize;
+
+    /// Deserialize an instance of type T from a string of XML text.
+    /// If deserialization was succeeded checks that all XML events was consumed
+    fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+        let mut de = Deserializer::from_str(s);
+        let result = T::deserialize(&mut de);
+
+        // If type was deserialized, the whole XML document should be consumed
+        if let Ok(_) = result {
+            assert_eq!(de.next().unwrap(), Event::Eof);
+        }
+
+        result
+    }
 
     #[test]
     fn read_to_end() {
