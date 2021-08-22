@@ -594,13 +594,26 @@ impl<R: BufRead> Reader<R> {
     /// println!("Found {} start events", count);
     /// println!("Text events: {:?}", txt);
     /// ```
+    #[inline]
     pub fn read_namespaced_event<'a, 'b, 'c>(
         &'a mut self,
         buf: &'b mut Vec<u8>,
         namespace_buffer: &'c mut Vec<u8>,
     ) -> Result<(Option<&'c [u8]>, Event<'b>)> {
+        self.read_namespaced_event_buffered(buf, namespace_buffer)
+    }
+
+    // TODO: See if `namespace_buffer` can be made to use type B as well
+    fn read_namespaced_event_buffered<'i, 'r, 'ns, B>(
+        &mut self,
+        buf: B,
+        namespace_buffer: &'ns mut Vec<u8>,
+    ) -> Result<(Option<&'ns [u8]>, Event<'i>)>
+    where
+        R: BufferedInput<'i, 'r, B>,
+    {
         self.ns_buffer.pop_empty_namespaces(namespace_buffer);
-        match self.read_event(buf) {
+        match self.read_event_buffered(buf) {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
@@ -892,6 +905,20 @@ impl<'a> Reader<&'a [u8]> {
         self.read_event_buffered(())
     }
 
+    /// Read an event that borrows from the input rather than a buffer, and
+    /// stores the namespace in the given buffer.
+    #[inline]
+    #[deprecated(
+        note = "The signature of this method may change in the future to be fully unbuffered."
+    )]
+    #[doc(hidden)]
+    pub fn read_namespaced_event_unbuffered<'ns>(
+        &mut self,
+        namespace_buffer: &'ns mut Vec<u8>,
+    ) -> Result<(Option<&'ns [u8]>, Event<'a>)> {
+        self.read_namespaced_event_buffered((), namespace_buffer)
+    }
+
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
@@ -944,7 +971,6 @@ where
 // Keep consuming and copying bytes from a BufRead into a user buffer until the
 // user buffer contains a complete element. The type of element is given by the
 // is_done function.
-#[inline(always)]
 fn read_until_done<'b, R, F1, F2>(
     buf_reader: &mut R,
     buf: &'b mut Vec<u8>,
@@ -1088,7 +1114,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
             let mut bang_type = match all_bytes[1] {
                 b'[' => BangType::CData,
                 b'-' => BangType::Comment,
-                b'D' => BangType::DocType(1, 0),
+                b'D' | b'd' => BangType::DocType(1, 0),
                 _ => return Err(Error::UnexpectedBang),
             };
 
@@ -1337,7 +1363,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         let bang_type = match &self[1..].first() {
             Some(b'[') => BangType::CData,
             Some(b'-') => BangType::Comment,
-            Some(b'D') => BangType::DocType,
+            Some(b'D') | Some(b'd') => BangType::DocType,
             Some(_) => return Err(Error::UnexpectedBang),
             None => return Err(Error::UnexpectedEof("Bang".to_string())),
         };
@@ -1355,8 +1381,23 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             };
 
             if finished {
-                *position += i;
                 let bytes = &self[..i];
+                let doctype = b"!DOCTYPE";
+
+                let matches = match bang_type {
+                    BangType::CData => bytes.starts_with(b"![CDATA["),
+                    BangType::Comment => bytes.starts_with(b"!--"),
+                    BangType::DocType => {
+                        bytes.len() > doctype.len()
+                            && bytes[0..doctype.len()].eq_ignore_ascii_case(doctype)
+                    }
+                };
+
+                if !matches {
+                    break;
+                }
+
+                *position += i;
                 // Skip the '>' too.
                 *self = &self[i + 1..];
                 return Ok(Some(bytes));

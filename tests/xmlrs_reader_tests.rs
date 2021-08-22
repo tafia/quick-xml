@@ -97,6 +97,7 @@ fn encoded_characters() {
         "
         .as_bytes(),
         true,
+        false,
     )
 }
 
@@ -147,6 +148,7 @@ fn sample_5_short() {
         include_bytes!("documents/sample_5_utf16bom.xml"),
         include_bytes!("documents/sample_5_short.txt"),
         true,
+        false,
     );
 }
 
@@ -350,10 +352,12 @@ fn default_namespace_applies_to_end_elem() {
 }
 
 fn test(input: &str, output: &str, is_short: bool) {
-    test_bytes(input.as_bytes(), output.as_bytes(), is_short);
+    for buffered in [true, false] {
+        test_bytes(input.as_bytes(), output.as_bytes(), is_short, buffered);
+    }
 }
 
-fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
+fn test_bytes(input: &[u8], output: &[u8], is_short: bool, buffered: bool) {
     // Normalize newlines on Windows to just \n, which is what the reader and
     // writer use.
     // let input = input.replace("\r\n", "\n");
@@ -377,7 +381,12 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
 
     loop {
         buf.clear();
-        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+        let event = if buffered {
+            reader.read_namespaced_event(&mut buf, &mut ns_buffer)
+        } else {
+            #[allow(deprecated)]
+            reader.read_namespaced_event_unbuffered(&mut ns_buffer)
+        };
         let line = xmlrs_display(&event, &reader);
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
@@ -402,8 +411,15 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
         }
 
         if !is_short && line.starts_with("StartDocument") {
+            let mut buf = Vec::new();
+            let event = if buffered {
+                reader.read_event(&mut buf)
+            } else {
+                reader.read_event_unbuffered()
+            };
+
             // advance next Characters(empty space) ...
-            if let Ok(Event::Text(ref e)) = reader.read_event(&mut Vec::new()) {
+            if let Ok(Event::Text(ref e)) = event {
                 if e.iter().any(|b| match *b {
                     b' ' | b'\r' | b'\n' | b'\t' => false,
                     _ => true,
