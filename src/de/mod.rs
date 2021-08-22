@@ -561,6 +561,58 @@ mod tests {
     use serde::Deserialize;
 
     #[test]
+    fn read_to_end() {
+        use crate::events::BytesEnd;
+        use crate::events::Event::*;
+
+        let mut reader = Reader::from_bytes(
+            r#"
+            <root>
+                <tag a="1"><tag>text</tag>content</tag>
+                <tag a="2"><![CDATA[cdata content]]></tag>
+                <self-closed/>
+            </root>
+            "#
+            .as_bytes(),
+        );
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+        let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed_name(b"root"))
+        );
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(br#"tag a="1""#, 3))
+        );
+        assert_eq!(de.read_to_end(b"tag").unwrap(), ());
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(br#"tag a="2""#, 3))
+        );
+        assert_eq!(
+            de.next().unwrap(),
+            CData(BytesText::from_plain_str("cdata content"))
+        );
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(b"self-closed", 11))
+        );
+        assert_eq!(de.read_to_end(b"self-closed").unwrap(), ());
+
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        assert_eq!(de.next().unwrap(), Eof);
+    }
+
+    #[test]
     fn borrowing_reader_parity() {
         let s = r##"
             <item name="hello" source="world.rs">Some text</item>
