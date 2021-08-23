@@ -1,5 +1,604 @@
 //! Serde `Deserializer` module
 //!
+//! Due to complexity of the XML standard and that fact that serde was developed
+//! with JSON in mind, not all serde concepts smoothly laid down on XML. This
+//! leads to that fact that some XML concepts are inexpressible in terms of serde
+//! derives and you may require implement deserialization manually.
+//!
+//! The most notable restriction is distinguish between _elements_ and _attributes_,
+//! no other serde format haven't such a conception.
+//!
+//! Due to that the mapping is performed in the best effort manner.
+//!
+//! # Mapping XML to Rust types
+//!
+//! Type names are never considered when deserializing, so you could name your
+//! types as you wish. Other general rules:
+//! - `struct` field name could be represented in XML only as attribute name or
+//!   element name.
+//! - `enum` variant name could be represented in XML only as attribute name or
+//!   element name.
+//! - the unit struct, unit type `()` and unit enum variant can be deserialized
+//!   from any valid XML content:
+//!   - attribute and element names
+//!   - attribute and element values
+//!   - text or CDATA content
+//! - when deserializing attribute names have precedence over element names.
+//!   So if your XML have both attribute and element named equally, the Rust
+//!   field/variant will be deserialized from the attribute.
+//!
+//! > NOTE: examples, marked with `FIXME:` do not work yet -- any PRs that fixes
+//! > that are welcome! The message after marker is a test failure message.
+//! > Also, all that tests are marked with an `ignore` option, although their
+//! > compiles. This is by intention, because rustdoc marks such blocks with
+//! > an exclamation mark unlike `no_run` blocks.
+//!
+//! <table>
+//! <thead>
+//! <tr><th>To parse all these XML's...</th><th>...use that Rust type</th></tr>
+//! </thead>
+//! <tbody>
+//! <tr>
+//! <td>
+//! Root tag name do not matter
+//!
+//! ```xml
+//! <any-tag one="..." two="..."/>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <one>...</one>
+//!   <two>...</two>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag one="...">
+//!   <two>...</two>
+//! </any-tag>
+//! ```
+//! > NOTE: such XML's are NOT supported because deserializer will always
+//! > report a duplicated field error:
+//! > ```xml
+//! > <any-tag field="...">
+//! >   <field>...</field>
+//! > </any-tag>
+//! > ```
+//! </td>
+//! <td>
+//!
+//! All these struct can be used to deserialize from specified XML depending on
+//! amount of information that you want to get:
+//!
+//! ```
+//! # type T = ();
+//! # type U = ();
+//! // Get both elements/attributes
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   one: T,
+//!   two: U,
+//! }
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..." two="..."/>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag><one>...</one><two>...</two></any-tag>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..."><two>...</two></any-tag>"#).unwrap();
+//! ```
+//! ```
+//! # type T = ();
+//! // Get only one element/attribute, ignore other
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   one: T,
+//! }
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..." two="..."/>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag><one>...</one><two>...</two></any-tag>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..."><two>...</two></any-tag>"#).unwrap();
+//! #
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..."><one>...</one></any-tag>"#).unwrap_err();
+//! ```
+//! ```ignore
+//! // Ignore all attributes/elements
+//! // You can also use the `()` type (unit type)
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName;
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..." two="..."/>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag><one>...</one><two>...</two></any-tag>"#).unwrap();
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..."><two>...</two></any-tag>"#).unwrap();
+//! # // FIXME: called `Result::unwrap_err()` on an `Ok` value: AnyName
+//! # quick_xml::de::from_str::<AnyName>(r#"<any-tag one="..."><one>...</one></any-tag>"#).unwrap_err();
+//! ```
+//!
+//! A structure where each XML attribute or child element mapped to the field.
+//! Each attribute or element name becomes a name of field. Name of the struct
+//! itself does not matter.
+//!
+//! > NOTE: XML allowing you to have an attribute and an element with the
+//! > same name inside the one element. Such XML's can't be deserialized because
+//! > serde does not allow you to pass custom properties to the fields and we
+//! > cannot tell the field on the Rust side, should it be deserialized from the
+//! > attribute or from the element
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! An optional XML attributes/elements that you want to capture.
+//! The root tag name do not matter.
+//!
+//! ```xml
+//! <any-tag optional="..."/>
+//! ```
+//! ```xml
+//! <any-tag/>
+//!   <optional>...</optional>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag/>
+//! ```
+//! </td>
+//! <td>
+//!
+//! A structure with an optional field.
+//!
+//! ```
+//! # type T = ();
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   optional: Option<T>,
+//! }
+//! # assert_eq!(AnyName { optional: Some(()) }, quick_xml::de::from_str(r#"<any-tag optional="..."/>"#).unwrap());
+//! # assert_eq!(AnyName { optional: Some(()) }, quick_xml::de::from_str(r#"<any-tag><optional>...</optional></any-tag>"#).unwrap());
+//! # assert_eq!(AnyName { optional: None     }, quick_xml::de::from_str(r#"<any-tag/>"#).unwrap());
+//! ```
+//! When the XML attribute or element is present, type `T` will be deserialized
+//! from an attribute value (which is a string) or an element (which is a string
+//! or a multi-mapping -- i.e. mapping which can have duplicated keys).
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>Text content, CDATA content</td>
+//! <td>
+//!
+//! Text content and CDATA mapped to any Rust type that could be deserialized
+//! from a string, for example, `String`, `&str` and so on.
+//!
+//! > NOTE: deserialization to non-owned types (i.e. borrow from the input),
+//! > such as `&str`, is possible only if you parse document in the UTF-8
+//! > encoding and text content do not contains escape sequences.
+//! <!-- TODO: document an error type returned -->
+//! <!-- TODO: add doctest for text/CDATA parsing -->
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! An XML with different root tag names.
+//!
+//! ```xml
+//! <one field1="...">...</one>
+//! ```
+//! ```xml
+//! <two field2="...">...</two>
+//! ```
+//! ```xml
+//! <one>
+//!   <field1>...</field1>
+//! </one>
+//! ```
+//! ```xml
+//! <two>
+//!   <field2>...</field2>
+//! </two>
+//! ```
+//! </td>
+//! <td>
+//!
+//! An enum where each variant have a name of the root tag. Name of the enum
+//! itself does not matter.
+//!
+//! All these types can be used to deserialize from specified XML depending on
+//! amount of information that you want to get:
+//!
+//! ```
+//! # type T = ();
+//! # type U = ();
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum AnyName {
+//!   One { field1: T },
+//!   Two { field2: U },
+//! }
+//! # assert_eq!(AnyName::One { field1: () }, quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
+//! # assert_eq!(AnyName::Two { field2: () }, quick_xml::de::from_str(r#"<two field2="...">...</two>"#).unwrap());
+//! # assert_eq!(AnyName::One { field1: () }, quick_xml::de::from_str(r#"<one><field1>...</field1></one>"#).unwrap());
+//! # assert_eq!(AnyName::Two { field2: () }, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! ```
+//! ```
+//! # type OtherType = ();
+//! # /*
+//! type OtherType = ...;
+//! # */
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum AnyName {
+//!   // `field1` contend discarded
+//!   One,
+//!   // OtherType deserialized from the `field2` content
+//!   Two(OtherType),
+//! }
+//! # assert_eq!(AnyName::One,     quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
+//! # assert_eq!(AnyName::Two(()), quick_xml::de::from_str(r#"<two field2="...">...</two>"#).unwrap());
+//! # assert_eq!(AnyName::One,     quick_xml::de::from_str(r#"<one><field1>...</field1></one>"#).unwrap());
+//! # assert_eq!(AnyName::Two(()), quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! ```
+//! ```
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum AnyName {
+//!   One,
+//!   // the <two> will be mapped to this
+//!   #[serde(other)]
+//!   Other,
+//! }
+//! # assert_eq!(AnyName::One,   quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
+//! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"<two field2="...">...</two>"#).unwrap());
+//! # assert_eq!(AnyName::One,   quick_xml::de::from_str(r#"<one><field1>...</field1></one>"#).unwrap());
+//! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! ```
+//! You should have variants for all possible tag names in your enum or have
+//! an `#[serde(other)]` variant.
+//! <!-- TODO: document an error type if that requirement is violated -->
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//!
+//! `<xs:choice>` inside of the other element.
+//!
+//! ```xml
+//! <any-tag field="...">
+//!   <one>...</one>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag field="...">
+//!   <two>...</two>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <field>...</field>
+//!   <one>...</one>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <two>...</two>
+//!   <field>...</field>
+//! </any-tag>
+//! ```
+//! </td>
+//! <td>
+//! Names of the enum, struct, and struct field does not matter.
+//!
+//! ```ignore
+//! // FIXME: Custom("missing field `$flatten`")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//!   Two,
+//! }
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   # field: (),
+//!   # /*
+//!   field: ...,
+//!   # */
+//!
+//!   // Creates problems while deserializing inner
+//!   // types in many cases due to
+//!   // https://github.com/serde-rs/serde/issues/1183
+//!   // #[serde(flatten)]
+//!   /// Field name is ignored if it is renamed to
+//!   /// `$flatten`
+//!   #[serde(rename = "$flatten")]
+//!   any_name: Choice,
+//! }
+//! # assert_eq!(AnyName { field: (), any_name: Choice::One }, quick_xml::de::from_str(r#"<any-tag field="..."><one>...</one></any-tag>"#).unwrap());
+//! # assert_eq!(AnyName { field: (), any_name: Choice::Two }, quick_xml::de::from_str(r#"<any-tag field="..."><two>...</two></any-tag>"#).unwrap());
+//! # assert_eq!(AnyName { field: (), any_name: Choice::One }, quick_xml::de::from_str(r#"<any-tag><field>...</field><one>...</one></any-tag>"#).unwrap());
+//! # assert_eq!(AnyName { field: (), any_name: Choice::Two }, quick_xml::de::from_str(r#"<any-tag><two>...</two><field>...</field></any-tag>"#).unwrap());
+//! ```
+//! > Due to selected workaround you can have only one `flatten` field
+//! > in your structure. That will be checked at the compile time by the
+//! > serde derive macro.
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! A sequence with a strict order, probably with a mixed content
+//! (text and tags).
+//!
+//! ```xml
+//! <one>...</one>
+//! text
+//! <![CDATA[cdata]]>
+//! <two>...</two>
+//! <one>...</one>
+//! ```
+//! </td>
+//! <td>
+//!
+//! All elements mapped to the heterogeneous sequential type: tuple or named tuple.
+//! Each element of the tuple should be able to be deserialized from the nested
+//! element content (`...`), except the enum types which would be deserialized
+//! from the full element (`<one>...</one>`), so they could use the element name to
+//! choose the right variant:
+//!
+//! ```ignore
+//! // FIXME: Custom("invalid length 3, expected tuple
+//! //                struct AnyName with 5 elements")
+//! # type One = ();
+//! # type Two = ();
+//! # /*
+//! type One = ...;
+//! type Two = ...;
+//! # */
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName(One, String, String, Two, One);
+//! # assert_eq!(
+//! #   AnyName((), "text".into(), "cdata".into(), (), ()),
+//! #   quick_xml::de::from_str(r#"<one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
+//! # );
+//! ```
+//! ```ignore
+//! // FIXME: Custom("invalid length 3, expected
+//! //                a tuple of size 5")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//! }
+//! # type Two = ();
+//! # /*
+//! type Two = ...;
+//! # */
+//! type AnyName = (Choice, String, String, Two, Choice);
+//! # assert_eq!(
+//! #   (Choice::One, "text".into(), "cdata".into(), (), Choice::One),
+//! #   quick_xml::de::from_str::<AnyName>(r#"<one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! A sequence with a non-strict order, probably with a mixed content
+//! (text and tags).
+//!
+//! ```xml
+//! <one>...</one>
+//! text
+//! <![CDATA[cdata]]>
+//! <two>...</two>
+//! <one>...</one>
+//! ```
+//! </td>
+//! <td>
+//! A homogeneous sequence of elements with a fixed or dynamic size.
+//!
+//! ```ignore
+//! // FIXME: Unsupported("Invalid event for Enum,
+//! //                     expecting `Text` or `Start`")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//!   Two,
+//!   #[serde(other)]
+//!   Other,
+//! }
+//! type AnyName = [Choice; 5];
+//! # assert_eq!(
+//! #   [Choice::One, Choice::Other, Choice::Other, Choice::Two, Choice::One],
+//! #   quick_xml::de::from_str::<AnyName>(r#"<one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
+//! # );
+//! ```
+//! ```ignore
+//! // FIXME: Custom("unknown variant `text`, expected
+//! //                one of `one`, `two`, `$value`")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//!   Two,
+//!   #[serde(rename = "$value")]
+//!   Other(String),
+//! }
+//! type AnyName = Vec<Choice>;
+//! # assert_eq!(
+//! #   vec![
+//! #     Choice::One,
+//! #     Choice::Other("text".into()),
+//! #     Choice::Other("cdata".into()),
+//! #     Choice::Two,
+//! #     Choice::One,
+//! #   ],
+//! #   quick_xml::de::from_str::<AnyName>(r#"<one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! A sequence with a strict order, probably with a mixed content,
+//! (text and tags) inside of the other element.
+//!
+//! ```xml
+//! <any-tag>
+//!   <one>...</one>
+//!   text
+//!   <![CDATA[cdata]]>
+//!   <two>...</two>
+//!   <one>...</one>
+//! </any-tag>
+//! ```
+//! </td>
+//! <td>
+//!
+//! A structure where all child elements mapped to the one field which have
+//! a heterogeneous sequential type: tuple or named tuple. Each element of the
+//! tuple should be able to be deserialized from the nested element content
+//! (`...`), except the enum types which would be deserialized from the full
+//! element (`<one>...</one>`):
+//!
+//! ```ignore
+//! // FIXME: Custom("missing field `$flatten`")
+//! # type One = ();
+//! # type Two = ();
+//! # /*
+//! type One = ...;
+//! type Two = ...;
+//! # */
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   // Does not (yet?) supported by the serde
+//!   // https://github.com/serde-rs/serde/issues/1905
+//!   // #[serde(flatten)]
+//!   /// Field name is ignored if it is renamed to
+//!   /// `$flatten`
+//!   #[serde(rename = "$flatten")]
+//!   any_name: (One, String, String, Two, One),
+//! }
+//! # assert_eq!(
+//! #   AnyName { any_name: ((), "text".into(), "cdata".into(), (), ()) },
+//! #   quick_xml::de::from_str(r#"<any-tag><one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one></any-tag>"#).unwrap(),
+//! # );
+//! ```
+//! ```ignore
+//! // FIXME: Custom("missing field `$flatten`")
+//! # type One = ();
+//! # type Two = ();
+//! # /*
+//! type One = ...;
+//! type Two = ...;
+//! # */
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct NamedTuple(One, String, String, Two, One);
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   // Does not (yet?) supported by the serde
+//!   // https://github.com/serde-rs/serde/issues/1905
+//!   // #[serde(flatten)]
+//!   /// Field name is ignored if it is renamed to
+//!   /// `$flatten`
+//!   #[serde(rename = "$flatten")]
+//!   any_name: NamedTuple,
+//! }
+//! # assert_eq!(
+//! #   AnyName { any_name: NamedTuple((), "text".into(), "cdata".into(), (), ()) },
+//! #   quick_xml::de::from_str(r#"<any-tag><one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one></any-tag>"#).unwrap(),
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//!
+//! <tr>
+//! <td>
+//! A sequence with a non-strict order, probably with a mixed content
+//! (text and tags) inside of the other element.
+//!
+//! ```xml
+//! <any-tag>
+//!   <one>...</one>
+//!   text
+//!   <![CDATA[cdata]]>
+//!   <two>...</two>
+//!   <one>...</one>
+//! </any-tag>
+//! ```
+//! </td>
+//! <td>
+//!
+//! A structure where all child elements mapped to the one field which have
+//! a homogeneous sequential type: array-like container. A container type `T`
+//! should be able to be deserialized from the nested element content (`...`),
+//! except if it is an enum type which would be deserialized from the full
+//! element (`<one>...</one>`):
+//!
+//! ```ignore
+//! // FIXME: Custom("missing field `$flatten`")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//!   Two,
+//!   #[serde(rename = "$value")]
+//!   Other(String),
+//! }
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   // Does not (yet?) supported by the serde
+//!   // https://github.com/serde-rs/serde/issues/1905
+//!   // #[serde(flatten)]
+//!   /// Field name is ignored if it is renamed to
+//!   /// `$flatten`
+//!   #[serde(rename = "$flatten")]
+//!   any_name: [Choice; 5],
+//! }
+//! # assert_eq!(
+//! #   AnyName { any_name: [
+//! #     Choice::One,
+//! #     Choice::Other("text".into()),
+//! #     Choice::Other("cdata".into()),
+//! #     Choice::Two,
+//! #     Choice::One,
+//! #   ] },
+//! #   quick_xml::de::from_str(r#"<any-tag><one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one></any-tag>"#).unwrap(),
+//! # );
+//! ```
+//! ```ignore
+//! // FIXME: Custom("missing field `$flatten`")
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! #[serde(rename_all = "snake_case")]
+//! enum Choice {
+//!   One,
+//!   Two,
+//!   #[serde(rename = "$value")]
+//!   Other(String),
+//! }
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   // Does not (yet?) supported by the serde
+//!   // https://github.com/serde-rs/serde/issues/1905
+//!   // #[serde(flatten)]
+//!   /// Field name is ignored if it is renamed to
+//!   /// `$flatten`
+//!   #[serde(rename = "$flatten")]
+//!   any_name: Vec<Choice>,
+//! }
+//! # assert_eq!(
+//! #   AnyName { any_name: vec![
+//! #     Choice::One,
+//! #     Choice::Other("text".into()),
+//! #     Choice::Other("cdata".into()),
+//! #     Choice::Two,
+//! #     Choice::One,
+//! #   ] },
+//! #   quick_xml::de::from_str(r#"<any-tag><one>...</one>text<![CDATA[cdata]]><two>...</two><one>...</one></any-tag>"#).unwrap(),
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//! </tbody>
+//! </table>
+//!
 //! # Examples
 //!
 //! Here is a simple example parsing [crates.io](https://crates.io/) source code.
