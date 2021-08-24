@@ -404,13 +404,12 @@ where
         deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
     }
 
+    /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
     {
-        let text = self.next_text()?;
-        let string = text.decode_and_escape(self.reader.decoder())?;
-        visitor.visit_string(string.into_owned())
+        self.deserialize_str(visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
