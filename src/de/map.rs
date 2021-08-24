@@ -8,12 +8,16 @@ use crate::{
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
 
-enum MapValue {
+/// Representing state of the `MapAccess` accessor.
+enum State {
+    /// `next_key_seed` not yet called. This is initial state and state after deserializing
+    /// value (calling `next_value_seed`).
     Empty,
-    /// Value should be deserialized from the attribute value
-    Attribute {
-        value: Vec<u8>,
-    },
+    /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
+    /// Next call to the `next_value_seed` will deserialize type from the specified
+    /// attribute value
+    Attribute { value: Vec<u8> },
+    /// The same as `InnerValue`
     Nested,
     /// Value should be deserialized from the text content of the XML node:
     ///
@@ -34,7 +38,9 @@ pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de> + 'a> {
     /// a new object on each advance of `Attributes` iterator, so we need
     /// to restore last position before advance.
     position: usize,
-    value: MapValue,
+    /// Current state of the accessor that determines what next call to API
+    /// methods should return.
+    state: State,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -51,7 +57,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
             de,
             start,
             position,
-            value: MapValue::Empty,
+            state: State::Empty,
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -80,14 +86,14 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
         let has_value_field = self.de.has_value_field;
         if let Some((key, value)) = self.next_attr()? {
             // try getting map from attributes (key= "value")
-            self.value = MapValue::Attribute { value };
+            self.state = State::Attribute { value };
             seed.deserialize(EscapedDeserializer::new(key, decoder, false))
                 .map(Some)
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 DeEvent::Text(_) => {
-                    self.value = MapValue::InnerValue;
+                    self.state = State::InnerValue;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
@@ -110,7 +116,7 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
-                    self.value = MapValue::InnerValue;
+                    self.state = State::InnerValue;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
@@ -130,11 +136,11 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.value = MapValue::InnerValue;
+                        self.state = State::InnerValue;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = e.local_name().to_owned();
-                        self.value = MapValue::Nested;
+                        self.state = State::Nested;
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
                     key.map(Some)
@@ -148,14 +154,14 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
         &mut self,
         seed: K,
     ) -> Result<K::Value, Self::Error> {
-        match std::mem::replace(&mut self.value, MapValue::Empty) {
-            MapValue::Attribute { value } => seed.deserialize(EscapedDeserializer::new(
+        match std::mem::replace(&mut self.state, State::Empty) {
+            State::Attribute { value } => seed.deserialize(EscapedDeserializer::new(
                 value,
                 self.de.reader.decoder(),
                 true,
             )),
-            MapValue::Nested | MapValue::InnerValue => seed.deserialize(&mut *self.de),
-            MapValue::Empty => Err(DeError::EndOfAttributes),
+            State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
+            State::Empty => Err(DeError::EndOfAttributes),
         }
     }
 }

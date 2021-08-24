@@ -143,7 +143,10 @@ pub mod serialize {
         Float(std::num::ParseFloatError),
         /// Xml parsing error
         Xml(Error),
-        /// Unexpected end of attributes
+        /// Unexpected end of attributes.
+        ///
+        /// Usually this indicates an error in the `Deserialize` implementation when read map:
+        /// `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`
         EndOfAttributes,
         /// Unexpected end of file
         Eof,
