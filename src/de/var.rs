@@ -3,6 +3,7 @@ use crate::{
     errors::serialize::DeError,
 };
 use serde::de::{self, Deserializer as SerdeDeserializer};
+use std::borrow::Cow;
 
 /// An enum access
 pub struct EnumAccess<'de, 'a, R: BorrowingReader<'de>> {
@@ -25,8 +26,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::EnumAccess<'de> for EnumAccess<'de, '
     ) -> Result<(V::Value, VariantAccess<'de, 'a, R>), DeError> {
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
-            DeEvent::Text(t) => EscapedDeserializer::new(t.to_vec(), decoder, true),
-            DeEvent::Start(e) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
+            DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, true),
+            DeEvent::Start(e) => EscapedDeserializer::new(Cow::Borrowed(e.name()), decoder, false),
             _ => {
                 return Err(DeError::Unsupported(
                     "Invalid event for Enum, expecting `Text` or `Start`",

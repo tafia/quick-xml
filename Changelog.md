@@ -15,6 +15,8 @@
 - refactor: unify errors when EOF encountered during serde deserialization
 - test: ensure that after deserializing all XML was consumed
 - feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
+- refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
+  from the attribute and element names and attribute values
 
 ## 0.23.0-alpha3
 

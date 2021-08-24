@@ -4,9 +4,11 @@ use crate::{
     de::escape::EscapedDeserializer,
     de::{BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
+    events::attributes::Attribute,
     events::BytesStart,
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
+use std::borrow::Cow;
 
 /// Representing state of the `MapAccess` accessor.
 enum State {
@@ -14,9 +16,8 @@ enum State {
     /// value (calling `next_value_seed`).
     Empty,
     /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
-    /// Next call to the `next_value_seed` will deserialize type from the specified
-    /// attribute value
-    Attribute { value: Vec<u8> },
+    /// Next call to the `next_value_seed` will deserialize type from the attribute value
+    Attribute,
     /// The same as `InnerValue`
     Nested,
     /// Value should be deserialized from the text content of the XML node:
@@ -28,7 +29,7 @@ enum State {
 }
 
 /// A deserializer for `Attributes`
-pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de> + 'a> {
+pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de>> {
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
     de: &'a mut Deserializer<'de, R>,
@@ -66,16 +67,16 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
         })
     }
 
-    fn next_attr(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>, DeError> {
+    fn next_attr(&mut self) -> Result<Option<Attribute>, DeError> {
         let mut attributes = self.start.attributes();
         attributes.position = self.position;
         let next_att = attributes.next().transpose()?;
         self.position = attributes.position;
-        Ok(next_att.map(|a| (a.key.to_owned(), a.value.into_owned())))
+        Ok(next_att)
     }
 }
 
-impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
+impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
     type Error = DeError;
 
     fn next_key_seed<K: DeserializeSeed<'de>>(
@@ -84,11 +85,18 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
     ) -> Result<Option<K::Value>, Self::Error> {
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
-        if let Some((key, value)) = self.next_attr()? {
+
+        let mut attributes = self.start.attributes();
+        attributes.position = self.position;
+        if let Some(a) = attributes.next().transpose()? {
             // try getting map from attributes (key= "value")
-            self.state = State::Attribute { value };
-            seed.deserialize(EscapedDeserializer::new(key, decoder, false))
-                .map(Some)
+            self.state = State::Attribute;
+            seed.deserialize(EscapedDeserializer::new(
+                Cow::Borrowed(a.key),
+                decoder,
+                false,
+            ))
+            .map(Some)
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
@@ -139,7 +147,7 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                         self.state = State::InnerValue;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
-                        let name = e.local_name().to_owned();
+                        let name = Cow::Borrowed(e.local_name());
                         self.state = State::Nested;
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
@@ -155,11 +163,14 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.state, State::Empty) {
-            State::Attribute { value } => seed.deserialize(EscapedDeserializer::new(
-                value,
-                self.de.reader.decoder(),
-                true,
-            )),
+            State::Attribute => {
+                let decoder = self.de.reader.decoder();
+                match self.next_attr()? {
+                    Some(a) => seed.deserialize(EscapedDeserializer::new(a.value, decoder, true)),
+                    // We set `Attribute` state only when we are sure that `next_attr()` returns a value
+                    None => unreachable!(),
+                }
+            }
             State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
             State::Empty => Err(DeError::EndOfAttributes),
         }
