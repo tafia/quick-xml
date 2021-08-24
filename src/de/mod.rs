@@ -114,6 +114,7 @@ mod var;
 
 pub use crate::errors::serialize::DeError;
 use crate::{
+    errors::Error,
     events::{BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
@@ -147,12 +148,7 @@ pub fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
 
 /// Deserialize a xml slice of bytes
 pub fn from_bytes<'de, T: Deserialize<'de>>(s: &'de [u8]) -> Result<T, DeError> {
-    let mut reader = Reader::from_bytes(s);
-    reader
-        .expand_empty_elements(true)
-        .check_end_names(true)
-        .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
+    let mut de = Deserializer::from_bytes(s);
     T::deserialize(&mut de)
 }
 
@@ -259,6 +255,23 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
             _ => (),
         }
         self.reader.read_to_end(name)
+    }
+}
+
+impl<'de> Deserializer<'de, SliceReader<'de>> {
+    /// Create new deserializer that will borrow data from the specified string
+    pub fn from_str(s: &'de str) -> Self {
+        Self::from_bytes(s.as_bytes())
+    }
+
+    /// Create new deserializer that will borrow data from the specified byte array
+    pub fn from_bytes(bytes: &'de [u8]) -> Self {
+        let mut reader = Reader::from_bytes(bytes);
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+        Self::from_borrowing_reader(SliceReader { reader })
     }
 }
 
@@ -439,10 +452,18 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         self.deserialize_string(visitor)
     }
 
+    /// Always call `visitor.visit_unit()` because returned value ignored in any case.
+    ///
+    /// This method consumes any single [event][Event] except the [`Start`][Event::Start]
+    /// event. in which case all events up to corresponding [`End`][Event::End] event will
+    /// be consumed.
+    ///
+    /// This method returns error if current event is [`End`][Event::End] or [`Eof`][Event::Eof]
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         match self.next()? {
             Event::Start(e) => self.read_to_end(e.name())?,
             Event::End(_) => return Err(DeError::End),
+            Event::Eof => return Err(DeError::Eof),
             _ => (),
         }
         visitor.visit_unit()
@@ -514,7 +535,10 @@ impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
-        Ok(self.reader.read_to_end(name, &mut self.buf)?)
+        match self.reader.read_to_end(name, &mut self.buf) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            other => Ok(other?),
+        }
     }
 
     fn decoder(&self) -> Decoder {
@@ -540,7 +564,10 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
-        Ok(self.reader.read_to_end_unbuffered(name)?)
+        match self.reader.read_to_end_unbuffered(name) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            other => Ok(other?),
+        }
     }
 
     fn decoder(&self) -> Decoder {
@@ -551,7 +578,74 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::de::IgnoredAny;
     use serde::Deserialize;
+
+    /// Deserialize an instance of type T from a string of XML text.
+    /// If deserialization was succeeded checks that all XML events was consumed
+    fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+        let mut de = Deserializer::from_str(s);
+        let result = T::deserialize(&mut de);
+
+        // If type was deserialized, the whole XML document should be consumed
+        if let Ok(_) = result {
+            assert_eq!(de.next().unwrap(), Event::Eof);
+        }
+
+        result
+    }
+
+    #[test]
+    fn read_to_end() {
+        use crate::events::BytesEnd;
+        use crate::events::Event::*;
+
+        let mut reader = Reader::from_bytes(
+            r#"
+            <root>
+                <tag a="1"><tag>text</tag>content</tag>
+                <tag a="2"><![CDATA[cdata content]]></tag>
+                <self-closed/>
+            </root>
+            "#
+            .as_bytes(),
+        );
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+        let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed_name(b"root"))
+        );
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(br#"tag a="1""#, 3))
+        );
+        assert_eq!(de.read_to_end(b"tag").unwrap(), ());
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(br#"tag a="2""#, 3))
+        );
+        assert_eq!(
+            de.next().unwrap(),
+            CData(BytesText::from_plain_str("cdata content"))
+        );
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
+
+        assert_eq!(
+            de.next().unwrap(),
+            Start(BytesStart::borrowed(b"self-closed", 11))
+        );
+        assert_eq!(de.read_to_end(b"self-closed").unwrap(), ());
+
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        assert_eq!(de.next().unwrap(), Eof);
+    }
 
     #[test]
     fn borrowing_reader_parity() {
@@ -578,7 +672,7 @@ mod tests {
                 break;
             }
 
-            assert_eq!(format!("{:?}", event1), format!("{:?}", event2));
+            assert_eq!(event1, event2);
         }
     }
 
@@ -676,23 +770,6 @@ mod tests {
     }
 
     #[test]
-    fn simple_struct_from_attributes() {
-        let s = r##"
-	    <item name="hello" source="world.rs" />
-	"##;
-
-        let item: Item = from_reader(s.as_bytes()).unwrap();
-
-        assert_eq!(
-            item,
-            Item {
-                name: "hello".to_string(),
-                source: "world.rs".to_string(),
-            }
-        );
-    }
-
-    #[test]
     fn multiple_roots_attributes() {
         let s = r##"
 	    <item name="hello" source="world.rs" />
@@ -713,25 +790,6 @@ mod tests {
                     source: "world.rs".to_string(),
                 },
             ]
-        );
-    }
-
-    #[test]
-    fn simple_struct_from_attribute_and_child() {
-        let s = r##"
-	    <item name="hello">
-            <source>world.rs</source>
-            </item>
-        "##;
-
-        let item: Item = from_str(s).unwrap();
-
-        assert_eq!(
-            item,
-            Item {
-                name: "hello".to_string(),
-                source: "world.rs".to_string(),
-            }
         );
     }
 
@@ -906,37 +964,234 @@ mod tests {
         assert_eq!(item, Item);
     }
 
+    /// Tests calling `deserialize_ignored_any`
     #[test]
-    fn unit() {
+    fn ignored_any() {
+        let err = from_str::<IgnoredAny>("");
+        match err {
+            Err(DeError::Eof) => {}
+            other => panic!("Expected `Eof`, found {:?}", other),
+        }
+
+        from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<with-attributes key="value"/>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested>text</nested>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested><![CDATA[cdata]]></nested>"#).unwrap();
+        from_str::<IgnoredAny>(r#"<nested><nested/></nested>"#).unwrap();
+    }
+
+    mod unit {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Unit;
 
-        let data: Unit = from_str("<root/>").unwrap();
-        assert_eq!(data, Unit);
+        #[test]
+        fn simple() {
+            let data: Unit = from_str("<root/>").unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Unit = from_str(r#"<root excess="attribute"/>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_element() {
+            let data: Unit = from_str(r#"<root><excess>element</excess></root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_text() {
+            let data: Unit = from_str(r#"<root>excess text</root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
+
+        #[test]
+        fn excess_cdata() {
+            let data: Unit = from_str(r#"<root><![CDATA[excess CDATA]]></root>"#).unwrap();
+            assert_eq!(data, Unit);
+        }
     }
 
-    #[test]
-    fn newtype() {
+    mod newtype {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Newtype(bool);
 
-        let data: Newtype = from_str("<root>true</root>").unwrap();
-        assert_eq!(data, Newtype(true));
+        #[test]
+        fn simple() {
+            let data: Newtype = from_str("<root>true</root>").unwrap();
+            assert_eq!(data, Newtype(true));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Newtype = from_str(r#"<root excess="attribute">true</root>"#).unwrap();
+            assert_eq!(data, Newtype(true));
+        }
     }
 
-    #[test]
-    fn tuple() {
-        let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
-        assert_eq!(data, (42.0, "answer".into()));
+    mod tuple {
+        use super::*;
+
+        #[test]
+        fn simple() {
+            let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
+            assert_eq!(data, (42.0, "answer".into()));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: (f32, String) =
+                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
+            assert_eq!(data, (42.0, "answer".into()));
+        }
     }
 
-    #[test]
-    fn tuple_struct() {
+    mod tuple_struct {
+        use super::*;
+
         #[derive(Debug, Deserialize, PartialEq)]
         struct Tuple(f32, String);
 
-        let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
-        assert_eq!(data, Tuple(42.0, "answer".into()));
+        #[test]
+        fn simple() {
+            let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
+            assert_eq!(data, Tuple(42.0, "answer".into()));
+        }
+
+        #[test]
+        fn excess_attribute() {
+            let data: Tuple =
+                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
+            assert_eq!(data, Tuple(42.0, "answer".into()));
+        }
+    }
+
+    macro_rules! maplike_errors {
+        ($type:ty) => {
+            mod non_closed {
+                use super::*;
+
+                #[test]
+                fn attributes() {
+                    let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_root() {
+                    let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_child() {
+                    let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
+
+                    match data {
+                        Err(DeError::Eof) => (),
+                        _ => panic!("Expected `Eof`, found {:?}", data),
+                    }
+                }
+            }
+
+            mod mismatched_end {
+                use super::*;
+                use crate::errors::Error::EndEventMismatch;
+
+                #[test]
+                fn attributes() {
+                    let data =
+                        from_str::<$type>(r#"<root float="42" string="answer"></mismatched>"#);
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_root() {
+                    let data = from_str::<$type>(
+                        r#"<root float="42"><string>answer</string></mismatched>"#,
+                    );
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+
+                #[test]
+                fn elements_child() {
+                    let data =
+                        from_str::<$type>(r#"<root float="42"><string>answer</mismatched></root>"#);
+
+                    match data {
+                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    }
+                }
+            }
+        };
+    }
+
+    mod map {
+        use super::*;
+        use std::collections::HashMap;
+        use std::iter::FromIterator;
+
+        #[test]
+        fn elements() {
+            let data: HashMap<(), ()> =
+                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        #[test]
+        fn attributes() {
+            let data: HashMap<(), ()> = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        #[test]
+        fn attribute_and_element() {
+            let data: HashMap<(), ()> = from_str(
+                r#"
+                <root float="42">
+                    <string>answer</string>
+                </root>
+            "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
+            );
+        }
+
+        maplike_errors!(HashMap<(), ()>);
     }
 
     mod struct_ {
@@ -962,6 +1217,28 @@ mod tests {
         }
 
         #[test]
+        fn excess_elements() {
+            let data: Struct = from_str(
+                r#"
+                <root>
+                    <before/>
+                    <float>42</float>
+                    <in-the-middle/>
+                    <string>answer</string>
+                    <after/>
+                </root>"#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        #[test]
         fn attributes() {
             let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
             assert_eq!(
@@ -972,6 +1249,43 @@ mod tests {
                 }
             );
         }
+
+        #[test]
+        fn excess_attributes() {
+            let data: Struct = from_str(
+                r#"<root before="1" float="42" in-the-middle="2" string="answer" after="3"/>"#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        #[test]
+        fn attribute_and_element() {
+            let data: Struct = from_str(
+                r#"
+                <root float="42">
+                    <string>answer</string>
+                </root>
+            "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                Struct {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        maplike_errors!(Struct);
     }
 
     mod nested_struct {

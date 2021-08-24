@@ -13,7 +13,7 @@ use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// [`with_checks(false)`]: #method.with_checks
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
@@ -281,12 +281,12 @@ impl<'a> Attribute<'a> {
 
 impl<'a> std::fmt::Debug for Attribute<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::{write_byte_string, write_cow_string};
 
         write!(f, "Attribute {{ key: ")?;
         write_byte_string(f, self.key)?;
         write!(f, ", value: ")?;
-        write_byte_string(f, &self.value)?;
+        write_cow_string(f, &self.value)?;
         write!(f, " }}")
     }
 }

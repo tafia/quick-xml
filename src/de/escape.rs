@@ -12,7 +12,7 @@ use std::borrow::Cow;
 /// Escaping the value is actually not always necessary, for instance
 /// when converting to float, we don't expect any escapable character
 /// anyway
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct EscapedDeserializer {
     decoder: Decoder,
     /// Possible escaped value of text/CDATA or attribute value
@@ -145,13 +145,7 @@ impl<'de> serde::Deserializer<'de> for EscapedDeserializer {
     where
         V: Visitor<'de>,
     {
-        if self.escaped_value.is_empty() {
-            visitor.visit_unit()
-        } else {
-            Err(DeError::InvalidUnit(
-                "Expecting unit, got non empty attribute".into(),
-            ))
-        }
+        visitor.visit_unit()
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>

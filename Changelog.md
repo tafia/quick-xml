@@ -10,6 +10,12 @@
 
 ## Unreleased
 
+- test: add tests for malformed inputs for serde deserializer
+- fix: allow to deserialize `unit`s from any data in attribute values and text nodes
+- refactor: unify errors when EOF encountered during serde deserialization
+- test: ensure that after deserializing all XML was consumed
+- feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
+
 ## 0.23.0-alpha3
 
 - fix: use element name (with namespace) when unflattening (serialize feature)

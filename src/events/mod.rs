@@ -365,10 +365,10 @@ impl<'a> BytesStart<'a> {
 
 impl<'a> std::fmt::Debug for BytesStart<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesStart {{ buf: ")?;
-        write_byte_string(f, &self.buf)?;
+        write_cow_string(f, &self.buf)?;
         write!(f, ", name_len: {} }}", self.name_len)
     }
 }
@@ -548,10 +548,10 @@ impl<'a> BytesEnd<'a> {
 
 impl<'a> std::fmt::Debug for BytesEnd<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesEnd {{ name: ")?;
-        write_byte_string(f, &self.name)?;
+        write_cow_string(f, &self.name)?;
         write!(f, " }}")
     }
 }
@@ -852,10 +852,10 @@ impl<'a> BytesText<'a> {
 
 impl<'a> std::fmt::Debug for BytesText<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesText {{ content: ")?;
-        write_byte_string(f, &self.content)?;
+        write_cow_string(f, &self.content)?;
         write!(f, " }}")
     }
 }

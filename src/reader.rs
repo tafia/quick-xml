@@ -1568,12 +1568,12 @@ impl NamespaceBufferIndex {
 
 /// Utf8 Decoder
 #[cfg(not(feature = "encoding"))]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Decoder;
 
 /// Utf8 Decoder
 #[cfg(feature = "encoding")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Decoder {
     encoding: &'static Encoding,
 }
