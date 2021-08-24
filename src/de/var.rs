@@ -25,14 +25,13 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::EnumAccess<'de> for EnumAccess<'de, '
     ) -> Result<(V::Value, VariantAccess<'de, 'a, R>), DeError> {
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
-            Some(DeEvent::Text(t)) => EscapedDeserializer::new(t.to_vec(), decoder, true),
-            Some(DeEvent::Start(e)) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
-            Some(_) => {
+            DeEvent::Text(t) => EscapedDeserializer::new(t.to_vec(), decoder, true),
+            DeEvent::Start(e) => EscapedDeserializer::new(e.name().to_vec(), decoder, false),
+            _ => {
                 return Err(DeError::Unsupported(
                     "Invalid event for Enum, expecting `Text` or `Start`",
                 ))
             }
-            None => return Err(DeError::Eof),
         };
         let name = seed.deserialize(de)?;
         Ok((name, VariantAccess { de: self.de }))

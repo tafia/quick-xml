@@ -202,11 +202,18 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
         Self::new(reader)
     }
 
-    fn peek(&mut self) -> Result<Option<&DeEvent<'de>>, DeError> {
+    fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
         if self.peek.is_none() {
             self.peek = Some(self.next()?);
         }
-        Ok(self.peek.as_ref())
+        match self.peek.as_ref() {
+            Some(v) => Ok(v),
+            // SAFETY: a `None` variant for `self.peek` would have been replaced
+            // by a `Some` variant in the code above.
+            // TODO: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
+            // if unsafe code will be allowed
+            None => unreachable!(),
+        }
     }
 
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
@@ -456,8 +463,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
 
     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
         match self.peek()? {
-            Some(DeEvent::Text(t)) if t.is_empty() => visitor.visit_none(),
-            None | Some(DeEvent::Eof) => visitor.visit_none(),
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
     }
@@ -484,7 +491,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     }
 
     fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        match self.peek()?.ok_or(DeError::Eof)? {
+        match self.peek()? {
             DeEvent::Start(_) => self.deserialize_map(visitor),
             DeEvent::End(_) => self.deserialize_unit(visitor),
             _ => self.deserialize_string(visitor),

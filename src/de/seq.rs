@@ -36,7 +36,7 @@ impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
         let names = if de.has_value_field {
             Names::Unknown
         } else {
-            if let Some(DeEvent::Start(e)) = de.peek()? {
+            if let DeEvent::Start(e) = de.peek()? {
                 #[cfg(not(feature = "encoding"))]
                 let name = decoder.decode(e.name())?.to_owned();
                 #[cfg(feature = "encoding")]
@@ -73,8 +73,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::SeqAccess<'de> for SeqAccess<'de, 'a,
         }
         let decoder = self.de.reader.decoder();
         match self.de.peek()? {
-            None | Some(DeEvent::Eof) | Some(DeEvent::End(_)) => Ok(None),
-            Some(DeEvent::Start(e)) if !self.names.is_valid(decoder, e)? => Ok(None),
+            DeEvent::Eof | DeEvent::End(_) => Ok(None),
+            DeEvent::Start(e) if !self.names.is_valid(decoder, e)? => Ok(None),
             _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }

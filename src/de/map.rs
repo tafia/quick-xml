@@ -98,7 +98,7 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
-                Some(DeEvent::Text(_)) => {
+                DeEvent::Text(_) => {
                     self.value = MapValue::InnerValue;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -121,12 +121,12 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                Some(DeEvent::Start(_)) if has_value_field => {
+                DeEvent::Start(_) if has_value_field => {
                     self.value = MapValue::InnerValue;
                     self.size_hint.as_mut().map(|l| *l = l.wrapping_sub(1));
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
-                Some(DeEvent::Start(e)) => {
+                DeEvent::Start(e) => {
                     self.size_hint.as_mut().map(|l| *l = l.wrapping_sub(1));
                     let key = if let Some(p) = self
                         .unflatten_fields
