@@ -41,6 +41,8 @@
 - fix: deserialization erroneously was successful in some cases where error is expected.
   This broke deserialization of untagged enums which rely on error if variant cannot be parsed
   ([#380](https://github.com/tafia/quick-xml/pull/380))
+- test: added bunch of tests for sequences deserialization
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 

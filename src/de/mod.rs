@@ -1141,9 +1141,9 @@ mod tests {
     #[test]
     fn multiple_roots_attributes() {
         let s = r##"
-	    <item name="hello" source="world.rs" />
-	    <item name="hello" source="world.rs" />
-	"##;
+            <item name="hello1" source="world1.rs" />
+            <item name="hello2" source="world2.rs" />
+        "##;
 
         let item: Vec<Item> = from_str(s).unwrap();
 
@@ -1151,12 +1151,12 @@ mod tests {
             item,
             vec![
                 Item {
-                    name: "hello".to_string(),
-                    source: "world.rs".to_string(),
+                    name: "hello1".to_string(),
+                    source: "world1.rs".to_string(),
                 },
                 Item {
-                    name: "hello".to_string(),
-                    source: "world.rs".to_string(),
+                    name: "hello2".to_string(),
+                    source: "world2.rs".to_string(),
                 },
             ]
         );
@@ -1410,6 +1410,1867 @@ mod tests {
             let data: Tuple =
                 from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
             assert_eq!(data, Tuple(42.0, "answer".into()));
+        }
+    }
+
+    mod seq {
+        use super::*;
+
+        /// Check that top-level sequences can be deserialized from the multi-root XML documents
+        mod top_level {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            #[test]
+            fn simple() {
+                let data: [(); 3] = from_str("<root/><root>42</root><root>answer</root>").unwrap();
+                assert_eq!(data, [(), (), ()]);
+            }
+
+            #[test]
+            fn excess_attribute() {
+                let data: [(); 3] =
+                    from_str(r#"<root/><root excess="attribute">42</root><root>answer</root>"#)
+                        .unwrap();
+                assert_eq!(data, [(), (), ()]);
+            }
+
+            #[test]
+            fn mixed_content() {
+                let data: [(); 3] = from_str(
+                    r#"
+                    <element/>
+                    text
+                    <![CDATA[cdata]]>"#,
+                )
+                .unwrap();
+                assert_eq!(data, [(), (), ()]);
+            }
+        }
+
+        /// Tests where each sequence item have an identical name in an XML.
+        /// That explicitly means that `enum`s as list elements are not supported
+        /// in that case, because enum requires different tags.
+        ///
+        /// (by `enums` we mean [externally tagged enums] is serde terminology)
+        ///
+        /// [externally tagged enums]: https://serde.rs/enum-representations.html#externally-tagged
+        mod fixed_name {
+            use super::*;
+
+            /// This module contains tests where size of the list have a compile-time size
+            mod fixed_size {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: [(); 3],
+                }
+
+                /// Simple case: count of elements matches expected size of sequence,
+                /// each element has the same name. Successful deserialization expected
+                #[test]
+                fn simple() {
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <item/>
+                            <item/>
+                            <item/>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+                }
+
+                /// Fever elements than expected size of sequence, each element has
+                /// the same name. Failure expected
+                #[test]
+                fn fever_elements() {
+                    match from_str::<List>(
+                        r#"
+                        <root>
+                            <item/>
+                            <item/>
+                        </root>
+                        "#,
+                    ) {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 2, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected `Err(Custom("invalid length 2, expected an array of length 3"))`, but found {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// More elements than expected size of sequence, each element has
+                /// the same name. Failure expected. If you wish to ignore excess
+                /// elements, use the special type, that consume as much elements
+                /// as possible, but ignores excess elements
+                #[test]
+                fn excess_elements() {
+                    match from_str::<List>(
+                        r#"
+                        <root>
+                            <item/>
+                            <item/>
+                            <item/>
+                            <item/>
+                        </root>
+                        "#,
+                    ) {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+                        e => panic!(
+                            r#"Expected `Err(Custom("duplicate field `item`"))`, but found {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Mixed content assumes, that some elements will have an internal
+                /// name `$value`, so, unless field named the same, it is expected
+                /// to fail
+                #[test]
+                fn mixed_content() {
+                    match from_str::<List>(
+                        r#"
+                        <root>
+                            <element/>
+                            text
+                            <![CDATA[cdata]]>
+                        </root>
+                        "#,
+                    ) {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "missing field `item`"),
+                        e => panic!(
+                            r#"Expected `Err(Custom("missing field `item`"))`, but found {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Mixed content assumes, that some elements will have an internal
+                /// name `$value`, so, we should get all elements
+                #[test]
+                fn mixed_content_value() {
+                    #[derive(Debug, PartialEq, Default, Deserialize)]
+                    struct List {
+                        #[serde(rename = "$value")]
+                        item: [(); 3],
+                    }
+
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <element/>
+                            text
+                            <![CDATA[cdata]]>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+                }
+
+                /// In those tests sequence should be deserialized from an XML
+                /// with additional elements that is not defined in the struct.
+                /// That fields should be skipped during deserialization
+                mod unknown_items {
+                    use super::*;
+
+                    #[test]
+                    fn before() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <unknown/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <unknown/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <item/>
+                                <unknown/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// before sequential, so it will be deserialized before the list.
+                /// That struct should be deserialized from an XML where these
+                /// fields comes in an arbitrary order
+                mod field_before_list {
+                    use super::*;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        item: [(); 3],
+                    }
+
+                    #[test]
+                    fn before() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <node/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <node/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <node/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// after sequential, so it will be deserialized after the list.
+                /// That struct should be deserialized from an XML where these
+                /// fields comes in an arbitrary order
+                mod field_after_list {
+                    use super::*;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        item: [(); 3],
+                        node: (),
+                    }
+
+                    #[test]
+                    fn before() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <node/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <node/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <node/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests two lists are deserialized simultaniously.
+                /// Lists shuould be deserialized even when them overlaps
+                mod two_lists {
+                    use super::*;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Pair {
+                        item: [(); 3],
+                        element: [(); 2],
+                    }
+
+                    #[test]
+                    fn splitted() {
+                        from_str::<Pair>(
+                            r#"
+                            <root>
+                                <element/>
+                                <element/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<Pair>(
+                            r#"
+                            <root>
+                                <item/>
+                                <element/>
+                                <item/>
+                                <element/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+
+            /// This module contains tests where size of the list have an unspecified size
+            mod variable_size {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: Vec<()>,
+                }
+
+                /// Simple case: count of elements matches expected size of sequence,
+                /// each element has the same name. Successful deserialization expected
+                #[test]
+                fn simple() {
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <item/>
+                            <item/>
+                            <item/>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+                }
+
+                /// Mixed content assumes, that some elements will have an internal
+                /// name `$value`, so, unless field named the same, it is expected
+                /// to fail
+                #[test]
+                fn mixed_content() {
+                    match from_str::<List>(
+                        r#"
+                        <root>
+                            <element/>
+                            text
+                            <![CDATA[cdata]]>
+                        </root>
+                        "#,
+                    ) {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "missing field `item`"),
+                        e => panic!(
+                            r#"Expected `Err(Custom("missing field `item`"))`, but found {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Mixed content assumes, that some elements will have an internal
+                /// name `$value`, so, we should get all elements
+                #[test]
+                fn mixed_content_value() {
+                    #[derive(Debug, PartialEq, Default, Deserialize)]
+                    struct List {
+                        #[serde(rename = "$value")]
+                        item: Vec<()>,
+                    }
+
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <element/>
+                            text
+                            <![CDATA[cdata]]>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+                }
+
+                /// In those tests sequence should be deserialized from the XML
+                /// with additional elements that is not defined in the struct.
+                /// That fields should be skipped during deserialization
+                mod unknown_items {
+                    use super::*;
+
+                    #[test]
+                    fn before() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <unknown/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <unknown/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <item/>
+                                <unknown/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// before sequential, so it will be deserialized before the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_before_list {
+                    use super::*;
+
+                    #[derive(Debug, PartialEq, Default, Deserialize)]
+                    struct Root {
+                        node: (),
+                        item: [(); 3],
+                    }
+
+                    #[test]
+                    fn before() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <node/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <node/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <node/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// after sequential, so it will be deserialized after the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_after_list {
+                    use super::*;
+
+                    #[derive(Debug, PartialEq, Default, Deserialize)]
+                    struct Root {
+                        item: [(); 3],
+                        node: (),
+                    }
+
+                    #[test]
+                    fn before() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <node/>
+                                <item/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn after() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <item/>
+                                <item/>
+                                <node/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        from_str::<Root>(
+                            r#"
+                            <root>
+                                <item/>
+                                <node/>
+                                <item/>
+                                <item/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap();
+                    }
+                }
+
+                /// In those tests two lists are deserialized simultaniously.
+                /// Lists shuould be deserialized even when them overlaps
+                mod two_lists {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Pair {
+                        item: Vec<()>,
+                        element: Vec<()>,
+                    }
+
+                    #[test]
+                    fn splitted() {
+                        assert_eq!(
+                            from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <element/>
+                                    <item/>
+                                    <item/>
+                                    <item/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Pair {
+                                item: vec![(), (), ()],
+                                element: vec![(), ()],
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        assert_eq!(
+                            from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <item/>
+                                    <element/>
+                                    <item/>
+                                    <element/>
+                                    <item/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Pair {
+                                item: vec![(), (), ()],
+                                element: vec![(), ()],
+                            }
+                        );
+                    }
+                }
+            }
+        }
+
+        /// Check that sequences inside element can be deserialized.
+        /// In terms of serde this is a sequence flatten into the struct:
+        ///
+        /// ```ignore
+        /// struct Root {
+        ///   #[serde(flatten)]
+        ///   items: Vec<T>,
+        /// }
+        /// ```
+        /// except that fact that this is not supported nowadays
+        /// (https://github.com/serde-rs/serde/issues/1905)
+        ///
+        /// Because this is very frequently used pattern in the XML, quick-xml
+        /// have a workaround for this. If a field will have a special name `$value`
+        /// then any `xs:element`s in the `xs:sequence` / `xs:all`, excapt that
+        /// which name matchesthe struct name, will be associated with this field:
+        ///
+        /// ```ignore
+        /// struct Root {
+        ///   field: U,
+        ///   #[serde(rename = "$value")]
+        ///   items: Vec<Enum>,
+        /// }
+        /// ```
+        /// In this example `<field>` tag will be associated with a `field` field,
+        /// but all other tags will be associated with an `items` field. Disadvantages
+        /// of this approach that you can have only one field, but usually you don't
+        /// want more
+        mod variable_name {
+            use super::*;
+            use serde::de::{Deserializer, VariantAccess};
+            use std::fmt::{self, Formatter};
+
+            // NOTE: Derive could be possible once https://github.com/serde-rs/serde/issues/2126 is resolved
+            macro_rules! impl_deserialize_choice {
+                ($name:ident : $(($field:ident, $field_name:literal)),*) => {
+                    impl<'de> Deserialize<'de> for $name {
+                        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                        where
+                            D: Deserializer<'de>,
+                        {
+                            #[derive(Deserialize)]
+                            #[serde(field_identifier)]
+                            #[serde(rename_all = "kebab-case")]
+                            enum Tag {
+                                $($field,)*
+                                Other(String),
+                            }
+
+                            struct EnumVisitor;
+                            impl<'de> de::Visitor<'de> for EnumVisitor {
+                                type Value = $name;
+
+                                fn expecting(&self, f: &mut Formatter) -> fmt::Result {
+                                    f.write_str("enum ")?;
+                                    f.write_str(stringify!($name))
+                                }
+
+                                fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+                                where
+                                    A: de::EnumAccess<'de>,
+                                {
+                                    match data.variant()? {
+                                        $(
+                                            (Tag::$field, variant) => variant.unit_variant().map(|_| $name::$field),
+                                        )*
+                                        (Tag::Other(t), v) => v.unit_variant().map(|_| $name::Other(t)),
+                                    }
+                                }
+                            }
+
+                            const VARIANTS: &'static [&'static str] = &[
+                                $($field_name,)*
+                                "<any other tag>"
+                            ];
+                            deserializer.deserialize_enum(stringify!($name), VARIANTS, EnumVisitor)
+                        }
+                    }
+                };
+            }
+
+            /// Type that can be deserialized from `<one>`, `<two>`, or any other element
+            #[derive(Debug, PartialEq)]
+            enum Choice {
+                One,
+                Two,
+                /// Any other tag name except `One` or `Two`
+                Other(String),
+            }
+            impl_deserialize_choice!(Choice: (One, "one"), (Two, "two"));
+
+            /// Type that can be deserialized from `<first>`, `<second>`, or any other element
+            #[derive(Debug, PartialEq)]
+            enum Choice2 {
+                First,
+                Second,
+                /// Any other tag name except `First` or `Second`
+                Other(String),
+            }
+            impl_deserialize_choice!(Choice2: (First, "first"), (Second, "second"));
+
+            /// This module contains tests where size of the list have a compile-time size
+            mod fixed_size {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    #[serde(rename = "$value")]
+                    item: [Choice; 3],
+                }
+
+                /// Simple case: count of elements matches expected size of sequence,
+                /// each element has the same name. Successful deserialization expected
+                #[test]
+                fn simple() {
+                    assert_eq!(
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <one/>
+                                <two/>
+                                <three/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap(),
+                        List {
+                            item: [Choice::One, Choice::Two, Choice::Other("three".into())]
+                        }
+                    );
+                }
+
+                /// Fever elements than expected size of sequence, each element has
+                /// the same name. Failure expected
+                #[test]
+                fn fever_elements() {
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <one/>
+                            <two/>
+                        </root>
+                        "#,
+                    )
+                    .unwrap_err();
+                }
+
+                /// More elements than expected size of sequence, each element has
+                /// the same name. Failure expected. If you wish to ignore excess
+                /// elements, use the special type, that consume as much elements
+                /// as possible, but ignores excess elements
+                #[test]
+                fn excess_elements() {
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <one/>
+                            <two/>
+                            <three/>
+                            <four/>
+                        </root>
+                        "#,
+                    )
+                    .unwrap_err();
+                }
+
+                #[test]
+                fn mixed_content() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct List {
+                        #[serde(rename = "$value")]
+                        item: [(); 3],
+                    }
+
+                    from_str::<List>(
+                        r#"
+                        <root>
+                            <element/>
+                            text
+                            <![CDATA[cdata]]>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+                }
+
+                // There cannot be unknown items, because any tag name is accepted
+
+                /// In those tests non-sequential field is defined in the struct
+                /// before sequential, so it will be deserialized before the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_before_list {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        #[serde(rename = "$value")]
+                        item: [Choice; 3],
+                    }
+
+                    #[test]
+                    fn before() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <node/>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())]
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn after() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                    <node/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())]
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <node/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())]
+                            }
+                        );
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// after sequential, so it will be deserialized after the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_after_list {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        #[serde(rename = "$value")]
+                        item: [Choice; 3],
+                        node: (),
+                    }
+
+                    #[test]
+                    fn before() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <node/>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn after() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                    <node/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <node/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+                }
+
+                /// In those tests two lists are deserialized simultaniously.
+                /// Lists shuould be deserialized even when them overlaps
+                mod two_lists {
+                    use super::*;
+
+                    /// A field with a variable-name items defined before a field with a fixed-name
+                    /// items
+                    mod choice_and_fixed {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            #[serde(rename = "$value")]
+                            item: [Choice; 3],
+                            element: [(); 2],
+                        }
+
+                        /// A list with fixed-name elements located before a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements located after a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn overlapped_fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <element/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn overlapped_fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <element/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+                    }
+
+                    /// A field with a variable-name items defined after a field with a fixed-name
+                    /// items
+                    mod fixed_and_choice {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            element: [(); 2],
+                            #[serde(rename = "$value")]
+                            item: [Choice; 3],
+                        }
+
+                        /// A list with fixed-name elements located before a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements located after a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn overlapped_fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <element/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn overlapped_fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <element/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+                        }
+                    }
+
+                    /// Tests are ignored, but exists to show a problem.
+                    /// May be it will be solved in the future
+                    mod choice_and_choice {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            #[serde(rename = "$value")]
+                            item: [Choice; 3],
+                            // Actually, we cannot rename both fields to `$value`, which is now
+                            // required to indicate, that field accepts elements with any name
+                            #[serde(rename = "$value")]
+                            element: [Choice2; 2],
+                        }
+
+                        #[test]
+                        #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knoledge from type"]
+                        fn splitted() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <first/>
+                                        <second/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [Choice2::First, Choice2::Second],
+                                }
+                            );
+                        }
+
+                        #[test]
+                        #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knoledge from type"]
+                        fn overlapped() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <first/>
+                                        <two/>
+                                        <second/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [Choice2::First, Choice2::Second],
+                                }
+                            );
+                        }
+                    }
+                }
+            }
+
+            /// This module contains tests where size of the list have an unspecified size
+            mod variable_size {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    #[serde(rename = "$value")]
+                    item: Vec<Choice>,
+                }
+
+                /// Simple case: count of elements matches expected size of sequence,
+                /// each element has the same name. Successful deserialization expected
+                #[test]
+                fn simple() {
+                    assert_eq!(
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <one/>
+                                <two/>
+                                <three/>
+                            </root>
+                            "#,
+                        )
+                        .unwrap(),
+                        List {
+                            item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                        }
+                    );
+                }
+
+                #[test]
+                fn mixed_content() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct List {
+                        #[serde(rename = "$value")]
+                        item: Vec<()>,
+                    }
+
+                    assert_eq!(
+                        from_str::<List>(
+                            r#"
+                            <root>
+                                <element/>
+                                text
+                                <![CDATA[cdata]]>
+                            </root>
+                            "#,
+                        )
+                        .unwrap(),
+                        List {
+                            item: vec![(), (), ()],
+                        }
+                    );
+                }
+
+                // There cannot be unknown items, because any tag name is accepted
+
+                /// In those tests non-sequential field is defined in the struct
+                /// before sequential, so it will be deserialized before the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_before_list {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        #[serde(rename = "$value")]
+                        item: Vec<Choice>,
+                    }
+
+                    #[test]
+                    fn before() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <node/>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn after() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                    <node/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <node/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                node: (),
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                            }
+                        );
+                    }
+                }
+
+                /// In those tests non-sequential field is defined in the struct
+                /// after sequential, so it will be deserialized after the list.
+                /// That struct should be deserialized from the XML where these
+                /// fields comes in an arbitrary order
+                mod field_after_list {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        #[serde(rename = "$value")]
+                        item: Vec<Choice>,
+                        node: (),
+                    }
+
+                    #[test]
+                    fn before() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <node/>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn after() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <two/>
+                                    <three/>
+                                    <node/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+
+                    #[test]
+                    fn overlapped() {
+                        assert_eq!(
+                            from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <node/>
+                                    <two/>
+                                    <three/>
+                                </root>
+                                "#,
+                            )
+                            .unwrap(),
+                            Root {
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                                node: (),
+                            }
+                        );
+                    }
+                }
+
+                /// In those tests two lists are deserialized simultaniously.
+                /// Lists shuould be deserialized even when them overlaps
+                mod two_lists {
+                    use super::*;
+
+                    /// A field with a variable-name items defined before a field with a fixed-name
+                    /// items
+                    mod choice_and_fixed {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            #[serde(rename = "$value")]
+                            item: Vec<Choice>,
+                            element: Vec<()>,
+                        }
+
+                        /// A list with fixed-name elements located before a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements located after a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn overlapped_fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <element/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn overlapped_fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <element/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+                        }
+                    }
+
+                    /// A field with a variable-name items defined after a field with a fixed-name
+                    /// items
+                    mod fixed_and_choice {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            element: Vec<()>,
+                            #[serde(rename = "$value")]
+                            item: Vec<Choice>,
+                        }
+
+                        /// A list with fixed-name elements located before a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements located after a list with variable-name
+                        /// elements in an XML
+                        #[test]
+                        fn fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn overlapped_fixed_before() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <element/>
+                                        <one/>
+                                        <two/>
+                                        <element/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                }
+                            );
+                        }
+
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn overlapped_fixed_after() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <element/>
+                                        <two/>
+                                        <three/>
+                                        <element/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                }
+                            );
+                        }
+                    }
+
+                    /// Tests are ignored, but exists to show a problem.
+                    /// May be it will be solved in the future
+                    mod choice_and_choice {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
+
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Pair {
+                            #[serde(rename = "$value")]
+                            item: Vec<Choice>,
+                            // Actually, we cannot rename both fields to `$value`, which is now
+                            // required to indicate, that field accepts elements with any name
+                            #[serde(rename = "$value")]
+                            element: Vec<Choice2>,
+                        }
+
+                        #[test]
+                        #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knoledge from type"]
+                        fn splitted() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <first/>
+                                        <second/>
+                                        <one/>
+                                        <two/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![Choice2::First, Choice2::Second],
+                                }
+                            );
+                        }
+
+                        #[test]
+                        #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knoledge from type"]
+                        fn overlapped() {
+                            assert_eq!(
+                                from_str::<Pair>(
+                                    r#"
+                                    <root>
+                                        <one/>
+                                        <first/>
+                                        <two/>
+                                        <second/>
+                                        <three/>
+                                    </root>
+                                    "#,
+                                )
+                                .unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into()),
+                                    ],
+                                    element: vec![Choice2::First, Choice2::Second],
+                                }
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
