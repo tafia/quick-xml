@@ -36,9 +36,11 @@
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
+- [#387]: Added a bunch of tests for sequences deserialization
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
 
 ## 0.23.0 -- 2022-05-08
