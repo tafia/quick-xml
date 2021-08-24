@@ -25,13 +25,12 @@ impl Names {
 /// A SeqAccess
 pub struct SeqAccess<'de, 'a, R: BorrowingReader<'de>> {
     de: &'a mut Deserializer<'de, R>,
-    max_size: Option<usize>,
     names: Names,
 }
 
 impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
     /// Get a new SeqAccess
-    pub fn new(de: &'a mut Deserializer<'de, R>, max_size: Option<usize>) -> Result<Self, DeError> {
+    pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
         let decoder = de.reader.decoder();
         let names = if de.has_value_field {
             Names::Unknown
@@ -46,31 +45,17 @@ impl<'a, 'de, R: BorrowingReader<'de>> SeqAccess<'de, 'a, R> {
                 Names::Unknown
             }
         };
-        Ok(SeqAccess {
-            de,
-            max_size,
-            names,
-        })
+        Ok(SeqAccess { de, names })
     }
 }
 
 impl<'de, 'a, R: BorrowingReader<'de>> de::SeqAccess<'de> for SeqAccess<'de, 'a, R> {
     type Error = DeError;
 
-    fn size_hint(&self) -> Option<usize> {
-        self.max_size
-    }
-
     fn next_element_seed<T: de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
     ) -> Result<Option<T::Value>, DeError> {
-        if let Some(s) = self.max_size.as_mut() {
-            if *s == 0 {
-                return Ok(None);
-            }
-            *s -= 1;
-        }
         let decoder = self.de.reader.decoder();
         match self.de.peek()? {
             DeEvent::Eof | DeEvent::End(_) => Ok(None),

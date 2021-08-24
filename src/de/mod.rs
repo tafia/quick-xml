@@ -426,14 +426,16 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         self.deserialize_tuple(1, visitor)
     }
 
+    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
     fn deserialize_tuple<V: de::Visitor<'de>>(
         self,
-        len: usize,
+        _len: usize,
         visitor: V,
     ) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, Some(len))?)
+        self.deserialize_seq(visitor)
     }
 
+    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
     fn deserialize_tuple_struct<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
@@ -454,7 +456,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
     }
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, None)?)
+        visitor.visit_seq(seq::SeqAccess::new(self)?)
     }
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {

@@ -35,8 +35,6 @@ pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de> + 'a> {
     /// to restore last position before advance.
     position: usize,
     value: MapValue,
-    /// number of fields yet to parse
-    size_hint: Option<usize>,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -54,11 +52,6 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
             start,
             position,
             value: MapValue::Empty,
-            size_hint: if fields.is_empty() {
-                None
-            } else {
-                Some(fields.len())
-            },
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -79,10 +72,6 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
 impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
     type Error = DeError;
 
-    fn size_hint(&self) -> Option<usize> {
-        self.size_hint.clone()
-    }
-
     fn next_key_seed<K: DeserializeSeed<'de>>(
         &mut self,
         seed: K,
@@ -92,7 +81,6 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
         if let Some((key, value)) = self.next_attr()? {
             // try getting map from attributes (key= "value")
             self.value = MapValue::Attribute { value };
-            self.size_hint.as_mut().map(|l| *l = l.wrapping_sub(1));
             seed.deserialize(EscapedDeserializer::new(key, decoder, false))
                 .map(Some)
         } else {
@@ -123,11 +111,9 @@ impl<'de, 'a, R: BorrowingReader<'de> + 'a> de::MapAccess<'de> for MapAccess<'de
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
                     self.value = MapValue::InnerValue;
-                    self.size_hint.as_mut().map(|l| *l = l.wrapping_sub(1));
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
-                    self.size_hint.as_mut().map(|l| *l = l.wrapping_sub(1));
                     let key = if let Some(p) = self
                         .unflatten_fields
                         .iter()
