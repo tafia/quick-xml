@@ -648,12 +648,10 @@ impl<'a> BytesText<'a> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
     }
 
+    /// Gets content of this text buffer in the specified encoding
     #[cfg(feature = "serialize")]
-    pub(crate) fn decode_and_escape(
-        &self,
-        decoder: crate::reader::Decoder,
-    ) -> Result<Cow<'a, str>> {
-        let decoded: Cow<str> = match &self.content {
+    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+        Ok(match &self.content {
             Cow::Borrowed(bytes) => {
                 #[cfg(feature = "encoding")]
                 {
@@ -673,9 +671,15 @@ impl<'a> BytesText<'a> {
 
                 decoded.into()
             }
-        };
+        })
+    }
 
-        match decoded {
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode_and_escape(
+        &self,
+        decoder: crate::reader::Decoder,
+    ) -> Result<Cow<'a, str>> {
+        match self.decode(decoder)? {
             Cow::Borrowed(decoded) => {
                 let unescaped =
                     do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;

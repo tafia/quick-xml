@@ -196,7 +196,7 @@ where
     #[cfg(feature = "encoding")]
     {
         let value = decoder.decode(value);
-
+        // No need to unescape because valid boolean representations cannot be escaped
         match value.as_ref() {
             "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
                 visitor.visit_bool(true)
@@ -210,6 +210,7 @@ where
 
     #[cfg(not(feature = "encoding"))]
     {
+        // No need to unescape because valid boolean representations cannot be escaped
         match value {
             b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
                 visitor.visit_bool(true)
@@ -335,14 +336,9 @@ macro_rules! deserialize_type {
     ($deserialize:ident => $visit:ident) => {
         fn $deserialize<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
             let txt = self.next_text()?;
-
-            #[cfg(not(feature = "encoding"))]
-            let value = self.reader.decoder().decode(&*txt)?.parse()?;
-
-            #[cfg(feature = "encoding")]
-            let value = self.reader.decoder().decode(&*txt).parse()?;
-
-            visitor.$visit(value)
+            // No need to unescape because valid integer representations cannot be escaped
+            let string = txt.decode(self.reader.decoder())?;
+            visitor.$visit(string.parse()?)
         }
     };
 }
