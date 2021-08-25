@@ -823,6 +823,7 @@ impl Reader<BufReader<File>> {
 }
 
 impl<'a> Reader<&'a [u8]> {
+    #[allow(clippy::should_implement_trait)]
     /// Creates an XML reader from a string slice.
     pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
         Reader::from_reader(s.as_bytes())
@@ -1200,7 +1201,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         };
         *self = &self[i..];
 
-        return Ok(Some(bytes));
+        Ok(Some(bytes))
     }
 
     fn read_bang_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
@@ -1327,6 +1328,6 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
     }
 
     fn input_borrowed(event: Event<'a>) -> Event<'a> {
-        return event;
+        event
     }
 }

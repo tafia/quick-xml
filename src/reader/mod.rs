@@ -119,10 +119,7 @@ enum TagState {
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
 pub(crate) fn is_whitespace(b: u8) -> bool {
-    match b {
-        b' ' | b'\r' | b'\n' | b'\t' => true,
-        _ => false,
-    }
+    matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 
 /// A namespace declaration. Can either bind a namespace to a prefix or define the current default

@@ -64,10 +64,7 @@ impl std::error::Error for EscapeError {}
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
     #[inline]
     fn to_escape(b: u8) -> bool {
-        match b {
-            b'<' | b'>' | b'\'' | b'&' | b'"' => true,
-            _ => false,
-        }
+        matches!(b, b'<' | b'>' | b'\'' | b'&' | b'"')
     }
 
     _escape(raw, to_escape)
@@ -80,10 +77,7 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
     #[inline]
     fn to_escape(b: u8) -> bool {
-        match b {
-            b'<' | b'>' | b'&' => true,
-            _ => false,
-        }
+        matches!(b, b'<' | b'>' | b'&')
     }
 
     _escape(raw, to_escape)
@@ -172,7 +166,7 @@ pub fn do_unescape<'a>(
                 } else if pat.starts_with(b"#") {
                     push_utf8(unescaped, parse_number(&pat[1..], start..end)?);
                 } else if let Some(value) = custom_entities.and_then(|hm| hm.get(pat)) {
-                    unescaped.extend_from_slice(&value);
+                    unescaped.extend_from_slice(value);
                 } else {
                     return Err(EscapeError::UnrecognizedSymbol(
                         start + 1..end,
@@ -1680,7 +1674,7 @@ fn parse_number(bytes: &[u8], range: Range<usize>) -> Result<char, EscapeError> 
     let code = if bytes.starts_with(b"x") {
         parse_hexadecimal(&bytes[1..])
     } else {
-        parse_decimal(&bytes)
+        parse_decimal(bytes)
     }?;
     if code == 0 {
         return Err(EscapeError::EntityWithNull(range));

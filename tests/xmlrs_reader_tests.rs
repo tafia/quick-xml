@@ -487,16 +487,12 @@ fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>) -> String {
         Ok((ref n, Event::End(ref e))) => format!("EndElement({})", namespace_name(n, e.name())),
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
         Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
-        Ok((_, Event::Text(ref e))) => {
-            match e.unescaped() {
-                Ok(c) => {
-                    match from_utf8(&*c) {
-                        Ok(c) => format!("Characters({})", c),
-                        Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
-                    }
-                },
-                Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
-            }
+        Ok((_, Event::Text(ref e))) => match e.unescaped() {
+            Ok(c) => match from_utf8(&*c) {
+                Ok(c) => format!("Characters({})", c),
+                Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
+            },
+            Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
         },
         Ok((_, Event::Decl(ref e))) => {
             let version_cow = e.version().unwrap();
@@ -540,4 +536,3 @@ impl<'a> Iterator for SpecIter<'a> {
         }
     }
 }
-

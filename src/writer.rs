@@ -109,7 +109,7 @@ impl<W: Write> Writer<W> {
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
-                self.write(&e.escaped())
+                self.write(e.escaped())
             }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => {
@@ -329,10 +329,7 @@ impl Indentation {
     }
 
     fn shrink(&mut self) {
-        self.indents_len = match self.indents_len.checked_sub(self.indent_size) {
-            Some(result) => result,
-            None => 0,
-        };
+        self.indents_len = self.indents_len.saturating_sub(self.indent_size);
     }
 }
 
