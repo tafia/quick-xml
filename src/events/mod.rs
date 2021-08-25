@@ -39,7 +39,6 @@ pub mod attributes;
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 
-use crate::escape::{do_unescape, escape};
 
 use memchr;
 use std::borrow::Cow;
@@ -50,7 +49,7 @@ use std::str::from_utf8;
 use self::attributes::{Attribute, Attributes};
 use crate::errors::{Error, Result};
 use crate::escapei::{do_unescape, escape};
-use crate::reader::{Decode, Reader};
+use crate::reader::{Decode};
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///

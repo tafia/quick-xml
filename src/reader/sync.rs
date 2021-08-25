@@ -4,13 +4,13 @@
 use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
-use std::{fs::File, path::Path, str::from_utf8};
+use std::{path::Path, str::from_utf8};
 
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use super::{is_whitespace, Decode, Decoder, NamespaceBufferIndex, TagState};
 

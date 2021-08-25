@@ -133,15 +133,11 @@
 
 #[cfg(feature = "serialize")]
 pub mod de;
-mod errors;
-mod escapei;
 pub mod escape {
     //! Manage xml character escapes
     pub(crate) use crate::escapei::{do_unescape, EscapeError};
     pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
 }
-pub mod events;
-mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
 
@@ -150,7 +146,6 @@ mod escapei;
 mod utils;
 mod writer;
 
-pub mod escape;
 pub mod events;
 pub mod reader;
 

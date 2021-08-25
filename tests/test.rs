@@ -4,6 +4,7 @@ extern crate serde;
 
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::Error;
 use quick_xml::Reader;
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};

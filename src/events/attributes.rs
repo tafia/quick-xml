@@ -4,10 +4,8 @@
 
 use crate::errors::{Error, Result};
 use crate::escape::{do_unescape, escape};
-use crate::reader::{is_whitespace, Decode, Reader};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::ops::Range;
+use crate::reader::{is_whitespace, Decode};
+use std::{borrow::Cow, collections::HashMap, ops::Range};
 
 /// Iterator over XML attributes.
 ///
@@ -169,7 +167,8 @@ impl<'a> Attribute<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self.value);
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -180,7 +179,8 @@ impl<'a> Attribute<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self.value)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -255,7 +255,8 @@ impl<'a> Attribute<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self.value);
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -266,7 +267,8 @@ impl<'a> Attribute<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self.value)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 }
@@ -340,8 +342,9 @@ impl<'a> Iterator for Attributes<'a> {
                 self.position = len;
                 if self.html {
                     attr!($key, 0..0)
+                } else {
+                    None
                 }
-                return None;
             }};
             ($key:expr, $val:expr) => {
                 Some(Ok(Attribute {
