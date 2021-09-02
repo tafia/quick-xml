@@ -116,7 +116,6 @@ pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
     events::{BytesStart, BytesText, Event},
-    reader::Decode,
     reader::Decoder,
     Reader,
 };

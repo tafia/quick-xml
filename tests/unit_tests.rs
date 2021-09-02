@@ -334,7 +334,7 @@ fn test_write_attrs() -> Result<()> {
         let event = match reader.read_event(&mut buf)? {
             Eof => break,
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
+                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.extend_attributes(attrs);

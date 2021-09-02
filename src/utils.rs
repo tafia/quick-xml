@@ -1,7 +1,17 @@
+use std::borrow::Cow;
 use std::fmt::{Formatter, Result};
 
-pub fn write_cow_string(f: &mut Formatter<'_>, s: &[u8]) -> Result {
-    write_byte_string(f, s)?;
+pub fn write_cow_string(f: &mut Formatter<'_>, cow_string: &Cow<[u8]>) -> Result {
+    match cow_string {
+        Cow::Owned(s) => {
+            write!(f, "Owned(")?;
+            write_byte_string(f, &s)?;
+        }
+        Cow::Borrowed(s) => {
+            write!(f, "Borrowed(")?;
+            write_byte_string(f, s)?;
+        }
+    }
     write!(f, ")")
 }
 

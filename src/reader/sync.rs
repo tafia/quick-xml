@@ -1,7 +1,5 @@
 //! A module to handle sync `Reader`
 
-#[cfg(feature = "encoding")]
-use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::{path::Path, str::from_utf8};

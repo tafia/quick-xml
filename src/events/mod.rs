@@ -39,7 +39,6 @@ pub mod attributes;
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
 
-
 use memchr;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -49,7 +48,7 @@ use std::str::from_utf8;
 use self::attributes::{Attribute, Attributes};
 use crate::errors::{Error, Result};
 use crate::escapei::{do_unescape, escape};
-use crate::reader::{Decode};
+use crate::reader::Decode;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -306,7 +305,8 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -318,7 +318,8 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -772,7 +773,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self);
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -783,7 +785,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -822,7 +825,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -833,7 +837,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped =
+            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
