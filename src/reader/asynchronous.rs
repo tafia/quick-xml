@@ -42,7 +42,7 @@ impl<B: AsyncBufRead> Decode for AsyncReader<B> {
 
 /// A low level encoding-agnostic XML event reader.
 ///
-/// Consumes a `BufRead` and streams XML `Event`s.
+/// Consumes a `AsyncBufRead` and streams XML `Event`s.
 ///
 /// # Examples
 ///
