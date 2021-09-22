@@ -1,6 +1,7 @@
 extern crate quick_xml;
 
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::reader::Decode;
 #[cfg(feature = "asynchronous")]
 use quick_xml::AsyncReader;
 use quick_xml::{Reader, Result};
@@ -45,7 +46,7 @@ fn sample_2_full() {
     );
 }
 
-#[cfg(all(not(windows), feature = "escape-html"))]
+#[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
     test(
@@ -54,27 +55,17 @@ fn html5() {
         false,
     );
 }
-
-#[cfg(all(windows, feature = "escape-html"))]
-#[test]
-fn html5() {
-    test(
-        include_bytes!("documents/html5.html"),
-        include_bytes!("documents/html5-windows.txt"),
-        false,
-    );
-}
-
 #[test]
 fn escaped_characters() {
     test(
-        r#"<e attr="&quot;Hello&quot;">&apos;a&apos; &lt; &apos;&amp;&apos;</e>"#,
+        r#"<e attr="&quot;Hello&quot;">&apos;a&apos; &lt; &apos;&amp;&apos;</e>"#.as_bytes(),
         r#"
             |StartElement(e [attr=""Hello""])
             |Characters('a' < '&')
             |EndElement(e)
             |EndDocument
-        "#,
+        "#
+        .as_bytes(),
         true,
     )
 }
@@ -83,13 +74,14 @@ fn escaped_characters() {
 #[test]
 fn escaped_characters_html() {
     test(
-        r#"<e attr="&planck;&Egrave;&ell;&#x1D55D;&bigodot;">&boxDR;&boxDL;&#x02554;&#x02557;&#9556;&#9559;</e>"#,
+        r#"<e attr="&planck;&Egrave;&ell;&#x1D55D;&bigodot;">&boxDR;&boxDL;&#x02554;&#x02557;&#9556;&#9559;</e>"#.as_bytes(),
         r#"
             |StartElement(e [attr="ℏÈℓ𝕝⨀"])
             |Characters(╔╗╔╗╔╗)
             |EndElement(e)
             |EndDocument
-        "#,
+        "#
+        .as_bytes(),
         true,
     )
 }
@@ -97,7 +89,7 @@ fn escaped_characters_html() {
 #[cfg(feature = "encoding")]
 #[test]
 fn encoded_characters() {
-    test_bytes(
+    test(
         b"\
             <?xml version = \"1.0\" encoding = \"Shift_JIS\" ?>\n\
             <a>\x82\xA0\x82\xA2\x82\xA4</a>\
@@ -157,7 +149,7 @@ fn encoded_characters() {
 // Found: InvalidUtf8([255, 254]; invalid utf-8 sequence of 1 bytes from index 0)
 #[ignore]
 fn sample_5_short() {
-    test_bytes(
+    test(
         include_bytes!("documents/sample_5_utf16bom.xml"),
         include_bytes!("documents/sample_5_short.txt"),
         true,
@@ -365,8 +357,6 @@ fn default_namespace_applies_to_end_elem() {
 }
 
 fn test_sync(input: &[u8], output: &[u8], is_short: bool) {
-    let mut reader = Reader::from_reader(input);
-
     // Normalize newlines on Windows to just \n, which is what the reader and
     // writer use.
     // let input = input.replace("\r\n", "\n");
@@ -457,7 +447,7 @@ async fn test_async(input: &[u8], output: &[u8], is_short: bool) {
 
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer).await;
 
-        let line = xmlrs_display(&event);
+        let line = xmlrs_display(&event, &reader);
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
                 break;
@@ -536,7 +526,7 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
 }
 
 // FIXME: The public API differs based on the "encoding" feature
-fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
+fn decode<'a>(text: &'a [u8], reader: &impl Decode) -> Cow<'a, str> {
     #[cfg(feature = "encoding")]
     let decoded = reader.decode(text);
 
@@ -546,7 +536,7 @@ fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
     decoded
 }
 
-fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>, reader: &Reader<&[u8]>) -> String {
+fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>, reader: &impl Decode) -> String {
     match opt_event {
         Ok((ref n, Event::Start(ref e))) => {
             let name = namespace_name(n, decode(e.name(), reader).as_bytes());
