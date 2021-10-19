@@ -107,6 +107,8 @@
 //! }
 //! ```
 
+#[cfg(test)]
+mod byte_buf;
 mod escape;
 mod map;
 mod seq;
@@ -115,11 +117,11 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
-    events::{BytesStart, BytesText, Event},
+    events::{BytesEnd, BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
 };
-use serde::de::{self, Deserialize, DeserializeOwned};
+use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::io::BufRead;
@@ -127,10 +129,29 @@ use std::io::BufRead;
 pub(crate) const INNER_VALUE: &str = "$value";
 pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
+/// Simplified event which contains only these variants that used by deserializer
+#[derive(Debug, PartialEq)]
+pub enum DeEvent<'a> {
+    /// Start tag (with attributes) `<tag attr="value">`.
+    Start(BytesStart<'a>),
+    /// End tag `</tag>`.
+    End(BytesEnd<'a>),
+    /// Escaped character data between `Start` and `End` element.
+    Text(BytesText<'a>),
+    /// Unescaped character data between `Start` and `End` element,
+    /// stored in `<![CDATA[...]]>`.
+    CData(BytesText<'a>),
+    /// End of XML document.
+    Eof,
+}
+
 /// An xml deserializer
-pub struct Deserializer<'de, R: BorrowingReader<'de>> {
+pub struct Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     reader: R,
-    peek: Option<Event<'de>>,
+    peek: Option<DeEvent<'de>>,
     /// Special sing that deserialized struct have a field with the special
     /// name (see constant `INNER_VALUE`). That field should be deserialized
     /// from the text content of the XML node:
@@ -142,23 +163,36 @@ pub struct Deserializer<'de, R: BorrowingReader<'de>> {
 }
 
 /// Deserialize an instance of type T from a string of XML text.
-pub fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
     from_bytes(s.as_bytes())
 }
 
 /// Deserialize a xml slice of bytes
-pub fn from_bytes<'de, T: Deserialize<'de>>(s: &'de [u8]) -> Result<T, DeError> {
+pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
     let mut de = Deserializer::from_bytes(s);
     T::deserialize(&mut de)
 }
 
 /// Deserialize an instance of type T from bytes of XML text.
-pub fn from_slice<T: DeserializeOwned>(b: &[u8]) -> Result<T, DeError> {
+pub fn from_slice<T>(b: &[u8]) -> Result<T, DeError>
+where
+    T: DeserializeOwned,
+{
     from_reader(b)
 }
 
 /// Deserialize from a reader
-pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeError> {
+pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
+where
+    R: BufRead,
+    T: DeserializeOwned,
+{
     let mut reader = Reader::from_reader(reader);
     reader
         .expand_empty_elements(true)
@@ -171,7 +205,46 @@ pub fn from_reader<R: BufRead, T: DeserializeOwned>(reader: R) -> Result<T, DeEr
     T::deserialize(&mut de)
 }
 
-impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
+// TODO: According to the https://www.w3.org/TR/xmlschema-2/#boolean,
+// valid boolean representations are only "true", "false", "1", and "0"
+fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
+where
+    V: Visitor<'de>,
+{
+    #[cfg(feature = "encoding")]
+    {
+        let value = decoder.decode(value);
+        // No need to unescape because valid boolean representations cannot be escaped
+        match value.as_ref() {
+            "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
+                visitor.visit_bool(true)
+            }
+            "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
+                visitor.visit_bool(false)
+            }
+            _ => Err(DeError::InvalidBoolean(value.into())),
+        }
+    }
+
+    #[cfg(not(feature = "encoding"))]
+    {
+        // No need to unescape because valid boolean representations cannot be escaped
+        match value {
+            b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
+                visitor.visit_bool(true)
+            }
+            b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
+                visitor.visit_bool(false)
+            }
+            e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
+        }
+    }
+}
+
+impl<'de, R> Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     /// Get a new deserializer
     pub fn new(reader: R) -> Self {
         Deserializer {
@@ -186,14 +259,21 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
         Self::new(reader)
     }
 
-    fn peek(&mut self) -> Result<Option<&Event<'de>>, DeError> {
+    fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
         if self.peek.is_none() {
             self.peek = Some(self.next()?);
         }
-        Ok(self.peek.as_ref())
+        match self.peek.as_ref() {
+            Some(v) => Ok(v),
+            // SAFETY: a `None` variant for `self.peek` would have been replaced
+            // by a `Some` variant in the code above.
+            // TODO: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
+            // if unsafe code will be allowed
+            None => unreachable!(),
+        }
     }
 
-    fn next(&mut self) -> Result<Event<'de>, DeError> {
+    fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         if let Some(e) = self.peek.take() {
             return Ok(e);
         }
@@ -204,9 +284,9 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
         loop {
             let e = self.next()?;
             match e {
-                Event::Start(e) => return Ok(Some(e)),
-                Event::End(_) => return Err(DeError::End),
-                Event::Eof => return Ok(None),
+                DeEvent::Start(e) => return Ok(Some(e)),
+                DeEvent::End(_) => return Err(DeError::End),
+                DeEvent::Eof => return Ok(None),
                 _ => (), // ignore texts
             }
         }
@@ -221,37 +301,35 @@ impl<'de, R: BorrowingReader<'de>> Deserializer<'de, R> {
     /// |`</tag>`             |empty slice|Not consumed                |
     fn next_text(&mut self) -> Result<BytesText<'de>, DeError> {
         match self.next()? {
-            Event::Text(e) | Event::CData(e) => Ok(e),
-            Event::Eof => Err(DeError::Eof),
-            Event::Start(e) => {
+            DeEvent::Text(e) | DeEvent::CData(e) => Ok(e),
+            DeEvent::Eof => Err(DeError::Eof),
+            DeEvent::Start(e) => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    Event::Text(t) | Event::CData(t) => t,
-                    Event::Start(_) => return Err(DeError::Start),
-                    Event::End(end) if end.name() == e.name() => {
+                    DeEvent::Text(t) | DeEvent::CData(t) => t,
+                    DeEvent::Start(_) => return Err(DeError::Start),
+                    DeEvent::End(end) if end.name() == e.name() => {
                         return Ok(BytesText::from_escaped(&[] as &[u8]));
                     }
-                    Event::End(_) => return Err(DeError::End),
-                    Event::Eof => return Err(DeError::Eof),
-                    _ => unreachable!(),
+                    DeEvent::End(_) => return Err(DeError::End),
+                    DeEvent::Eof => return Err(DeError::Eof),
                 };
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            Event::End(e) => {
-                self.peek = Some(Event::End(e));
+            DeEvent::End(e) => {
+                self.peek = Some(DeEvent::End(e));
                 Ok(BytesText::from_escaped(&[] as &[u8]))
             }
-            _ => unreachable!(),
         }
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         // First one might be in self.peek
         match self.next()? {
-            Event::Start(e) => self.reader.read_to_end(e.name())?,
-            Event::End(e) if e.name() == name => return Ok(()),
+            DeEvent::Start(e) => self.reader.read_to_end(e.name())?,
+            DeEvent::End(e) if e.name() == name => return Ok(()),
             _ => (),
         }
         self.reader.read_to_end(name)
@@ -277,29 +355,33 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
 
 macro_rules! deserialize_type {
     ($deserialize:ident => $visit:ident) => {
-        fn $deserialize<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+        fn $deserialize<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
             let txt = self.next_text()?;
-
-            #[cfg(not(feature = "encoding"))]
-            let value = self.reader.decoder().decode(&*txt)?.parse()?;
-
-            #[cfg(feature = "encoding")]
-            let value = self.reader.decoder().decode(&*txt).parse()?;
-
-            visitor.$visit(value)
+            // No need to unescape because valid integer representations cannot be escaped
+            let string = txt.decode(self.reader.decoder())?;
+            visitor.$visit(string.parse()?)
         }
     };
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deserializer<'de, R> {
+impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
+where
+    R: BorrowingReader<'de>,
+{
     type Error = DeError;
 
-    fn deserialize_struct<V: de::Visitor<'de>>(
+    fn deserialize_struct<V>(
         self,
         _name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
@@ -314,51 +396,35 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let txt = self.next_text()?;
 
-        #[cfg(feature = "encoding")]
-        {
-            let value = self.reader.decoder().decode(&*txt);
-
-            match value.as_ref() {
-                "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-                    visitor.visit_bool(true)
-                }
-                "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-                    visitor.visit_bool(false)
-                }
-                _ => Err(DeError::InvalidBoolean(value.into())),
-            }
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        {
-            match txt.as_ref() {
-                b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                    visitor.visit_bool(true)
-                }
-                b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                    visitor.visit_bool(false)
-                }
-                e => Err(DeError::InvalidBoolean(
-                    self.reader.decoder().decode(e)?.into(),
-                )),
-            }
-        }
+        deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
     }
 
-    fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let string = text.decode_and_escape(self.reader.decoder())?;
         visitor.visit_string(string.into_owned())
     }
 
-    fn deserialize_char<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_string(visitor)
     }
 
-    fn deserialize_str<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let string = text.decode_and_escape(self.reader.decoder())?;
         match string {
@@ -367,112 +433,174 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::Deserializer<'de> for &'a mut Deseria
         }
     }
 
-    fn deserialize_bytes<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let value = text.escaped();
         visitor.visit_bytes(value)
     }
 
-    fn deserialize_byte_buf<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let text = self.next_text()?;
         let value = text.into_inner().into_owned();
         visitor.visit_byte_buf(value)
     }
 
-    fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    /// Unit represented in XML as a `xs:element` or text/CDATA content.
+    /// Any content inside `xs:element` is ignored and skipped.
+    ///
+    /// Produces unit struct from any of following inputs:
+    /// - any `<tag ...>...</tag>`
+    /// - any `<tag .../>`
+    /// - any text content
+    /// - any CDATA content
+    ///
+    /// # Events handling
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|-------------------------------------------
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to corresponding `End` event
+    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`DeError::End`]
+    /// |[`DeEvent::Text`] |`text content`             |Calls `visitor.visit_unit()`. Text content is ignored
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Calls `visitor.visit_unit()`. CDATA content is ignored
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.next()? {
-            Event::Start(s) => {
+            DeEvent::Start(s) => {
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            e => Err(DeError::InvalidUnit(format!("{:?}", e))),
+            DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
+            DeEvent::End(_) => Err(DeError::End),
+            DeEvent::Eof => Err(DeError::Eof),
         }
     }
 
-    fn deserialize_unit_struct<V: de::Visitor<'de>>(
+    /// Representation of the names units the same as [unnamed units](#method.deserialize_unit)
+    fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_unit(visitor)
     }
 
-    fn deserialize_newtype_struct<V: de::Visitor<'de>>(
+    fn deserialize_newtype_struct<V>(
         self,
         _name: &'static str,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_tuple(1, visitor)
     }
 
-    fn deserialize_tuple<V: de::Visitor<'de>>(
-        self,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, Some(len))?)
+    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
     }
 
-    fn deserialize_tuple_struct<V: de::Visitor<'de>>(
+    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+    fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
         len: usize,
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_tuple(len, visitor)
     }
 
-    fn deserialize_enum<V: de::Visitor<'de>>(
+    fn deserialize_enum<V>(
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, DeError> {
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         let value = visitor.visit_enum(var::EnumAccess::new(self))?;
         Ok(value)
     }
 
-    fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        visitor.visit_seq(seq::SeqAccess::new(self, None)?)
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_seq(seq::SeqAccess::new(self)?)
     }
 
-    fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_struct("", &[], visitor)
     }
 
-    fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.peek()? {
-            Some(Event::Text(t)) if t.is_empty() => visitor.visit_none(),
-            None | Some(Event::Eof) => visitor.visit_none(),
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
     }
 
-    fn deserialize_identifier<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         self.deserialize_string(visitor)
     }
 
     /// Always call `visitor.visit_unit()` because returned value ignored in any case.
     ///
-    /// This method consumes any single [event][Event] except the [`Start`][Event::Start]
-    /// event. in which case all events up to corresponding [`End`][Event::End] event will
+    /// This method consumes any single [event][DeEvent] except the [`Start`][DeEvent::Start]
+    /// event, in which case all events up to corresponding [`End`][DeEvent::End] event will
     /// be consumed.
     ///
-    /// This method returns error if current event is [`End`][Event::End] or [`Eof`][Event::Eof]
-    fn deserialize_ignored_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
+    /// This method returns error if current event is [`End`][DeEvent::End] or [`Eof`][DeEvent::Eof]
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
         match self.next()? {
-            Event::Start(e) => self.read_to_end(e.name())?,
-            Event::End(_) => return Err(DeError::End),
-            Event::Eof => return Err(DeError::Eof),
+            DeEvent::Start(e) => self.read_to_end(e.name())?,
+            DeEvent::End(_) => return Err(DeError::End),
+            DeEvent::Eof => return Err(DeError::Eof),
             _ => (),
         }
         visitor.visit_unit()
     }
 
-    fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, DeError> {
-        match self.peek()?.ok_or(DeError::Eof)? {
-            Event::Start(_) => self.deserialize_map(visitor),
-            Event::End(_) => self.deserialize_unit(visitor),
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.peek()? {
+            DeEvent::Start(_) => self.deserialize_map(visitor),
+            // Redirect to deserialize_unit in order to consume an event and return an appropriate error
+            DeEvent::End(_) | DeEvent::Eof => self.deserialize_unit(visitor),
             _ => self.deserialize_string(visitor),
         }
     }
@@ -502,7 +630,7 @@ where
     Self: 'i,
 {
     /// Return an input-borrowing event.
-    fn next(&mut self) -> Result<Event<'i>, DeError>;
+    fn next(&mut self) -> Result<DeEvent<'i>, DeError>;
 
     /// Skips until end element is found. Unlike `next()` it will not allocate
     /// when it cannot satisfy the lifetime.
@@ -518,13 +646,16 @@ struct IoReader<R: BufRead> {
 }
 
 impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
-    fn next(&mut self) -> Result<Event<'static>, DeError> {
+    fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
         let event = loop {
             let e = self.reader.read_event(&mut self.buf)?;
             match e {
-                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof | Event::CData(_) => {
-                    break Ok(e.into_owned())
-                }
+                Event::Start(e) => break Ok(DeEvent::Start(e.into_owned())),
+                Event::End(e) => break Ok(DeEvent::End(e.into_owned())),
+                Event::Text(e) => break Ok(DeEvent::Text(e.into_owned())),
+                Event::CData(e) => break Ok(DeEvent::CData(e.into_owned())),
+                Event::Eof => break Ok(DeEvent::Eof),
+
                 _ => self.buf.clear(),
             }
         };
@@ -551,13 +682,16 @@ struct SliceReader<'de> {
 }
 
 impl<'de> BorrowingReader<'de> for SliceReader<'de> {
-    fn next(&mut self) -> Result<Event<'de>, DeError> {
+    fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         loop {
             let e = self.reader.read_event_unbuffered()?;
             match e {
-                Event::Start(_) | Event::End(_) | Event::Text(_) | Event::Eof | Event::CData(_) => {
-                    break Ok(e)
-                }
+                Event::Start(e) => break Ok(DeEvent::Start(e)),
+                Event::End(e) => break Ok(DeEvent::End(e)),
+                Event::Text(e) => break Ok(DeEvent::Text(e)),
+                Event::CData(e) => break Ok(DeEvent::CData(e)),
+                Event::Eof => break Ok(DeEvent::Eof),
+
                 _ => (),
             }
         }
@@ -578,18 +712,22 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::de::byte_buf::ByteBuf;
     use serde::de::IgnoredAny;
     use serde::Deserialize;
 
     /// Deserialize an instance of type T from a string of XML text.
     /// If deserialization was succeeded checks that all XML events was consumed
-    fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, DeError> {
+    fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
+    where
+        T: Deserialize<'de>,
+    {
         let mut de = Deserializer::from_str(s);
         let result = T::deserialize(&mut de);
 
         // If type was deserialized, the whole XML document should be consumed
         if let Ok(_) = result {
-            assert_eq!(de.next().unwrap(), Event::Eof);
+            assert_eq!(de.next().unwrap(), DeEvent::Eof);
         }
 
         result
@@ -597,8 +735,7 @@ mod tests {
 
     #[test]
     fn read_to_end() {
-        use crate::events::BytesEnd;
-        use crate::events::Event::*;
+        use crate::de::DeEvent::*;
 
         let mut reader = Reader::from_bytes(
             r#"
@@ -668,7 +805,7 @@ mod tests {
             let event1 = reader1.next().unwrap();
             let event2 = reader2.next().unwrap();
 
-            if let (Event::Eof, Event::Eof) = (&event1, &event2) {
+            if let (DeEvent::Eof, DeEvent::Eof) = (&event1, &event2) {
                 break;
             }
 
@@ -700,13 +837,13 @@ mod tests {
 
         loop {
             let event = reader.next().unwrap();
-            if let Event::Eof = event {
+            if let DeEvent::Eof = event {
                 break;
             }
             events.push(event);
         }
 
-        use crate::events::{BytesEnd, BytesStart, BytesText, Event::*};
+        use crate::de::DeEvent::*;
 
         assert_eq!(
             events,
@@ -742,10 +879,10 @@ mod tests {
 
         assert_eq!(
             reader.next().unwrap(),
-            Event::Start(BytesStart::borrowed(b"item ", 4))
+            DeEvent::Start(BytesStart::borrowed(b"item ", 4))
         );
         reader.read_to_end(b"item").unwrap();
-        assert_eq!(reader.next().unwrap(), Event::Eof);
+        assert_eq!(reader.next().unwrap(), DeEvent::Eof);
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
@@ -874,43 +1011,10 @@ mod tests {
 
     #[test]
     fn deserialize_bytes() {
-        #[derive(Debug, PartialEq)]
-        struct Item {
-            bytes: Vec<u8>,
-        }
-
-        impl<'de> Deserialize<'de> for Item {
-            fn deserialize<D>(d: D) -> Result<Self, D::Error>
-            where
-                D: serde::de::Deserializer<'de>,
-            {
-                struct ItemVisitor;
-
-                impl<'de> de::Visitor<'de> for ItemVisitor {
-                    type Value = Item;
-
-                    fn expecting(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        fmt.write_str("byte data")
-                    }
-
-                    fn visit_byte_buf<E: de::Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
-                        Ok(Item { bytes: v })
-                    }
-                }
-
-                Ok(d.deserialize_byte_buf(ItemVisitor)?)
-            }
-        }
-
         let s = r#"<item>bytes</item>"#;
-        let item: Item = from_reader(s.as_bytes()).unwrap();
+        let item: ByteBuf = from_reader(s.as_bytes()).unwrap();
 
-        assert_eq!(
-            item,
-            Item {
-                bytes: "bytes".as_bytes().to_vec(),
-            }
-        );
+        assert_eq!(item, ByteBuf(b"bytes".to_vec()));
     }
 
     /// Test for https://github.com/tafia/quick-xml/issues/231
