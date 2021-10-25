@@ -160,10 +160,10 @@ impl<'bf> BytesStart<'bf> {
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
     ///
     /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    pub fn with_attributes<'a, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
+        I::Item: Into<Attribute<'a>>,
     {
         self.extend_attributes(attributes);
         self
@@ -223,13 +223,13 @@ impl<'bf> BytesStart<'bf> {
     }
 
     /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes<'a> {
-        Attributes::new(&self.buf, self.name_len)
+    pub fn attributes(&self) -> Attributes<'bf> {
+        Attributes::new(self.buf.clone(), self.name_len)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
-    pub fn html_attributes(&self) -> Attributes<'a> {
-        Attributes::html(self, self.name_len)
+    pub fn html_attributes(&self) -> Attributes<'bf> {
+        Attributes::html(self.buf.clone(), self.name_len)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
@@ -244,10 +244,10 @@ impl<'bf> BytesStart<'bf> {
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
     ///
     /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'bf>
+    pub fn extend_attributes<'a, I>(&mut self, attributes: I) -> &mut BytesStart<'bf>
     where
         I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
+        I::Item: Into<Attribute<'a>>,
     {
         for attr in attributes {
             self.push_attribute(attr);
@@ -319,13 +319,13 @@ impl<'bf> BytesStart<'bf> {
     }
 
     /// Adds an attribute to this element.
-    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A) {
+    pub fn push_attribute<'a, A: Into<Attribute<'a>>>(&mut self, attr: A) {
         let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
-        bytes.extend_from_slice(a.key);
+        bytes.extend_from_slice(&a.key);
         bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(&*a.value);
+        bytes.extend_from_slice(&a.value);
         bytes.push(b'"');
     }
 
@@ -349,7 +349,7 @@ impl<'bf> BytesStart<'bf> {
 
     /// Try to get an attribute
     pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
-        &'bf self,
+        &self,
         attr_name: N,
     ) -> Result<Option<Attribute<'bf>>> {
         for a in self.attributes() {
@@ -391,12 +391,9 @@ impl<'bf> BytesDecl<'bf> {
         // The version *must* be the first thing in the declaration.
         match self.element.attributes().next() {
             Some(Err(e)) => Err(e),
-            Some(Ok(Attribute {
-                key: b"version",
-                value: v,
-            })) => Ok(v),
+            Some(Ok(a)) if a.key == &b"version"[..] => return Ok(a.value.clone()),
             Some(Ok(a)) => {
-                let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
+                let found = from_utf8(&a.key).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             None => Err(Error::XmlDeclWithoutVersion(None)),
@@ -408,10 +405,7 @@ impl<'bf> BytesDecl<'bf> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"encoding",
-                    value: v,
-                }) => return Some(Ok(v)),
+                Ok(a) if a.key == &b"encoding"[..] => return Some(Ok(a.value.clone())),
                 _ => (),
             }
         }
@@ -423,10 +417,7 @@ impl<'bf> BytesDecl<'bf> {
         for a in self.element.attributes() {
             match a {
                 Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"standalone",
-                    value: v,
-                }) => return Some(Ok(v)),
+                Ok(a) if a.key == &b"standalone"[..] => return Some(Ok(a.value.clone())),
                 _ => (),
             }
         }

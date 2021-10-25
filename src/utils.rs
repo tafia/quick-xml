@@ -1,5 +1,19 @@
 use std::borrow::Cow;
 use std::fmt::{Formatter, Result};
+use std::ops::Index;
+
+/// Index a range from a [Cow]. This will re-allocate on owned Cow's,
+/// but use the underlying borrow for borrowed Cows.
+pub fn index_cow<'a, I, T>(cow: &Cow<'a, T>, range: I) -> Cow<'a, T>
+where
+    T: Index<I, Output = T> + ToOwned + ?Sized,
+    <T as ToOwned>::Owned: Index<I, Output = T>,
+{
+    match cow {
+        Cow::Borrowed(v) => Cow::Borrowed(&v[range]),
+        Cow::Owned(v) => Cow::Owned(v[range].to_owned()),
+    }
+}
 
 pub fn write_cow_string(f: &mut Formatter<'_>, cow_string: &Cow<[u8]>) -> Result {
     match cow_string {

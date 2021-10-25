@@ -2,10 +2,12 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
+
 use crate::errors::{Error, Result};
 use crate::escape::{do_unescape, escape};
 use crate::reader::{is_whitespace, Reader};
-use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
+use crate::utils::index_cow;
 
 /// Iterator over XML attributes.
 ///
@@ -16,7 +18,7 @@ use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 #[derive(Clone, Debug)]
 pub struct Attributes<'bf> {
     /// slice of `Element` corresponding to attributes
-    bytes: &'bf [u8],
+    bytes: Cow<'bf, [u8]>,
     /// current position of the iterator
     pub(crate) position: usize,
     /// if true, checks for duplicate names
@@ -30,7 +32,7 @@ pub struct Attributes<'bf> {
 
 impl<'bf> Attributes<'bf> {
     /// Creates a new attribute iterator from a buffer.
-    pub fn new(buf: &'bf [u8], pos: usize) -> Attributes<'bf> {
+    pub fn new(buf: Cow<'bf, [u8]>, pos: usize) -> Attributes<'bf> {
         Attributes {
             bytes: buf,
             position: pos,
@@ -41,7 +43,7 @@ impl<'bf> Attributes<'bf> {
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
-    pub fn html(buf: &'bf [u8], pos: usize) -> Attributes<'bf> {
+    pub fn html(buf: Cow<'bf, [u8]>, pos: usize) -> Attributes<'bf> {
         Attributes {
             bytes: buf,
             position: pos,
@@ -78,7 +80,7 @@ pub struct Attribute<'bf> {
     /// If [`Attributes::with_checks`] is turned off, the key might not be unique.
     ///
     /// [`Attributes::with_checks`]: struct.Attributes.html#method.with_checks
-    pub key: &'bf [u8],
+    pub key: Cow<'bf, [u8]>,
     /// The raw value of the attribute.
     pub value: Cow<'bf, [u8]>,
 }
@@ -178,7 +180,7 @@ impl<'bf> Attribute<'bf> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        let decoded = reader.decode(&*self.value)?;
+        let decoded = reader.decode(&self.value)?;
         let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities)
             .map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
@@ -272,7 +274,7 @@ impl<'bf> Attribute<'bf> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        let decoded = reader.decode_without_bom(&*self.value)?;
+        let decoded = reader.decode_without_bom(&self.value)?;
         let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities)
             .map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
@@ -281,10 +283,10 @@ impl<'bf> Attribute<'bf> {
 
 impl<'bf> std::fmt::Debug for Attribute<'bf> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use crate::utils::{write_byte_string, write_cow_string};
+        use crate::utils::write_cow_string;
 
         write!(f, "Attribute {{ key: ")?;
-        write_byte_string(f, self.key)?;
+        write_cow_string(f, &self.key)?;
         write!(f, ", value: ")?;
         write_cow_string(f, &self.value)?;
         write!(f, " }}")
@@ -303,10 +305,10 @@ impl<'bf> From<(&'bf [u8], &'bf [u8])> for Attribute<'bf> {
     /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
-    fn from(val: (&'bf [u8], &'bf [u8])) -> Attribute<'bf> {
+    fn from((key, val): (&'bf [u8], &'bf [u8])) -> Attribute<'bf> {
         Attribute {
-            key: val.0,
-            value: Cow::from(val.1),
+            key: Cow::Borrowed(key),
+            value: Cow::Borrowed(val),
         }
     }
 }
@@ -323,15 +325,15 @@ impl<'bf> From<(&'bf str, &'bf str)> for Attribute<'bf> {
     /// let features = Attribute::from(("features", "Bells & whistles"));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
-    fn from(val: (&'bf str, &'bf str)) -> Attribute<'bf> {
+    fn from((key, val): (&'bf str, &'bf str)) -> Attribute<'bf> {
         Attribute {
-            key: val.0.as_bytes(),
-            value: escape(val.1.as_bytes()),
+            key: Cow::Borrowed(key.as_bytes()),
+            value: escape(val.as_bytes()),
         }
     }
 }
 
-impl<'bf> Iterator for Attributes<'bf> {
+impl<'bf, 'a> Iterator for Attributes<'bf> {
     type Item = Result<Attribute<'bf>>;
     fn next(&mut self) -> Option<Self::Item> {
         let len = self.bytes.len();
@@ -354,8 +356,8 @@ impl<'bf> Iterator for Attributes<'bf> {
             }};
             ($key:expr, $val:expr) => {
                 Some(Ok(Attribute {
-                    key: &self.bytes[$key],
-                    value: Cow::Borrowed(&self.bytes[$val]),
+                    key: index_cow(&self.bytes, $key),
+                    value: index_cow(&self.bytes, $val),
                 }))
             };
         }
@@ -449,13 +451,13 @@ mod tests {
     #[test]
     fn regular() {
         let event = b"name a='a' b = 'b'";
-        let mut attributes = Attributes::new(event, 0);
+        let mut attributes = Attributes::new(Cow::Borrowed(event), 0);
         attributes.with_checks(true);
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.key, b"a");
         assert_eq!(&*a.value, b"a");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.key, b"b");
         assert_eq!(&*a.value, b"b");
         assert!(attributes.next().is_none());
     }
@@ -463,16 +465,16 @@ mod tests {
     #[test]
     fn mixed_quote() {
         let event = b"name a='a' b = \"b\" c='cc\"cc'";
-        let mut attributes = Attributes::new(event, 0);
+        let mut attributes = Attributes::new(Cow::Borrowed(event), 0);
         attributes.with_checks(true);
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.key, b"a");
         assert_eq!(&*a.value, b"a");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.key, b"b");
         assert_eq!(&*a.value, b"b");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"c");
+        assert_eq!(&*a.key, b"c");
         assert_eq!(&*a.value, b"cc\"cc");
         assert!(attributes.next().is_none());
     }
@@ -480,10 +482,10 @@ mod tests {
     #[test]
     fn html_fail() {
         let event = b"name a='a' b=b c";
-        let mut attributes = Attributes::new(event, 0);
+        let mut attributes = Attributes::new(Cow::Borrowed(event), 0);
         attributes.with_checks(true);
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.key, b"a");
         assert_eq!(&*a.value, b"a");
         assert!(attributes.next().unwrap().is_err());
     }
@@ -491,25 +493,25 @@ mod tests {
     #[test]
     fn html_ok() {
         let event = b"name a='a' e b=b c d ee=ee";
-        let mut attributes = Attributes::html(event, 0);
+        let mut attributes = Attributes::html(Cow::Borrowed(event), 0);
         attributes.with_checks(true);
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
+        assert_eq!(&*a.key, b"a");
         assert_eq!(&*a.value, b"a");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"e");
+        assert_eq!(&*a.key, b"e");
         assert_eq!(&*a.value, b"");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
+        assert_eq!(&*a.key, b"b");
         assert_eq!(&*a.value, b"b");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"c");
+        assert_eq!(&*a.key, b"c");
         assert_eq!(&*a.value, b"");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"d");
+        assert_eq!(&*a.key, b"d");
         assert_eq!(&*a.value, b"");
         let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"ee");
+        assert_eq!(&*a.key, b"ee");
         assert_eq!(&*a.value, b"ee");
         assert!(attributes.next().is_none());
     }

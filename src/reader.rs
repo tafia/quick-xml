@@ -9,7 +9,7 @@ use std::{fs::File, path::Path, str::from_utf8};
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -1503,28 +1503,28 @@ impl NamespaceBufferIndex {
         let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
-        for a in e.attributes().with_checks(false) {
-            if let Ok(Attribute { key: k, value: v }) = a {
-                if k.starts_with(b"xmlns") {
-                    match k.get(5) {
+        for attribute in e.attributes().with_checks(false) {
+            if let Ok(attr) = attribute {
+                if attr.key.starts_with(b"xmlns") {
+                    match attr.key.get(5) {
                         None => {
                             let start = buffer.len();
-                            buffer.extend_from_slice(&*v);
+                            buffer.extend_from_slice(&attr.value);
                             self.slices.push(Namespace {
                                 start,
                                 prefix_len: 0,
-                                value_len: v.len(),
+                                value_len: attr.value.len(),
                                 level,
                             });
                         }
                         Some(&b':') => {
                             let start = buffer.len();
-                            buffer.extend_from_slice(&k[6..]);
-                            buffer.extend_from_slice(&*v);
+                            buffer.extend_from_slice(&attr.key[6..]);
+                            buffer.extend_from_slice(&attr.value);
                             self.slices.push(Namespace {
                                 start,
-                                prefix_len: k.len() - 6,
-                                value_len: v.len(),
+                                prefix_len: attr.key.len() - 6,
+                                value_len: attr.value.len(),
                                 level,
                             });
                         }

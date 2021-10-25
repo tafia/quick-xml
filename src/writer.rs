@@ -228,9 +228,9 @@ pub struct ElementWriter<'wr, W: Write> {
 
 impl<'wr, W: Write> ElementWriter<'wr, W> {
     /// Adds an attribute to this element.
-    pub fn with_attribute<'b, I>(mut self, attr: I) -> Self
+    pub fn with_attribute<'a, I>(mut self, attr: I) -> Self
     where
-        I: Into<Attribute<'b>>,
+        I: Into<Attribute<'a>>,
     {
         self.start_tag.push_attribute(attr);
         self
@@ -241,10 +241,10 @@ impl<'wr, W: Write> ElementWriter<'wr, W> {
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
     ///
     /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    pub fn with_attributes<'a, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
+        I::Item: Into<Attribute<'a>>,
     {
         self.start_tag.extend_attributes(attributes);
         self

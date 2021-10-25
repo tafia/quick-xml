@@ -37,14 +37,14 @@ fn test_attributes_empty() {
             let mut atts = e.attributes();
             match atts.next() {
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: Cow::Borrowed(b"att1"),
                     value: Cow::Borrowed(b"a"),
                 })) => (),
                 e => panic!("Expecting att1='a' attribute, found {:?}", e),
             }
             match atts.next() {
                 Some(Ok(Attribute {
-                    key: b"att2",
+                    key: Cow::Borrowed(b"att2"),
                     value: Cow::Borrowed(b"b"),
                 })) => (),
                 e => panic!("Expecting att2='b' attribute, found {:?}", e),
@@ -69,7 +69,7 @@ fn test_attribute_equal() {
             let mut atts = e.attributes();
             match atts.next() {
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: Cow::Borrowed(b"att1"),
                     value: Cow::Borrowed(b"a=b"),
                 })) => (),
                 e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
@@ -120,8 +120,12 @@ fn test_attributes_empty_ns() {
         .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
         // we don't care about xmlns attributes for this test
         .filter(|kv| !kv.key.starts_with(b"xmlns"))
-        .map(|Attribute { key: name, value }| {
-            let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
+        .map(|Attribute { key, value }| {
+            let name = match key {
+                Cow::Borrowed(k) => k,
+                _ => panic!("should be borrowed"),
+            };
+            let (opt_ns, local_name) = r.attribute_namespace(&name, &ns_buf);
             (opt_ns, local_name, value)
         });
     match atts.next() {
@@ -165,8 +169,12 @@ fn test_attributes_empty_ns_expanded() {
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
+            .map(|Attribute { key, value }| {
+                let name = match key {
+                    Cow::Borrowed(k) => k,
+                    _ => panic!("should be borrowed"),
+                };
+                let (opt_ns, local_name) = r.attribute_namespace(&name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         match atts.next() {
@@ -230,8 +238,12 @@ fn test_default_ns_shadowing_empty() {
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
+            .map(|Attribute { key, value }| {
+                let name = match key {
+                    Cow::Borrowed(k) => k,
+                    _ => panic!("should be borrowed"),
+                };
+                let (opt_ns, local_name) = r.attribute_namespace(&name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -292,8 +304,12 @@ fn test_default_ns_shadowing_expanded() {
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
             .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
+            .map(|Attribute { key, value }| {
+                let name = match key {
+                    Cow::Borrowed(k) => k,
+                    _ => panic!("should be borrowed"),
+                };
+                let (opt_ns, local_name) = r.attribute_namespace(&name, &ns_buf);
                 (opt_ns, local_name, value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
