@@ -223,12 +223,12 @@ impl<'bf> BytesStart<'bf> {
     }
 
     /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes {
+    pub fn attributes(&self) -> Attributes<'a> {
         Attributes::new(&self.buf, self.name_len)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
-    pub fn html_attributes(&self) -> Attributes {
+    pub fn html_attributes(&self) -> Attributes<'a> {
         Attributes::html(self, self.name_len)
     }
 
