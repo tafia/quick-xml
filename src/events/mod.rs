@@ -219,7 +219,7 @@ impl<'a> BytesStart<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
+        do_unescape(&self.buf, custom_entities).map_err(Error::EscapeError)
     }
 
     /// Returns an iterator over the attributes of this tag.
@@ -301,8 +301,7 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -314,8 +313,8 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities)
+            .map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -645,7 +644,7 @@ impl<'a> BytesText<'a> {
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(self, custom_entities).map_err(Error::EscapeError)
+        do_unescape(&self.content, custom_entities).map_err(Error::EscapeError)
     }
 
     /// Gets content of this text buffer in the specified encoding
@@ -681,8 +680,8 @@ impl<'a> BytesText<'a> {
     ) -> Result<Cow<'a, str>> {
         match self.decode(decoder)? {
             Cow::Borrowed(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), None)
+                    .map_err(Error::EscapeError)?;
                 match unescaped {
                     Cow::Borrowed(unescaped) => {
                         from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
@@ -693,8 +692,8 @@ impl<'a> BytesText<'a> {
                 }
             }
             Cow::Owned(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), None)
+                    .map_err(Error::EscapeError)?;
                 String::from_utf8(unescaped.into_owned())
                     .map(|s| s.into())
                     .map_err(|e| Error::Utf8(e.utf8_error()))
@@ -791,8 +790,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities)
+            .map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
@@ -843,8 +842,8 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
         let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
+        let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), custom_entities)
+            .map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 

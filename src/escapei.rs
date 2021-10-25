@@ -126,7 +126,7 @@ fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value
-pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
+pub fn unescape<'a>(raw: &Cow<'a, [u8]>) -> Result<Cow<'a, [u8]>, EscapeError> {
     do_unescape(raw, None)
 }
 
@@ -137,7 +137,7 @@ pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
 ///
 /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
 pub fn unescape_with<'a>(
-    raw: &'a [u8],
+    raw: &Cow<'a, [u8]>,
     custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<Cow<'a, [u8]>, EscapeError> {
     do_unescape(raw, Some(custom_entities))
@@ -150,7 +150,7 @@ pub fn unescape_with<'a>(
 ///
 /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
 pub fn do_unescape<'a>(
-    raw: &'a [u8],
+    raw: &Cow<'a, [u8]>,
     custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
 ) -> Result<Cow<'a, [u8]>, EscapeError> {
     let mut unescaped = None;
@@ -193,7 +193,7 @@ pub fn do_unescape<'a>(
         }
         Ok(Cow::Owned(unescaped))
     } else {
-        Ok(Cow::Borrowed(raw))
+        Ok(raw.clone())
     }
 }
 
@@ -1728,11 +1728,11 @@ fn parse_decimal(bytes: &[u8]) -> Result<u32, EscapeError> {
 
 #[test]
 fn test_unescape() {
-    assert_eq!(&*unescape(b"test").unwrap(), b"test");
-    assert_eq!(&*unescape(b"&lt;test&gt;").unwrap(), b"<test>");
-    assert_eq!(&*unescape(b"&#x30;").unwrap(), b"0");
-    assert_eq!(&*unescape(b"&#48;").unwrap(), b"0");
-    assert!(unescape(b"&foo;").is_err());
+    assert_eq!(&*unescape(&Cow::Borrowed(&b"test"[..])).unwrap(), b"test");
+    assert_eq!(&*unescape(&Cow::Borrowed(&b"&lt;test&gt;"[..])).unwrap(), b"<test>");
+    assert_eq!(&*unescape(&Cow::Borrowed(&b"&#x30;"[..])).unwrap(), b"0");
+    assert_eq!(&*unescape(&Cow::Borrowed(&b"&#48;"[..])).unwrap(), b"0");
+    assert!(unescape(&Cow::Borrowed(&b"&foo;"[..])).is_err());
 }
 
 #[test]
@@ -1740,37 +1740,37 @@ fn test_unescape_with() {
     let custom_entities = vec![(b"foo".to_vec(), b"BAR".to_vec())]
         .into_iter()
         .collect();
-    assert_eq!(&*unescape_with(b"test", &custom_entities).unwrap(), b"test");
+    assert_eq!(&*unescape_with(&Cow::Borrowed(&b"test"[..]), &custom_entities).unwrap(), b"test");
     assert_eq!(
-        &*unescape_with(b"&lt;test&gt;", &custom_entities).unwrap(),
+        &*unescape_with(&Cow::Borrowed(&b"&lt;test&gt;"[..]), &custom_entities).unwrap(),
         b"<test>"
     );
-    assert_eq!(&*unescape_with(b"&#x30;", &custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with(b"&#48;", &custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with(b"&foo;", &custom_entities).unwrap(), b"BAR");
-    assert!(unescape_with(b"&fop;", &custom_entities).is_err());
+    assert_eq!(&*unescape_with(&Cow::Borrowed(&b"&#x30;"[..]), &custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(&Cow::Borrowed(&b"&#48;"[..]), &custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(&Cow::Borrowed(&b"&foo;"[..]), &custom_entities).unwrap(), b"BAR");
+    assert!(unescape_with(&Cow::Borrowed(&b"&fop;"[..]), &custom_entities).is_err());
 }
 
 #[test]
 fn test_escape() {
-    assert_eq!(&*escape(b"test"), b"test");
-    assert_eq!(&*escape(b"<test>"), b"&lt;test&gt;");
-    assert_eq!(&*escape(b"\"a\"bc"), b"&quot;a&quot;bc");
-    assert_eq!(&*escape(b"\"a\"b&c"), b"&quot;a&quot;b&amp;c");
+    assert_eq!(&*escape(&Cow::Borrowed(&b"test"[..])), b"test");
+    assert_eq!(&*escape(&Cow::Borrowed(&b"<test>"[..])), b"&lt;test&gt;");
+    assert_eq!(&*escape(&Cow::Borrowed(&b"\"a\"bc"[..])), b"&quot;a&quot;bc");
+    assert_eq!(&*escape(&Cow::Borrowed(&b"\"a\"b&c"[..])), b"&quot;a&quot;b&amp;c");
     assert_eq!(
-        &*escape(b"prefix_\"a\"b&<>c"),
+        &*escape(&Cow::Borrowed(&b"prefix_\"a\"b&<>c"[..])),
         "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
     );
 }
 
 #[test]
 fn test_partial_escape() {
-    assert_eq!(&*partial_escape(b"test"), b"test");
-    assert_eq!(&*partial_escape(b"<test>"), b"&lt;test&gt;");
-    assert_eq!(&*partial_escape(b"\"a\"bc"), b"\"a\"bc");
-    assert_eq!(&*partial_escape(b"\"a\"b&c"), b"\"a\"b&amp;c");
+    assert_eq!(&*partial_escape(&Cow::Borrowed(&b"test"[..])), b"test");
+    assert_eq!(&*partial_escape(&Cow::Borrowed(&b"<test>"[..])), b"&lt;test&gt;");
+    assert_eq!(&*partial_escape(&Cow::Borrowed(&b"\"a\"bc"[..])), b"\"a\"bc");
+    assert_eq!(&*partial_escape(&Cow::Borrowed(&b"\"a\"b&c"[..])), b"\"a\"b&amp;c");
     assert_eq!(
-        &*partial_escape(b"prefix_\"a\"b&<>c"),
+        &*partial_escape(&Cow::Borrowed(&b"prefix_\"a\"b&<>c"[..])),
         "prefix_\"a\"b&amp;&lt;&gt;c".as_bytes()
     );
 }
