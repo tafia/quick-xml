@@ -98,7 +98,6 @@ fn test_namespaces() {
 }
 
 #[test]
-#[ignore] // FIXME
 fn test_doctype() {
     #[derive(PartialEq, Serialize, Deserialize, Debug)]
     struct Envelope {

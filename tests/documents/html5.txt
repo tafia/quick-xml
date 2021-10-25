@@ -1,4 +1,4 @@
-DocType( html)
+DocType(html)
 Characters(
 )
 StartElement(a, attr-error: error while parsing attribute at position 7: Attribute value must start with a quote.)

@@ -371,7 +371,12 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
             debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
-            Ok(Event::DocType(BytesText::from_escaped(&buf[8..])))
+            let start = buf[8..]
+                .iter()
+                .position(|b| !is_whitespace(*b))
+                .unwrap_or_else(|| buf.len() - 8);
+            debug_assert!(start < buf.len() - 8, "DocType must have a name");
+            Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
         } else {
             unreachable!("Proper bang start guaranteed by read_bang_elem");
         }
