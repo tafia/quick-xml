@@ -92,7 +92,7 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescaped_value_with_custom_entities()`](#method.unescaped_value_with_custom_entities)
-    pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
+    pub fn unescaped_value(&self) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped_value(None)
     }
 
@@ -112,14 +112,14 @@ impl<'a> Attribute<'a> {
     pub fn unescaped_value_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<[u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped_value(Some(custom_entities))
     }
 
     fn make_unescaped_value(
         &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<[u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         do_unescape(&self.value, custom_entities).map_err(Error::EscapeError)
     }
 

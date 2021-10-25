@@ -191,7 +191,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
     #[inline]
-    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped(None)
     }
 
@@ -207,18 +207,18 @@ impl<'a> BytesStart<'a> {
     ///
     /// See also [`unescaped()`](#method.unescaped)
     #[inline]
-    pub fn unescaped_with_custom_entities<'s>(
-        &'s self,
+    pub fn unescaped_with_custom_entities(
+        &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<'s, [u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped(Some(custom_entities))
     }
 
     #[inline]
-    fn make_unescaped<'s>(
-        &'s self,
+    fn make_unescaped(
+        &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'s, [u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         do_unescape(&self.buf, custom_entities).map_err(Error::EscapeError)
     }
 
@@ -618,7 +618,7 @@ impl<'a> BytesText<'a> {
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
     /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
-    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped(None)
     }
 
@@ -633,17 +633,17 @@ impl<'a> BytesText<'a> {
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     ///
     /// See also [`unescaped()`](#method.unescaped)
-    pub fn unescaped_with_custom_entities<'s>(
-        &'s self,
+    pub fn unescaped_with_custom_entities(
+        &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<'s, [u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         self.make_unescaped(Some(custom_entities))
     }
 
-    fn make_unescaped<'s>(
-        &'s self,
+    fn make_unescaped(
+        &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'s, [u8]>> {
+    ) -> Result<Cow<'a, [u8]>> {
         do_unescape(&self.content, custom_entities).map_err(Error::EscapeError)
     }
 
