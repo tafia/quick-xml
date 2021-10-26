@@ -885,7 +885,7 @@ pub enum Event<'a> {
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
     PI(BytesText<'a>),
-    /// Doctype `<!DOCTYPE...>`.
+    /// Doctype `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
     /// End of XML document.
     Eof,

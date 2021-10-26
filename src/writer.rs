@@ -119,7 +119,7 @@ impl<W: Write> Writer<W> {
             }
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", e, b">"),
+            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE ", e, b">"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
