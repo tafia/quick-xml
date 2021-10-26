@@ -131,16 +131,16 @@ pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 
 /// Simplified event which contains only these variants that used by deserializer
 #[derive(Debug, PartialEq)]
-pub enum DeEvent<'a> {
+pub enum DeEvent<'bf> {
     /// Start tag (with attributes) `<tag attr="value">`.
-    Start(BytesStart<'a>),
+    Start(BytesStart<'bf>),
     /// End tag `</tag>`.
-    End(BytesEnd<'a>),
+    End(BytesEnd<'bf>),
     /// Escaped character data between `Start` and `End` element.
-    Text(BytesText<'a>),
+    Text(BytesText<'bf>),
     /// Unescaped character data between `Start` and `End` element,
     /// stored in `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesText<'bf>),
     /// End of XML document.
     Eof,
 }

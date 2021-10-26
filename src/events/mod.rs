@@ -58,21 +58,21 @@ use memchr;
 /// [`unescaped`]: #method.unescaped
 /// [`attributes`]: #method.attributes
 #[derive(Clone, Eq, PartialEq)]
-pub struct BytesStart<'a> {
+pub struct BytesStart<'bf> {
     /// content of the element, before any utf8 conversion
-    buf: Cow<'a, [u8]>,
+    buf: Cow<'bf, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
     name_len: usize,
 }
 
-impl<'a> BytesStart<'a> {
+impl<'bf> BytesStart<'bf> {
     /// Creates a new `BytesStart` from the given content (name + attributes).
     ///
     /// # Warning
     ///
     /// `&content[..name_len]` is not checked to be a valid name
     #[inline]
-    pub fn borrowed(content: &'a [u8], name_len: usize) -> Self {
+    pub fn borrowed(content: &'bf [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
@@ -85,7 +85,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// `&content` is not checked to be a valid name
     #[inline]
-    pub fn borrowed_name(name: &'a [u8]) -> BytesStart<'a> {
+    pub fn borrowed_name(name: &'bf [u8]) -> BytesStart<'bf> {
         Self::borrowed(name, name.len())
     }
 
@@ -191,7 +191,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
     #[inline]
-    pub fn unescaped(&self) -> Result<Cow<'a, [u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped(None)
     }
 
@@ -210,7 +210,7 @@ impl<'a> BytesStart<'a> {
     pub fn unescaped_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped(Some(custom_entities))
     }
 
@@ -218,7 +218,7 @@ impl<'a> BytesStart<'a> {
     fn make_unescaped(
         &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         do_unescape(&self.buf, custom_entities).map_err(Error::EscapeError)
     }
 
@@ -244,7 +244,7 @@ impl<'a> BytesStart<'a> {
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
     ///
     /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
+    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'bf>
     where
         I: IntoIterator,
         I::Item: Into<Attribute<'b>>,
@@ -334,7 +334,7 @@ impl<'a> BytesStart<'a> {
     /// # Warning
     ///
     /// `name` is not checked to be a valid name
-    pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
+    pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'bf> {
         let bytes = self.buf.to_mut();
         bytes.splice(..self.name_len, name.iter().cloned());
         self.name_len = name.len();
@@ -342,16 +342,16 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Remove all attributes from the ByteStart
-    pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
+    pub fn clear_attributes(&mut self) -> &mut BytesStart<'bf> {
         self.buf.to_mut().truncate(self.name_len);
         self
     }
 
     /// Try to get an attribute
     pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
-        &'a self,
+        &'bf self,
         attr_name: N,
-    ) -> Result<Option<Attribute<'a>>> {
+    ) -> Result<Option<Attribute<'bf>>> {
         for a in self.attributes() {
             let a = a?;
             if a.key == attr_name.as_ref() {
@@ -362,7 +362,7 @@ impl<'a> BytesStart<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesStart<'a> {
+impl<'bf> std::fmt::Debug for BytesStart<'bf> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use crate::utils::write_cow_string;
 
@@ -376,13 +376,13 @@ impl<'a> std::fmt::Debug for BytesStart<'a> {
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BytesDecl<'a> {
-    element: BytesStart<'a>,
+pub struct BytesDecl<'bf> {
+    element: BytesStart<'bf>,
 }
 
-impl<'a> BytesDecl<'a> {
+impl<'bf> BytesDecl<'bf> {
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub fn from_start(start: BytesStart<'a>) -> BytesDecl<'a> {
+    pub fn from_start(start: BytesStart<'bf>) -> BytesDecl<'bf> {
         BytesDecl { element: start }
     }
 
@@ -498,14 +498,14 @@ impl<'a> BytesDecl<'a> {
 
 /// A struct to manage `Event::End` events
 #[derive(Clone, Eq, PartialEq)]
-pub struct BytesEnd<'a> {
-    name: Cow<'a, [u8]>,
+pub struct BytesEnd<'bf> {
+    name: Cow<'bf, [u8]>,
 }
 
-impl<'a> BytesEnd<'a> {
+impl<'bf> BytesEnd<'bf> {
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
-    pub fn borrowed(name: &'a [u8]) -> BytesEnd<'a> {
+    pub fn borrowed(name: &'bf [u8]) -> BytesEnd<'bf> {
         BytesEnd {
             name: Cow::Borrowed(name),
         }
@@ -545,7 +545,7 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesEnd<'a> {
+impl<'bf> std::fmt::Debug for BytesEnd<'bf> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use crate::utils::write_cow_string;
 
@@ -557,15 +557,15 @@ impl<'a> std::fmt::Debug for BytesEnd<'a> {
 
 /// Data from various events (most notably, `Event::Text`).
 #[derive(Clone, Eq, PartialEq)]
-pub struct BytesText<'a> {
+pub struct BytesText<'bf> {
     // Invariant: The content is always escaped.
-    content: Cow<'a, [u8]>,
+    content: Cow<'bf, [u8]>,
 }
 
-impl<'a> BytesText<'a> {
+impl<'bf> BytesText<'bf> {
     /// Creates a new `BytesText` from an escaped byte sequence.
     #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> BytesText<'a> {
+    pub fn from_escaped<C: Into<Cow<'bf, [u8]>>>(content: C) -> BytesText<'bf> {
         BytesText {
             content: content.into(),
         }
@@ -574,7 +574,7 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from a byte sequence. The byte sequence is
     /// expected not to be escaped.
     #[inline]
-    pub fn from_plain(content: &'a [u8]) -> BytesText<'a> {
+    pub fn from_plain(content: &'bf [u8]) -> BytesText<'bf> {
         BytesText {
             content: escape(content),
         }
@@ -582,7 +582,7 @@ impl<'a> BytesText<'a> {
 
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
-    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> BytesText<'a> {
+    pub fn from_escaped_str<C: Into<Cow<'bf, str>>>(content: C) -> BytesText<'bf> {
         Self::from_escaped(match content.into() {
             Cow::Owned(o) => Cow::Owned(o.into_bytes()),
             Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
@@ -592,7 +592,7 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from a string. The string is expected not to
     /// be escaped.
     #[inline]
-    pub fn from_plain_str(content: &'a str) -> BytesText<'a> {
+    pub fn from_plain_str(content: &'bf str) -> BytesText<'bf> {
         Self::from_plain(content.as_bytes())
     }
 
@@ -608,7 +608,7 @@ impl<'a> BytesText<'a> {
     /// Extracts the inner `Cow` from the `BytesText` event container.
     #[cfg(feature = "serialize")]
     #[inline]
-    pub(crate) fn into_inner(self) -> Cow<'a, [u8]> {
+    pub(crate) fn into_inner(self) -> Cow<'bf, [u8]> {
         self.content
     }
 
@@ -618,7 +618,7 @@ impl<'a> BytesText<'a> {
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
     /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
-    pub fn unescaped(&self) -> Result<Cow<'a, [u8]>> {
+    pub fn unescaped(&self) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped(None)
     }
 
@@ -636,20 +636,20 @@ impl<'a> BytesText<'a> {
     pub fn unescaped_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped(Some(custom_entities))
     }
 
     fn make_unescaped(
         &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         do_unescape(&self.content, custom_entities).map_err(Error::EscapeError)
     }
 
     /// Gets content of this text buffer in the specified encoding
     #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'bf, str>> {
         Ok(match &self.content {
             Cow::Borrowed(bytes) => {
                 #[cfg(feature = "encoding")]
@@ -677,7 +677,7 @@ impl<'a> BytesText<'a> {
     pub(crate) fn decode_and_escape(
         &self,
         decoder: crate::reader::Decoder,
-    ) -> Result<Cow<'a, str>> {
+    ) -> Result<Cow<'bf, str>> {
         match self.decode(decoder)? {
             Cow::Borrowed(decoded) => {
                 let unescaped = do_unescape(&Cow::Borrowed(decoded.as_bytes()), None)
@@ -853,7 +853,7 @@ impl<'a> BytesText<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesText<'a> {
+impl<'bf> std::fmt::Debug for BytesText<'bf> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         use crate::utils::write_cow_string;
 
@@ -867,30 +867,30 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Event<'a> {
+pub enum Event<'bf> {
     /// Start tag (with attributes) `<tag attr="value">`.
-    Start(BytesStart<'a>),
+    Start(BytesStart<'bf>),
     /// End tag `</tag>`.
-    End(BytesEnd<'a>),
+    End(BytesEnd<'bf>),
     /// Empty element tag (with attributes) `<tag attr="value" />`.
-    Empty(BytesStart<'a>),
+    Empty(BytesStart<'bf>),
     /// Character data between `Start` and `End` element.
-    Text(BytesText<'a>),
+    Text(BytesText<'bf>),
     /// Comment `<!-- ... -->`.
-    Comment(BytesText<'a>),
+    Comment(BytesText<'bf>),
     /// CData `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesText<'bf>),
     /// XML declaration `<?xml ...?>`.
-    Decl(BytesDecl<'a>),
+    Decl(BytesDecl<'bf>),
     /// Processing instruction `<?...?>`.
-    PI(BytesText<'a>),
+    PI(BytesText<'bf>),
     /// Doctype `<!DOCTYPE...>`.
-    DocType(BytesText<'a>),
+    DocType(BytesText<'bf>),
     /// End of XML document.
     Eof,
 }
 
-impl<'a> Event<'a> {
+impl<'bf> Event<'bf> {
     /// Converts the event to an owned version, untied to the lifetime of
     /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
@@ -909,35 +909,35 @@ impl<'a> Event<'a> {
     }
 }
 
-impl<'a> Deref for BytesStart<'a> {
+impl<'bf> Deref for BytesStart<'bf> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         &*self.buf
     }
 }
 
-impl<'a> Deref for BytesDecl<'a> {
+impl<'bf> Deref for BytesDecl<'bf> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         &*self.element
     }
 }
 
-impl<'a> Deref for BytesEnd<'a> {
+impl<'bf> Deref for BytesEnd<'bf> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         &*self.name
     }
 }
 
-impl<'a> Deref for BytesText<'a> {
+impl<'bf> Deref for BytesText<'bf> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         &*self.content
     }
 }
 
-impl<'a> Deref for Event<'a> {
+impl<'bf> Deref for Event<'bf> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         match *self {
@@ -954,8 +954,8 @@ impl<'a> Deref for Event<'a> {
     }
 }
 
-impl<'a> AsRef<Event<'a>> for Event<'a> {
-    fn as_ref(&self) -> &Event<'a> {
+impl<'bf> AsRef<Event<'bf>> for Event<'bf> {
+    fn as_ref(&self) -> &Event<'bf> {
         self
     }
 }
