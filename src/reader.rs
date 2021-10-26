@@ -224,9 +224,9 @@ impl<R: BufRead> Reader<R> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         self.tag_state = TagState::Opened;
 
@@ -256,9 +256,9 @@ impl<R: BufRead> Reader<R> {
     }
 
     /// private function to read until '>' is found
-    fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         self.tag_state = TagState::Closed;
 
@@ -503,9 +503,9 @@ impl<R: BufRead> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -919,10 +919,7 @@ impl<'inp> Reader<&'inp [u8]> {
     }
 }
 
-trait BufferedInput<'bf, 'int, B>
-where
-    Self: 'int,
-{
+trait BufferedInput<'bf, B> {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -939,14 +936,12 @@ where
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
     fn peek_one(&mut self) -> Result<Option<u8>>;
-
-    fn input_borrowed(event: Event<'bf>) -> Event<'int>;
 }
 
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
 // The lifetimes are 'bf for the ad-hoc buffer and 'r for the type of the BufRead.
-impl<'bf, 'r, R: BufRead + 'r> BufferedInput<'bf, 'r, &'bf mut Vec<u8>> for R {
+impl<'bf, R: BufRead> BufferedInput<'bf, &'bf mut Vec<u8>> for R {
     /// read until `byte` is found or end of file
     /// return the position of byte
     #[inline]
@@ -1224,15 +1219,11 @@ impl<'bf, 'r, R: BufRead + 'r> BufferedInput<'bf, 'r, &'bf mut Vec<u8>> for R {
             };
         }
     }
-
-    fn input_borrowed(event: Event<'bf>) -> Event<'static> {
-        event.into_owned()
-    }
 }
 
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
-impl<'inp> BufferedInput<'inp, 'inp, ()> for &'inp [u8] {
+impl<'inp> BufferedInput<'inp, ()> for &'inp [u8] {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -1380,10 +1371,6 @@ impl<'inp> BufferedInput<'inp, 'inp, ()> for &'inp [u8] {
 
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
-    }
-
-    fn input_borrowed(event: Event<'inp>) -> Event<'inp> {
-        return event;
     }
 }
 
