@@ -14,9 +14,9 @@ use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 ///
 /// [`with_checks(false)`]: #method.with_checks
 #[derive(Clone, Debug)]
-pub struct Attributes<'a> {
+pub struct Attributes<'bf> {
     /// slice of `Element` corresponding to attributes
-    bytes: &'a [u8],
+    bytes: &'bf [u8],
     /// current position of the iterator
     pub(crate) position: usize,
     /// if true, checks for duplicate names
@@ -28,9 +28,9 @@ pub struct Attributes<'a> {
     consumed: Vec<Range<usize>>,
 }
 
-impl<'a> Attributes<'a> {
+impl<'bf> Attributes<'bf> {
     /// Creates a new attribute iterator from a buffer.
-    pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
+    pub fn new(buf: &'bf [u8], pos: usize) -> Attributes<'bf> {
         Attributes {
             bytes: buf,
             position: pos,
@@ -41,7 +41,7 @@ impl<'a> Attributes<'a> {
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
-    pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
+    pub fn html(buf: &'bf [u8], pos: usize) -> Attributes<'bf> {
         Attributes {
             bytes: buf,
             position: pos,
@@ -57,7 +57,7 @@ impl<'a> Attributes<'a> {
     /// can be disabled to improve performance slightly.
     ///
     /// (`true` by default)
-    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
+    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'bf> {
         self.with_checks = val;
         self
     }
@@ -72,18 +72,18 @@ impl<'a> Attributes<'a> {
 /// [`unescaped_value`]: #method.unescaped_value
 /// [`unescape_and_decode_value`]: #method.unescape_and_decode_value
 #[derive(Clone, PartialEq)]
-pub struct Attribute<'a> {
+pub struct Attribute<'bf> {
     /// The key to uniquely define the attribute.
     ///
     /// If [`Attributes::with_checks`] is turned off, the key might not be unique.
     ///
     /// [`Attributes::with_checks`]: struct.Attributes.html#method.with_checks
-    pub key: &'a [u8],
+    pub key: &'bf [u8],
     /// The raw value of the attribute.
-    pub value: Cow<'a, [u8]>,
+    pub value: Cow<'bf, [u8]>,
 }
 
-impl<'a> Attribute<'a> {
+impl<'bf> Attribute<'bf> {
     /// Returns the unescaped value.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
@@ -92,7 +92,7 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescaped_value_with_custom_entities()`](#method.unescaped_value_with_custom_entities)
-    pub fn unescaped_value(&self) -> Result<Cow<'a, [u8]>> {
+    pub fn unescaped_value(&self) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped_value(None)
     }
 
@@ -112,14 +112,14 @@ impl<'a> Attribute<'a> {
     pub fn unescaped_value_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         self.make_unescaped_value(Some(custom_entities))
     }
 
     fn make_unescaped_value(
         &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'a, [u8]>> {
+    ) -> Result<Cow<'bf, [u8]>> {
         do_unescape(&self.value, custom_entities).map_err(Error::EscapeError)
     }
 
@@ -279,7 +279,7 @@ impl<'a> Attribute<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for Attribute<'a> {
+impl<'bf> std::fmt::Debug for Attribute<'bf> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use crate::utils::{write_byte_string, write_cow_string};
 
@@ -291,7 +291,7 @@ impl<'a> std::fmt::Debug for Attribute<'a> {
     }
 }
 
-impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
+impl<'bf> From<(&'bf [u8], &'bf [u8])> for Attribute<'bf> {
     /// Creates new attribute from raw bytes.
     /// Does not apply any transformation to both key and value.
     ///
@@ -303,7 +303,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
-    fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
+    fn from(val: (&'bf [u8], &'bf [u8])) -> Attribute<'bf> {
         Attribute {
             key: val.0,
             value: Cow::from(val.1),
@@ -311,7 +311,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     }
 }
 
-impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
+impl<'bf> From<(&'bf str, &'bf str)> for Attribute<'bf> {
     /// Creates new attribute from text representation.
     /// Key is stored as-is, but the value will be escaped.
     ///
@@ -323,7 +323,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// let features = Attribute::from(("features", "Bells & whistles"));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
-    fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
+    fn from(val: (&'bf str, &'bf str)) -> Attribute<'bf> {
         Attribute {
             key: val.0.as_bytes(),
             value: escape(val.1.as_bytes()),
@@ -331,8 +331,8 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     }
 }
 
-impl<'a> Iterator for Attributes<'a> {
-    type Item = Result<Attribute<'a>>;
+impl<'bf> Iterator for Attributes<'bf> {
+    type Item = Result<Attribute<'bf>>;
     fn next(&mut self) -> Option<Self::Item> {
         let len = self.bytes.len();
 

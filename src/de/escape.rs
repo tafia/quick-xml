@@ -14,16 +14,16 @@ use std::borrow::Cow;
 /// when converting to float, we don't expect any escapable character
 /// anyway
 #[derive(Clone, Debug)]
-pub struct EscapedDeserializer<'a> {
+pub struct EscapedDeserializer<'bf> {
     decoder: Decoder,
     /// Possible escaped value of text/CDATA or attribute value
-    escaped_value: Cow<'a, [u8]>,
+    escaped_value: Cow<'bf, [u8]>,
     /// If `true`, value requires unescaping before using
     escaped: bool,
 }
 
-impl<'a> EscapedDeserializer<'a> {
-    pub fn new(escaped_value: Cow<'a, [u8]>, decoder: Decoder, escaped: bool) -> Self {
+impl<'bf> EscapedDeserializer<'bf> {
+    pub fn new(escaped_value: Cow<'bf, [u8]>, decoder: Decoder, escaped: bool) -> Self {
         EscapedDeserializer {
             decoder,
             escaped_value,
@@ -56,7 +56,7 @@ macro_rules! deserialize_num {
     };
 }
 
-impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
+impl<'de, 'bf> serde::Deserializer<'de> for EscapedDeserializer<'bf> {
     type Error = DeError;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -172,7 +172,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> EnumAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'bf> EnumAccess<'de> for EscapedDeserializer<'bf> {
     type Error = DeError;
     type Variant = Self;
 
@@ -185,7 +185,7 @@ impl<'de, 'a> EnumAccess<'de> for EscapedDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> VariantAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'bf> VariantAccess<'de> for EscapedDeserializer<'bf> {
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
