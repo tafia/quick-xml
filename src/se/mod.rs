@@ -4,6 +4,7 @@ mod var;
 
 use self::var::{Map, Seq, Struct, Tuple};
 use crate::{
+    de::PRIMITIVE_PREFIX,
     errors::serialize::DeError,
     events::{BytesEnd, BytesStart, BytesText, Event},
     writer::Writer,
@@ -232,7 +233,12 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        self.write_self_closed(variant)
+        if variant.starts_with(PRIMITIVE_PREFIX) {
+            let variant = variant.split_at(PRIMITIVE_PREFIX.len()).1;
+            self.write_primitive(variant, false)
+        } else {
+            self.write_self_closed(variant)
+        }
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -634,6 +640,8 @@ mod tests {
             #[derive(Serialize)]
             enum Node {
                 Unit,
+                #[serde(rename = "$primitive=PrimitiveUnit")]
+                PrimitiveUnit,
                 Newtype(bool),
                 Tuple(f64, String),
                 Struct {
@@ -659,6 +667,21 @@ mod tests {
                 {
                     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
                     let node = Node::Unit;
+                    node.serialize(&mut ser).unwrap();
+                }
+
+                let got = String::from_utf8(buffer).unwrap();
+                assert_eq!(got, should_be);
+            }
+
+            #[test]
+            fn primitive_unit() {
+                let mut buffer = Vec::new();
+                let should_be = "PrimitiveUnit";
+
+                {
+                    let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                    let node = Node::PrimitiveUnit;
                     node.serialize(&mut ser).unwrap();
                 }
 
