@@ -64,7 +64,7 @@ enum TagState {
 pub struct Reader<R: BufRead> {
     /// reader
     pub(crate) reader: R,
-    /// current buffer position, useful for debuging errors
+    /// current buffer position, useful for debugging errors
     buf_position: usize,
     /// current state Open/Close
     tag_state: TagState,
