@@ -364,7 +364,7 @@ impl<'a> Iterator for Attributes<'a> {
             return None;
         }
 
-        let mut bytes = self.bytes.iter().enumerate().skip(self.position);
+        let mut bytes = (self.position..).zip(self.bytes[self.position..].iter());
 
         // key starts after the whitespace
         let start_key = match bytes
@@ -409,7 +409,7 @@ impl<'a> Iterator for Attributes<'a> {
                 .consumed
                 .iter()
                 .filter(|r| r.len() == end_key - start_key)
-                .find(|r| self.bytes[(*r).clone()] == self.bytes[start_key..end_key])
+                .find(|r| self.bytes[r.start..r.end] == self.bytes[start_key..end_key])
                 .map(|ref r| r.start)
             {
                 err!(Error::DuplicatedAttribute(start_key, start));
