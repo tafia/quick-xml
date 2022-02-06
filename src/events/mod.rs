@@ -387,7 +387,59 @@ impl<'a> BytesDecl<'a> {
         BytesDecl { element: start }
     }
 
-    /// Gets xml version, including quotes (' or ")
+    /// Gets xml version, excluding quotes (' or ")
+    ///
+    /// According to the [grammar], the version *must* be the first thing in the declaration.
+    /// This method tries to extract the first thing in the declaration and return it.
+    /// In case of multiple attributes value of the first one is returned.
+    ///
+    /// If version is missed in the declaration, or the first thing is not a version,
+    /// [`Error::XmlDeclWithoutVersion`] will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.1".as_ref())
+    /// );
+    ///
+    /// // <?xml version='1.0' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.0' version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.0".as_ref())
+    /// );
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='utf-8' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8' version='1.1'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b"", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
         match self.element.attributes().next() {
@@ -404,7 +456,41 @@ impl<'a> BytesDecl<'a> {
         }
     }
 
-    /// Gets xml encoding, including quotes (' or ")
+    /// Gets xml encoding, excluding quotes (' or ")
+    ///
+    /// Although according to the [grammar] encoding must appear before `"standalone"`
+    /// and after `"version"`, this method does not check that. The first occurrence
+    /// of the attribute will be returned even if there are several. Also, method does
+    /// not restrict symbols that can forming the encoding, so the returned encoding
+    /// name may not correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert!(decl.encoding().is_none());
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
         for a in self.element.attributes() {
             match a {
@@ -419,7 +505,41 @@ impl<'a> BytesDecl<'a> {
         None
     }
 
-    /// Gets xml standalone, including quotes (' or ")
+    /// Gets xml standalone, excluding quotes (' or ")
+    ///
+    /// Although according to the [grammar] standalone flag must appear after `"version"`
+    /// and `"encoding"`, this method does not check that. The first occurrence of the
+    /// attribute will be returned even if there are several. Also, method does not
+    /// restrict symbols that can forming the value, so the returned flag name may not
+    /// correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert!(decl.standalone().is_none());
+    ///
+    /// // <?xml standalone='yes'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='yes'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
         for a in self.element.attributes() {
             match a {
