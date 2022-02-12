@@ -1282,7 +1282,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         let bang_type = match &self[1..].first() {
             Some(b'[') => BangType::CData,
             Some(b'-') => BangType::Comment,
-            Some(b'D') => BangType::DocType,
+            Some(b'D') | Some(b'd') => BangType::DocType,
             Some(_) => return Err(Error::UnexpectedBang),
             None => return Err(Error::UnexpectedEof("Bang".to_string())),
         };
