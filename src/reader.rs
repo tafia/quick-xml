@@ -1064,26 +1064,19 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                 }
             };
 
-            match memchr::memchr(b'>', available) {
-                Some(i) => {
-                    buf.extend_from_slice(&available[..i]);
-                    let used = i + 1;
-                    self.consume(used);
-                    read += used;
+            if let Some((consumed, used)) = bang_type.parse(available, read) {
+                buf.extend_from_slice(consumed);
 
-                    if bang_type.check_finished(buf, read) {
-                        break;
-                    } else {
-                        // '>' was omitted in the extend_from_slice above
-                        buf.push(b'>');
-                    }
-                }
-                None => {
-                    buf.extend_from_slice(available);
-                    let used = available.len();
-                    self.consume(used);
-                    read += used;
-                }
+                self.consume(used);
+                read += used;
+
+                break;
+            } else {
+                buf.extend_from_slice(available);
+
+                let used = available.len();
+                self.consume(used);
+                read += used;
             }
         }
         *position += read;
@@ -1272,14 +1265,10 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 
         let bang_type = BangType::new(self[1..].first().copied())?;
 
-        for i in memchr::memchr_iter(b'>', self) {
-            let bytes = &self[..i];
-            if bang_type.check_finished(bytes, i + 1) {
-                *position += i + 1;
-                // Skip the '>' too.
-                *self = &self[i + 1..];
-                return Ok(Some(bytes));
-            }
+        if let Some((bytes, i)) = bang_type.parse(self, 0) {
+            *position += i;
+            *self = &self[i..];
+            return Ok(Some(bytes));
         }
 
         // Note: Do not update position, so the error points to
@@ -1403,6 +1392,18 @@ impl BangType {
                     == 0
             }
         }
+    }
+    /// If element is finished, returns its content up to `>` symbol and
+    /// an index of this symbol, otherwise returns `None`
+    #[inline(always)]
+    fn parse<'b>(&self, chunk: &'b [u8], offset: usize) -> Option<(&'b [u8], usize)> {
+        for i in memchr::memchr_iter(b'>', chunk) {
+            let result = &chunk[..i];
+            if self.check_finished(result, i + 1 + offset) {
+                return Some((result, i + 1)); // +1 for `>`
+            }
+        }
+        None
     }
     #[inline]
     fn to_err(self) -> Error {
