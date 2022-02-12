@@ -1135,12 +1135,12 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                 for i in memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
                     *self = match (*self, bytes[i]) {
                         // only allowed to match `>` while we are in state `Elem`
-                        (State::Elem, b'>') => return Some((&bytes[..i], i + 1)),
-                        (State::Elem, b'\'') => State::SingleQ,
-                        (State::Elem, b'\"') => State::DoubleQ,
+                        (Self::Elem, b'>') => return Some((&bytes[..i], i + 1)),
+                        (Self::Elem, b'\'') => Self::SingleQ,
+                        (Self::Elem, b'\"') => Self::DoubleQ,
 
                         // the only end_byte that gets us out if the same character
-                        (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+                        (Self::SingleQ, b'\'') | (Self::DoubleQ, b'\"') => Self::Elem,
 
                         // all other bytes: no state change
                         _ => *self,
