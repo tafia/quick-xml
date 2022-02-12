@@ -1120,36 +1120,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         buf: &'b mut Vec<u8>,
         position: &mut usize,
     ) -> Result<Option<&'b [u8]>> {
-        #[derive(Clone, Copy)]
-        enum State {
-            /// The initial state (inside element, but outside of attribute value)
-            Elem,
-            /// Inside a single-quoted attribute value
-            SingleQ,
-            /// Inside a double-quoted attribute value
-            DoubleQ,
-        }
-        impl State {
-            #[inline(always)]
-            fn change<'b>(&mut self, bytes: &'b [u8]) -> Option<(&'b [u8], usize)> {
-                for i in memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
-                    *self = match (*self, bytes[i]) {
-                        // only allowed to match `>` while we are in state `Elem`
-                        (Self::Elem, b'>') => return Some((&bytes[..i], i + 1)),
-                        (Self::Elem, b'\'') => Self::SingleQ,
-                        (Self::Elem, b'\"') => Self::DoubleQ,
-
-                        // the only end_byte that gets us out if the same character
-                        (Self::SingleQ, b'\'') | (Self::DoubleQ, b'\"') => Self::Elem,
-
-                        // all other bytes: no state change
-                        _ => *self,
-                    };
-                }
-                None
-            }
-        }
-        let mut state = State::Elem;
+        let mut state = ReadElementState::Elem;
         let mut read = 0;
         let mut done = false;
 
@@ -1298,38 +1269,12 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             return Ok(None);
         }
 
-        #[derive(Clone, Copy)]
-        enum State {
-            /// The initial state (inside element, but outside of attribute value)
-            Elem,
-            /// Inside a single-quoted attribute value
-            SingleQ,
-            /// Inside a double-quoted attribute value
-            DoubleQ,
-        }
-        let mut state = State::Elem;
+        let mut state = ReadElementState::Elem;
 
-        let end_byte = b'>';
-
-        for i in memchr::memchr3_iter(end_byte, b'\'', b'"', self) {
-            state = match (state, self[i]) {
-                (State::Elem, b) if b == end_byte => {
-                    // only allowed to match `end_byte` while we are in state `Elem`
-                    *position += i + 1;
-                    let bytes = &self[..i];
-                    // Skip the '>' too.
-                    *self = &self[i + 1..];
-                    return Ok(Some(bytes));
-                }
-                (State::Elem, b'\'') => State::SingleQ,
-                (State::Elem, b'\"') => State::DoubleQ,
-
-                // the only end_byte that gets us out if the same character
-                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
-
-                // all other bytes: no state change
-                _ => state,
-            };
+        if let Some((bytes, i)) = state.change(self) {
+            *position += i;
+            *self = &self[i..];
+            return Ok(Some(bytes));
         }
 
         // Note: Do not update position, so the error points to a sane place
@@ -1434,6 +1379,40 @@ impl BangType {
             Self::DocType => "DOCTYPE",
         };
         Error::UnexpectedEof(bang_str.to_string())
+    }
+}
+
+/// State machine for the [`BufferedInput::read_element`]
+#[derive(Clone, Copy)]
+enum ReadElementState {
+    /// The initial state (inside element, but outside of attribute value)
+    Elem,
+    /// Inside a single-quoted attribute value
+    SingleQ,
+    /// Inside a double-quoted attribute value
+    DoubleQ,
+}
+impl ReadElementState {
+    /// Changes state by analyzing part of input.
+    /// Returns a tuple with part of chunk up to element closing symbol `>`
+    /// and a position after that symbol or `None` if such symbol was not found
+    #[inline(always)]
+    fn change<'b>(&mut self, chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
+        for i in memchr::memchr3_iter(b'>', b'\'', b'"', chunk) {
+            *self = match (*self, chunk[i]) {
+                // only allowed to match `>` while we are in state `Elem`
+                (Self::Elem, b'>') => return Some((&chunk[..i], i + 1)),
+                (Self::Elem, b'\'') => Self::SingleQ,
+                (Self::Elem, b'\"') => Self::DoubleQ,
+
+                // the only end_byte that gets us out if the same character
+                (Self::SingleQ, b'\'') | (Self::DoubleQ, b'"') => Self::Elem,
+
+                // all other bytes: no state change
+                _ => *self,
+            };
+        }
+        None
     }
 }
 
