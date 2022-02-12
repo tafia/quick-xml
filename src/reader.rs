@@ -1132,10 +1132,13 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
             DoubleQ,
         }
         impl State {
-            fn find<'b>(&mut self, end_byte: u8, bytes: &'b [u8]) -> Option<(&'b [u8], usize)> {
-                for i in memchr::memchr3_iter(end_byte, b'\'', b'"', bytes) {
+            #[inline(always)]
+            fn change<'b>(&mut self, bytes: &'b [u8]) -> Option<(&'b [u8], usize)> {
+                const END_BYTE: u8 = b'>';
+
+                for i in memchr::memchr3_iter(END_BYTE, b'\'', b'"', bytes) {
                     *self = match (*self, bytes[i]) {
-                        (State::Elem, b) if b == end_byte => {
+                        (State::Elem, b) if b == END_BYTE => {
                             // only allowed to match `end_byte` while we are in state `Elem`
                             return Some((&bytes[..i], i + 1));
                         }
@@ -1175,7 +1178,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                     }
                 };
 
-                if let Some((consumed, used)) = state.find(b'>', available) {
+                if let Some((consumed, used)) = state.change(available) {
                     done = true;
                     buf.extend_from_slice(consumed);
                     used
