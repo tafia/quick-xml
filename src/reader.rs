@@ -1051,22 +1051,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         buf.push(b'!');
         self.consume(1);
 
-        enum BangType {
-            // <![CDATA[...]]>
-            CData,
-            // <!--...-->
-            Comment,
-            // <!DOCTYPE...>
-            DocType,
-        }
-
-        let bang_type = match self.peek_one()? {
-            Some(b'[') => BangType::CData,
-            Some(b'-') => BangType::Comment,
-            Some(b'D') | Some(b'd') => BangType::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
-        };
+        let bang_type = BangType::new(self.peek_one()?)?;
 
         loop {
             let available = match self.fill_buf() {
@@ -1305,22 +1290,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         // start with it.
         debug_assert_eq!(self[0], b'!');
 
-        enum BangType {
-            // <![CDATA[...]]>
-            CData,
-            // <!--...-->
-            Comment,
-            // <!DOCTYPE...>
-            DocType,
-        }
-
-        let bang_type = match &self[1..].first() {
-            Some(b'[') => BangType::CData,
-            Some(b'-') => BangType::Comment,
-            Some(b'D') | Some(b'd') => BangType::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
-        };
+        let bang_type = BangType::new(self[1..].first().copied())?;
 
         for i in memchr::memchr_iter(b'>', self) {
             let finished = match bang_type {
@@ -1425,6 +1395,28 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 
     fn input_borrowed(event: Event<'a>) -> Event<'a> {
         return event;
+    }
+}
+
+/// Possible elements started with `<!`
+enum BangType {
+    /// <![CDATA[...]]>
+    CData,
+    /// <!--...-->
+    Comment,
+    /// <!DOCTYPE...>
+    DocType,
+}
+impl BangType {
+    #[inline(always)]
+    fn new(byte: Option<u8>) -> Result<Self> {
+        Ok(match byte {
+            Some(b'[') => Self::CData,
+            Some(b'-') => Self::Comment,
+            Some(b'D') | Some(b'd') => Self::DocType,
+            Some(_) => return Err(Error::UnexpectedBang),
+            None => return Err(Error::UnexpectedEof("Bang".to_string())),
+        })
     }
 }
 
