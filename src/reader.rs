@@ -1154,7 +1154,6 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
 
                 let mut find = |end_byte| -> usize {
                     let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
-                    let used: usize;
                     loop {
                         match memiter.next() {
                             Some(i) => {
@@ -1163,8 +1162,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                                         // only allowed to match `end_byte` while we are in state `Elem`
                                         buf.extend_from_slice(&available[..i]);
                                         done = true;
-                                        used = i + 1;
-                                        break;
+                                        return i + 1;
                                     }
                                     (State::Elem, b'\'') => State::SingleQ,
                                     (State::Elem, b'\"') => State::DoubleQ,
@@ -1178,12 +1176,10 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                             }
                             None => {
                                 buf.extend_from_slice(available);
-                                used = available.len();
-                                break;
+                                return available.len();
                             }
                         }
                     }
-                    used
                 };
                 find(b'>')
             };
