@@ -1134,14 +1134,10 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         impl State {
             #[inline(always)]
             fn change<'b>(&mut self, bytes: &'b [u8]) -> Option<(&'b [u8], usize)> {
-                const END_BYTE: u8 = b'>';
-
-                for i in memchr::memchr3_iter(END_BYTE, b'\'', b'"', bytes) {
+                for i in memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
                     *self = match (*self, bytes[i]) {
-                        (State::Elem, b) if b == END_BYTE => {
-                            // only allowed to match `end_byte` while we are in state `Elem`
-                            return Some((&bytes[..i], i + 1));
-                        }
+                        // only allowed to match `>` while we are in state `Elem`
+                        (State::Elem, b'>') => return Some((&bytes[..i], i + 1)),
                         (State::Elem, b'\'') => State::SingleQ,
                         (State::Elem, b'\"') => State::DoubleQ,
 
