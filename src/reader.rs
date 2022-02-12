@@ -1078,18 +1078,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                     self.consume(used);
                     read += used;
 
-                    let finished = match bang_type {
-                        BangType::Comment => read >= 5 && buf.ends_with(b"--"),
-                        BangType::CData => buf.ends_with(b"]]"),
-                        BangType::DocType => {
-                            memchr::memchr2_iter(b'<', b'>', buf)
-                                .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
-                                .sum::<i32>()
-                                == 0
-                        }
-                    };
-
-                    if finished {
+                    if bang_type.check_finished(buf, read) {
                         break;
                     } else {
                         // '>' was omitted in the extend_from_slice above
@@ -1291,20 +1280,9 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         let bang_type = BangType::new(self[1..].first().copied())?;
 
         for i in memchr::memchr_iter(b'>', self) {
-            let finished = match bang_type {
-                BangType::Comment => i >= 5 && self[..i].ends_with(b"--"),
-                BangType::CData => self[..i].ends_with(b"]]"),
-                BangType::DocType => {
-                    // Inefficient, but unlikely to happen often
-                    let open = self[..i].iter().filter(|b| **b == b'<').count();
-                    let closed = self[..i].iter().filter(|b| **b == b'>').count();
-                    open == closed
-                }
-            };
-
-            if finished {
+            let bytes = &self[..i];
+            if bang_type.check_finished(bytes, i + 1) {
                 *position += i + 1;
-                let bytes = &self[..i];
                 // Skip the '>' too.
                 *self = &self[i + 1..];
                 return Ok(Some(bytes));
@@ -1415,6 +1393,28 @@ impl BangType {
             Some(_) => return Err(Error::UnexpectedBang),
             None => return Err(Error::UnexpectedEof("Bang".to_string())),
         })
+    }
+
+    /// Checks that element is finished
+    ///
+    /// # Parameters
+    /// - `buf`: data from the `!` symbol
+    /// - `index`: position of the `>` symbol
+    #[inline(always)]
+    fn check_finished(&self, buf: &[u8], index: usize) -> bool {
+        match self {
+            // Need to read at least 6 symbols (`!---->`) for properly finished comment
+            // <!----> - XML comment
+            //  012345 - index
+            Self::Comment => index > 5 && buf.ends_with(b"--"),
+            Self::CData => buf.ends_with(b"]]"),
+            Self::DocType => {
+                memchr::memchr2_iter(b'<', b'>', buf)
+                    .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
+                    .sum::<i32>()
+                    == 0
+            }
+        }
     }
 }
 
