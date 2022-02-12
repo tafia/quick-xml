@@ -1065,6 +1065,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                         self.consume(used);
                         read += used;
 
+                        *position += read;
                         break;
                     } else {
                         buf.extend_from_slice(available);
@@ -1081,7 +1082,6 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                 }
             }
         }
-        *position += read;
 
         if read == 0 {
             Ok(None)
