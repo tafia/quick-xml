@@ -19,6 +19,7 @@
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
+- fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
 
 ## 0.23.0-alpha3
 
