@@ -1122,10 +1122,9 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
     ) -> Result<Option<&'b [u8]>> {
         let mut state = ReadElementState::Elem;
         let mut read = 0;
-        let mut done = false;
 
         let start = buf.len();
-        while !done {
+        loop {
             match self.fill_buf() {
                 Ok(n) if n.is_empty() => {
                     if read == 0 {
@@ -1136,11 +1135,11 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                 }
                 Ok(available) => {
                     if let Some((consumed, used)) = state.change(available) {
-                        done = true;
                         buf.extend_from_slice(consumed);
 
                         self.consume(used);
                         read += used;
+                        break;
                     } else {
                         buf.extend_from_slice(available);
 
