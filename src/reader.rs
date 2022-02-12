@@ -1052,31 +1052,31 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         let bang_type = BangType::new(self.peek_one()?)?;
 
         loop {
-            let available = match self.fill_buf() {
+            match self.fill_buf() {
                 // Note: Do not update position, so the error points to
                 // somewhere sane rather than at the EOF
                 Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
-                Ok(n) => n,
+                Ok(available) => {
+                    if let Some((consumed, used)) = bang_type.parse(available, read) {
+                        buf.extend_from_slice(consumed);
+
+                        self.consume(used);
+                        read += used;
+
+                        break;
+                    } else {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self.consume(used);
+                        read += used;
+                    }
+                }
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => {
                     *position += read;
                     return Err(Error::Io(e));
                 }
-            };
-
-            if let Some((consumed, used)) = bang_type.parse(available, read) {
-                buf.extend_from_slice(consumed);
-
-                self.consume(used);
-                read += used;
-
-                break;
-            } else {
-                buf.extend_from_slice(available);
-
-                let used = available.len();
-                self.consume(used);
-                read += used;
             }
         }
         *position += read;
