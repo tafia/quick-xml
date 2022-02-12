@@ -1128,30 +1128,28 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
 
         let start = buf.len();
         while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => {
-                        if read == 0 {
-                            return Ok(None);
-                        } else {
-                            return Ok(Some(&buf[start..]));
-                        }
+            let used = match self.fill_buf() {
+                Ok(n) if n.is_empty() => {
+                    if read == 0 {
+                        return Ok(None);
+                    } else {
+                        return Ok(Some(&buf[start..]));
                     }
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e));
+                }
+                Ok(available) => {
+                    if let Some((consumed, used)) = state.change(available) {
+                        done = true;
+                        buf.extend_from_slice(consumed);
+                        used
+                    } else {
+                        buf.extend_from_slice(available);
+                        available.len()
                     }
-                };
-
-                if let Some((consumed, used)) = state.change(available) {
-                    done = true;
-                    buf.extend_from_slice(consumed);
-                    used
-                } else {
-                    buf.extend_from_slice(available);
-                    available.len()
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    *position += read;
+                    return Err(Error::Io(e));
                 }
             };
             self.consume(used);
