@@ -1128,13 +1128,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         let start = buf.len();
         loop {
             match self.fill_buf() {
-                Ok(n) if n.is_empty() => {
-                    if read == 0 {
-                        return Ok(None);
-                    } else {
-                        return Ok(Some(&buf[start..]));
-                    }
-                }
+                Ok(n) if n.is_empty() => break,
                 Ok(available) => {
                     if let Some((consumed, used)) = state.change(available) {
                         buf.extend_from_slice(consumed);
