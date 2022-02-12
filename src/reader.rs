@@ -1176,12 +1176,11 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                                     _ => state,
                                 };
                             }
-                            None => {
-                                buf.extend_from_slice(available);
-                                return available.len();
-                            }
+                            None => break,
                         }
                     }
+                    buf.extend_from_slice(available);
+                    return available.len();
                 };
                 find(b'>')
             };
