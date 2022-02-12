@@ -1055,16 +1055,9 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
 
         loop {
             let available = match self.fill_buf() {
-                Ok(n) if n.is_empty() => {
-                    // Note: Do not update position, so the error points to
-                    // somewhere sane rather than at the EOF
-                    let bang_str = match bang_type {
-                        BangType::CData => "CData",
-                        BangType::Comment => "Comment",
-                        BangType::DocType => "DOCTYPE",
-                    };
-                    return Err(Error::UnexpectedEof(bang_str.to_string()));
-                }
+                // Note: Do not update position, so the error points to
+                // somewhere sane rather than at the EOF
+                Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
                 Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => {
@@ -1293,12 +1286,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 
         // Note: Do not update position, so the error points to
         // somewhere sane rather than at the EOF
-        let bang_str = match bang_type {
-            BangType::CData => "CData",
-            BangType::Comment => "Comment",
-            BangType::DocType => "DOCTYPE",
-        };
-        Err(Error::UnexpectedEof(bang_str.to_string()))
+        Err(bang_type.to_err())
     }
 
     fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
@@ -1417,6 +1405,15 @@ impl BangType {
                     == 0
             }
         }
+    }
+    #[inline]
+    fn to_err(self) -> Error {
+        let bang_str = match self {
+            Self::CData => "CData",
+            Self::Comment => "Comment",
+            Self::DocType => "DOCTYPE",
+        };
+        Error::UnexpectedEof(bang_str.to_string())
     }
 }
 
