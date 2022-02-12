@@ -1134,7 +1134,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         let mut state = State::Elem;
         let mut read = 0;
         let mut done = false;
-        let end_byte = b'>';
+
         let start = buf.len();
         while !done {
             let used = {
@@ -1154,37 +1154,40 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
                     }
                 };
 
-                let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
-                let used: usize;
-                loop {
-                    match memiter.next() {
-                        Some(i) => {
-                            state = match (state, available[i]) {
-                                (State::Elem, b) if b == end_byte => {
-                                    // only allowed to match `end_byte` while we are in state `Elem`
-                                    buf.extend_from_slice(&available[..i]);
-                                    done = true;
-                                    used = i + 1;
-                                    break;
-                                }
-                                (State::Elem, b'\'') => State::SingleQ,
-                                (State::Elem, b'\"') => State::DoubleQ,
+                let mut find = |end_byte| -> usize {
+                    let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
+                    let used: usize;
+                    loop {
+                        match memiter.next() {
+                            Some(i) => {
+                                state = match (state, available[i]) {
+                                    (State::Elem, b) if b == end_byte => {
+                                        // only allowed to match `end_byte` while we are in state `Elem`
+                                        buf.extend_from_slice(&available[..i]);
+                                        done = true;
+                                        used = i + 1;
+                                        break;
+                                    }
+                                    (State::Elem, b'\'') => State::SingleQ,
+                                    (State::Elem, b'\"') => State::DoubleQ,
 
-                                // the only end_byte that gets us out if the same character
-                                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
+                                    // the only end_byte that gets us out if the same character
+                                    (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
 
-                                // all other bytes: no state change
-                                _ => state,
-                            };
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            used = available.len();
-                            break;
+                                    // all other bytes: no state change
+                                    _ => state,
+                                };
+                            }
+                            None => {
+                                buf.extend_from_slice(available);
+                                used = available.len();
+                                break;
+                            }
                         }
                     }
-                }
-                used
+                    used
+                };
+                find(b'>')
             };
             self.consume(used);
             read += used;
