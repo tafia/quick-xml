@@ -27,6 +27,7 @@
 - fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
 - test: add tests for consistence behavior of buffered and borrowed readers
 - fix: produce consistent error positions in buffered and borrowed readers
+- feat: `Error::UnexpectedBang` now provide the byte found
 
 ## 0.23.0-alpha3
 
