@@ -1378,7 +1378,7 @@ impl BangType {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
             Some(b'D') | Some(b'd') => Self::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
+            Some(b) => return Err(Error::UnexpectedBang(b)),
             None => return Err(Error::UnexpectedEof("Bang".to_string())),
         })
     }

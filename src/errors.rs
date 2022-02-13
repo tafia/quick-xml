@@ -22,7 +22,7 @@ pub enum Error {
     /// Unexpected token
     UnexpectedToken(String),
     /// Unexpected <!>
-    UnexpectedBang,
+    UnexpectedBang(u8),
     /// Text not found, expected `Event::Text`
     TextNotFound,
     /// `Event::XmlDecl` must start with *version* attribute
@@ -78,9 +78,10 @@ impl std::fmt::Display for Error {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
             }
             Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
-            Error::UnexpectedBang => write!(
+            Error::UnexpectedBang(b) => write!(
                 f,
-                "Only Comment, CDATA and DOCTYPE nodes can start with a '!'"
+                "Only Comment (`--`), CDATA (`[CDATA[`) and DOCTYPE (`DOCTYPE`) nodes can start with a '!', but symbol `{}` found",
+                *b as char
             ),
             Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
             Error::XmlDeclWithoutVersion(e) => write!(
