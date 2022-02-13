@@ -981,6 +981,28 @@ where
         position: &mut usize,
     ) -> Result<Option<(BangType, &'r [u8])>>;
 
+    /// Read input until XML element is closed by approaching a `>` symbol.
+    /// Returns `Some(buffer)` that contains a data between `<` and `>` or
+    /// `None` if end-of-input was reached and nothing was read.
+    ///
+    /// Derived from `read_until`, but modified to handle XML attributes
+    /// using a minimal state machine.
+    ///
+    /// Attribute values are [defined] as follows:
+    /// ```plain
+    /// AttValue := '"' (([^<&"]) | Reference)* '"'
+    ///           | "'" (([^<&']) | Reference)* "'"
+    /// ```
+    /// (`Reference` is something like `&quot;`, but we don't care about
+    /// escaped characters at this level)
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
+    /// [events]: crate::events::Event
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
@@ -1092,16 +1114,6 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         }
     }
 
-    /// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
-    /// [W3C Extensible Markup Language (XML) 1.1 (2006)](https://www.w3.org/TR/xml11)
-    ///
-    /// Attribute values are defined as follows:
-    /// ```plain
-    /// AttValue := '"' (([^<&"]) | Reference)* '"'
-    ///           | "'" (([^<&']) | Reference)* "'"
-    /// ```
-    /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
-    /// level)
     #[inline]
     fn read_element(
         &mut self,
@@ -2093,6 +2105,170 @@ mod test {
                             }
                             assert_eq!(position, 0);
                         }
+                    }
+                }
+            }
+
+            mod read_element {
+                use crate::reader::BufferedInput;
+
+                /// Checks that nothing was read from empty buffer
+                #[test]
+                fn empty() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"".as_ref();
+                    //                ^= 0
+
+                    assert_eq!(input.read_element(buf, &mut position).unwrap(), None);
+                    assert_eq!(position, 0);
+                }
+
+                mod open {
+                    use crate::reader::BufferedInput;
+
+                    #[test]
+                    fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b">".as_ref();
+                        //                 ^= 1
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b"".as_ref())
+                        );
+                        assert_eq!(position, 1);
+                    }
+
+                    #[test]
+                    fn normal() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"tag>".as_ref();
+                        //                    ^= 4
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b"tag".as_ref())
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[test]
+                    fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":>".as_ref();
+                        //                  ^= 2
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b":".as_ref())
+                        );
+                        assert_eq!(position, 2);
+                    }
+
+                    #[test]
+                    fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":tag>".as_ref();
+                        //                     ^= 5
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b":tag".as_ref())
+                        );
+                        assert_eq!(position, 5);
+                    }
+
+                    #[test]
+                    fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref();
+                        //                                                        ^= 38
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#.as_ref())
+                        );
+                        assert_eq!(position, 38);
+                    }
+                }
+
+                mod self_closed {
+                    use crate::reader::BufferedInput;
+
+                    #[test]
+                    fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"/>".as_ref();
+                        //                  ^= 2
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b"/".as_ref())
+                        );
+                        assert_eq!(position, 2);
+                    }
+
+                    #[test]
+                    fn normal() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"tag/>".as_ref();
+                        //                     ^= 5
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b"tag/".as_ref())
+                        );
+                        assert_eq!(position, 5);
+                    }
+
+                    #[test]
+                    fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":/>".as_ref();
+                        //                   ^= 3
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b":/".as_ref())
+                        );
+                        assert_eq!(position, 3);
+                    }
+
+                    #[test]
+                    fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":tag/>".as_ref();
+                        //                      ^= 6
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(b":tag/".as_ref())
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[test]
+                    fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref();
+                        //                                                           ^= 41
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap(),
+                            Some(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#.as_ref())
+                        );
+                        assert_eq!(position, 41);
                     }
                 }
             }
