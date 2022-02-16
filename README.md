@@ -213,8 +213,8 @@ fn crates_io() -> Result<Html, DeError> {
 
 ### Credits
 
-This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
-quick-xml follows its convention for deserialization, including the 
+This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs).
+quick-xml follows its convention for deserialization, including the
 [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
 
 ### Parsing the "value" of a tag
@@ -259,6 +259,25 @@ struct Root {
 ```
 
 Serializing `Root { foo: Foo::Bar }` will then yield `<Root foo="Bar"/>` instead of `<Root><Bar/></Root>`.
+
+### Serializing newtype variants
+The `$struct` tag is an experimental feature that allows serializing newtype variants where the newtype is a struct.
+Please note that this feature will only work for serialization, therefore serde rename should be called only for serialize, unlike in the other features described before.
+See here:
+
+```rust, ignore
+struct Foo {
+    a: String
+}
+
+enum Bar {
+    #[serde(rename(serialize = "$struct"))]
+    x(Foo)
+}
+```
+
+This is only necessary for structs passed in newtype variants.
+In the case of struct variants or when the newtype is a primitive adding this tag should be avoided.
 
 ### Performance
 

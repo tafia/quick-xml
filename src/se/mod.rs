@@ -262,7 +262,13 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         // (`variant`), we need to clear root tag before writing content and restore
         // it after
         let root = self.root_tag.take();
-        let result = self.write_paired(variant, value);
+        let result;
+        if variant == "$struct" {
+            result = value.serialize(&mut *self);
+        }
+        else {
+            result = self.write_paired(variant, value)
+        }
         self.root_tag = root;
         result
     }
