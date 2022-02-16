@@ -269,38 +269,37 @@ impl<R: BufRead> Reader<R> {
             Err(e) => return Err(e),
         };
 
-        if start != b'/' && start != b'!' && start != b'?' {
-            match self.reader.read_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => {
-                    // we already *know* that we are in this case
-                    self.read_start(bytes)
-                }
-                Err(e) => Err(e),
-            }
-        } else if start == b'!' {
-            match self.reader.read_bang_element(buf, &mut self.buf_position) {
+        match start {
+            // `<!` - comment, CDATA or DOCTYPE declaration
+            b'!' => match self.reader.read_bang_element(buf, &mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_bang(bytes),
                 Err(e) => Err(e),
-            }
-        } else {
-            match self
+            },
+            // `</` - closing tag
+            b'/' => match self
                 .reader
                 .read_bytes_until(b'>', buf, &mut self.buf_position)
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => match start {
-                    b'/' => self.read_end(bytes),
-                    b'?' => self.read_question_mark(bytes),
-                    _ => unreachable!(
-                        "We checked that `start` must be one of [/?], was {:?} \
-                         instead.",
-                        start
-                    ),
-                },
+                Ok(Some(bytes)) => self.read_end(bytes),
                 Err(e) => Err(e),
-            }
+            },
+            // `<?` - processing instruction
+            b'?' => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
+            // `<...` - opening or self-closed tag
+            _ => match self.reader.read_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_start(bytes),
+                Err(e) => Err(e),
+            },
         }
     }
 
