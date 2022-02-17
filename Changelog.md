@@ -23,6 +23,8 @@
   ([#357](https://github.com/tafia/quick-xml/pull/357))
 - test: add tests for consistence behavior of buffered and borrowed readers
   ([#367](https://github.com/tafia/quick-xml/pull/367))
+- fix: produce consistent error positions in buffered and borrowed readers
+  ([#367](https://github.com/tafia/quick-xml/pull/367))
 
 ## 0.23.0-alpha3
 

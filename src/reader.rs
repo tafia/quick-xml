@@ -1271,20 +1271,17 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             return Ok(None);
         }
 
-        let i = memchr::memchr(byte, self).unwrap_or(self.len());
-
-        *position += i;
-        let bytes = &self[..i];
-        let i = if i < self.len() {
-            // Skip the matched byte too.
-            i + 1
+        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
+            *position += i + 1;
+            let bytes = &self[..i];
+            *self = &self[i + 1..];
+            bytes
         } else {
-            // Unless we're at the end of the string
-            i
-        };
-        *self = &self[i..];
-
-        return Ok(Some(bytes));
+            *position += self.len();
+            let bytes = &self[..];
+            *self = &[];
+            bytes
+        }))
     }
 
     fn read_bang_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
@@ -1322,7 +1319,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             };
 
             if finished {
-                *position += i;
+                *position += i + 1;
                 let bytes = &self[..i];
                 // Skip the '>' too.
                 *self = &self[i + 1..];
@@ -1362,7 +1359,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             state = match (state, self[i]) {
                 (State::Elem, b) if b == end_byte => {
                     // only allowed to match `end_byte` while we are in state `Elem`
-                    *position += i;
+                    *position += i + 1;
                     let bytes = &self[..i];
                     // Skip the '>' too.
                     *self = &self[i + 1..];
