@@ -64,7 +64,7 @@ enum TagState {
 pub struct Reader<R: BufRead> {
     /// reader
     pub(crate) reader: R,
-    /// current buffer position, useful for debuging errors
+    /// current buffer position, useful for debugging errors
     buf_position: usize,
     /// current state Open/Close
     tag_state: TagState,
@@ -930,6 +930,32 @@ trait BufferedInput<'r, 'i, B>
 where
     Self: 'i,
 {
+    /// Read input until `byte` is found or end of input is reached.
+    ///
+    /// Returns a slice of data read up to `byte`, which does not include into result.
+    /// If input (`Self`) is exhausted, returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut position = 0;
+    /// let mut input = b"abc*def".as_ref();
+    /// //                    ^= 4
+    ///
+    /// assert_eq!(
+    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
+    ///     Some(b"abc".as_ref())
+    /// );
+    /// assert_eq!(position, 4); // position after the symbol matched
+    /// ```
+    ///
+    /// # Parameters
+    /// - `byte`: Byte for search
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -953,8 +979,6 @@ where
 /// Implementation of BufferedInput for any BufRead reader using a user-given
 /// Vec<u8> as buffer that will be borrowed by events.
 impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
-    /// read until `byte` is found or end of file
-    /// return the position of byte
     #[inline]
     fn read_bytes_until(
         &mut self,
@@ -1599,5 +1623,126 @@ impl Decoder {
     #[cfg(feature = "encoding")]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    macro_rules! check {
+        ($buf:expr) => {
+            mod read_bytes_until {
+                use crate::reader::BufferedInput;
+                // Use Bytes for printing bytes as strings for ASCII range
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                /// Checks that search in the empty buffer returns `None`
+                #[test]
+                fn empty() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"".as_ref();
+                    //                ^= 0
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        None
+                    );
+                    assert_eq!(position, 0);
+                }
+
+                /// Checks that search in the buffer non-existent value returns entire buffer
+                /// as a result and set `position` to `len()`
+                #[test]
+                fn non_existent() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abcdef".as_ref();
+                    //                      ^= 6
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abcdef"))
+                    );
+                    assert_eq!(position, 6);
+                }
+
+                /// Checks that search in the buffer an element that is located in the front of
+                /// buffer returns empty slice as a result and set `position` to one symbol
+                /// after match (`1`)
+                #[test]
+                fn at_the_start() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"*abcdef".as_ref();
+                    //                 ^= 1
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b""))
+                    );
+                    assert_eq!(position, 1); // position after the symbol matched
+                }
+
+                /// Checks that search in the buffer an element that is located in the middle of
+                /// buffer returns slice before that symbol as a result and set `position` to one
+                /// symbol after match
+                #[test]
+                fn inside() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abc*def".as_ref();
+                    //                    ^= 4
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abc"))
+                    );
+                    assert_eq!(position, 4); // position after the symbol matched
+                }
+
+                /// Checks that search in the buffer an element that is located in the end of
+                /// buffer returns slice before that symbol as a result and set `position` to one
+                /// symbol after match (`len()`)
+                #[test]
+                fn in_the_end() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abcdef*".as_ref();
+                    //                       ^= 7
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abcdef"))
+                    );
+                    assert_eq!(position, 7); // position after the symbol matched
+                }
+            }
+        };
+    }
+
+    /// Tests for reader that generates events that borrow from the provided buffer
+    mod buffered {
+        check!(&mut Vec::new());
+    }
+
+    /// Tests for reader that generates events that borrow from the input
+    mod borrowed {
+        check!(());
     }
 }

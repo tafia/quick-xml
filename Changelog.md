@@ -25,6 +25,7 @@
 - fix: `ElementWriter`, introduced in [#274](https://github.com/tafia/quick-xml/pull/274)
   (0.23.0-alpha2) now available to end users
 - fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
+- test: add tests for consistence behavior of buffered and borrowed readers
 
 ## 0.23.0-alpha3
 
