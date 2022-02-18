@@ -20,6 +20,9 @@
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
 - fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
+  ([#357](https://github.com/tafia/quick-xml/pull/357))
+- test: add tests for consistence behavior of buffered and borrowed readers
+  ([#367](https://github.com/tafia/quick-xml/pull/367))
 
 ## 0.23.0-alpha3
 
