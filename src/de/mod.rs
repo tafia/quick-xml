@@ -127,8 +127,10 @@ use std::borrow::Cow;
 use std::io::BufRead;
 
 pub(crate) const INNER_VALUE: &str = "$value";
+pub(crate) const STRUCT_TAG: &str = "$struct";
 pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 pub(crate) const PRIMITIVE_PREFIX: &str = "$primitive=";
+pub(crate) const DOCUMENT_PREFIX: &str = "$root=";
 
 /// Simplified event which contains only these variants that used by deserializer
 #[derive(Debug, PartialEq)]

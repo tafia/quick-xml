@@ -4,9 +4,9 @@ mod var;
 
 use self::var::{Map, Seq, Struct, Tuple};
 use crate::{
-    de::PRIMITIVE_PREFIX,
+    de::{DOCUMENT_PREFIX, PRIMITIVE_PREFIX, STRUCT_TAG},
     errors::serialize::DeError,
-    events::{BytesEnd, BytesStart, BytesText, Event},
+    events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event},
     writer::Writer,
 };
 use serde::ser::{self, Serialize};
@@ -127,6 +127,15 @@ impl<'r, W: Write> Serializer<'r, W> {
         value.serialize(&mut *self)?;
         self.writer
             .write_event(Event::End(BytesEnd::borrowed(tag_name.as_bytes())))?;
+        Ok(())
+    }
+
+    fn write_declaration(&mut self) -> Result<(), DeError> {
+        self.writer.write_event(Event::Decl(BytesDecl::new(
+            "1.0".as_bytes(),
+            Some("UTF-8".as_bytes()),
+            None,
+        )))?;
         Ok(())
     }
 }
@@ -263,10 +272,9 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         // it after
         let root = self.root_tag.take();
         let result;
-        if variant == "$struct" {
+        if variant == STRUCT_TAG {
             result = value.serialize(&mut *self);
-        }
-        else {
+        } else {
             result = self.write_paired(variant, value)
         }
         self.root_tag = root;
@@ -321,7 +329,12 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        Ok(Struct::new(self, self.root_tag.unwrap_or(name)))
+        let mut element_name = self.root_tag.unwrap_or(name);
+        if element_name.starts_with(DOCUMENT_PREFIX) {
+            self.write_declaration()?;
+            element_name = name.split_at(DOCUMENT_PREFIX.len()).1;
+        }
+        Ok(Struct::new(self, element_name))
     }
 
     fn serialize_struct_variant(
