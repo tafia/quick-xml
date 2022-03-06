@@ -224,9 +224,9 @@ impl<R: BufRead> Reader<R> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         self.tag_state = TagState::Opened;
 
@@ -257,9 +257,9 @@ impl<R: BufRead> Reader<R> {
 
     /// Private function to read until `>` is found. This function expects that
     /// it was called just after encounter a `<` symbol.
-    fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         self.tag_state = TagState::Closed;
 
@@ -507,9 +507,9 @@ impl<R: BufRead> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: BufferedInput<'i, B>,
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -923,10 +923,21 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
-trait BufferedInput<'r, 'i, B>
-where
-    Self: 'i,
-{
+/// Represents an input for a reader that can return borrowed data.
+///
+/// There are two implementors of this trait: generic one that read data from
+/// `Self`, copies some part of it into a provided buffer of type `B` and then
+/// returns data that borrow from that buffer.
+///
+/// The other implementor is for `&[u8]` and instead of copying data returns
+/// borrowed data from `Self` instead. This implementation allows zero-copy
+/// deserialization.
+///
+/// # Parameters
+/// - `'r`: lifetime of a buffer from which events will borrow
+/// - `B`: a type of a buffer that can be used to store data read from `Self` and
+///   from which events can borrow
+trait BufferedInput<'r, B> {
     /// Read input until `byte` is found or end of input is reached.
     ///
     /// Returns a slice of data read up to `byte`, which does not include into result.
@@ -1010,13 +1021,11 @@ where
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
     fn peek_one(&mut self) -> Result<Option<u8>>;
-
-    fn input_borrowed(event: Event<'r>) -> Event<'i>;
 }
 
-/// Implementation of BufferedInput for any BufRead reader using a user-given
-/// Vec<u8> as buffer that will be borrowed by events.
-impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
+/// Implementation of `BufferedInput` for any `BufRead` reader using a user-given
+/// `Vec<u8>` as buffer that will be borrowed by events.
+impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
     #[inline]
     fn read_bytes_until(
         &mut self,
@@ -1205,15 +1214,11 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
             };
         }
     }
-
-    fn input_borrowed(event: Event<'b>) -> Event<'i> {
-        event.into_owned()
-    }
 }
 
-/// Implementation of BufferedInput for any BufRead reader using a user-given
-/// Vec<u8> as buffer that will be borrowed by events.
-impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
+/// Implementation of `BufferedInput` for `&[u8]` reader using a `Self` as buffer
+/// that will be borrowed by events. This implementation provides a zero-copy deserialization
+impl<'a> BufferedInput<'a, ()> for &'a [u8] {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -1301,10 +1306,6 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
-    }
-
-    fn input_borrowed(event: Event<'a>) -> Event<'a> {
-        return event;
     }
 }
 
