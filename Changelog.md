@@ -29,6 +29,8 @@
 - fix: produce consistent error positions in buffered and borrowed readers
 - feat: `Error::UnexpectedBang` now provide the byte found
 - refactor: unify code for buffered and borrowed readers
+- fix: fix internal panic message when parse malformed XML
+  ([#344](https://github.com/tafia/quick-xml/issues/344))
 
 ## 0.23.0-alpha3
 

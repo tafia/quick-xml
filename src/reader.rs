@@ -274,7 +274,7 @@ impl<R: BufRead> Reader<R> {
             // `<!` - comment, CDATA or DOCTYPE declaration
             b'!' => match self.reader.read_bang_element(buf, &mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_bang(bytes),
+                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
@@ -347,36 +347,37 @@ impl<R: BufRead> Reader<R> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+    fn read_bang<'a, 'b>(&'a mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
         };
 
         let len = buf.len();
-        if buf.starts_with(b"!--") {
-            // FIXME: actually, isn't, it misses <!-->
-            debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_element");
-            if self.check_comments {
-                // search if '--' not in comments
-                if let Some(p) =
-                    memchr::memchr_iter(b'-', &buf[3..len - 2]).position(|p| buf[3 + p + 1] == b'-')
-                {
-                    self.buf_position += len - p;
-                    return Err(Error::UnexpectedToken("--".to_string()));
+        match bang_type {
+            BangType::Comment if buf.starts_with(b"!--") => {
+                if self.check_comments {
+                    // search if '--' not in comments
+                    if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
+                        .position(|p| buf[3 + p + 1] == b'-')
+                    {
+                        self.buf_position += len - p;
+                        return Err(Error::UnexpectedToken("--".to_string()));
+                    }
                 }
+                Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
             }
-            Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
-        } else if uncased_starts_with(buf, b"![CDATA[") {
-            Ok(Event::CData(BytesText::from_plain(&buf[8..])))
-        } else if uncased_starts_with(buf, b"!DOCTYPE") {
-            let start = buf[8..]
-                .iter()
-                .position(|b| !is_whitespace(*b))
-                .unwrap_or_else(|| len - 8);
-            debug_assert!(start < len - 8, "DocType must have a name");
-            Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
-        } else {
-            unreachable!("Proper bang start guaranteed by read_bang_element");
+            BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
+                Ok(Event::CData(BytesText::from_plain(&buf[8..])))
+            }
+            BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
+                let start = buf[8..]
+                    .iter()
+                    .position(|b| !is_whitespace(*b))
+                    .unwrap_or_else(|| len - 8);
+                debug_assert!(start < len - 8, "DocType must have a name");
+                Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
+            }
+            _ => Err(bang_type.to_err()),
         }
     }
 
@@ -976,7 +977,11 @@ where
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
+    fn read_bang_element(
+        &mut self,
+        buf: B,
+        position: &mut usize,
+    ) -> Result<Option<(BangType, &'r [u8])>>;
 
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
@@ -1042,7 +1047,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         &mut self,
         buf: &'b mut Vec<u8>,
         position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
+    ) -> Result<Option<(BangType, &'b [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         let start = buf.len();
@@ -1085,7 +1090,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         if read == 0 {
             Ok(None)
         } else {
-            Ok(Some(&buf[start..]))
+            Ok(Some((bang_type, &buf[start..])))
         }
     }
 
@@ -1259,7 +1264,11 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         }))
     }
 
-    fn read_bang_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
+    fn read_bang_element(
+        &mut self,
+        _buf: (),
+        position: &mut usize,
+    ) -> Result<Option<(BangType, &'a [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         debug_assert_eq!(self[0], b'!');
@@ -1269,7 +1278,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
         if let Some((bytes, i)) = bang_type.parse(self, 0) {
             *position += i;
             *self = &self[i..];
-            return Ok(Some(bytes));
+            return Ok(Some((bang_type, bytes)));
         }
 
         // Note: Do not update position, so the error points to
@@ -1353,6 +1362,7 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
 }
 
 /// Possible elements started with `<!`
+#[derive(Debug, PartialEq)]
 enum BangType {
     /// <![CDATA[...]]>
     CData,
@@ -1741,7 +1751,7 @@ mod test {
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
                     use crate::errors::Error;
-                    use crate::reader::BufferedInput;
+                    use crate::reader::{BangType, BufferedInput};
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1798,8 +1808,8 @@ mod test {
                             input
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
-                                .map(Bytes),
-                            Some(Bytes(b"![CDATA["))
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::CData, Bytes(b"![CDATA[")))
                         );
                         assert_eq!(position, 11);
                     }
@@ -1818,8 +1828,8 @@ mod test {
                             input
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
-                                .map(Bytes),
-                            Some(Bytes(b"![CDATA[cdata]] ]>content"))
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content")))
                         );
                         assert_eq!(position, 28);
                     }
@@ -1843,7 +1853,7 @@ mod test {
                 /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
                 mod comment {
                     use crate::errors::Error;
-                    use crate::reader::BufferedInput;
+                    use crate::reader::{BangType, BufferedInput};
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1949,8 +1959,8 @@ mod test {
                             input
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
-                                .map(Bytes),
-                            Some(Bytes(b"!----"))
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::Comment, Bytes(b"!----")))
                         );
                         assert_eq!(position, 6);
                     }
@@ -1966,8 +1976,8 @@ mod test {
                             input
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
-                                .map(Bytes),
-                            Some(Bytes(b"!--->comment<---"))
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::Comment, Bytes(b"!--->comment<---")))
                         );
                         assert_eq!(position, 17);
                     }
@@ -1977,7 +1987,7 @@ mod test {
                 mod doctype {
                     mod uppercase {
                         use crate::errors::Error;
-                        use crate::reader::BufferedInput;
+                        use crate::reader::{BangType, BufferedInput};
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2028,8 +2038,8 @@ mod test {
                                 input
                                     .read_bang_element(buf, &mut position)
                                     .unwrap()
-                                    .map(Bytes),
-                                Some(Bytes(b"!DOCTYPE"))
+                                    .map(|(ty, data)| (ty, Bytes(data))),
+                                Some((BangType::DocType, Bytes(b"!DOCTYPE")))
                             );
                             assert_eq!(position, 9);
                         }
@@ -2055,7 +2065,7 @@ mod test {
 
                     mod lowercase {
                         use crate::errors::Error;
-                        use crate::reader::BufferedInput;
+                        use crate::reader::{BangType, BufferedInput};
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2106,8 +2116,8 @@ mod test {
                                 input
                                     .read_bang_element(buf, &mut position)
                                     .unwrap()
-                                    .map(Bytes),
-                                Some(Bytes(b"!doctype"))
+                                    .map(|(ty, data)| (ty, Bytes(data))),
+                                Some((BangType::DocType, Bytes(b"!doctype")))
                             );
                             assert_eq!(position, 9);
                         }
