@@ -27,6 +27,8 @@
   ([#367](https://github.com/tafia/quick-xml/pull/367))
 - refactor: unify code for buffered and borrowed readers
   ([#367](https://github.com/tafia/quick-xml/pull/367))
+- fix: fix internal panic message when parse malformed XML
+  ([#344](https://github.com/tafia/quick-xml/issues/344), [#367](https://github.com/tafia/quick-xml/pull/367))
 
 ## 0.23.0-alpha3
 
