@@ -354,7 +354,7 @@ impl<R: BufRead> Reader<R> {
         let len = buf.len();
         if buf.starts_with(b"!--") {
             // FIXME: actually, isn't, it misses <!-->
-            debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_elem");
+            debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_element");
             if self.check_comments {
                 // search if '--' not in comments
                 if let Some(p) =
@@ -366,10 +366,10 @@ impl<R: BufRead> Reader<R> {
             }
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
         } else if uncased_starts_with(buf, b"![CDATA[") {
-            debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
+            debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_element");
             Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
-            debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
+            debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_element");
             let start = buf[8..]
                 .iter()
                 .position(|b| !is_whitespace(*b))
@@ -377,7 +377,7 @@ impl<R: BufRead> Reader<R> {
             debug_assert!(start < buf.len() - 8, "DocType must have a name");
             Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
         } else {
-            unreachable!("Proper bang start guaranteed by read_bang_elem");
+            unreachable!("Proper bang start guaranteed by read_bang_element");
         }
     }
 
@@ -962,6 +962,21 @@ where
         position: &mut usize,
     ) -> Result<Option<&'r [u8]>>;
 
+    /// Read input until comment, CDATA or processing instruction is finished.
+    ///
+    /// This method expect that `<` already was read.
+    ///
+    /// Returns a slice of data read up to end of comment, CDATA or processing
+    /// instruction (`>`), which does not include into result.
+    ///
+    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
     fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
@@ -1727,6 +1742,402 @@ mod test {
                         Some(Bytes(b"abcdef"))
                     );
                     assert_eq!(position, 7); // position after the symbol matched
+                }
+            }
+
+            mod read_bang_element {
+                /// Checks that reading CDATA content works correctly
+                mod cdata {
+                    use crate::errors::Error;
+                    use crate::reader::BufferedInput;
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    /// Checks that if input begins like CDATA element, but CDATA start sequence
+                    /// is not finished, parsing ends with an error
+                    #[test]
+                    #[ignore = "start CDATA sequence fully checked outside of `read_bang_element`"]
+                    fn not_properly_start() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![]]>other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    /// Checks that if CDATA startup sequence was matched, but an end sequence
+                    /// is not found, parsing ends with an error
+                    #[test]
+                    fn not_closed() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    /// Checks that CDATA element without content inside parsed successfully
+                    #[test]
+                    fn empty() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[]]>other content".as_ref();
+                        //                           ^= 11
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(Bytes),
+                            Some(Bytes(b"![CDATA[]]"))
+                        );
+                        assert_eq!(position, 11);
+                    }
+
+                    /// Checks that CDATA element with content parsed successfully.
+                    /// Additionally checks that sequences inside CDATA that may look like
+                    /// a CDATA end sequence do not interrupt CDATA parsing
+                    #[test]
+                    fn with_content() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref();
+                        //                                            ^= 28
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(Bytes),
+                            Some(Bytes(b"![CDATA[cdata]] ]>content]]"))
+                        );
+                        assert_eq!(position, 28);
+                    }
+                }
+
+                /// Checks that reading XML comments works correctly. According to the [specification],
+                /// comment data can contain any sequence except `--`:
+                ///
+                /// ```peg
+                /// comment = '<--' (!'--' char)* '-->';
+                /// char = [#x1-#x2C]
+                ///      / [#x2E-#xD7FF]
+                ///      / [#xE000-#xFFFD]
+                ///      / [#x10000-#x10FFFF]
+                /// ```
+                ///
+                /// The presence of this limitation, however, is simply a poorly designed specification
+                /// (maybe for purpose of building of LL(1) XML parser) and quick-xml does not check for
+                /// presence of these sequences by default. This tests allow such content.
+                ///
+                /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
+                mod comment {
+                    use crate::errors::Error;
+                    use crate::reader::BufferedInput;
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    #[test]
+                    #[ignore = "start comment sequence fully checked outside of `read_bang_element`"]
+                    fn not_properly_start() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!- -->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_properly_end() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed1() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed2() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!-->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed3() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn empty() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!---->other content".as_ref();
+                        //                      ^= 6
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(Bytes),
+                            Some(Bytes(b"!----"))
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[test]
+                    fn with_content() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--->comment<--->other content".as_ref();
+                        //                                 ^= 17
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(Bytes),
+                            Some(Bytes(b"!--->comment<---"))
+                        );
+                        assert_eq!(position, 17);
+                    }
+                }
+
+                /// Checks that reading DOCTYPE definition works correctly
+                mod doctype {
+                    mod uppercase {
+                        use crate::errors::Error;
+                        use crate::reader::BufferedInput;
+                        use crate::utils::Bytes;
+                        use pretty_assertions::assert_eq;
+
+                        #[test]
+                        fn not_properly_start() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!D other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn without_space() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPEother content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn empty() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPE>other content".as_ref();
+                            //                         ^= 9
+
+                            assert_eq!(
+                                input
+                                    .read_bang_element(buf, &mut position)
+                                    .unwrap()
+                                    .map(Bytes),
+                                Some(Bytes(b"!DOCTYPE"))
+                            );
+                            assert_eq!(position, 9);
+                        }
+
+                        #[test]
+                        fn not_closed() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPE other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+                    }
+
+                    mod lowercase {
+                        use crate::errors::Error;
+                        use crate::reader::BufferedInput;
+                        use crate::utils::Bytes;
+                        use pretty_assertions::assert_eq;
+
+                        #[test]
+                        fn not_properly_start() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!d other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn without_space() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctypeother content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn empty() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctype>other content".as_ref();
+                            //                         ^= 9
+
+                            assert_eq!(
+                                input
+                                    .read_bang_element(buf, &mut position)
+                                    .unwrap()
+                                    .map(Bytes),
+                                Some(Bytes(b"!doctype"))
+                            );
+                            assert_eq!(position, 9);
+                        }
+
+                        #[test]
+                        fn not_closed() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctype other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+                    }
                 }
             }
         };
