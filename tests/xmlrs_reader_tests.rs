@@ -194,6 +194,17 @@ fn dashes_in_comments() {
         "#,
         true,
     );
+
+    // Canary test for correct comments
+    test(
+        r#"<!-- comment --><hello/>"#,
+        r#"
+        |Comment( comment )
+        |EmptyElement(hello)
+        |EndDocument
+        "#,
+        true,
+    );
 }
 
 #[test]
