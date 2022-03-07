@@ -360,21 +360,19 @@ impl<R: BufRead> Reader<R> {
                 if let Some(p) =
                     memchr::memchr_iter(b'-', &buf[3..len - 2]).position(|p| buf[3 + p + 1] == b'-')
                 {
-                    self.buf_position += buf.len() - p;
+                    self.buf_position += len - p;
                     return Err(Error::UnexpectedToken("--".to_string()));
                 }
             }
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
         } else if uncased_starts_with(buf, b"![CDATA[") {
-            debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_element");
-            Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
+            Ok(Event::CData(BytesText::from_plain(&buf[8..])))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
-            debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_element");
             let start = buf[8..]
                 .iter()
                 .position(|b| !is_whitespace(*b))
-                .unwrap_or_else(|| buf.len() - 8);
-            debug_assert!(start < buf.len() - 8, "DocType must have a name");
+                .unwrap_or_else(|| len - 8);
+            debug_assert!(start < len - 8, "DocType must have a name");
             Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
         } else {
             unreachable!("Proper bang start guaranteed by read_bang_element");
@@ -1374,35 +1372,38 @@ impl BangType {
         })
     }
 
-    /// Checks that element is finished
-    ///
-    /// # Parameters
-    /// - `buf`: data from the `!` symbol
-    /// - `index`: position of the `>` symbol
-    #[inline(always)]
-    fn check_finished(&self, buf: &[u8], index: usize) -> bool {
-        match self {
-            // Need to read at least 6 symbols (`!---->`) for properly finished comment
-            // <!----> - XML comment
-            //  012345 - index
-            Self::Comment => index > 5 && buf.ends_with(b"--"),
-            Self::CData => buf.ends_with(b"]]"),
-            Self::DocType => {
-                memchr::memchr2_iter(b'<', b'>', buf)
-                    .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
-                    .sum::<i32>()
-                    == 0
-            }
-        }
-    }
     /// If element is finished, returns its content up to `>` symbol and
     /// an index of this symbol, otherwise returns `None`
     #[inline(always)]
     fn parse<'b>(&self, chunk: &'b [u8], offset: usize) -> Option<(&'b [u8], usize)> {
         for i in memchr::memchr_iter(b'>', chunk) {
-            let result = &chunk[..i];
-            if self.check_finished(result, i + 1 + offset) {
-                return Some((result, i + 1)); // +1 for `>`
+            match self {
+                // Need to read at least 6 symbols (`!---->`) for properly finished comment
+                // <!----> - XML comment
+                //  012345 - i
+                Self::Comment => {
+                    if offset + i > 4 && chunk[..i].ends_with(b"--") {
+                        // We cannot strip last `--` from the buffer because we need it in case of
+                        // check_comments enabled option. XML standard requires that comment
+                        // will not end with `--->` sequence because this is a special case of
+                        // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
+                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                    }
+                }
+                Self::CData => {
+                    if chunk[..i].ends_with(b"]]") {
+                        return Some((&chunk[..i - 2], i + 1)); // +1 for `>`
+                    }
+                }
+                Self::DocType => {
+                    let content = &chunk[..i];
+                    let balance = memchr::memchr2_iter(b'<', b'>', content)
+                        .map(|p| if content[p] == b'<' { 1i32 } else { -1 })
+                        .sum::<i32>();
+                    if balance == 0 {
+                        return Some((content, i + 1)); // +1 for `>`
+                    }
+                }
             }
         }
         None
@@ -1797,7 +1798,7 @@ mod test {
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
                                 .map(Bytes),
-                            Some(Bytes(b"![CDATA[]]"))
+                            Some(Bytes(b"![CDATA["))
                         );
                         assert_eq!(position, 11);
                     }
@@ -1817,7 +1818,7 @@ mod test {
                                 .read_bang_element(buf, &mut position)
                                 .unwrap()
                                 .map(Bytes),
-                            Some(Bytes(b"![CDATA[cdata]] ]>content]]"))
+                            Some(Bytes(b"![CDATA[cdata]] ]>content"))
                         );
                         assert_eq!(position, 28);
                     }
