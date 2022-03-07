@@ -91,7 +91,10 @@ fn test_comment_starting_with_gt() {
     let mut buf = Vec::new();
     loop {
         match r.read_event(&mut buf) {
-            Ok(Comment(ref e)) if &**e == b">" => break,
+            Ok(Comment(e)) => {
+                assert_eq!(e.as_ref(), b">");
+                break;
+            }
             Ok(Eof) => panic!("Expecting Comment"),
             _ => (),
         }
