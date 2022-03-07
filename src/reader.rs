@@ -255,7 +255,8 @@ impl<R: BufRead> Reader<R> {
         }
     }
 
-    /// private function to read until '>' is found
+    /// Private function to read until `>` is found. This function expects that
+    /// it was called just after encounter a `<` symbol.
     fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
         R: BufferedInput<'i, 'r, B>,
@@ -2128,6 +2129,70 @@ mod test {
                             }
                             assert_eq!(position, 0);
                         }
+                    }
+                }
+            }
+
+            mod issue_344 {
+                use crate::errors::Error;
+
+                #[test]
+                fn cdata() {
+                    let doc = "![]]>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn comment() {
+                    let doc = "!- -->";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn doctype_uppercase() {
+                    let doc = "!D>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn doctype_lowercase() {
+                    let doc = "!d>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                            x
+                        ),
                     }
                 }
             }
