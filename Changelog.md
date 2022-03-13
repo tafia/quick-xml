@@ -32,6 +32,7 @@
 - fix: fix internal panic message when parse malformed XML
   ([#344](https://github.com/tafia/quick-xml/issues/344))
 - test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
+- fix: CDATA was not handled in many cases where it should
 
 ## 0.23.0-alpha3
 

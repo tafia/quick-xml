@@ -36,6 +36,8 @@ where
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
             DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, true),
+            // Escape sequences does not processed inside CDATA section
+            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, false),
             DeEvent::Start(e) => EscapedDeserializer::new(Cow::Borrowed(e.name()), decoder, false),
             _ => {
                 return Err(DeError::Unsupported(
@@ -64,7 +66,7 @@ where
     fn unit_variant(self) -> Result<(), DeError> {
         match self.de.next()? {
             DeEvent::Start(e) => self.de.read_to_end(e.name()),
-            DeEvent::Text(_) => Ok(()),
+            DeEvent::Text(_) | DeEvent::CData(_) => Ok(()),
             _ => unreachable!(),
         }
     }
