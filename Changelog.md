@@ -20,6 +20,7 @@
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
 - test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
+- fix: CDATA was not handled in many cases where it should
 
 ## 0.23.0-alpha3
 

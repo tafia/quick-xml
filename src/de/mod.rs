@@ -560,7 +560,7 @@ where
         V: Visitor<'de>,
     {
         match self.peek()? {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Text(t) | DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
