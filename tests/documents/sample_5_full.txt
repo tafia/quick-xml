@@ -1,5 +1,4 @@
-StartDocument(1.0, utf-8)
-DocType(data SYSTEM "abcd.dtd")
+StartDocument(1.0, utf-16)
 StartElement({urn:x}p:data [z=">"])
 Whitespace("\n    ")
 Comment(" abcd &lt; &gt; &amp; ")

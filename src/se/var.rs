@@ -1,10 +1,12 @@
 use crate::{
+    de::{INNER_VALUE, UNFLATTEN_PREFIX},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
     se::Serializer,
     writer::Writer,
 };
 use serde::ser::{self, Serialize};
+use serde::Serializer as _;
 use std::io::Write;
 
 /// An implementation of `SerializeMap` for serializing to XML.
@@ -32,10 +34,16 @@ where
     type Ok = ();
     type Error = DeError;
 
-    fn serialize_key<T: ?Sized + Serialize>(&mut self, _: &T) -> Result<(), DeError> {
+    fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), DeError> {
+        /*
         Err(DeError::Unsupported(
             "impossible to serialize the key on its own, please use serialize_entry()",
         ))
+        */
+        write!(self.parent.writer.inner(), "<enum key=\"").map_err(Error::Io)?;
+        key.serialize(&mut *self.parent)?;
+        write!(self.parent.writer.inner(), "\"/>").map_err(Error::Io)?;
+        Ok(())
     }
 
     fn serialize_value<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), DeError> {
@@ -116,17 +124,24 @@ where
     ) -> Result<(), DeError> {
         // TODO: Inherit indentation state from self.parent.writer
         let writer = Writer::new(&mut self.buffer);
-        let mut serializer = Serializer::with_root(writer, Some(key));
-        value.serialize(&mut serializer)?;
+        if key.starts_with(UNFLATTEN_PREFIX) {
+            let key = &key[UNFLATTEN_PREFIX.len()..];
+            let mut serializer = Serializer::with_root(writer, Some(key));
+            serializer.serialize_newtype_struct(key, value)?;
+            self.children.append(&mut self.buffer);
+        } else {
+            let mut serializer = Serializer::with_root(writer, Some(key));
+            value.serialize(&mut serializer)?;
 
-        if !self.buffer.is_empty() {
-            if self.buffer[0] == b'<' || key == "$value" {
-                // Drains buffer, moves it to children
-                self.children.append(&mut self.buffer);
-            } else {
-                self.attrs
-                    .push_attribute((key.as_bytes(), self.buffer.as_ref()));
-                self.buffer.clear();
+            if !self.buffer.is_empty() {
+                if self.buffer[0] == b'<' || key == INNER_VALUE {
+                    // Drains buffer, moves it to children
+                    self.children.append(&mut self.buffer);
+                } else {
+                    self.attrs
+                        .push_attribute((key.as_bytes(), self.buffer.as_ref()));
+                    self.buffer.clear();
+                }
             }
         }
 

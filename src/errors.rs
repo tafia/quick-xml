@@ -1,12 +1,15 @@
 //! Error management module
 
+use crate::escape::EscapeError;
+use std::str::Utf8Error;
+
 /// The error type used by this crate.
 #[derive(Debug)]
 pub enum Error {
     /// IO error
     Io(::std::io::Error),
     /// Utf8 error
-    Utf8(::std::str::Utf8Error),
+    Utf8(Utf8Error),
     /// Unexpected End of File
     UnexpectedEof(String),
     /// End event mismatch
@@ -33,7 +36,7 @@ pub enum Error {
     /// Duplicate attribute
     DuplicatedAttribute(usize, usize),
     /// Escape error
-    EscapeError(::escape::EscapeError),
+    EscapeError(EscapeError),
 }
 
 impl From<::std::io::Error> for Error {
@@ -44,18 +47,26 @@ impl From<::std::io::Error> for Error {
     }
 }
 
-impl From<::std::str::Utf8Error> for Error {
+impl From<Utf8Error> for Error {
     /// Creates a new `Error::Utf8` from the given error
     #[inline]
-    fn from(error: ::std::str::Utf8Error) -> Error {
+    fn from(error: Utf8Error) -> Error {
         Error::Utf8(error)
+    }
+}
+
+impl From<EscapeError> for Error {
+    /// Creates a new `Error::EscapeError` from the given error
+    #[inline]
+    fn from(error: EscapeError) -> Error {
+        Error::EscapeError(error)
     }
 }
 
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 ///
 /// [`Error`]: enum.Error.html
-pub type Result<T> = ::std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -123,6 +134,7 @@ pub mod serialize {
 
     use super::Error;
     use std::fmt;
+    use std::num::{ParseFloatError, ParseIntError};
 
     /// (De)serialization error
     #[derive(Debug)]
@@ -130,19 +142,20 @@ pub mod serialize {
         /// Serde custom error
         Custom(String),
         /// Cannot parse to integer
-        Int(std::num::ParseIntError),
+        Int(ParseIntError),
         /// Cannot parse to float
-        Float(std::num::ParseFloatError),
+        Float(ParseFloatError),
         /// Xml parsing error
         Xml(Error),
-        /// Unexpected end of attributes
+        /// Unexpected end of attributes.
+        ///
+        /// Usually this indicates an error in the `Deserialize` implementation when read map:
+        /// `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`
         EndOfAttributes,
         /// Unexpected end of file
         Eof,
         /// Invalid value for a boolean
         InvalidBoolean(String),
-        /// Invalid unit value
-        InvalidUnit(String),
         /// Invalid event for Enum
         InvalidEnum(crate::events::Event<'static>),
         /// Expecting Text event
@@ -165,9 +178,6 @@ pub mod serialize {
                 DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
                 DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
                 DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
-                DeError::InvalidUnit(v) => {
-                    write!(f, "Invalid unit value '{}', expected empty string", v)
-                }
                 DeError::InvalidEnum(e) => write!(
                     f,
                     "Invalid event for Enum, expecting Text or Start, got: {:?}",
@@ -210,14 +220,14 @@ pub mod serialize {
         }
     }
 
-    impl From<std::num::ParseIntError> for DeError {
-        fn from(e: std::num::ParseIntError) -> Self {
+    impl From<ParseIntError> for DeError {
+        fn from(e: ParseIntError) -> Self {
             DeError::Int(e)
         }
     }
 
-    impl From<std::num::ParseFloatError> for DeError {
-        fn from(e: std::num::ParseFloatError) -> Self {
+    impl From<ParseFloatError> for DeError {
+        fn from(e: ParseFloatError) -> Self {
             DeError::Float(e)
         }
     }

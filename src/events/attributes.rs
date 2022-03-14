@@ -2,13 +2,10 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::{is_whitespace, Reader};
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::ops::Range;
+use crate::errors::{Error, Result};
+use crate::escape::{do_unescape, escape};
+use crate::reader::{is_whitespace, Reader};
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 
 /// Iterator over XML attributes.
 ///
@@ -16,7 +13,7 @@ use std::ops::Range;
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// [`with_checks(false)`]: #method.with_checks
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
@@ -284,12 +281,12 @@ impl<'a> Attribute<'a> {
 
 impl<'a> std::fmt::Debug for Attribute<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::{write_byte_string, write_cow_string};
 
         write!(f, "Attribute {{ key: ")?;
         write_byte_string(f, self.key)?;
         write!(f, ", value: ")?;
-        write_byte_string(f, &self.value)?;
+        write_cow_string(f, &self.value)?;
         write!(f, " }}")
     }
 }
@@ -352,14 +349,14 @@ impl<'a> Iterator for Attributes<'a> {
                 if self.html {
                     attr!($key, 0..0)
                 } else {
-                    return None;
-                };
+                    None
+                }
             }};
             ($key:expr, $val:expr) => {
-                return Some(Ok(Attribute {
+                Some(Ok(Attribute {
                     key: &self.bytes[$key],
                     value: Cow::Borrowed(&self.bytes[$val]),
-                }));
+                }))
             };
         }
 
@@ -376,7 +373,7 @@ impl<'a> Iterator for Attributes<'a> {
             .find(|&(_, &b)| !is_whitespace(b))
         {
             Some((i, _)) => i,
-            None => attr!(self.position..len),
+            None => return attr!(self.position..len),
         };
 
         // key ends with either whitespace or =
@@ -394,17 +391,17 @@ impl<'a> Iterator for Attributes<'a> {
                     Some((_, &b'=')) => i,
                     Some((j, _)) if self.html => {
                         self.position = j - 1;
-                        attr!(start_key..i, 0..0);
+                        return attr!(start_key..i, 0..0);
                     }
                     Some((j, _)) => err!(Error::NoEqAfterName(j)),
                     None if self.html => {
                         self.position = len;
-                        attr!(start_key..len, 0..0);
+                        return attr!(start_key..len, 0..0);
                     }
                     None => err!(Error::NoEqAfterName(len)),
                 }
             }
-            None => attr!(start_key..len),
+            None => return attr!(start_key..len),
         };
 
         if self.with_checks {
@@ -426,7 +423,7 @@ impl<'a> Iterator for Attributes<'a> {
                 match bytes.by_ref().find(|&(_, &b)| b == *quote) {
                     Some((j, _)) => {
                         self.position = j + 1;
-                        attr!(start_key..end_key, i + 1..j)
+                        return attr!(start_key..end_key, i + 1..j);
                     }
                     None => err!(Error::UnquotedValue(i)),
                 }
@@ -437,10 +434,10 @@ impl<'a> Iterator for Attributes<'a> {
                     .find(|&(_, &b)| is_whitespace(b))
                     .map_or(len, |(j, _)| j);
                 self.position = j;
-                attr!(start_key..end_key, i..j)
+                return attr!(start_key..end_key, i..j);
             }
             Some((i, _)) => err!(Error::UnquotedValue(i)),
-            None => attr!(start_key..end_key),
+            None => return attr!(start_key..end_key),
         }
     }
 }

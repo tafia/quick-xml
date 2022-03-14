@@ -1,19 +1,48 @@
 //! Defines zero-copy XML events used throughout this library.
+//!
+//! A XML event often represents part of a XML element.
+//! They occur both during reading and writing and are
+//! usually used with the stream-oriented API.
+//!
+//! For example, the XML element
+//! ```xml
+//! <name attr="value">Inner text</name>
+//! ```
+//! consists of the three events `Start`, `Text` and `End`.
+//! They can also represent other parts in an XML document like the
+//! XML declaration. Each Event usually contains further information,
+//! like the tag name, the attribute or the inner text.
+//!
+//! See [`Event`] for a list of all possible events.
+//!
+//! # Reading
+//! When reading a XML stream, the events are emitted by
+//! [`Reader::read_event`]. You must listen
+//! for the different types of events you are interested in.
+//!
+//! See [`Reader`] for further information.
+//!
+//! # Writing
+//! When writing the XML document, you must create the XML element
+//! by constructing the events it consists of and pass them to the writer
+//! sequentially.
+//!
+//! See [`Writer`] for further information.
+//!
+//! [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
+//! [`Reader`]: ../reader/struct.Reader.html
+//! [`Writer`]: ../writer/struct.Writer.html
+//! [`Event`]: enum.Event.html
 
 pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::ops::Deref;
-use std::str::from_utf8;
+use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
-use self::attributes::{Attribute, Attributes};
-use errors::{Error, Result};
-use escape::{do_unescape, escape};
-use reader::Reader;
+use crate::escape::{do_unescape, escape};
+use crate::{errors::Error, errors::Result, reader::Reader};
+use attributes::{Attribute, Attributes};
 
 use memchr;
 
@@ -28,7 +57,7 @@ use memchr;
 /// [`local_name`]: #method.local_name
 /// [`unescaped`]: #method.unescaped
 /// [`attributes`]: #method.attributes
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
     buf: Cow<'a, [u8]>,
@@ -97,7 +126,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust
     /// # use quick_xml::{Error, Writer};
     /// use quick_xml::events::{BytesStart, Event};
     ///
@@ -195,7 +224,7 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(self, self.name_len)
+        Attributes::new(&self.buf, self.name_len)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
@@ -318,14 +347,28 @@ impl<'a> BytesStart<'a> {
         self.buf.to_mut().truncate(self.name_len);
         self
     }
+
+    /// Try to get an attribute
+    pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
+        &'a self,
+        attr_name: N,
+    ) -> Result<Option<Attribute<'a>>> {
+        for a in self.attributes() {
+            let a = a?;
+            if a.key == attr_name.as_ref() {
+                return Ok(Some(a));
+            }
+        }
+        Ok(None)
+    }
 }
 
 impl<'a> std::fmt::Debug for BytesStart<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesStart {{ buf: ")?;
-        write_byte_string(f, &self.buf)?;
+        write_cow_string(f, &self.buf)?;
         write!(f, ", name_len: {} }}", self.name_len)
     }
 }
@@ -333,7 +376,7 @@ impl<'a> std::fmt::Debug for BytesStart<'a> {
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
     element: BytesStart<'a>,
 }
@@ -455,7 +498,7 @@ impl<'a> BytesDecl<'a> {
 }
 
 /// A struct to manage `Event::End` events
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>,
 }
@@ -505,16 +548,16 @@ impl<'a> BytesEnd<'a> {
 
 impl<'a> std::fmt::Debug for BytesEnd<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesEnd {{ name: ")?;
-        write_byte_string(f, &self.name)?;
+        write_cow_string(f, &self.name)?;
         write!(f, " }}")
     }
 }
 
 /// Data from various events (most notably, `Event::Text`).
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     // Invariant: The content is always escaped.
     content: Cow<'a, [u8]>,
@@ -603,6 +646,60 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
+    }
+
+    /// Gets content of this text buffer in the specified encoding
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+        Ok(match &self.content {
+            Cow::Borrowed(bytes) => {
+                #[cfg(feature = "encoding")]
+                {
+                    decoder.decode(bytes)
+                }
+                #[cfg(not(feature = "encoding"))]
+                {
+                    decoder.decode(bytes)?.into()
+                }
+            }
+            Cow::Owned(bytes) => {
+                #[cfg(feature = "encoding")]
+                let decoded = decoder.decode(bytes).into_owned();
+
+                #[cfg(not(feature = "encoding"))]
+                let decoded = decoder.decode(bytes)?.to_string();
+
+                decoded.into()
+            }
+        })
+    }
+
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode_and_escape(
+        &self,
+        decoder: crate::reader::Decoder,
+    ) -> Result<Cow<'a, str>> {
+        match self.decode(decoder)? {
+            Cow::Borrowed(decoded) => {
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                match unescaped {
+                    Cow::Borrowed(unescaped) => {
+                        from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
+                    }
+                    Cow::Owned(unescaped) => String::from_utf8(unescaped)
+                        .map(|s| s.into())
+                        .map_err(|e| Error::Utf8(e.utf8_error())),
+                }
+            }
+            Cow::Owned(decoded) => {
+                let unescaped =
+                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
+                String::from_utf8(unescaped.into_owned())
+                    .map(|s| s.into())
+                    .map_err(|e| Error::Utf8(e.utf8_error()))
+            }
+        }
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -759,10 +856,10 @@ impl<'a> BytesText<'a> {
 
 impl<'a> std::fmt::Debug for BytesText<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_byte_string;
+        use crate::utils::write_cow_string;
 
         write!(f, "BytesText {{ content: ")?;
-        write_byte_string(f, &self.content)?;
+        write_cow_string(f, &self.content)?;
         write!(f, " }}")
     }
 }
@@ -770,7 +867,7 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
 /// Event emitted by [`Reader::read_event`].
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
@@ -788,7 +885,7 @@ pub enum Event<'a> {
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
     PI(BytesText<'a>),
-    /// Doctype `<!DOCTYPE...>`.
+    /// Doctype `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
     /// End of XML document.
     Eof,
@@ -796,7 +893,7 @@ pub enum Event<'a> {
 
 impl<'a> Event<'a> {
     /// Converts the event to an owned version, untied to the lifetime of
-    /// buffer used when reading but incurring a new, seperate allocation.
+    /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
         match self {
             Event::Start(e) => Event::Start(e.into_owned()),

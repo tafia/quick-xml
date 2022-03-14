@@ -10,6 +10,36 @@
 
 ## Unreleased
 
+- test: add tests for malformed inputs for serde deserializer
+- fix: allow to deserialize `unit`s from any data in attribute values and text nodes
+- refactor: unify errors when EOF encountered during serde deserialization
+- test: ensure that after deserializing all XML was consumed
+- feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
+- refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
+  from the attribute and element names and attribute values
+- fix: allow to deserialize `unit`s from text and CDATA content.
+  `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
+
+## 0.23.0-alpha3
+
+- fix: use element name (with namespace) when unflattening (serialize feature)
+
+## 0.23.0-alpha2
+
+- fix: failing tests with features
+
+## 0.23.0-alpha1
+
+- style: convert to rust edition 2018
+- fix: don't encode multi byte escape characters as big endian
+- feat: add `Writer::write_nested_event`
+- feat: add `BytesStart::try_get_attribute`
+- test: add more test on github actions
+- feat: allow unbuffered deserialization (!!)
+- style: use edition 2018
+- feat: add a function for partially escaping an element
+- feat: higher level api to write xmls
+
 ## 0.22.0
 
 - feat (breaking): Move html entity escape behind a `'escape-html'` feature to help with compilation

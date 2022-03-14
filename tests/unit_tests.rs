@@ -1,11 +1,8 @@
-extern crate quick_xml;
-
 use std::io::Cursor;
 use std::str::from_utf8;
 
-use quick_xml::events::Event::*;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::{Reader, Result, Writer};
+use quick_xml::{events::Event::*, Reader, Result, Writer};
 
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
@@ -201,55 +198,58 @@ fn test_nested() {
 }
 
 #[test]
-fn test_writer() {
+fn test_writer() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(result, txt.as_bytes());
+    Ok(())
 }
 
 #[test]
-fn test_writer_borrow() {
+fn test_writer_borrow() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(result, txt.as_bytes());
+    Ok(())
 }
 
 #[test]
-fn test_writer_indent() {
+fn test_writer_indent() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
+    // Normalize newlines on Windows to just \n, which is what the reader and
+    // writer use.
+    let normalized_txt = txt.replace("\r\n", "\n");
+    let txt = normalized_txt.as_str();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
@@ -261,20 +261,21 @@ fn test_writer_indent() {
 
     #[cfg(not(windows))]
     assert_eq!(result, txt.as_bytes());
+
+    Ok(())
 }
 
 #[test]
-fn test_writer_indent_cdata() {
+fn test_writer_indent_cdata() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent_cdata.xml");
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
@@ -285,10 +286,12 @@ fn test_writer_indent_cdata() {
 
     #[cfg(not(windows))]
     assert_eq!(result, txt.as_bytes());
+
+    Ok(())
 }
 
 #[test]
-fn test_write_empty_element_attrs() {
+fn test_write_empty_element_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;
     let mut reader = Reader::from_str(str_from);
@@ -296,19 +299,19 @@ fn test_write_empty_element_attrs() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), expected);
+    Ok(())
 }
 
 #[test]
-fn test_write_attrs() {
+fn test_write_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
@@ -316,25 +319,26 @@ fn test_write_attrs() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        let event = match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(Start(elem)) => {
-                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>().unwrap();
+        let event = match reader.read_event(&mut buf)? {
+            Eof => break,
+            Start(elem) => {
+                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
-            Ok(End(_)) => End(BytesEnd::borrowed(b"copy")),
-            Ok(e) => e,
-            Err(e) => panic!(e),
+            End(_) => End(BytesEnd::borrowed(b"copy")),
+            e => e,
         };
         assert!(writer.write_event(event).is_ok());
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(result, expected.as_bytes());
+
+    Ok(())
 }
 
 #[test]
@@ -646,7 +650,7 @@ fn test_escaped_content() {
 }
 
 #[test]
-fn test_read_write_roundtrip_results_in_identity() {
+fn test_read_write_roundtrip_results_in_identity() -> Result<()> {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <section ns:label="header">
@@ -661,19 +665,19 @@ fn test_read_write_roundtrip_results_in_identity() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(result, input.as_bytes());
+    Ok(())
 }
 
 #[test]
-fn test_read_write_roundtrip() {
+fn test_read_write_roundtrip() -> Result<()> {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <section ns:label="header">
@@ -688,19 +692,19 @@ fn test_read_write_roundtrip() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+    Ok(())
 }
 
 #[test]
-fn test_read_write_roundtrip_escape() {
+fn test_read_write_roundtrip_escape() -> Result<()> {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <section ns:label="header">
@@ -715,25 +719,25 @@ fn test_read_write_roundtrip_escape() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(Text(e)) => {
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            Text(e) => {
                 let t = e.escaped();
                 assert!(writer
                     .write_event(Event::Text(BytesText::from_escaped(t.to_vec())))
                     .is_ok());
             }
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+    Ok(())
 }
 
 #[test]
-fn test_read_write_roundtrip_escape_text() {
+fn test_read_write_roundtrip_escape_text() -> Result<()> {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
         <section ns:label="header">
@@ -748,21 +752,21 @@ fn test_read_write_roundtrip_escape_text() {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf) {
-            Ok(Eof) => break,
-            Ok(Text(e)) => {
+        match reader.read_event(&mut buf)? {
+            Eof => break,
+            Text(e) => {
                 let t = e.unescape_and_decode(&reader).unwrap();
                 assert!(writer
                     .write_event(Event::Text(BytesText::from_plain_str(&t)))
                     .is_ok());
             }
-            Ok(e) => assert!(writer.write_event(e).is_ok()),
-            Err(e) => panic!(e),
+            e => assert!(writer.write_event(e).is_ok()),
         }
     }
 
     let result = writer.into_inner().into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+    Ok(())
 }
 
 #[test]

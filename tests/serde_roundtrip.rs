@@ -125,6 +125,26 @@ fn no_contiguous_fields() {
 }
 
 #[test]
+fn test_parse_unflatten_field() {
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    struct Unflatten {
+        #[serde(rename = "$unflatten=NewKey")]
+        field: String,
+    }
+
+    let source = "<Unflatten><NewKey>Foo</NewKey></Unflatten>";
+    let expected = Unflatten {
+        field: "Foo".to_string(),
+    };
+
+    let parsed: Unflatten = ::quick_xml::de::from_str(source).unwrap();
+    assert_eq!(&parsed, &expected);
+
+    let stringified = to_string(&parsed).unwrap();
+    assert_eq!(&stringified, source);
+}
+
+#[test]
 fn escapes_in_cdata() {
     #[derive(Debug, Deserialize, PartialEq)]
     pub struct Protocols {

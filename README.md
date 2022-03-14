@@ -1,7 +1,7 @@
 # quick-xml
 
-[![Build Status](https://travis-ci.org/tafia/quick-xml.svg?branch=master)](https://travis-ci.org/tafia/quick-xml)
-[![Crate](http://meritbadge.herokuapp.com/quick-xml)](https://crates.io/crates/quick-xml)
+![status](https://github.com/tafia/quick-xml/actions/workflows/rust.yml/badge.svg)
+[![Crate](https://img.shields.io/crates/v/quick-xml.svg)](https://crates.io/crates/quick-xml)
 
 High performance xml pull reader/writer.
 
@@ -38,6 +38,9 @@ let mut buf = Vec::new();
 
 // The `Reader` does not implement `Iterator` because it outputs borrowed data (`Cow`s)
 loop {
+    // NOTE: this is the generic case when we don't know about the input BufRead.
+    // when the input is a &str or a &[u8], we don't actually need to use another
+    // buffer, we could directly call `reader.read_event_unbuffered()`
     match reader.read_event(&mut buf) {
         Ok(Event::Start(ref e)) => {
             match e.name() {
@@ -225,6 +228,37 @@ struct Foo {
     pub body: String,
 }
 ```
+
+### Unflattening structs into verbose XML
+
+If your XML files look like `<root><first>value</first><second>value</second></root>`, you can
+(de)serialize them with the special name prefix `$unflatten=`:
+
+```rust,ignore
+struct Root {
+    #[serde(rename = "$unflatten=first")]
+    first: String,
+    #[serde(rename = "$unflatten=second")]
+    other_field: String,
+}
+```
+
+### Serializing unit variants as primitives
+
+The `$primitive` prefix lets you serialize enum variants without associated values (internally referred to as _unit variants_) as primitive strings rather than self-closing tags. Consider the following definitions:
+
+```rust,ignore
+enum Foo {
+    #[serde(rename = "$primitive=Bar")]
+    Bar
+}
+
+struct Root {
+    foo: Foo
+}
+```
+
+Serializing `Root { foo: Foo::Bar }` will then yield `<Root foo="Bar"/>` instead of `<Root><Bar/></Root>`.
 
 ### Performance
 

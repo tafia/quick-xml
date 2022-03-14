@@ -3,7 +3,9 @@
 use memchr;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::ops::Range;
 
+/// Error for XML escape/unescqpe.
 #[derive(Debug)]
 pub enum EscapeError {
     /// Entity with Null character
@@ -23,6 +25,8 @@ pub enum EscapeError {
     TooLongDecimal,
     /// Character is not a valid decimal value
     InvalidDecimal(char),
+    /// Not a valid unicode codepoint
+    InvalidCodepoint(u32),
 }
 
 impl std::fmt::Display for EscapeError {
@@ -49,24 +53,17 @@ impl std::fmt::Display for EscapeError {
             }
             EscapeError::TooLongDecimal => write!(f, "Cannot convert decimal to utf8"),
             EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
+            EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
         }
     }
 }
 
 impl std::error::Error for EscapeError {}
 
-// UTF-8 ranges and tags for encoding characters
-const TAG_CONT: u8 = 0b1000_0000;
-const TAG_TWO_B: u8 = 0b1100_0000;
-const TAG_THREE_B: u8 = 0b1110_0000;
-const TAG_FOUR_B: u8 = 0b1111_0000;
-const MAX_ONE_B: u32 = 0x80;
-const MAX_TWO_B: u32 = 0x800;
-const MAX_THREE_B: u32 = 0x10000;
-
 /// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
 /// corresponding xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
     fn to_escape(b: u8) -> bool {
         match b {
             b'<' | b'>' | b'\'' | b'&' | b'"' => true,
@@ -74,10 +71,32 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
         }
     }
 
+    _escape(raw, to_escape)
+}
+
+/// Should only be used for escaping text content. In xml text content, it is allowed
+/// (though not recommended) to leave the quote special characters " and ' unescaped.
+/// This function escapes a `&[u8]` and replaces xml special characters (<, >, &) with
+/// their corresponding xml escaped value, but does not escape quote characters.
+pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
+    #[inline]
+    fn to_escape(b: u8) -> bool {
+        match b {
+            b'<' | b'>' | b'&' => true,
+            _ => false,
+        }
+    }
+
+    _escape(raw, to_escape)
+}
+
+/// Escapes a `&[u8]` and replaces a subset of xml special characters (<, >, &, ', ") with their
+/// corresponding xml escaped value.
+fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     let mut escaped = None;
     let mut bytes = raw.iter();
     let mut pos = 0;
-    while let Some(i) = bytes.position(|&b| to_escape(b)) {
+    while let Some(i) = bytes.position(|&b| escape_chars(b)) {
         if escaped.is_none() {
             escaped = Some(Vec::with_capacity(raw.len()));
         }
@@ -125,7 +144,7 @@ pub fn unescape_with<'a>(
 }
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using an optional dictionnary of custom entities.
+/// value, using an optional dictionary of custom entities.
 ///
 /// # Pre-condition
 ///
@@ -148,5444 +167,20 @@ pub fn do_unescape<'a>(
                 unescaped.extend_from_slice(&raw[last_end..start]);
 
                 // search for character correctness
-                #[cfg(not(feature = "escape-html"))]
-                match &raw[start + 1..end] {
-                    b"lt" => unescaped.push(b'<'),
-                    b"gt" => unescaped.push(b'>'),
-                    b"amp" => unescaped.push(b'&'),
-                    b"apos" => unescaped.push(b'\''),
-                    b"quot" => unescaped.push(b'\"'),
-                    bytes if bytes.starts_with(b"#") => {
-                        let bytes = &bytes[1..];
-                        let code = if bytes.starts_with(b"x") {
-                            parse_hexadecimal(&bytes[1..])
-                        } else {
-                            parse_decimal(&bytes)
-                        }?;
-                        if code == 0 {
-                            return Err(EscapeError::EntityWithNull(start..end));
-                        }
-                        push_utf8(unescaped, code);
-                    }
-                    bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
-                        Some(value) => unescaped.extend_from_slice(&value),
-                        None => {
-                            return Err(EscapeError::UnrecognizedSymbol(
-                                start + 1..end,
-                                String::from_utf8(bytes.to_vec()),
-                            ))
-                        }
-                    },
+                let pat = &raw[start + 1..end];
+                if let Some(s) = named_entity(pat) {
+                    unescaped.extend_from_slice(s.as_bytes());
+                } else if pat.starts_with(b"#") {
+                    push_utf8(unescaped, parse_number(&pat[1..], start..end)?);
+                } else if let Some(value) = custom_entities.and_then(|hm| hm.get(pat)) {
+                    unescaped.extend_from_slice(&value);
+                } else {
+                    return Err(EscapeError::UnrecognizedSymbol(
+                        start + 1..end,
+                        String::from_utf8(pat.to_vec()),
+                    ));
                 }
 
-                #[cfg(feature = "escape-html")]
-                match &raw[start + 1..end] {
-                    // imported from https://dev.w3.org/html5/html-author/charref
-                    b"Tab" => unescaped.push(b'\x09'),
-                    b"NewLine" => unescaped.push(b'\x0A'),
-                    b"excl" => {
-                        unescaped.push(b'\x21');
-                    }
-                    b"quot" | b"QUOT" => {
-                        unescaped.push(b'\x22');
-                    }
-                    b"num" => {
-                        unescaped.push(b'\x23');
-                    }
-                    b"dollar" => {
-                        unescaped.push(b'\x24');
-                    }
-                    b"percnt" => {
-                        unescaped.push(b'\x25');
-                    }
-                    b"amp" | b"AMP" => {
-                        unescaped.push(b'\x26');
-                    }
-                    b"apos" => {
-                        unescaped.push(b'\x27');
-                    }
-                    b"lpar" => {
-                        unescaped.push(b'\x28');
-                    }
-                    b"rpar" => {
-                        unescaped.push(b'\x29');
-                    }
-                    b"ast" | b"midast" => {
-                        unescaped.push(b'\x2A');
-                    }
-                    b"plus" => {
-                        unescaped.push(b'\x2B');
-                    }
-                    b"comma" => {
-                        unescaped.push(b'\x2C');
-                    }
-                    b"period" => {
-                        unescaped.push(b'\x2E');
-                    }
-                    b"sol" => {
-                        unescaped.push(b'\x2F');
-                    }
-                    b"colon" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"semi" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"lt" | b"LT" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"equals" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"gt" | b"GT" => {
-                        unescaped.push(b'\x3E');
-                    }
-                    b"quest" => {
-                        unescaped.push(b'\x3F');
-                    }
-                    b"commat" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"lsqb" | b"lbrack" => {
-                        unescaped.push(b'\x5B');
-                    }
-                    b"bsol" => {
-                        unescaped.push(b'\x5C');
-                    }
-                    b"rsqb" | b"rbrack" => {
-                        unescaped.push(b'\x5D');
-                    }
-                    b"Hat" => {
-                        unescaped.push(b'\x5E');
-                    }
-                    b"lowbar" => {
-                        unescaped.push(b'\x5F');
-                    }
-                    b"grave" | b"DiacriticalGrave" => {
-                        unescaped.push(b'\x60');
-                    }
-                    b"lcub" | b"lbrace" => {
-                        unescaped.push(b'\x7B');
-                    }
-                    b"verbar" | b"vert" | b"VerticalLine" => {
-                        unescaped.push(b'\x7C');
-                    }
-                    b"rcub" | b"rbrace" => {
-                        unescaped.push(b'\x7D');
-                    }
-                    b"nbsp" | b"NonBreakingSpace" => {
-                        unescaped.push(b'\xA0');
-                    }
-                    b"iexcl" => {
-                        unescaped.push(b'\xA1');
-                    }
-                    b"cent" => {
-                        unescaped.push(b'\xA2');
-                    }
-                    b"pound" => {
-                        unescaped.push(b'\xA3');
-                    }
-                    b"curren" => {
-                        unescaped.push(b'\xA4');
-                    }
-                    b"yen" => {
-                        unescaped.push(b'\xA5');
-                    }
-                    b"brvbar" => {
-                        unescaped.push(b'\xA6');
-                    }
-                    b"sect" => {
-                        unescaped.push(b'\xA7');
-                    }
-                    b"Dot" | b"die" | b"DoubleDot" | b"uml" => {
-                        unescaped.push(b'\xA8');
-                    }
-                    b"copy" | b"COPY" => {
-                        unescaped.push(b'\xA9');
-                    }
-                    b"ordf" => {
-                        unescaped.push(b'\xAA');
-                    }
-                    b"laquo" => {
-                        unescaped.push(b'\xAB');
-                    }
-                    b"not" => {
-                        unescaped.push(b'\xAC');
-                    }
-                    b"shy" => {
-                        unescaped.push(b'\xAD');
-                    }
-                    b"reg" | b"circledR" | b"REG" => {
-                        unescaped.push(b'\xAE');
-                    }
-                    b"macr" | b"OverBar" | b"strns" => {
-                        unescaped.push(b'\xAF');
-                    }
-                    b"deg" => {
-                        unescaped.push(b'\xB0');
-                    }
-                    b"plusmn" | b"pm" | b"PlusMinus" => {
-                        unescaped.push(b'\xB1');
-                    }
-                    b"sup2" => {
-                        unescaped.push(b'\xB2');
-                    }
-                    b"sup3" => {
-                        unescaped.push(b'\xB3');
-                    }
-                    b"acute" | b"DiacriticalAcute" => {
-                        unescaped.push(b'\xB4');
-                    }
-                    b"micro" => {
-                        unescaped.push(b'\xB5');
-                    }
-                    b"para" => {
-                        unescaped.push(b'\xB6');
-                    }
-                    b"middot" | b"centerdot" | b"CenterDot" => {
-                        unescaped.push(b'\xB7');
-                    }
-                    b"cedil" | b"Cedilla" => {
-                        unescaped.push(b'\xB8');
-                    }
-                    b"sup1" => {
-                        unescaped.push(b'\xB9');
-                    }
-                    b"ordm" => {
-                        unescaped.push(b'\xBA');
-                    }
-                    b"raquo" => {
-                        unescaped.push(b'\xBB');
-                    }
-                    b"frac14" => {
-                        unescaped.push(b'\xBC');
-                    }
-                    b"frac12" | b"half" => {
-                        unescaped.push(b'\xBD');
-                    }
-                    b"frac34" => {
-                        unescaped.push(b'\xBE');
-                    }
-                    b"iquest" => {
-                        unescaped.push(b'\xBF');
-                    }
-                    b"Agrave" => {
-                        unescaped.push(b'\xC0');
-                    }
-                    b"Aacute" => {
-                        unescaped.push(b'\xC1');
-                    }
-                    b"Acirc" => {
-                        unescaped.push(b'\xC2');
-                    }
-                    b"Atilde" => {
-                        unescaped.push(b'\xC3');
-                    }
-                    b"Auml" => {
-                        unescaped.push(b'\xC4');
-                    }
-                    b"Aring" => {
-                        unescaped.push(b'\xC5');
-                    }
-                    b"AElig" => {
-                        unescaped.push(b'\xC6');
-                    }
-                    b"Ccedil" => {
-                        unescaped.push(b'\xC7');
-                    }
-                    b"Egrave" => {
-                        unescaped.push(b'\xC8');
-                    }
-                    b"Eacute" => {
-                        unescaped.push(b'\xC9');
-                    }
-                    b"Ecirc" => {
-                        unescaped.push(b'\xCA');
-                    }
-                    b"Euml" => {
-                        unescaped.push(b'\xCB');
-                    }
-                    b"Igrave" => {
-                        unescaped.push(b'\xCC');
-                    }
-                    b"Iacute" => {
-                        unescaped.push(b'\xCD');
-                    }
-                    b"Icirc" => {
-                        unescaped.push(b'\xCE');
-                    }
-                    b"Iuml" => {
-                        unescaped.push(b'\xCF');
-                    }
-                    b"ETH" => {
-                        unescaped.push(b'\xD0');
-                    }
-                    b"Ntilde" => {
-                        unescaped.push(b'\xD1');
-                    }
-                    b"Ograve" => {
-                        unescaped.push(b'\xD2');
-                    }
-                    b"Oacute" => {
-                        unescaped.push(b'\xD3');
-                    }
-                    b"Ocirc" => {
-                        unescaped.push(b'\xD4');
-                    }
-                    b"Otilde" => {
-                        unescaped.push(b'\xD5');
-                    }
-                    b"Ouml" => {
-                        unescaped.push(b'\xD6');
-                    }
-                    b"times" => {
-                        unescaped.push(b'\xD7');
-                    }
-                    b"Oslash" => {
-                        unescaped.push(b'\xD8');
-                    }
-                    b"Ugrave" => {
-                        unescaped.push(b'\xD9');
-                    }
-                    b"Uacute" => {
-                        unescaped.push(b'\xDA');
-                    }
-                    b"Ucirc" => {
-                        unescaped.push(b'\xDB');
-                    }
-                    b"Uuml" => {
-                        unescaped.push(b'\xDC');
-                    }
-                    b"Yacute" => {
-                        unescaped.push(b'\xDD');
-                    }
-                    b"THORN" => {
-                        unescaped.push(b'\xDE');
-                    }
-                    b"szlig" => {
-                        unescaped.push(b'\xDF');
-                    }
-                    b"agrave" => {
-                        unescaped.push(b'\xE0');
-                    }
-                    b"aacute" => {
-                        unescaped.push(b'\xE1');
-                    }
-                    b"acirc" => {
-                        unescaped.push(b'\xE2');
-                    }
-                    b"atilde" => {
-                        unescaped.push(b'\xE3');
-                    }
-                    b"auml" => {
-                        unescaped.push(b'\xE4');
-                    }
-                    b"aring" => {
-                        unescaped.push(b'\xE5');
-                    }
-                    b"aelig" => {
-                        unescaped.push(b'\xE6');
-                    }
-                    b"ccedil" => {
-                        unescaped.push(b'\xE7');
-                    }
-                    b"egrave" => {
-                        unescaped.push(b'\xE8');
-                    }
-                    b"eacute" => {
-                        unescaped.push(b'\xE9');
-                    }
-                    b"ecirc" => {
-                        unescaped.push(b'\xEA');
-                    }
-                    b"euml" => {
-                        unescaped.push(b'\xEB');
-                    }
-                    b"igrave" => {
-                        unescaped.push(b'\xEC');
-                    }
-                    b"iacute" => {
-                        unescaped.push(b'\xED');
-                    }
-                    b"icirc" => {
-                        unescaped.push(b'\xEE');
-                    }
-                    b"iuml" => {
-                        unescaped.push(b'\xEF');
-                    }
-                    b"eth" => {
-                        unescaped.push(b'\xF0');
-                    }
-                    b"ntilde" => {
-                        unescaped.push(b'\xF1');
-                    }
-                    b"ograve" => {
-                        unescaped.push(b'\xF2');
-                    }
-                    b"oacute" => {
-                        unescaped.push(b'\xF3');
-                    }
-                    b"ocirc" => {
-                        unescaped.push(b'\xF4');
-                    }
-                    b"otilde" => {
-                        unescaped.push(b'\xF5');
-                    }
-                    b"ouml" => {
-                        unescaped.push(b'\xF6');
-                    }
-                    b"divide" | b"div" => {
-                        unescaped.push(b'\xF7');
-                    }
-                    b"oslash" => {
-                        unescaped.push(b'\xF8');
-                    }
-                    b"ugrave" => {
-                        unescaped.push(b'\xF9');
-                    }
-                    b"uacute" => {
-                        unescaped.push(b'\xFA');
-                    }
-                    b"ucirc" => {
-                        unescaped.push(b'\xFB');
-                    }
-                    b"uuml" => {
-                        unescaped.push(b'\xFC');
-                    }
-                    b"yacute" => {
-                        unescaped.push(b'\xFD');
-                    }
-                    b"thorn" => {
-                        unescaped.push(b'\xFE');
-                    }
-                    b"yuml" => {
-                        unescaped.push(b'\xFF');
-                    }
-                    b"Amacr" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"amacr" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Abreve" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"abreve" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Aogon" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"aogon" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Cacute" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"cacute" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Ccirc" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"ccirc" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Cdot" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"cdot" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Ccaron" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"ccaron" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Dcaron" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"dcaron" => {
-                        unescaped.push(b'\x10');
-                    }
-                    b"Dstrok" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"dstrok" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Emacr" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"emacr" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Edot" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"edot" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Eogon" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"eogon" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Ecaron" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"ecaron" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Gcirc" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"gcirc" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Gbreve" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"gbreve" => {
-                        unescaped.push(b'\x11');
-                    }
-                    b"Gdot" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"gdot" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Gcedil" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Hcirc" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"hcirc" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Hstrok" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"hstrok" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Itilde" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"itilde" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Imacr" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"imacr" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Iogon" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"iogon" => {
-                        unescaped.push(b'\x12');
-                    }
-                    b"Idot" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"imath" | b"inodot" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"IJlig" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"ijlig" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Jcirc" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"jcirc" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Kcedil" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"kcedil" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"kgreen" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Lacute" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"lacute" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Lcedil" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"lcedil" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Lcaron" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"lcaron" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"Lmidot" => {
-                        unescaped.push(b'\x13');
-                    }
-                    b"lmidot" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Lstrok" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"lstrok" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Nacute" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"nacute" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Ncedil" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"ncedil" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Ncaron" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"ncaron" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"napos" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"ENG" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"eng" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Omacr" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"omacr" => {
-                        unescaped.push(b'\x14');
-                    }
-                    b"Odblac" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"odblac" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"OElig" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"oelig" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Racute" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"racute" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Rcedil" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"rcedil" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Rcaron" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"rcaron" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Sacute" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"sacute" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Scirc" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"scirc" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Scedil" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"scedil" => {
-                        unescaped.push(b'\x15');
-                    }
-                    b"Scaron" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"scaron" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Tcedil" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"tcedil" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Tcaron" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"tcaron" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Tstrok" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"tstrok" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Utilde" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"utilde" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Umacr" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"umacr" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Ubreve" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"ubreve" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Uring" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"uring" => {
-                        unescaped.push(b'\x16');
-                    }
-                    b"Udblac" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"udblac" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Uogon" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"uogon" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Wcirc" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"wcirc" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Ycirc" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"ycirc" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Yuml" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Zacute" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"zacute" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Zdot" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"zdot" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"Zcaron" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"zcaron" => {
-                        unescaped.push(b'\x17');
-                    }
-                    b"fnof" => {
-                        unescaped.push(b'\x19');
-                    }
-                    b"imped" => {
-                        unescaped.push(b'\x1B');
-                    }
-                    b"gacute" => {
-                        unescaped.push(b'\x1F');
-                    }
-                    b"jmath" => {
-                        unescaped.push(b'\x23');
-                    }
-                    b"circ" => {
-                        unescaped.push(b'\x2C');
-                    }
-                    b"caron" | b"Hacek" => {
-                        unescaped.push(b'\x2C');
-                    }
-                    b"breve" | b"Breve" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"dot" | b"DiacriticalDot" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"ring" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"ogon" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"tilde" | b"DiacriticalTilde" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"dblac" | b"DiacriticalDoubleAcute" => {
-                        unescaped.push(b'\x2D');
-                    }
-                    b"DownBreve" => {
-                        unescaped.push(b'\x31');
-                    }
-                    b"UnderBar" => {
-                        unescaped.push(b'\x33');
-                    }
-                    b"Alpha" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Beta" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Gamma" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Delta" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Epsilon" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Zeta" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Eta" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Theta" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Iota" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Kappa" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Lambda" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Mu" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Nu" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Xi" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Omicron" => {
-                        unescaped.push(b'\x39');
-                    }
-                    b"Pi" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Rho" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Sigma" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Tau" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Upsilon" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Phi" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Chi" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Psi" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"Omega" => {
-                        unescaped.push(b'\x3A');
-                    }
-                    b"alpha" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"beta" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"gamma" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"delta" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"epsiv" | b"varepsilon" | b"epsilon" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"zeta" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"eta" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"theta" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"iota" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"kappa" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"lambda" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"mu" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"nu" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"xi" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"omicron" => {
-                        unescaped.push(b'\x3B');
-                    }
-                    b"pi" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"rho" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"sigmav" | b"varsigma" | b"sigmaf" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"sigma" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"tau" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"upsi" | b"upsilon" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"phi" | b"phiv" | b"varphi" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"chi" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"psi" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"omega" => {
-                        unescaped.push(b'\x3C');
-                    }
-                    b"thetav" | b"vartheta" | b"thetasym" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"Upsi" | b"upsih" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"straightphi" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"piv" | b"varpi" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"Gammad" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"gammad" | b"digamma" => {
-                        unescaped.push(b'\x3D');
-                    }
-                    b"kappav" | b"varkappa" => {
-                        unescaped.push(b'\x3F');
-                    }
-                    b"rhov" | b"varrho" => {
-                        unescaped.push(b'\x3F');
-                    }
-                    b"epsi" | b"straightepsilon" => {
-                        unescaped.push(b'\x3F');
-                    }
-                    b"bepsi" | b"backepsilon" => {
-                        unescaped.push(b'\x3F');
-                    }
-                    b"IOcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"DJcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"GJcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"Jukcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"DScy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"Iukcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"YIcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"Jsercy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"LJcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"NJcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"TSHcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"KJcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"Ubrcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"DZcy" => {
-                        unescaped.push(b'\x40');
-                    }
-                    b"Acy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Bcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Vcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Gcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Dcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"IEcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"ZHcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Zcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Icy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Jcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Kcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Lcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Mcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Ncy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Ocy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Pcy" => {
-                        unescaped.push(b'\x41');
-                    }
-                    b"Rcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Scy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Tcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Ucy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Fcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"KHcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"TScy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"CHcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"SHcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"SHCHcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"HARDcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Ycy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"SOFTcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"Ecy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"YUcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"YAcy" => {
-                        unescaped.push(b'\x42');
-                    }
-                    b"acy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"bcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"vcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"gcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"dcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"iecy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"zhcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"zcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"icy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"jcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"kcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"lcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"mcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"ncy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"ocy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"pcy" => {
-                        unescaped.push(b'\x43');
-                    }
-                    b"rcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"scy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"tcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"ucy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"fcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"khcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"tscy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"chcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"shcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"shchcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"hardcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"ycy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"softcy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"ecy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"yucy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"yacy" => {
-                        unescaped.push(b'\x44');
-                    }
-                    b"iocy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"djcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"gjcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"jukcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"dscy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"iukcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"yicy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"jsercy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"ljcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"njcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"tshcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"kjcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"ubrcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"dzcy" => {
-                        unescaped.push(b'\x45');
-                    }
-                    b"ensp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x02');
-                    }
-                    b"emsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x03');
-                    }
-                    b"emsp13" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x04');
-                    }
-                    b"emsp14" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x05');
-                    }
-                    b"numsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x07');
-                    }
-                    b"puncsp" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x08');
-                    }
-                    b"thinsp" | b"ThinSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x09');
-                    }
-                    b"hairsp" | b"VeryThinSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0A');
-                    }
-                    b"ZeroWidthSpace"
-                    | b"NegativeVeryThinSpace"
-                    | b"NegativeThinSpace"
-                    | b"NegativeMediumSpace"
-                    | b"NegativeThickSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0B');
-                    }
-                    b"zwnj" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"zwj" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0D');
-                    }
-                    b"lrm" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0E');
-                    }
-                    b"rlm" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x0F');
-                    }
-                    b"hyphen" | b"dash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x10');
-                    }
-                    b"ndash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x13');
-                    }
-                    b"mdash" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x14');
-                    }
-                    b"horbar" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x15');
-                    }
-                    b"Verbar" | b"Vert" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x16');
-                    }
-                    b"lsquo" | b"OpenCurlyQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x18');
-                    }
-                    b"rsquo" | b"rsquor" | b"CloseCurlyQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x19');
-                    }
-                    b"lsquor" | b"sbquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1A');
-                    }
-                    b"ldquo" | b"OpenCurlyDoubleQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1C');
-                    }
-                    b"rdquo" | b"rdquor" | b"CloseCurlyDoubleQuote" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1D');
-                    }
-                    b"ldquor" | b"bdquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x1E');
-                    }
-                    b"dagger" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x20');
-                    }
-                    b"Dagger" | b"ddagger" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x21');
-                    }
-                    b"bull" | b"bullet" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x22');
-                    }
-                    b"nldr" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x25');
-                    }
-                    b"hellip" | b"mldr" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x26');
-                    }
-                    b"permil" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x30');
-                    }
-                    b"pertenk" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x31');
-                    }
-                    b"prime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x32');
-                    }
-                    b"Prime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x33');
-                    }
-                    b"tprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x34');
-                    }
-                    b"bprime" | b"backprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x35');
-                    }
-                    b"lsaquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x39');
-                    }
-                    b"rsaquo" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x3A');
-                    }
-                    b"oline" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x3E');
-                    }
-                    b"caret" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x41');
-                    }
-                    b"hybull" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x43');
-                    }
-                    b"frasl" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x44');
-                    }
-                    b"bsemi" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x4F');
-                    }
-                    b"qprime" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x57');
-                    }
-                    b"MediumSpace" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x5F');
-                    }
-                    b"NoBreak" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x60');
-                    }
-                    b"ApplyFunction" | b"af" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x61');
-                    }
-                    b"InvisibleTimes" | b"it" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x62');
-                    }
-                    b"InvisibleComma" | b"ic" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\x63');
-                    }
-                    b"euro" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xAC');
-                    }
-                    b"tdot" | b"TripleDot" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xDB');
-                    }
-                    b"DotDot" => {
-                        unescaped.push(b'\x20');
-                        unescaped.push(b'\xDC');
-                    }
-                    b"Copf" | b"complexes" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x02');
-                    }
-                    b"incare" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x05');
-                    }
-                    b"gscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0A');
-                    }
-                    b"hamilt" | b"HilbertSpace" | b"Hscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0B');
-                    }
-                    b"Hfr" | b"Poincareplane" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"quaternions" | b"Hopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0D');
-                    }
-                    b"planckh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0E');
-                    }
-                    b"planck" | b"hbar" | b"plankv" | b"hslash" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x0F');
-                    }
-                    b"Iscr" | b"imagline" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x10');
-                    }
-                    b"image" | b"Im" | b"imagpart" | b"Ifr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x11');
-                    }
-                    b"Lscr" | b"lagran" | b"Laplacetrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x12');
-                    }
-                    b"ell" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x13');
-                    }
-                    b"Nopf" | b"naturals" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x15');
-                    }
-                    b"numero" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x16');
-                    }
-                    b"copysr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x17');
-                    }
-                    b"weierp" | b"wp" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x18');
-                    }
-                    b"Popf" | b"primes" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x19');
-                    }
-                    b"rationals" | b"Qopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1A');
-                    }
-                    b"Rscr" | b"realine" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1B');
-                    }
-                    b"real" | b"Re" | b"realpart" | b"Rfr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1C');
-                    }
-                    b"reals" | b"Ropf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1D');
-                    }
-                    b"rx" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x1E');
-                    }
-                    b"trade" | b"TRADE" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x22');
-                    }
-                    b"integers" | b"Zopf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x24');
-                    }
-                    b"ohm" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x26');
-                    }
-                    b"mho" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x27');
-                    }
-                    b"Zfr" | b"zeetrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x28');
-                    }
-                    b"iiota" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x29');
-                    }
-                    b"angst" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2B');
-                    }
-                    b"bernou" | b"Bernoullis" | b"Bscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2C');
-                    }
-                    b"Cfr" | b"Cayleys" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2D');
-                    }
-                    b"escr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x2F');
-                    }
-                    b"Escr" | b"expectation" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x30');
-                    }
-                    b"Fscr" | b"Fouriertrf" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x31');
-                    }
-                    b"phmmat" | b"Mellintrf" | b"Mscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x33');
-                    }
-                    b"order" | b"orderof" | b"oscr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x34');
-                    }
-                    b"alefsym" | b"aleph" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x35');
-                    }
-                    b"beth" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x36');
-                    }
-                    b"gimel" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x37');
-                    }
-                    b"daleth" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x38');
-                    }
-                    b"CapitalDifferentialD" | b"DD" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x45');
-                    }
-                    b"DifferentialD" | b"dd" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x46');
-                    }
-                    b"ExponentialE" | b"exponentiale" | b"ee" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x47');
-                    }
-                    b"ImaginaryI" | b"ii" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x48');
-                    }
-                    b"frac13" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x53');
-                    }
-                    b"frac23" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x54');
-                    }
-                    b"frac15" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x55');
-                    }
-                    b"frac25" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x56');
-                    }
-                    b"frac35" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x57');
-                    }
-                    b"frac45" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x58');
-                    }
-                    b"frac16" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x59');
-                    }
-                    b"frac56" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5A');
-                    }
-                    b"frac18" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5B');
-                    }
-                    b"frac38" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5C');
-                    }
-                    b"frac58" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5D');
-                    }
-                    b"frac78" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x5E');
-                    }
-                    b"larr" | b"leftarrow" | b"LeftArrow" | b"slarr" | b"ShortLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x90');
-                    }
-                    b"uarr" | b"uparrow" | b"UpArrow" | b"ShortUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x91');
-                    }
-                    b"rarr" | b"rightarrow" | b"RightArrow" | b"srarr" | b"ShortRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x92');
-                    }
-                    b"darr" | b"downarrow" | b"DownArrow" | b"ShortDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x93');
-                    }
-                    b"harr" | b"leftrightarrow" | b"LeftRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x94');
-                    }
-                    b"varr" | b"updownarrow" | b"UpDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x95');
-                    }
-                    b"nwarr" | b"UpperLeftArrow" | b"nwarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x96');
-                    }
-                    b"nearr" | b"UpperRightArrow" | b"nearrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x97');
-                    }
-                    b"searr" | b"searrow" | b"LowerRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x98');
-                    }
-                    b"swarr" | b"swarrow" | b"LowerLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x99');
-                    }
-                    b"nlarr" | b"nleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9A');
-                    }
-                    b"nrarr" | b"nrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9B');
-                    }
-                    b"rarrw" | b"rightsquigarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9D');
-                    }
-                    b"Larr" | b"twoheadleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9E');
-                    }
-                    b"Uarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\x9F');
-                    }
-                    b"Rarr" | b"twoheadrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA0');
-                    }
-                    b"Darr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA1');
-                    }
-                    b"larrtl" | b"leftarrowtail" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA2');
-                    }
-                    b"rarrtl" | b"rightarrowtail" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA3');
-                    }
-                    b"LeftTeeArrow" | b"mapstoleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA4');
-                    }
-                    b"UpTeeArrow" | b"mapstoup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA5');
-                    }
-                    b"map" | b"RightTeeArrow" | b"mapsto" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA6');
-                    }
-                    b"DownTeeArrow" | b"mapstodown" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA7');
-                    }
-                    b"larrhk" | b"hookleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xA9');
-                    }
-                    b"rarrhk" | b"hookrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAA');
-                    }
-                    b"larrlp" | b"looparrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAB');
-                    }
-                    b"rarrlp" | b"looparrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAC');
-                    }
-                    b"harrw" | b"leftrightsquigarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAD');
-                    }
-                    b"nharr" | b"nleftrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xAE');
-                    }
-                    b"lsh" | b"Lsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB0');
-                    }
-                    b"rsh" | b"Rsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB1');
-                    }
-                    b"ldsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB2');
-                    }
-                    b"rdsh" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB3');
-                    }
-                    b"crarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"cularr" | b"curvearrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB6');
-                    }
-                    b"curarr" | b"curvearrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xB7');
-                    }
-                    b"olarr" | b"circlearrowleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBA');
-                    }
-                    b"orarr" | b"circlearrowright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBB');
-                    }
-                    b"lharu" | b"LeftVector" | b"leftharpoonup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBC');
-                    }
-                    b"lhard" | b"leftharpoondown" | b"DownLeftVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBD');
-                    }
-                    b"uharr" | b"upharpoonright" | b"RightUpVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBE');
-                    }
-                    b"uharl" | b"upharpoonleft" | b"LeftUpVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xBF');
-                    }
-                    b"rharu" | b"RightVector" | b"rightharpoonup" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC0');
-                    }
-                    b"rhard" | b"rightharpoondown" | b"DownRightVector" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC1');
-                    }
-                    b"dharr" | b"RightDownVector" | b"downharpoonright" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC2');
-                    }
-                    b"dharl" | b"LeftDownVector" | b"downharpoonleft" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC3');
-                    }
-                    b"rlarr" | b"rightleftarrows" | b"RightArrowLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC4');
-                    }
-                    b"udarr" | b"UpArrowDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC5');
-                    }
-                    b"lrarr" | b"leftrightarrows" | b"LeftArrowRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC6');
-                    }
-                    b"llarr" | b"leftleftarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC7');
-                    }
-                    b"uuarr" | b"upuparrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC8');
-                    }
-                    b"rrarr" | b"rightrightarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xC9');
-                    }
-                    b"ddarr" | b"downdownarrows" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCA');
-                    }
-                    b"lrhar" | b"ReverseEquilibrium" | b"leftrightharpoons" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCB');
-                    }
-                    b"rlhar" | b"rightleftharpoons" | b"Equilibrium" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCC');
-                    }
-                    b"nlArr" | b"nLeftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCD');
-                    }
-                    b"nhArr" | b"nLeftrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCE');
-                    }
-                    b"nrArr" | b"nRightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xCF');
-                    }
-                    b"lArr" | b"Leftarrow" | b"DoubleLeftArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD0');
-                    }
-                    b"uArr" | b"Uparrow" | b"DoubleUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD1');
-                    }
-                    b"rArr" | b"Rightarrow" | b"Implies" | b"DoubleRightArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD2');
-                    }
-                    b"dArr" | b"Downarrow" | b"DoubleDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD3');
-                    }
-                    b"hArr" | b"Leftrightarrow" | b"DoubleLeftRightArrow" | b"iff" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD4');
-                    }
-                    b"vArr" | b"Updownarrow" | b"DoubleUpDownArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD5');
-                    }
-                    b"nwArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD6');
-                    }
-                    b"neArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD7');
-                    }
-                    b"seArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD8');
-                    }
-                    b"swArr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xD9');
-                    }
-                    b"lAarr" | b"Lleftarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDA');
-                    }
-                    b"rAarr" | b"Rrightarrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDB');
-                    }
-                    b"zigrarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xDD');
-                    }
-                    b"larrb" | b"LeftArrowBar" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xE4');
-                    }
-                    b"rarrb" | b"RightArrowBar" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xE5');
-                    }
-                    b"duarr" | b"DownArrowUpArrow" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xF5');
-                    }
-                    b"loarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFD');
-                    }
-                    b"roarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFE');
-                    }
-                    b"hoarr" => {
-                        unescaped.push(b'\x21');
-                        unescaped.push(b'\xFF');
-                    }
-                    b"forall" | b"ForAll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x00');
-                    }
-                    b"comp" | b"complement" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x01');
-                    }
-                    b"part" | b"PartialD" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x02');
-                    }
-                    b"exist" | b"Exists" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x03');
-                    }
-                    b"nexist" | b"NotExists" | b"nexists" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x04');
-                    }
-                    b"empty" | b"emptyset" | b"emptyv" | b"varnothing" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x05');
-                    }
-                    b"nabla" | b"Del" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x07');
-                    }
-                    b"isin" | b"isinv" | b"Element" | b"in" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x08');
-                    }
-                    b"notin" | b"NotElement" | b"notinva" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x09');
-                    }
-                    b"niv" | b"ReverseElement" | b"ni" | b"SuchThat" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0B');
-                    }
-                    b"notni" | b"notniva" | b"NotReverseElement" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"prod" | b"Product" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x0F');
-                    }
-                    b"coprod" | b"Coproduct" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x10');
-                    }
-                    b"sum" | b"Sum" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x11');
-                    }
-                    b"minus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x12');
-                    }
-                    b"mnplus" | b"mp" | b"MinusPlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x13');
-                    }
-                    b"plusdo" | b"dotplus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x14');
-                    }
-                    b"setmn" | b"setminus" | b"Backslash" | b"ssetmn" | b"smallsetminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x16');
-                    }
-                    b"lowast" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x17');
-                    }
-                    b"compfn" | b"SmallCircle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x18');
-                    }
-                    b"radic" | b"Sqrt" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1A');
-                    }
-                    b"prop" | b"propto" | b"Proportional" | b"vprop" | b"varpropto" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1D');
-                    }
-                    b"infin" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1E');
-                    }
-                    b"angrt" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x1F');
-                    }
-                    b"ang" | b"angle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x20');
-                    }
-                    b"angmsd" | b"measuredangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x21');
-                    }
-                    b"angsph" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x22');
-                    }
-                    b"mid" | b"VerticalBar" | b"smid" | b"shortmid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x23');
-                    }
-                    b"nmid" | b"NotVerticalBar" | b"nsmid" | b"nshortmid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x24');
-                    }
-                    b"par" | b"parallel" | b"DoubleVerticalBar" | b"spar" | b"shortparallel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x25');
-                    }
-                    b"npar"
-                    | b"nparallel"
-                    | b"NotDoubleVerticalBar"
-                    | b"nspar"
-                    | b"nshortparallel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x26');
-                    }
-                    b"and" | b"wedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x27');
-                    }
-                    b"or" | b"vee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x28');
-                    }
-                    b"cap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x29');
-                    }
-                    b"cup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2A');
-                    }
-                    b"int" | b"Integral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2B');
-                    }
-                    b"Int" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2C');
-                    }
-                    b"tint" | b"iiint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2D');
-                    }
-                    b"conint" | b"oint" | b"ContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2E');
-                    }
-                    b"Conint" | b"DoubleContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x2F');
-                    }
-                    b"Cconint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x30');
-                    }
-                    b"cwint" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x31');
-                    }
-                    b"cwconint" | b"ClockwiseContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x32');
-                    }
-                    b"awconint" | b"CounterClockwiseContourIntegral" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x33');
-                    }
-                    b"there4" | b"therefore" | b"Therefore" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x34');
-                    }
-                    b"becaus" | b"because" | b"Because" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x35');
-                    }
-                    b"ratio" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x36');
-                    }
-                    b"Colon" | b"Proportion" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x37');
-                    }
-                    b"minusd" | b"dotminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x38');
-                    }
-                    b"mDDot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3A');
-                    }
-                    b"homtht" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3B');
-                    }
-                    b"sim" | b"Tilde" | b"thksim" | b"thicksim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3C');
-                    }
-                    b"bsim" | b"backsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3D');
-                    }
-                    b"ac" | b"mstpos" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3E');
-                    }
-                    b"acd" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x3F');
-                    }
-                    b"wreath" | b"VerticalTilde" | b"wr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x40');
-                    }
-                    b"nsim" | b"NotTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x41');
-                    }
-                    b"esim" | b"EqualTilde" | b"eqsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x42');
-                    }
-                    b"sime" | b"TildeEqual" | b"simeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x43');
-                    }
-                    b"nsime" | b"nsimeq" | b"NotTildeEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x44');
-                    }
-                    b"cong" | b"TildeFullEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x45');
-                    }
-                    b"simne" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x46');
-                    }
-                    b"ncong" | b"NotTildeFullEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x47');
-                    }
-                    b"asymp" | b"ap" | b"TildeTilde" | b"approx" | b"thkap" | b"thickapprox" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x48');
-                    }
-                    b"nap" | b"NotTildeTilde" | b"napprox" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x49');
-                    }
-                    b"ape" | b"approxeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"apid" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"bcong" | b"backcong" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"asympeq" | b"CupCap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4D');
-                    }
-                    b"bump" | b"HumpDownHump" | b"Bumpeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4E');
-                    }
-                    b"bumpe" | b"HumpEqual" | b"bumpeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x4F');
-                    }
-                    b"esdot" | b"DotEqual" | b"doteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x50');
-                    }
-                    b"eDot" | b"doteqdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x51');
-                    }
-                    b"efDot" | b"fallingdotseq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x52');
-                    }
-                    b"erDot" | b"risingdotseq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x53');
-                    }
-                    b"colone" | b"coloneq" | b"Assign" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x54');
-                    }
-                    b"ecolon" | b"eqcolon" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x55');
-                    }
-                    b"ecir" | b"eqcirc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x56');
-                    }
-                    b"cire" | b"circeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x57');
-                    }
-                    b"wedgeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x59');
-                    }
-                    b"veeeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5A');
-                    }
-                    b"trie" | b"triangleq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5C');
-                    }
-                    b"equest" | b"questeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x5F');
-                    }
-                    b"ne" | b"NotEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x60');
-                    }
-                    b"equiv" | b"Congruent" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x61');
-                    }
-                    b"nequiv" | b"NotCongruent" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x62');
-                    }
-                    b"le" | b"leq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x64');
-                    }
-                    b"ge" | b"GreaterEqual" | b"geq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x65');
-                    }
-                    b"lE" | b"LessFullEqual" | b"leqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x66');
-                    }
-                    b"gE" | b"GreaterFullEqual" | b"geqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x67');
-                    }
-                    b"lnE" | b"lneqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x68');
-                    }
-                    b"gnE" | b"gneqq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x69');
-                    }
-                    b"Lt" | b"NestedLessLess" | b"ll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6A');
-                    }
-                    b"Gt" | b"NestedGreaterGreater" | b"gg" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6B');
-                    }
-                    b"twixt" | b"between" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6C');
-                    }
-                    b"NotCupCap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6D');
-                    }
-                    b"nlt" | b"NotLess" | b"nless" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6E');
-                    }
-                    b"ngt" | b"NotGreater" | b"ngtr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x6F');
-                    }
-                    b"nle" | b"NotLessEqual" | b"nleq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x70');
-                    }
-                    b"nge" | b"NotGreaterEqual" | b"ngeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x71');
-                    }
-                    b"lsim" | b"LessTilde" | b"lesssim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x72');
-                    }
-                    b"gsim" | b"gtrsim" | b"GreaterTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x73');
-                    }
-                    b"nlsim" | b"NotLessTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x74');
-                    }
-                    b"ngsim" | b"NotGreaterTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x75');
-                    }
-                    b"lg" | b"lessgtr" | b"LessGreater" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x76');
-                    }
-                    b"gl" | b"gtrless" | b"GreaterLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x77');
-                    }
-                    b"ntlg" | b"NotLessGreater" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x78');
-                    }
-                    b"ntgl" | b"NotGreaterLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x79');
-                    }
-                    b"pr" | b"Precedes" | b"prec" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7A');
-                    }
-                    b"sc" | b"Succeeds" | b"succ" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7B');
-                    }
-                    b"prcue" | b"PrecedesSlantEqual" | b"preccurlyeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7C');
-                    }
-                    b"sccue" | b"SucceedsSlantEqual" | b"succcurlyeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7D');
-                    }
-                    b"prsim" | b"precsim" | b"PrecedesTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7E');
-                    }
-                    b"scsim" | b"succsim" | b"SucceedsTilde" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x7F');
-                    }
-                    b"npr" | b"nprec" | b"NotPrecedes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x80');
-                    }
-                    b"nsc" | b"nsucc" | b"NotSucceeds" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x81');
-                    }
-                    b"sub" | b"subset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x82');
-                    }
-                    b"sup" | b"supset" | b"Superset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x83');
-                    }
-                    b"nsub" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x84');
-                    }
-                    b"nsup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x85');
-                    }
-                    b"sube" | b"SubsetEqual" | b"subseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x86');
-                    }
-                    b"supe" | b"supseteq" | b"SupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x87');
-                    }
-                    b"nsube" | b"nsubseteq" | b"NotSubsetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x88');
-                    }
-                    b"nsupe" | b"nsupseteq" | b"NotSupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x89');
-                    }
-                    b"subne" | b"subsetneq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8A');
-                    }
-                    b"supne" | b"supsetneq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8B');
-                    }
-                    b"cupdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8D');
-                    }
-                    b"uplus" | b"UnionPlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8E');
-                    }
-                    b"sqsub" | b"SquareSubset" | b"sqsubset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x8F');
-                    }
-                    b"sqsup" | b"SquareSuperset" | b"sqsupset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x90');
-                    }
-                    b"sqsube" | b"SquareSubsetEqual" | b"sqsubseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x91');
-                    }
-                    b"sqsupe" | b"SquareSupersetEqual" | b"sqsupseteq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x92');
-                    }
-                    b"sqcap" | b"SquareIntersection" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x93');
-                    }
-                    b"sqcup" | b"SquareUnion" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x94');
-                    }
-                    b"oplus" | b"CirclePlus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x95');
-                    }
-                    b"ominus" | b"CircleMinus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x96');
-                    }
-                    b"otimes" | b"CircleTimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x97');
-                    }
-                    b"osol" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x98');
-                    }
-                    b"odot" | b"CircleDot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x99');
-                    }
-                    b"ocir" | b"circledcirc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9A');
-                    }
-                    b"oast" | b"circledast" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9B');
-                    }
-                    b"odash" | b"circleddash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9D');
-                    }
-                    b"plusb" | b"boxplus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9E');
-                    }
-                    b"minusb" | b"boxminus" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\x9F');
-                    }
-                    b"timesb" | b"boxtimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA0');
-                    }
-                    b"sdotb" | b"dotsquare" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA1');
-                    }
-                    b"vdash" | b"RightTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA2');
-                    }
-                    b"dashv" | b"LeftTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA3');
-                    }
-                    b"top" | b"DownTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA4');
-                    }
-                    b"bottom" | b"bot" | b"perp" | b"UpTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA5');
-                    }
-                    b"models" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA7');
-                    }
-                    b"vDash" | b"DoubleRightTee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA8');
-                    }
-                    b"Vdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xA9');
-                    }
-                    b"Vvdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAA');
-                    }
-                    b"VDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAB');
-                    }
-                    b"nvdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAC');
-                    }
-                    b"nvDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAD');
-                    }
-                    b"nVdash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAE');
-                    }
-                    b"nVDash" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xAF');
-                    }
-                    b"prurel" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB0');
-                    }
-                    b"vltri" | b"vartriangleleft" | b"LeftTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB2');
-                    }
-                    b"vrtri" | b"vartriangleright" | b"RightTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB3');
-                    }
-                    b"ltrie" | b"trianglelefteq" | b"LeftTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB4');
-                    }
-                    b"rtrie" | b"trianglerighteq" | b"RightTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"origof" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB6');
-                    }
-                    b"imof" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB7');
-                    }
-                    b"mumap" | b"multimap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB8');
-                    }
-                    b"hercon" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xB9');
-                    }
-                    b"intcal" | b"intercal" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBA');
-                    }
-                    b"veebar" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBB');
-                    }
-                    b"barvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBD');
-                    }
-                    b"angrtvb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBE');
-                    }
-                    b"lrtri" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xBF');
-                    }
-                    b"xwedge" | b"Wedge" | b"bigwedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC0');
-                    }
-                    b"xvee" | b"Vee" | b"bigvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC1');
-                    }
-                    b"xcap" | b"Intersection" | b"bigcap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC2');
-                    }
-                    b"xcup" | b"Union" | b"bigcup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC3');
-                    }
-                    b"diam" | b"diamond" | b"Diamond" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC4');
-                    }
-                    b"sdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC5');
-                    }
-                    b"sstarf" | b"Star" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC6');
-                    }
-                    b"divonx" | b"divideontimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC7');
-                    }
-                    b"bowtie" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC8');
-                    }
-                    b"ltimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xC9');
-                    }
-                    b"rtimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCA');
-                    }
-                    b"lthree" | b"leftthreetimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCB');
-                    }
-                    b"rthree" | b"rightthreetimes" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCC');
-                    }
-                    b"bsime" | b"backsimeq" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCD');
-                    }
-                    b"cuvee" | b"curlyvee" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCE');
-                    }
-                    b"cuwed" | b"curlywedge" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xCF');
-                    }
-                    b"Sub" | b"Subset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD0');
-                    }
-                    b"Sup" | b"Supset" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD1');
-                    }
-                    b"Cap" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD2');
-                    }
-                    b"Cup" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD3');
-                    }
-                    b"fork" | b"pitchfork" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD4');
-                    }
-                    b"epar" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD5');
-                    }
-                    b"ltdot" | b"lessdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD6');
-                    }
-                    b"gtdot" | b"gtrdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD7');
-                    }
-                    b"Ll" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD8');
-                    }
-                    b"Gg" | b"ggg" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xD9');
-                    }
-                    b"leg" | b"LessEqualGreater" | b"lesseqgtr" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDA');
-                    }
-                    b"gel" | b"gtreqless" | b"GreaterEqualLess" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDB');
-                    }
-                    b"cuepr" | b"curlyeqprec" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDE');
-                    }
-                    b"cuesc" | b"curlyeqsucc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xDF');
-                    }
-                    b"nprcue" | b"NotPrecedesSlantEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE0');
-                    }
-                    b"nsccue" | b"NotSucceedsSlantEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE1');
-                    }
-                    b"nsqsube" | b"NotSquareSubsetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE2');
-                    }
-                    b"nsqsupe" | b"NotSquareSupersetEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE3');
-                    }
-                    b"lnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE6');
-                    }
-                    b"gnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE7');
-                    }
-                    b"prnsim" | b"precnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE8');
-                    }
-                    b"scnsim" | b"succnsim" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xE9');
-                    }
-                    b"nltri" | b"ntriangleleft" | b"NotLeftTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEA');
-                    }
-                    b"nrtri" | b"ntriangleright" | b"NotRightTriangle" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEB');
-                    }
-                    b"nltrie" | b"ntrianglelefteq" | b"NotLeftTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEC');
-                    }
-                    b"nrtrie" | b"ntrianglerighteq" | b"NotRightTriangleEqual" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xED');
-                    }
-                    b"vellip" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEE');
-                    }
-                    b"ctdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xEF');
-                    }
-                    b"utdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF0');
-                    }
-                    b"dtdot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF1');
-                    }
-                    b"disin" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF2');
-                    }
-                    b"isinsv" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF3');
-                    }
-                    b"isins" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF4');
-                    }
-                    b"isindot" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF5');
-                    }
-                    b"notinvc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF6');
-                    }
-                    b"notinvb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF7');
-                    }
-                    b"isinE" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xF9');
-                    }
-                    b"nisd" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFA');
-                    }
-                    b"xnis" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFB');
-                    }
-                    b"nis" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFC');
-                    }
-                    b"notnivc" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFD');
-                    }
-                    b"notnivb" => {
-                        unescaped.push(b'\x22');
-                        unescaped.push(b'\xFE');
-                    }
-                    b"barwed" | b"barwedge" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x05');
-                    }
-                    b"Barwed" | b"doublebarwedge" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x06');
-                    }
-                    b"lceil" | b"LeftCeiling" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x08');
-                    }
-                    b"rceil" | b"RightCeiling" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x09');
-                    }
-                    b"lfloor" | b"LeftFloor" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0A');
-                    }
-                    b"rfloor" | b"RightFloor" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0B');
-                    }
-                    b"drcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"dlcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0D');
-                    }
-                    b"urcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0E');
-                    }
-                    b"ulcrop" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x0F');
-                    }
-                    b"bnot" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x10');
-                    }
-                    b"profline" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x12');
-                    }
-                    b"profsurf" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x13');
-                    }
-                    b"telrec" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x15');
-                    }
-                    b"target" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x16');
-                    }
-                    b"ulcorn" | b"ulcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1C');
-                    }
-                    b"urcorn" | b"urcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1D');
-                    }
-                    b"dlcorn" | b"llcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1E');
-                    }
-                    b"drcorn" | b"lrcorner" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x1F');
-                    }
-                    b"frown" | b"sfrown" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x22');
-                    }
-                    b"smile" | b"ssmile" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x23');
-                    }
-                    b"cylcty" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x2D');
-                    }
-                    b"profalar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x2E');
-                    }
-                    b"topbot" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x36');
-                    }
-                    b"ovbar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x3D');
-                    }
-                    b"solbar" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x3F');
-                    }
-                    b"angzarr" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\x7C');
-                    }
-                    b"lmoust" | b"lmoustache" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB0');
-                    }
-                    b"rmoust" | b"rmoustache" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB1');
-                    }
-                    b"tbrk" | b"OverBracket" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB4');
-                    }
-                    b"bbrk" | b"UnderBracket" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"bbrktbrk" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xB6');
-                    }
-                    b"OverParenthesis" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDC');
-                    }
-                    b"UnderParenthesis" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDD');
-                    }
-                    b"OverBrace" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDE');
-                    }
-                    b"UnderBrace" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xDF');
-                    }
-                    b"trpezium" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xE2');
-                    }
-                    b"elinters" => {
-                        unescaped.push(b'\x23');
-                        unescaped.push(b'\xE7');
-                    }
-                    b"blank" => {
-                        unescaped.push(b'\x24');
-                        unescaped.push(b'\x23');
-                    }
-                    b"oS" | b"circledS" => {
-                        unescaped.push(b'\x24');
-                        unescaped.push(b'\xC8');
-                    }
-                    b"boxh" | b"HorizontalLine" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x00');
-                    }
-                    b"boxv" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x02');
-                    }
-                    b"boxdr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"boxdl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x10');
-                    }
-                    b"boxur" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x14');
-                    }
-                    b"boxul" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x18');
-                    }
-                    b"boxvr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x1C');
-                    }
-                    b"boxvl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x24');
-                    }
-                    b"boxhd" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x2C');
-                    }
-                    b"boxhu" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x34');
-                    }
-                    b"boxvh" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x3C');
-                    }
-                    b"boxH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x50');
-                    }
-                    b"boxV" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x51');
-                    }
-                    b"boxdR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x52');
-                    }
-                    b"boxDr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x53');
-                    }
-                    b"boxDR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x54');
-                    }
-                    b"boxdL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x55');
-                    }
-                    b"boxDl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x56');
-                    }
-                    b"boxDL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x57');
-                    }
-                    b"boxuR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x58');
-                    }
-                    b"boxUr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x59');
-                    }
-                    b"boxUR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5A');
-                    }
-                    b"boxuL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5B');
-                    }
-                    b"boxUl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5C');
-                    }
-                    b"boxUL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5D');
-                    }
-                    b"boxvR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5E');
-                    }
-                    b"boxVr" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x5F');
-                    }
-                    b"boxVR" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x60');
-                    }
-                    b"boxvL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x61');
-                    }
-                    b"boxVl" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x62');
-                    }
-                    b"boxVL" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x63');
-                    }
-                    b"boxHd" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x64');
-                    }
-                    b"boxhD" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x65');
-                    }
-                    b"boxHD" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x66');
-                    }
-                    b"boxHu" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x67');
-                    }
-                    b"boxhU" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x68');
-                    }
-                    b"boxHU" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x69');
-                    }
-                    b"boxvH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6A');
-                    }
-                    b"boxVh" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6B');
-                    }
-                    b"boxVH" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x6C');
-                    }
-                    b"uhblk" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x80');
-                    }
-                    b"lhblk" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x84');
-                    }
-                    b"block" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x88');
-                    }
-                    b"blk14" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x91');
-                    }
-                    b"blk12" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x92');
-                    }
-                    b"blk34" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\x93');
-                    }
-                    b"squ" | b"square" | b"Square" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xA1');
-                    }
-                    b"squf" | b"squarf" | b"blacksquare" | b"FilledVerySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAA');
-                    }
-                    b"EmptyVerySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAB');
-                    }
-                    b"rect" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAD');
-                    }
-                    b"marker" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xAE');
-                    }
-                    b"fltns" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB1');
-                    }
-                    b"xutri" | b"bigtriangleup" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB3');
-                    }
-                    b"utrif" | b"blacktriangle" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB4');
-                    }
-                    b"utri" | b"triangle" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"rtrif" | b"blacktriangleright" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB8');
-                    }
-                    b"rtri" | b"triangleright" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xB9');
-                    }
-                    b"xdtri" | b"bigtriangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBD');
-                    }
-                    b"dtrif" | b"blacktriangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBE');
-                    }
-                    b"dtri" | b"triangledown" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xBF');
-                    }
-                    b"ltrif" | b"blacktriangleleft" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xC2');
-                    }
-                    b"ltri" | b"triangleleft" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xC3');
-                    }
-                    b"loz" | b"lozenge" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xCA');
-                    }
-                    b"cir" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xCB');
-                    }
-                    b"tridot" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xEC');
-                    }
-                    b"xcirc" | b"bigcirc" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xEF');
-                    }
-                    b"ultri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xF8');
-                    }
-                    b"urtri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xF9');
-                    }
-                    b"lltri" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFA');
-                    }
-                    b"EmptySmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFB');
-                    }
-                    b"FilledSmallSquare" => {
-                        unescaped.push(b'\x25');
-                        unescaped.push(b'\xFC');
-                    }
-                    b"starf" | b"bigstar" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x05');
-                    }
-                    b"star" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x06');
-                    }
-                    b"phone" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x0E');
-                    }
-                    b"female" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x40');
-                    }
-                    b"male" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x42');
-                    }
-                    b"spades" | b"spadesuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x60');
-                    }
-                    b"clubs" | b"clubsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x63');
-                    }
-                    b"hearts" | b"heartsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x65');
-                    }
-                    b"diams" | b"diamondsuit" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x66');
-                    }
-                    b"sung" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6A');
-                    }
-                    b"flat" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6D');
-                    }
-                    b"natur" | b"natural" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6E');
-                    }
-                    b"sharp" => {
-                        unescaped.push(b'\x26');
-                        unescaped.push(b'\x6F');
-                    }
-                    b"check" | b"checkmark" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x13');
-                    }
-                    b"cross" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x17');
-                    }
-                    b"malt" | b"maltese" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x20');
-                    }
-                    b"sext" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x36');
-                    }
-                    b"VerticalSeparator" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x58');
-                    }
-                    b"lbbrk" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x72');
-                    }
-                    b"rbbrk" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\x73');
-                    }
-                    b"lobrk" | b"LeftDoubleBracket" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE6');
-                    }
-                    b"robrk" | b"RightDoubleBracket" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE7');
-                    }
-                    b"lang" | b"LeftAngleBracket" | b"langle" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE8');
-                    }
-                    b"rang" | b"RightAngleBracket" | b"rangle" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xE9');
-                    }
-                    b"Lang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEA');
-                    }
-                    b"Rang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEB');
-                    }
-                    b"loang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xEC');
-                    }
-                    b"roang" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xED');
-                    }
-                    b"xlarr" | b"longleftarrow" | b"LongLeftArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF5');
-                    }
-                    b"xrarr" | b"longrightarrow" | b"LongRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF6');
-                    }
-                    b"xharr" | b"longleftrightarrow" | b"LongLeftRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF7');
-                    }
-                    b"xlArr" | b"Longleftarrow" | b"DoubleLongLeftArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF8');
-                    }
-                    b"xrArr" | b"Longrightarrow" | b"DoubleLongRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xF9');
-                    }
-                    b"xhArr" | b"Longleftrightarrow" | b"DoubleLongLeftRightArrow" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFA');
-                    }
-                    b"xmap" | b"longmapsto" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFC');
-                    }
-                    b"dzigrarr" => {
-                        unescaped.push(b'\x27');
-                        unescaped.push(b'\xFF');
-                    }
-                    b"nvlArr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x02');
-                    }
-                    b"nvrArr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x03');
-                    }
-                    b"nvHarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x04');
-                    }
-                    b"Map" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x05');
-                    }
-                    b"lbarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"rbarr" | b"bkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0D');
-                    }
-                    b"lBarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0E');
-                    }
-                    b"rBarr" | b"dbkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x0F');
-                    }
-                    b"RBarr" | b"drbkarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x10');
-                    }
-                    b"DDotrahd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x11');
-                    }
-                    b"UpArrowBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x12');
-                    }
-                    b"DownArrowBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x13');
-                    }
-                    b"Rarrtl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x16');
-                    }
-                    b"latail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x19');
-                    }
-                    b"ratail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1A');
-                    }
-                    b"lAtail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1B');
-                    }
-                    b"rAtail" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1C');
-                    }
-                    b"larrfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1D');
-                    }
-                    b"rarrfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1E');
-                    }
-                    b"larrbfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x1F');
-                    }
-                    b"rarrbfs" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x20');
-                    }
-                    b"nwarhk" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x23');
-                    }
-                    b"nearhk" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x24');
-                    }
-                    b"searhk" | b"hksearow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x25');
-                    }
-                    b"swarhk" | b"hkswarow" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x26');
-                    }
-                    b"nwnear" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x27');
-                    }
-                    b"nesear" | b"toea" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x28');
-                    }
-                    b"seswar" | b"tosa" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x29');
-                    }
-                    b"swnwar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x2A');
-                    }
-                    b"rarrc" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x33');
-                    }
-                    b"cudarrr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x35');
-                    }
-                    b"ldca" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x36');
-                    }
-                    b"rdca" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x37');
-                    }
-                    b"cudarrl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x38');
-                    }
-                    b"larrpl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x39');
-                    }
-                    b"curarrm" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x3C');
-                    }
-                    b"cularrp" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x3D');
-                    }
-                    b"rarrpl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x45');
-                    }
-                    b"harrcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x48');
-                    }
-                    b"Uarrocir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x49');
-                    }
-                    b"lurdshar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"ldrushar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"LeftRightVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4E');
-                    }
-                    b"RightUpDownVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x4F');
-                    }
-                    b"DownLeftRightVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x50');
-                    }
-                    b"LeftUpDownVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x51');
-                    }
-                    b"LeftVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x52');
-                    }
-                    b"RightVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x53');
-                    }
-                    b"RightUpVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x54');
-                    }
-                    b"RightDownVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x55');
-                    }
-                    b"DownLeftVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x56');
-                    }
-                    b"DownRightVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x57');
-                    }
-                    b"LeftUpVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x58');
-                    }
-                    b"LeftDownVectorBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x59');
-                    }
-                    b"LeftTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5A');
-                    }
-                    b"RightTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5B');
-                    }
-                    b"RightUpTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5C');
-                    }
-                    b"RightDownTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5D');
-                    }
-                    b"DownLeftTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5E');
-                    }
-                    b"DownRightTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x5F');
-                    }
-                    b"LeftUpTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x60');
-                    }
-                    b"LeftDownTeeVector" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x61');
-                    }
-                    b"lHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x62');
-                    }
-                    b"uHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x63');
-                    }
-                    b"rHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x64');
-                    }
-                    b"dHar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x65');
-                    }
-                    b"luruhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x66');
-                    }
-                    b"ldrdhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x67');
-                    }
-                    b"ruluhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x68');
-                    }
-                    b"rdldhar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x69');
-                    }
-                    b"lharul" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6A');
-                    }
-                    b"llhard" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6B');
-                    }
-                    b"rharul" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6C');
-                    }
-                    b"lrhard" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6D');
-                    }
-                    b"udhar" | b"UpEquilibrium" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6E');
-                    }
-                    b"duhar" | b"ReverseUpEquilibrium" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x6F');
-                    }
-                    b"RoundImplies" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x70');
-                    }
-                    b"erarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x71');
-                    }
-                    b"simrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x72');
-                    }
-                    b"larrsim" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x73');
-                    }
-                    b"rarrsim" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x74');
-                    }
-                    b"rarrap" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x75');
-                    }
-                    b"ltlarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x76');
-                    }
-                    b"gtrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x78');
-                    }
-                    b"subrarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x79');
-                    }
-                    b"suplarr" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7B');
-                    }
-                    b"lfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7C');
-                    }
-                    b"rfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7D');
-                    }
-                    b"ufisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7E');
-                    }
-                    b"dfisht" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x7F');
-                    }
-                    b"lopar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x85');
-                    }
-                    b"ropar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x86');
-                    }
-                    b"lbrke" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8B');
-                    }
-                    b"rbrke" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8C');
-                    }
-                    b"lbrkslu" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8D');
-                    }
-                    b"rbrksld" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8E');
-                    }
-                    b"lbrksld" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x8F');
-                    }
-                    b"rbrkslu" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x90');
-                    }
-                    b"langd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x91');
-                    }
-                    b"rangd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x92');
-                    }
-                    b"lparlt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x93');
-                    }
-                    b"rpargt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x94');
-                    }
-                    b"gtlPar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x95');
-                    }
-                    b"ltrPar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x96');
-                    }
-                    b"vzigzag" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9A');
-                    }
-                    b"vangrt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9C');
-                    }
-                    b"angrtvbd" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\x9D');
-                    }
-                    b"ange" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA4');
-                    }
-                    b"range" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA5');
-                    }
-                    b"dwangle" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA6');
-                    }
-                    b"uwangle" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA7');
-                    }
-                    b"angmsdaa" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA8');
-                    }
-                    b"angmsdab" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xA9');
-                    }
-                    b"angmsdac" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAA');
-                    }
-                    b"angmsdad" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAB');
-                    }
-                    b"angmsdae" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAC');
-                    }
-                    b"angmsdaf" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAD');
-                    }
-                    b"angmsdag" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAE');
-                    }
-                    b"angmsdah" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xAF');
-                    }
-                    b"bemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB0');
-                    }
-                    b"demptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB1');
-                    }
-                    b"cemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB2');
-                    }
-                    b"raemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB3');
-                    }
-                    b"laemptyv" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB4');
-                    }
-                    b"ohbar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"omid" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB6');
-                    }
-                    b"opar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB7');
-                    }
-                    b"operp" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xB9');
-                    }
-                    b"olcross" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBB');
-                    }
-                    b"odsold" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBC');
-                    }
-                    b"olcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBE');
-                    }
-                    b"ofcir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xBF');
-                    }
-                    b"olt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC0');
-                    }
-                    b"ogt" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC1');
-                    }
-                    b"cirscir" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC2');
-                    }
-                    b"cirE" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC3');
-                    }
-                    b"solb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC4');
-                    }
-                    b"bsolb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC5');
-                    }
-                    b"boxbox" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xC9');
-                    }
-                    b"trisb" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCD');
-                    }
-                    b"rtriltri" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCE');
-                    }
-                    b"LeftTriangleBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xCF');
-                    }
-                    b"RightTriangleBar" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xD0');
-                    }
-                    b"race" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDA');
-                    }
-                    b"iinfin" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDC');
-                    }
-                    b"infintie" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDD');
-                    }
-                    b"nvinfin" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xDE');
-                    }
-                    b"eparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE3');
-                    }
-                    b"smeparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE4');
-                    }
-                    b"eqvparsl" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xE5');
-                    }
-                    b"lozf" | b"blacklozenge" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xEB');
-                    }
-                    b"RuleDelayed" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xF4');
-                    }
-                    b"dsol" => {
-                        unescaped.push(b'\x29');
-                        unescaped.push(b'\xF6');
-                    }
-                    b"xodot" | b"bigodot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x00');
-                    }
-                    b"xoplus" | b"bigoplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x01');
-                    }
-                    b"xotime" | b"bigotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x02');
-                    }
-                    b"xuplus" | b"biguplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x04');
-                    }
-                    b"xsqcup" | b"bigsqcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x06');
-                    }
-                    b"qint" | b"iiiint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x0C');
-                    }
-                    b"fpartint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x0D');
-                    }
-                    b"cirfnint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x10');
-                    }
-                    b"awint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x11');
-                    }
-                    b"rppolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x12');
-                    }
-                    b"scpolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x13');
-                    }
-                    b"npolint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x14');
-                    }
-                    b"pointint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x15');
-                    }
-                    b"quatint" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x16');
-                    }
-                    b"intlarhk" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x17');
-                    }
-                    b"pluscir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x22');
-                    }
-                    b"plusacir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x23');
-                    }
-                    b"simplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x24');
-                    }
-                    b"plusdu" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x25');
-                    }
-                    b"plussim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x26');
-                    }
-                    b"plustwo" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x27');
-                    }
-                    b"mcomma" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x29');
-                    }
-                    b"minusdu" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2A');
-                    }
-                    b"loplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2D');
-                    }
-                    b"roplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2E');
-                    }
-                    b"Cross" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x2F');
-                    }
-                    b"timesd" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x30');
-                    }
-                    b"timesbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x31');
-                    }
-                    b"smashp" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x33');
-                    }
-                    b"lotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x34');
-                    }
-                    b"rotimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x35');
-                    }
-                    b"otimesas" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x36');
-                    }
-                    b"Otimes" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x37');
-                    }
-                    b"odiv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x38');
-                    }
-                    b"triplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x39');
-                    }
-                    b"triminus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3A');
-                    }
-                    b"tritime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3B');
-                    }
-                    b"iprod" | b"intprod" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3C');
-                    }
-                    b"amalg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x3F');
-                    }
-                    b"capdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x40');
-                    }
-                    b"ncup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x42');
-                    }
-                    b"ncap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x43');
-                    }
-                    b"capand" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x44');
-                    }
-                    b"cupor" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x45');
-                    }
-                    b"cupcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x46');
-                    }
-                    b"capcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x47');
-                    }
-                    b"cupbrcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x48');
-                    }
-                    b"capbrcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x49');
-                    }
-                    b"cupcup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"capcap" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"ccups" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"ccaps" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x4D');
-                    }
-                    b"ccupssm" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x50');
-                    }
-                    b"And" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Or" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x54');
-                    }
-                    b"andand" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x55');
-                    }
-                    b"oror" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x56');
-                    }
-                    b"orslope" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x57');
-                    }
-                    b"andslope" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x58');
-                    }
-                    b"andv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5A');
-                    }
-                    b"orv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5B');
-                    }
-                    b"andd" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5C');
-                    }
-                    b"ord" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5D');
-                    }
-                    b"wedbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x5F');
-                    }
-                    b"sdote" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x66');
-                    }
-                    b"simdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6A');
-                    }
-                    b"congdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6D');
-                    }
-                    b"easter" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6E');
-                    }
-                    b"apacir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x6F');
-                    }
-                    b"apE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x70');
-                    }
-                    b"eplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x71');
-                    }
-                    b"pluse" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x72');
-                    }
-                    b"Esim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x73');
-                    }
-                    b"Colone" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x74');
-                    }
-                    b"Equal" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x75');
-                    }
-                    b"eDDot" | b"ddotseq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x77');
-                    }
-                    b"equivDD" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x78');
-                    }
-                    b"ltcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x79');
-                    }
-                    b"gtcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7A');
-                    }
-                    b"ltquest" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7B');
-                    }
-                    b"gtquest" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7C');
-                    }
-                    b"les" | b"LessSlantEqual" | b"leqslant" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7D');
-                    }
-                    b"ges" | b"GreaterSlantEqual" | b"geqslant" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7E');
-                    }
-                    b"lesdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x7F');
-                    }
-                    b"gesdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x80');
-                    }
-                    b"lesdoto" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x81');
-                    }
-                    b"gesdoto" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x82');
-                    }
-                    b"lesdotor" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x83');
-                    }
-                    b"gesdotol" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x84');
-                    }
-                    b"lap" | b"lessapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x85');
-                    }
-                    b"gap" | b"gtrapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x86');
-                    }
-                    b"lne" | b"lneq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x87');
-                    }
-                    b"gne" | b"gneq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x88');
-                    }
-                    b"lnap" | b"lnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x89');
-                    }
-                    b"gnap" | b"gnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8A');
-                    }
-                    b"lEg" | b"lesseqqgtr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8B');
-                    }
-                    b"gEl" | b"gtreqqless" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8C');
-                    }
-                    b"lsime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8D');
-                    }
-                    b"gsime" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8E');
-                    }
-                    b"lsimg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x8F');
-                    }
-                    b"gsiml" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x90');
-                    }
-                    b"lgE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x91');
-                    }
-                    b"glE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x92');
-                    }
-                    b"lesges" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x93');
-                    }
-                    b"gesles" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x94');
-                    }
-                    b"els" | b"eqslantless" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x95');
-                    }
-                    b"egs" | b"eqslantgtr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x96');
-                    }
-                    b"elsdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x97');
-                    }
-                    b"egsdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x98');
-                    }
-                    b"el" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x99');
-                    }
-                    b"eg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9A');
-                    }
-                    b"siml" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9D');
-                    }
-                    b"simg" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9E');
-                    }
-                    b"simlE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\x9F');
-                    }
-                    b"simgE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA0');
-                    }
-                    b"LessLess" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA1');
-                    }
-                    b"GreaterGreater" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA2');
-                    }
-                    b"glj" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA4');
-                    }
-                    b"gla" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA5');
-                    }
-                    b"ltcc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA6');
-                    }
-                    b"gtcc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA7');
-                    }
-                    b"lescc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA8');
-                    }
-                    b"gescc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xA9');
-                    }
-                    b"smt" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAA');
-                    }
-                    b"lat" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAB');
-                    }
-                    b"smte" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAC');
-                    }
-                    b"late" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAD');
-                    }
-                    b"bumpE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAE');
-                    }
-                    b"pre" | b"preceq" | b"PrecedesEqual" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xAF');
-                    }
-                    b"sce" | b"succeq" | b"SucceedsEqual" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB0');
-                    }
-                    b"prE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB3');
-                    }
-                    b"scE" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB4');
-                    }
-                    b"prnE" | b"precneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB5');
-                    }
-                    b"scnE" | b"succneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB6');
-                    }
-                    b"prap" | b"precapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB7');
-                    }
-                    b"scap" | b"succapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB8');
-                    }
-                    b"prnap" | b"precnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xB9');
-                    }
-                    b"scnap" | b"succnapprox" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBA');
-                    }
-                    b"Pr" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBB');
-                    }
-                    b"Sc" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBC');
-                    }
-                    b"subdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBD');
-                    }
-                    b"supdot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBE');
-                    }
-                    b"subplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xBF');
-                    }
-                    b"supplus" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC0');
-                    }
-                    b"submult" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC1');
-                    }
-                    b"supmult" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC2');
-                    }
-                    b"subedot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC3');
-                    }
-                    b"supedot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC4');
-                    }
-                    b"subE" | b"subseteqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC5');
-                    }
-                    b"supE" | b"supseteqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC6');
-                    }
-                    b"subsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC7');
-                    }
-                    b"supsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xC8');
-                    }
-                    b"subnE" | b"subsetneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCB');
-                    }
-                    b"supnE" | b"supsetneqq" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCC');
-                    }
-                    b"csub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xCF');
-                    }
-                    b"csup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD0');
-                    }
-                    b"csube" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD1');
-                    }
-                    b"csupe" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD2');
-                    }
-                    b"subsup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD3');
-                    }
-                    b"supsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD4');
-                    }
-                    b"subsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD5');
-                    }
-                    b"supsup" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD6');
-                    }
-                    b"suphsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD7');
-                    }
-                    b"supdsub" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD8');
-                    }
-                    b"forkv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xD9');
-                    }
-                    b"topfork" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xDA');
-                    }
-                    b"mlcp" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xDB');
-                    }
-                    b"Dashv" | b"DoubleLeftTee" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE4');
-                    }
-                    b"Vdashl" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE6');
-                    }
-                    b"Barv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE7');
-                    }
-                    b"vBar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE8');
-                    }
-                    b"vBarv" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xE9');
-                    }
-                    b"Vbar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEB');
-                    }
-                    b"Not" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEC');
-                    }
-                    b"bNot" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xED');
-                    }
-                    b"rnmid" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEE');
-                    }
-                    b"cirmid" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xEF');
-                    }
-                    b"midcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF0');
-                    }
-                    b"topcir" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF1');
-                    }
-                    b"nhpar" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF2');
-                    }
-                    b"parsim" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xF3');
-                    }
-                    b"parsl" => {
-                        unescaped.push(b'\x2A');
-                        unescaped.push(b'\xFD');
-                    }
-                    b"fflig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x00');
-                    }
-                    b"filig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x01');
-                    }
-                    b"fllig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x02');
-                    }
-                    b"ffilig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x03');
-                    }
-                    b"ffllig" => {
-                        unescaped.push(b'\xFB');
-                        unescaped.push(b'\x04');
-                    }
-                    b"Ascr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
-                    }
-                    b"Cscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
-                    }
-                    b"Dscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x49');
-                    }
-                    b"Gscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Jscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Kscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Nscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Oscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Pscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Qscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Sscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Tscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4A');
-                    }
-                    b"Uscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"Vscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"Wscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"Xscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"Yscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"Zscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"ascr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"bscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"cscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"dscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"fscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"hscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"iscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"jscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4B');
-                    }
-                    b"kscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"lscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"mscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"nscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"pscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"qscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"rscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"sscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"tscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"uscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"vscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"wscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"xscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"yscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"zscr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x4C');
-                    }
-                    b"Afr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Bfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Dfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Efr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Ffr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Gfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Jfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Kfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Lfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x50');
-                    }
-                    b"Mfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Nfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Ofr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Pfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Qfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Sfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Tfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Ufr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Vfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Wfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Xfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"Yfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"afr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"bfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x51');
-                    }
-                    b"cfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"dfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"efr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"ffr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"gfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"hfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"ifr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"jfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"kfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"lfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"mfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"nfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"ofr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"pfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"qfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"rfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x52');
-                    }
-                    b"sfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"tfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"ufr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"vfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"wfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"xfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"yfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"zfr" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Aopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Bopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Dopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Eopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Fopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Gopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x53');
-                    }
-                    b"Iopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Jopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Kopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Lopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Mopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Oopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Sopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Topf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Uopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Vopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Wopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Xopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x54');
-                    }
-                    b"Yopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"aopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"bopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"copf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"dopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"eopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"fopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"gopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"hopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"iopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"jopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"kopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"lopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"mopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"nopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x55');
-                    }
-                    b"oopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"popf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"qopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"ropf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"sopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"topf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"uopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"vopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"wopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"xopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"yopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    b"zopf" => {
-                        unescaped.push(b'\x1D');
-                        unescaped.push(b'\x56');
-                    }
-                    bytes if bytes.starts_with(b"#") => {
-                        let bytes = &bytes[1..];
-                        let code = if bytes.starts_with(b"x") {
-                            parse_hexadecimal(&bytes[1..])
-                        } else {
-                            parse_decimal(&bytes)
-                        }?;
-                        if code == 0 {
-                            return Err(EscapeError::EntityWithNull(start..end));
-                        }
-                        push_utf8(unescaped, code);
-                    }
-                    bytes => match custom_entities.and_then(|hm| hm.get(bytes)) {
-                        Some(value) => unescaped.extend_from_slice(&value),
-                        None => {
-                            return Err(EscapeError::UnrecognizedSymbol(
-                                start + 1..end,
-                                String::from_utf8(bytes.to_vec()),
-                            ))
-                        }
-                    },
-                }
                 last_end = end + 1;
             }
             _ => return Err(EscapeError::UnterminatedEntity(start..raw.len())),
@@ -5602,21 +197,1498 @@ pub fn do_unescape<'a>(
     }
 }
 
-fn push_utf8(buf: &mut Vec<u8>, code: u32) {
-    if code < MAX_ONE_B {
-        buf.push(code as u8);
-    } else if code < MAX_TWO_B {
-        buf.push((code >> 6 & 0x1F) as u8 | TAG_TWO_B);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
-    } else if code < MAX_THREE_B {
-        buf.push((code >> 12 & 0x0F) as u8 | TAG_THREE_B);
-        buf.push((code >> 6 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
+#[cfg(not(feature = "escape-html"))]
+const fn named_entity(name: &[u8]) -> Option<&str> {
+    let s = match name {
+        b"lt" => "<",
+        b"gt" => ">",
+        b"amp" => "&",
+        b"apos" => "'",
+        b"quot" => "\"",
+        _ => return None,
+    };
+    Some(s)
+}
+#[cfg(feature = "escape-html")]
+const fn named_entity(name: &[u8]) -> Option<&str> {
+    // imported from https://dev.w3.org/html5/html-author/charref
+    let s = match name {
+        b"Tab" => "\u{09}",
+        b"NewLine" => "\u{0A}",
+        b"excl" => "\u{21}",
+        b"quot" | b"QUOT" => "\u{22}",
+        b"num" => "\u{23}",
+        b"dollar" => "\u{24}",
+        b"percnt" => "\u{25}",
+        b"amp" | b"AMP" => "\u{26}",
+        b"apos" => "\u{27}",
+        b"lpar" => "\u{28}",
+        b"rpar" => "\u{29}",
+        b"ast" | b"midast" => "\u{2A}",
+        b"plus" => "\u{2B}",
+        b"comma" => "\u{2C}",
+        b"period" => "\u{2E}",
+        b"sol" => "\u{2F}",
+        b"colon" => "\u{3A}",
+        b"semi" => "\u{3B}",
+        b"lt" | b"LT" => "\u{3C}",
+        b"equals" => "\u{3D}",
+        b"gt" | b"GT" => "\u{3E}",
+        b"quest" => "\u{3F}",
+        b"commat" => "\u{40}",
+        b"lsqb" | b"lbrack" => "\u{5B}",
+        b"bsol" => "\u{5C}",
+        b"rsqb" | b"rbrack" => "\u{5D}",
+        b"Hat" => "\u{5E}",
+        b"lowbar" => "\u{5F}",
+        b"grave" | b"DiacriticalGrave" => "\u{60}",
+        b"lcub" | b"lbrace" => "\u{7B}",
+        b"verbar" | b"vert" | b"VerticalLine" => "\u{7C}",
+        b"rcub" | b"rbrace" => "\u{7D}",
+        b"nbsp" | b"NonBreakingSpace" => "\u{A0}",
+        b"iexcl" => "\u{A1}",
+        b"cent" => "\u{A2}",
+        b"pound" => "\u{A3}",
+        b"curren" => "\u{A4}",
+        b"yen" => "\u{A5}",
+        b"brvbar" => "\u{A6}",
+        b"sect" => "\u{A7}",
+        b"Dot" | b"die" | b"DoubleDot" | b"uml" => "\u{A8}",
+        b"copy" | b"COPY" => "\u{A9}",
+        b"ordf" => "\u{AA}",
+        b"laquo" => "\u{AB}",
+        b"not" => "\u{AC}",
+        b"shy" => "\u{AD}",
+        b"reg" | b"circledR" | b"REG" => "\u{AE}",
+        b"macr" | b"OverBar" | b"strns" => "\u{AF}",
+        b"deg" => "\u{B0}",
+        b"plusmn" | b"pm" | b"PlusMinus" => "\u{B1}",
+        b"sup2" => "\u{B2}",
+        b"sup3" => "\u{B3}",
+        b"acute" | b"DiacriticalAcute" => "\u{B4}",
+        b"micro" => "\u{B5}",
+        b"para" => "\u{B6}",
+        b"middot" | b"centerdot" | b"CenterDot" => "\u{B7}",
+        b"cedil" | b"Cedilla" => "\u{B8}",
+        b"sup1" => "\u{B9}",
+        b"ordm" => "\u{BA}",
+        b"raquo" => "\u{BB}",
+        b"frac14" => "\u{BC}",
+        b"frac12" | b"half" => "\u{BD}",
+        b"frac34" => "\u{BE}",
+        b"iquest" => "\u{BF}",
+        b"Agrave" => "\u{C0}",
+        b"Aacute" => "\u{C1}",
+        b"Acirc" => "\u{C2}",
+        b"Atilde" => "\u{C3}",
+        b"Auml" => "\u{C4}",
+        b"Aring" => "\u{C5}",
+        b"AElig" => "\u{C6}",
+        b"Ccedil" => "\u{C7}",
+        b"Egrave" => "\u{C8}",
+        b"Eacute" => "\u{C9}",
+        b"Ecirc" => "\u{CA}",
+        b"Euml" => "\u{CB}",
+        b"Igrave" => "\u{CC}",
+        b"Iacute" => "\u{CD}",
+        b"Icirc" => "\u{CE}",
+        b"Iuml" => "\u{CF}",
+        b"ETH" => "\u{D0}",
+        b"Ntilde" => "\u{D1}",
+        b"Ograve" => "\u{D2}",
+        b"Oacute" => "\u{D3}",
+        b"Ocirc" => "\u{D4}",
+        b"Otilde" => "\u{D5}",
+        b"Ouml" => "\u{D6}",
+        b"times" => "\u{D7}",
+        b"Oslash" => "\u{D8}",
+        b"Ugrave" => "\u{D9}",
+        b"Uacute" => "\u{DA}",
+        b"Ucirc" => "\u{DB}",
+        b"Uuml" => "\u{DC}",
+        b"Yacute" => "\u{DD}",
+        b"THORN" => "\u{DE}",
+        b"szlig" => "\u{DF}",
+        b"agrave" => "\u{E0}",
+        b"aacute" => "\u{E1}",
+        b"acirc" => "\u{E2}",
+        b"atilde" => "\u{E3}",
+        b"auml" => "\u{E4}",
+        b"aring" => "\u{E5}",
+        b"aelig" => "\u{E6}",
+        b"ccedil" => "\u{E7}",
+        b"egrave" => "\u{E8}",
+        b"eacute" => "\u{E9}",
+        b"ecirc" => "\u{EA}",
+        b"euml" => "\u{EB}",
+        b"igrave" => "\u{EC}",
+        b"iacute" => "\u{ED}",
+        b"icirc" => "\u{EE}",
+        b"iuml" => "\u{EF}",
+        b"eth" => "\u{F0}",
+        b"ntilde" => "\u{F1}",
+        b"ograve" => "\u{F2}",
+        b"oacute" => "\u{F3}",
+        b"ocirc" => "\u{F4}",
+        b"otilde" => "\u{F5}",
+        b"ouml" => "\u{F6}",
+        b"divide" | b"div" => "\u{F7}",
+        b"oslash" => "\u{F8}",
+        b"ugrave" => "\u{F9}",
+        b"uacute" => "\u{FA}",
+        b"ucirc" => "\u{FB}",
+        b"uuml" => "\u{FC}",
+        b"yacute" => "\u{FD}",
+        b"thorn" => "\u{FE}",
+        b"yuml" => "\u{FF}",
+        b"Amacr" => "\u{10}",
+        b"amacr" => "\u{10}",
+        b"Abreve" => "\u{10}",
+        b"abreve" => "\u{10}",
+        b"Aogon" => "\u{10}",
+        b"aogon" => "\u{10}",
+        b"Cacute" => "\u{10}",
+        b"cacute" => "\u{10}",
+        b"Ccirc" => "\u{10}",
+        b"ccirc" => "\u{10}",
+        b"Cdot" => "\u{10}",
+        b"cdot" => "\u{10}",
+        b"Ccaron" => "\u{10}",
+        b"ccaron" => "\u{10}",
+        b"Dcaron" => "\u{10}",
+        b"dcaron" => "\u{10}",
+        b"Dstrok" => "\u{11}",
+        b"dstrok" => "\u{11}",
+        b"Emacr" => "\u{11}",
+        b"emacr" => "\u{11}",
+        b"Edot" => "\u{11}",
+        b"edot" => "\u{11}",
+        b"Eogon" => "\u{11}",
+        b"eogon" => "\u{11}",
+        b"Ecaron" => "\u{11}",
+        b"ecaron" => "\u{11}",
+        b"Gcirc" => "\u{11}",
+        b"gcirc" => "\u{11}",
+        b"Gbreve" => "\u{11}",
+        b"gbreve" => "\u{11}",
+        b"Gdot" => "\u{12}",
+        b"gdot" => "\u{12}",
+        b"Gcedil" => "\u{12}",
+        b"Hcirc" => "\u{12}",
+        b"hcirc" => "\u{12}",
+        b"Hstrok" => "\u{12}",
+        b"hstrok" => "\u{12}",
+        b"Itilde" => "\u{12}",
+        b"itilde" => "\u{12}",
+        b"Imacr" => "\u{12}",
+        b"imacr" => "\u{12}",
+        b"Iogon" => "\u{12}",
+        b"iogon" => "\u{12}",
+        b"Idot" => "\u{13}",
+        b"imath" | b"inodot" => "\u{13}",
+        b"IJlig" => "\u{13}",
+        b"ijlig" => "\u{13}",
+        b"Jcirc" => "\u{13}",
+        b"jcirc" => "\u{13}",
+        b"Kcedil" => "\u{13}",
+        b"kcedil" => "\u{13}",
+        b"kgreen" => "\u{13}",
+        b"Lacute" => "\u{13}",
+        b"lacute" => "\u{13}",
+        b"Lcedil" => "\u{13}",
+        b"lcedil" => "\u{13}",
+        b"Lcaron" => "\u{13}",
+        b"lcaron" => "\u{13}",
+        b"Lmidot" => "\u{13}",
+        b"lmidot" => "\u{14}",
+        b"Lstrok" => "\u{14}",
+        b"lstrok" => "\u{14}",
+        b"Nacute" => "\u{14}",
+        b"nacute" => "\u{14}",
+        b"Ncedil" => "\u{14}",
+        b"ncedil" => "\u{14}",
+        b"Ncaron" => "\u{14}",
+        b"ncaron" => "\u{14}",
+        b"napos" => "\u{14}",
+        b"ENG" => "\u{14}",
+        b"eng" => "\u{14}",
+        b"Omacr" => "\u{14}",
+        b"omacr" => "\u{14}",
+        b"Odblac" => "\u{15}",
+        b"odblac" => "\u{15}",
+        b"OElig" => "\u{15}",
+        b"oelig" => "\u{15}",
+        b"Racute" => "\u{15}",
+        b"racute" => "\u{15}",
+        b"Rcedil" => "\u{15}",
+        b"rcedil" => "\u{15}",
+        b"Rcaron" => "\u{15}",
+        b"rcaron" => "\u{15}",
+        b"Sacute" => "\u{15}",
+        b"sacute" => "\u{15}",
+        b"Scirc" => "\u{15}",
+        b"scirc" => "\u{15}",
+        b"Scedil" => "\u{15}",
+        b"scedil" => "\u{15}",
+        b"Scaron" => "\u{16}",
+        b"scaron" => "\u{16}",
+        b"Tcedil" => "\u{16}",
+        b"tcedil" => "\u{16}",
+        b"Tcaron" => "\u{16}",
+        b"tcaron" => "\u{16}",
+        b"Tstrok" => "\u{16}",
+        b"tstrok" => "\u{16}",
+        b"Utilde" => "\u{16}",
+        b"utilde" => "\u{16}",
+        b"Umacr" => "\u{16}",
+        b"umacr" => "\u{16}",
+        b"Ubreve" => "\u{16}",
+        b"ubreve" => "\u{16}",
+        b"Uring" => "\u{16}",
+        b"uring" => "\u{16}",
+        b"Udblac" => "\u{17}",
+        b"udblac" => "\u{17}",
+        b"Uogon" => "\u{17}",
+        b"uogon" => "\u{17}",
+        b"Wcirc" => "\u{17}",
+        b"wcirc" => "\u{17}",
+        b"Ycirc" => "\u{17}",
+        b"ycirc" => "\u{17}",
+        b"Yuml" => "\u{17}",
+        b"Zacute" => "\u{17}",
+        b"zacute" => "\u{17}",
+        b"Zdot" => "\u{17}",
+        b"zdot" => "\u{17}",
+        b"Zcaron" => "\u{17}",
+        b"zcaron" => "\u{17}",
+        b"fnof" => "\u{19}",
+        b"imped" => "\u{1B}",
+        b"gacute" => "\u{1F}",
+        b"jmath" => "\u{23}",
+        b"circ" => "\u{2C}",
+        b"caron" | b"Hacek" => "\u{2C}",
+        b"breve" | b"Breve" => "\u{2D}",
+        b"dot" | b"DiacriticalDot" => "\u{2D}",
+        b"ring" => "\u{2D}",
+        b"ogon" => "\u{2D}",
+        b"tilde" | b"DiacriticalTilde" => "\u{2D}",
+        b"dblac" | b"DiacriticalDoubleAcute" => "\u{2D}",
+        b"DownBreve" => "\u{31}",
+        b"UnderBar" => "\u{33}",
+        b"Alpha" => "\u{39}",
+        b"Beta" => "\u{39}",
+        b"Gamma" => "\u{39}",
+        b"Delta" => "\u{39}",
+        b"Epsilon" => "\u{39}",
+        b"Zeta" => "\u{39}",
+        b"Eta" => "\u{39}",
+        b"Theta" => "\u{39}",
+        b"Iota" => "\u{39}",
+        b"Kappa" => "\u{39}",
+        b"Lambda" => "\u{39}",
+        b"Mu" => "\u{39}",
+        b"Nu" => "\u{39}",
+        b"Xi" => "\u{39}",
+        b"Omicron" => "\u{39}",
+        b"Pi" => "\u{3A}",
+        b"Rho" => "\u{3A}",
+        b"Sigma" => "\u{3A}",
+        b"Tau" => "\u{3A}",
+        b"Upsilon" => "\u{3A}",
+        b"Phi" => "\u{3A}",
+        b"Chi" => "\u{3A}",
+        b"Psi" => "\u{3A}",
+        b"Omega" => "\u{3A}",
+        b"alpha" => "\u{3B}",
+        b"beta" => "\u{3B}",
+        b"gamma" => "\u{3B}",
+        b"delta" => "\u{3B}",
+        b"epsiv" | b"varepsilon" | b"epsilon" => "\u{3B}",
+        b"zeta" => "\u{3B}",
+        b"eta" => "\u{3B}",
+        b"theta" => "\u{3B}",
+        b"iota" => "\u{3B}",
+        b"kappa" => "\u{3B}",
+        b"lambda" => "\u{3B}",
+        b"mu" => "\u{3B}",
+        b"nu" => "\u{3B}",
+        b"xi" => "\u{3B}",
+        b"omicron" => "\u{3B}",
+        b"pi" => "\u{3C}",
+        b"rho" => "\u{3C}",
+        b"sigmav" | b"varsigma" | b"sigmaf" => "\u{3C}",
+        b"sigma" => "\u{3C}",
+        b"tau" => "\u{3C}",
+        b"upsi" | b"upsilon" => "\u{3C}",
+        b"phi" | b"phiv" | b"varphi" => "\u{3C}",
+        b"chi" => "\u{3C}",
+        b"psi" => "\u{3C}",
+        b"omega" => "\u{3C}",
+        b"thetav" | b"vartheta" | b"thetasym" => "\u{3D}",
+        b"Upsi" | b"upsih" => "\u{3D}",
+        b"straightphi" => "\u{3D}",
+        b"piv" | b"varpi" => "\u{3D}",
+        b"Gammad" => "\u{3D}",
+        b"gammad" | b"digamma" => "\u{3D}",
+        b"kappav" | b"varkappa" => "\u{3F}",
+        b"rhov" | b"varrho" => "\u{3F}",
+        b"epsi" | b"straightepsilon" => "\u{3F}",
+        b"bepsi" | b"backepsilon" => "\u{3F}",
+        b"IOcy" => "\u{40}",
+        b"DJcy" => "\u{40}",
+        b"GJcy" => "\u{40}",
+        b"Jukcy" => "\u{40}",
+        b"DScy" => "\u{40}",
+        b"Iukcy" => "\u{40}",
+        b"YIcy" => "\u{40}",
+        b"Jsercy" => "\u{40}",
+        b"LJcy" => "\u{40}",
+        b"NJcy" => "\u{40}",
+        b"TSHcy" => "\u{40}",
+        b"KJcy" => "\u{40}",
+        b"Ubrcy" => "\u{40}",
+        b"DZcy" => "\u{40}",
+        b"Acy" => "\u{41}",
+        b"Bcy" => "\u{41}",
+        b"Vcy" => "\u{41}",
+        b"Gcy" => "\u{41}",
+        b"Dcy" => "\u{41}",
+        b"IEcy" => "\u{41}",
+        b"ZHcy" => "\u{41}",
+        b"Zcy" => "\u{41}",
+        b"Icy" => "\u{41}",
+        b"Jcy" => "\u{41}",
+        b"Kcy" => "\u{41}",
+        b"Lcy" => "\u{41}",
+        b"Mcy" => "\u{41}",
+        b"Ncy" => "\u{41}",
+        b"Ocy" => "\u{41}",
+        b"Pcy" => "\u{41}",
+        b"Rcy" => "\u{42}",
+        b"Scy" => "\u{42}",
+        b"Tcy" => "\u{42}",
+        b"Ucy" => "\u{42}",
+        b"Fcy" => "\u{42}",
+        b"KHcy" => "\u{42}",
+        b"TScy" => "\u{42}",
+        b"CHcy" => "\u{42}",
+        b"SHcy" => "\u{42}",
+        b"SHCHcy" => "\u{42}",
+        b"HARDcy" => "\u{42}",
+        b"Ycy" => "\u{42}",
+        b"SOFTcy" => "\u{42}",
+        b"Ecy" => "\u{42}",
+        b"YUcy" => "\u{42}",
+        b"YAcy" => "\u{42}",
+        b"acy" => "\u{43}",
+        b"bcy" => "\u{43}",
+        b"vcy" => "\u{43}",
+        b"gcy" => "\u{43}",
+        b"dcy" => "\u{43}",
+        b"iecy" => "\u{43}",
+        b"zhcy" => "\u{43}",
+        b"zcy" => "\u{43}",
+        b"icy" => "\u{43}",
+        b"jcy" => "\u{43}",
+        b"kcy" => "\u{43}",
+        b"lcy" => "\u{43}",
+        b"mcy" => "\u{43}",
+        b"ncy" => "\u{43}",
+        b"ocy" => "\u{43}",
+        b"pcy" => "\u{43}",
+        b"rcy" => "\u{44}",
+        b"scy" => "\u{44}",
+        b"tcy" => "\u{44}",
+        b"ucy" => "\u{44}",
+        b"fcy" => "\u{44}",
+        b"khcy" => "\u{44}",
+        b"tscy" => "\u{44}",
+        b"chcy" => "\u{44}",
+        b"shcy" => "\u{44}",
+        b"shchcy" => "\u{44}",
+        b"hardcy" => "\u{44}",
+        b"ycy" => "\u{44}",
+        b"softcy" => "\u{44}",
+        b"ecy" => "\u{44}",
+        b"yucy" => "\u{44}",
+        b"yacy" => "\u{44}",
+        b"iocy" => "\u{45}",
+        b"djcy" => "\u{45}",
+        b"gjcy" => "\u{45}",
+        b"jukcy" => "\u{45}",
+        b"dscy" => "\u{45}",
+        b"iukcy" => "\u{45}",
+        b"yicy" => "\u{45}",
+        b"jsercy" => "\u{45}",
+        b"ljcy" => "\u{45}",
+        b"njcy" => "\u{45}",
+        b"tshcy" => "\u{45}",
+        b"kjcy" => "\u{45}",
+        b"ubrcy" => "\u{45}",
+        b"dzcy" => "\u{45}",
+        b"ensp" => "\u{2002}",
+        b"emsp" => "\u{2003}",
+        b"emsp13" => "\u{2004}",
+        b"emsp14" => "\u{2005}",
+        b"numsp" => "\u{2007}",
+        b"puncsp" => "\u{2008}",
+        b"thinsp" | b"ThinSpace" => "\u{2009}",
+        b"hairsp" | b"VeryThinSpace" => "\u{200A}",
+        b"ZeroWidthSpace"
+        | b"NegativeVeryThinSpace"
+        | b"NegativeThinSpace"
+        | b"NegativeMediumSpace"
+        | b"NegativeThickSpace" => "\u{200B}",
+        b"zwnj" => "\u{200C}",
+        b"zwj" => "\u{200D}",
+        b"lrm" => "\u{200E}",
+        b"rlm" => "\u{200F}",
+        b"hyphen" | b"dash" => "\u{2010}",
+        b"ndash" => "\u{2013}",
+        b"mdash" => "\u{2014}",
+        b"horbar" => "\u{2015}",
+        b"Verbar" | b"Vert" => "\u{2016}",
+        b"lsquo" | b"OpenCurlyQuote" => "\u{2018}",
+        b"rsquo" | b"rsquor" | b"CloseCurlyQuote" => "\u{2019}",
+        b"lsquor" | b"sbquo" => "\u{201A}",
+        b"ldquo" | b"OpenCurlyDoubleQuote" => "\u{201C}",
+        b"rdquo" | b"rdquor" | b"CloseCurlyDoubleQuote" => "\u{201D}",
+        b"ldquor" | b"bdquo" => "\u{201E}",
+        b"dagger" => "\u{2020}",
+        b"Dagger" | b"ddagger" => "\u{2021}",
+        b"bull" | b"bullet" => "\u{2022}",
+        b"nldr" => "\u{2025}",
+        b"hellip" | b"mldr" => "\u{2026}",
+        b"permil" => "\u{2030}",
+        b"pertenk" => "\u{2031}",
+        b"prime" => "\u{2032}",
+        b"Prime" => "\u{2033}",
+        b"tprime" => "\u{2034}",
+        b"bprime" | b"backprime" => "\u{2035}",
+        b"lsaquo" => "\u{2039}",
+        b"rsaquo" => "\u{203A}",
+        b"oline" => "\u{203E}",
+        b"caret" => "\u{2041}",
+        b"hybull" => "\u{2043}",
+        b"frasl" => "\u{2044}",
+        b"bsemi" => "\u{204F}",
+        b"qprime" => "\u{2057}",
+        b"MediumSpace" => "\u{205F}",
+        b"NoBreak" => "\u{2060}",
+        b"ApplyFunction" | b"af" => "\u{2061}",
+        b"InvisibleTimes" | b"it" => "\u{2062}",
+        b"InvisibleComma" | b"ic" => "\u{2063}",
+        b"euro" => "\u{20AC}",
+        b"tdot" | b"TripleDot" => "\u{20DB}",
+        b"DotDot" => "\u{20DC}",
+        b"Copf" | b"complexes" => "\u{2102}",
+        b"incare" => "\u{2105}",
+        b"gscr" => "\u{210A}",
+        b"hamilt" | b"HilbertSpace" | b"Hscr" => "\u{210B}",
+        b"Hfr" | b"Poincareplane" => "\u{210C}",
+        b"quaternions" | b"Hopf" => "\u{210D}",
+        b"planckh" => "\u{210E}",
+        b"planck" | b"hbar" | b"plankv" | b"hslash" => "\u{210F}",
+        b"Iscr" | b"imagline" => "\u{2110}",
+        b"image" | b"Im" | b"imagpart" | b"Ifr" => "\u{2111}",
+        b"Lscr" | b"lagran" | b"Laplacetrf" => "\u{2112}",
+        b"ell" => "\u{2113}",
+        b"Nopf" | b"naturals" => "\u{2115}",
+        b"numero" => "\u{2116}",
+        b"copysr" => "\u{2117}",
+        b"weierp" | b"wp" => "\u{2118}",
+        b"Popf" | b"primes" => "\u{2119}",
+        b"rationals" | b"Qopf" => "\u{211A}",
+        b"Rscr" | b"realine" => "\u{211B}",
+        b"real" | b"Re" | b"realpart" | b"Rfr" => "\u{211C}",
+        b"reals" | b"Ropf" => "\u{211D}",
+        b"rx" => "\u{211E}",
+        b"trade" | b"TRADE" => "\u{2122}",
+        b"integers" | b"Zopf" => "\u{2124}",
+        b"ohm" => "\u{2126}",
+        b"mho" => "\u{2127}",
+        b"Zfr" | b"zeetrf" => "\u{2128}",
+        b"iiota" => "\u{2129}",
+        b"angst" => "\u{212B}",
+        b"bernou" | b"Bernoullis" | b"Bscr" => "\u{212C}",
+        b"Cfr" | b"Cayleys" => "\u{212D}",
+        b"escr" => "\u{212F}",
+        b"Escr" | b"expectation" => "\u{2130}",
+        b"Fscr" | b"Fouriertrf" => "\u{2131}",
+        b"phmmat" | b"Mellintrf" | b"Mscr" => "\u{2133}",
+        b"order" | b"orderof" | b"oscr" => "\u{2134}",
+        b"alefsym" | b"aleph" => "\u{2135}",
+        b"beth" => "\u{2136}",
+        b"gimel" => "\u{2137}",
+        b"daleth" => "\u{2138}",
+        b"CapitalDifferentialD" | b"DD" => "\u{2145}",
+        b"DifferentialD" | b"dd" => "\u{2146}",
+        b"ExponentialE" | b"exponentiale" | b"ee" => "\u{2147}",
+        b"ImaginaryI" | b"ii" => "\u{2148}",
+        b"frac13" => "\u{2153}",
+        b"frac23" => "\u{2154}",
+        b"frac15" => "\u{2155}",
+        b"frac25" => "\u{2156}",
+        b"frac35" => "\u{2157}",
+        b"frac45" => "\u{2158}",
+        b"frac16" => "\u{2159}",
+        b"frac56" => "\u{215A}",
+        b"frac18" => "\u{215B}",
+        b"frac38" => "\u{215C}",
+        b"frac58" => "\u{215D}",
+        b"frac78" => "\u{215E}",
+        b"larr" | b"leftarrow" | b"LeftArrow" | b"slarr" | b"ShortLeftArrow" => "\u{2190}",
+        b"uarr" | b"uparrow" | b"UpArrow" | b"ShortUpArrow" => "\u{2191}",
+        b"rarr" | b"rightarrow" | b"RightArrow" | b"srarr" | b"ShortRightArrow" => "\u{2192}",
+        b"darr" | b"downarrow" | b"DownArrow" | b"ShortDownArrow" => "\u{2193}",
+        b"harr" | b"leftrightarrow" | b"LeftRightArrow" => "\u{2194}",
+        b"varr" | b"updownarrow" | b"UpDownArrow" => "\u{2195}",
+        b"nwarr" | b"UpperLeftArrow" | b"nwarrow" => "\u{2196}",
+        b"nearr" | b"UpperRightArrow" | b"nearrow" => "\u{2197}",
+        b"searr" | b"searrow" | b"LowerRightArrow" => "\u{2198}",
+        b"swarr" | b"swarrow" | b"LowerLeftArrow" => "\u{2199}",
+        b"nlarr" | b"nleftarrow" => "\u{219A}",
+        b"nrarr" | b"nrightarrow" => "\u{219B}",
+        b"rarrw" | b"rightsquigarrow" => "\u{219D}",
+        b"Larr" | b"twoheadleftarrow" => "\u{219E}",
+        b"Uarr" => "\u{219F}",
+        b"Rarr" | b"twoheadrightarrow" => "\u{21A0}",
+        b"Darr" => "\u{21A1}",
+        b"larrtl" | b"leftarrowtail" => "\u{21A2}",
+        b"rarrtl" | b"rightarrowtail" => "\u{21A3}",
+        b"LeftTeeArrow" | b"mapstoleft" => "\u{21A4}",
+        b"UpTeeArrow" | b"mapstoup" => "\u{21A5}",
+        b"map" | b"RightTeeArrow" | b"mapsto" => "\u{21A6}",
+        b"DownTeeArrow" | b"mapstodown" => "\u{21A7}",
+        b"larrhk" | b"hookleftarrow" => "\u{21A9}",
+        b"rarrhk" | b"hookrightarrow" => "\u{21AA}",
+        b"larrlp" | b"looparrowleft" => "\u{21AB}",
+        b"rarrlp" | b"looparrowright" => "\u{21AC}",
+        b"harrw" | b"leftrightsquigarrow" => "\u{21AD}",
+        b"nharr" | b"nleftrightarrow" => "\u{21AE}",
+        b"lsh" | b"Lsh" => "\u{21B0}",
+        b"rsh" | b"Rsh" => "\u{21B1}",
+        b"ldsh" => "\u{21B2}",
+        b"rdsh" => "\u{21B3}",
+        b"crarr" => "\u{21B5}",
+        b"cularr" | b"curvearrowleft" => "\u{21B6}",
+        b"curarr" | b"curvearrowright" => "\u{21B7}",
+        b"olarr" | b"circlearrowleft" => "\u{21BA}",
+        b"orarr" | b"circlearrowright" => "\u{21BB}",
+        b"lharu" | b"LeftVector" | b"leftharpoonup" => "\u{21BC}",
+        b"lhard" | b"leftharpoondown" | b"DownLeftVector" => "\u{21BD}",
+        b"uharr" | b"upharpoonright" | b"RightUpVector" => "\u{21BE}",
+        b"uharl" | b"upharpoonleft" | b"LeftUpVector" => "\u{21BF}",
+        b"rharu" | b"RightVector" | b"rightharpoonup" => "\u{21C0}",
+        b"rhard" | b"rightharpoondown" | b"DownRightVector" => "\u{21C1}",
+        b"dharr" | b"RightDownVector" | b"downharpoonright" => "\u{21C2}",
+        b"dharl" | b"LeftDownVector" | b"downharpoonleft" => "\u{21C3}",
+        b"rlarr" | b"rightleftarrows" | b"RightArrowLeftArrow" => "\u{21C4}",
+        b"udarr" | b"UpArrowDownArrow" => "\u{21C5}",
+        b"lrarr" | b"leftrightarrows" | b"LeftArrowRightArrow" => "\u{21C6}",
+        b"llarr" | b"leftleftarrows" => "\u{21C7}",
+        b"uuarr" | b"upuparrows" => "\u{21C8}",
+        b"rrarr" | b"rightrightarrows" => "\u{21C9}",
+        b"ddarr" | b"downdownarrows" => "\u{21CA}",
+        b"lrhar" | b"ReverseEquilibrium" | b"leftrightharpoons" => "\u{21CB}",
+        b"rlhar" | b"rightleftharpoons" | b"Equilibrium" => "\u{21CC}",
+        b"nlArr" | b"nLeftarrow" => "\u{21CD}",
+        b"nhArr" | b"nLeftrightarrow" => "\u{21CE}",
+        b"nrArr" | b"nRightarrow" => "\u{21CF}",
+        b"lArr" | b"Leftarrow" | b"DoubleLeftArrow" => "\u{21D0}",
+        b"uArr" | b"Uparrow" | b"DoubleUpArrow" => "\u{21D1}",
+        b"rArr" | b"Rightarrow" | b"Implies" | b"DoubleRightArrow" => "\u{21D2}",
+        b"dArr" | b"Downarrow" | b"DoubleDownArrow" => "\u{21D3}",
+        b"hArr" | b"Leftrightarrow" | b"DoubleLeftRightArrow" | b"iff" => "\u{21D4}",
+        b"vArr" | b"Updownarrow" | b"DoubleUpDownArrow" => "\u{21D5}",
+        b"nwArr" => "\u{21D6}",
+        b"neArr" => "\u{21D7}",
+        b"seArr" => "\u{21D8}",
+        b"swArr" => "\u{21D9}",
+        b"lAarr" | b"Lleftarrow" => "\u{21DA}",
+        b"rAarr" | b"Rrightarrow" => "\u{21DB}",
+        b"zigrarr" => "\u{21DD}",
+        b"larrb" | b"LeftArrowBar" => "\u{21E4}",
+        b"rarrb" | b"RightArrowBar" => "\u{21E5}",
+        b"duarr" | b"DownArrowUpArrow" => "\u{21F5}",
+        b"loarr" => "\u{21FD}",
+        b"roarr" => "\u{21FE}",
+        b"hoarr" => "\u{21FF}",
+        b"forall" | b"ForAll" => "\u{2200}",
+        b"comp" | b"complement" => "\u{2201}",
+        b"part" | b"PartialD" => "\u{2202}",
+        b"exist" | b"Exists" => "\u{2203}",
+        b"nexist" | b"NotExists" | b"nexists" => "\u{2204}",
+        b"empty" | b"emptyset" | b"emptyv" | b"varnothing" => "\u{2205}",
+        b"nabla" | b"Del" => "\u{2207}",
+        b"isin" | b"isinv" | b"Element" | b"in" => "\u{2208}",
+        b"notin" | b"NotElement" | b"notinva" => "\u{2209}",
+        b"niv" | b"ReverseElement" | b"ni" | b"SuchThat" => "\u{220B}",
+        b"notni" | b"notniva" | b"NotReverseElement" => "\u{220C}",
+        b"prod" | b"Product" => "\u{220F}",
+        b"coprod" | b"Coproduct" => "\u{2210}",
+        b"sum" | b"Sum" => "\u{2211}",
+        b"minus" => "\u{2212}",
+        b"mnplus" | b"mp" | b"MinusPlus" => "\u{2213}",
+        b"plusdo" | b"dotplus" => "\u{2214}",
+        b"setmn" | b"setminus" | b"Backslash" | b"ssetmn" | b"smallsetminus" => "\u{2216}",
+        b"lowast" => "\u{2217}",
+        b"compfn" | b"SmallCircle" => "\u{2218}",
+        b"radic" | b"Sqrt" => "\u{221A}",
+        b"prop" | b"propto" | b"Proportional" | b"vprop" | b"varpropto" => "\u{221D}",
+        b"infin" => "\u{221E}",
+        b"angrt" => "\u{221F}",
+        b"ang" | b"angle" => "\u{2220}",
+        b"angmsd" | b"measuredangle" => "\u{2221}",
+        b"angsph" => "\u{2222}",
+        b"mid" | b"VerticalBar" | b"smid" | b"shortmid" => "\u{2223}",
+        b"nmid" | b"NotVerticalBar" | b"nsmid" | b"nshortmid" => "\u{2224}",
+        b"par" | b"parallel" | b"DoubleVerticalBar" | b"spar" | b"shortparallel" => "\u{2225}",
+        b"npar" | b"nparallel" | b"NotDoubleVerticalBar" | b"nspar" | b"nshortparallel" => {
+            "\u{2226}"
+        }
+        b"and" | b"wedge" => "\u{2227}",
+        b"or" | b"vee" => "\u{2228}",
+        b"cap" => "\u{2229}",
+        b"cup" => "\u{222A}",
+        b"int" | b"Integral" => "\u{222B}",
+        b"Int" => "\u{222C}",
+        b"tint" | b"iiint" => "\u{222D}",
+        b"conint" | b"oint" | b"ContourIntegral" => "\u{222E}",
+        b"Conint" | b"DoubleContourIntegral" => "\u{222F}",
+        b"Cconint" => "\u{2230}",
+        b"cwint" => "\u{2231}",
+        b"cwconint" | b"ClockwiseContourIntegral" => "\u{2232}",
+        b"awconint" | b"CounterClockwiseContourIntegral" => "\u{2233}",
+        b"there4" | b"therefore" | b"Therefore" => "\u{2234}",
+        b"becaus" | b"because" | b"Because" => "\u{2235}",
+        b"ratio" => "\u{2236}",
+        b"Colon" | b"Proportion" => "\u{2237}",
+        b"minusd" | b"dotminus" => "\u{2238}",
+        b"mDDot" => "\u{223A}",
+        b"homtht" => "\u{223B}",
+        b"sim" | b"Tilde" | b"thksim" | b"thicksim" => "\u{223C}",
+        b"bsim" | b"backsim" => "\u{223D}",
+        b"ac" | b"mstpos" => "\u{223E}",
+        b"acd" => "\u{223F}",
+        b"wreath" | b"VerticalTilde" | b"wr" => "\u{2240}",
+        b"nsim" | b"NotTilde" => "\u{2241}",
+        b"esim" | b"EqualTilde" | b"eqsim" => "\u{2242}",
+        b"sime" | b"TildeEqual" | b"simeq" => "\u{2243}",
+        b"nsime" | b"nsimeq" | b"NotTildeEqual" => "\u{2244}",
+        b"cong" | b"TildeFullEqual" => "\u{2245}",
+        b"simne" => "\u{2246}",
+        b"ncong" | b"NotTildeFullEqual" => "\u{2247}",
+        b"asymp" | b"ap" | b"TildeTilde" | b"approx" | b"thkap" | b"thickapprox" => "\u{2248}",
+        b"nap" | b"NotTildeTilde" | b"napprox" => "\u{2249}",
+        b"ape" | b"approxeq" => "\u{224A}",
+        b"apid" => "\u{224B}",
+        b"bcong" | b"backcong" => "\u{224C}",
+        b"asympeq" | b"CupCap" => "\u{224D}",
+        b"bump" | b"HumpDownHump" | b"Bumpeq" => "\u{224E}",
+        b"bumpe" | b"HumpEqual" | b"bumpeq" => "\u{224F}",
+        b"esdot" | b"DotEqual" | b"doteq" => "\u{2250}",
+        b"eDot" | b"doteqdot" => "\u{2251}",
+        b"efDot" | b"fallingdotseq" => "\u{2252}",
+        b"erDot" | b"risingdotseq" => "\u{2253}",
+        b"colone" | b"coloneq" | b"Assign" => "\u{2254}",
+        b"ecolon" | b"eqcolon" => "\u{2255}",
+        b"ecir" | b"eqcirc" => "\u{2256}",
+        b"cire" | b"circeq" => "\u{2257}",
+        b"wedgeq" => "\u{2259}",
+        b"veeeq" => "\u{225A}",
+        b"trie" | b"triangleq" => "\u{225C}",
+        b"equest" | b"questeq" => "\u{225F}",
+        b"ne" | b"NotEqual" => "\u{2260}",
+        b"equiv" | b"Congruent" => "\u{2261}",
+        b"nequiv" | b"NotCongruent" => "\u{2262}",
+        b"le" | b"leq" => "\u{2264}",
+        b"ge" | b"GreaterEqual" | b"geq" => "\u{2265}",
+        b"lE" | b"LessFullEqual" | b"leqq" => "\u{2266}",
+        b"gE" | b"GreaterFullEqual" | b"geqq" => "\u{2267}",
+        b"lnE" | b"lneqq" => "\u{2268}",
+        b"gnE" | b"gneqq" => "\u{2269}",
+        b"Lt" | b"NestedLessLess" | b"ll" => "\u{226A}",
+        b"Gt" | b"NestedGreaterGreater" | b"gg" => "\u{226B}",
+        b"twixt" | b"between" => "\u{226C}",
+        b"NotCupCap" => "\u{226D}",
+        b"nlt" | b"NotLess" | b"nless" => "\u{226E}",
+        b"ngt" | b"NotGreater" | b"ngtr" => "\u{226F}",
+        b"nle" | b"NotLessEqual" | b"nleq" => "\u{2270}",
+        b"nge" | b"NotGreaterEqual" | b"ngeq" => "\u{2271}",
+        b"lsim" | b"LessTilde" | b"lesssim" => "\u{2272}",
+        b"gsim" | b"gtrsim" | b"GreaterTilde" => "\u{2273}",
+        b"nlsim" | b"NotLessTilde" => "\u{2274}",
+        b"ngsim" | b"NotGreaterTilde" => "\u{2275}",
+        b"lg" | b"lessgtr" | b"LessGreater" => "\u{2276}",
+        b"gl" | b"gtrless" | b"GreaterLess" => "\u{2277}",
+        b"ntlg" | b"NotLessGreater" => "\u{2278}",
+        b"ntgl" | b"NotGreaterLess" => "\u{2279}",
+        b"pr" | b"Precedes" | b"prec" => "\u{227A}",
+        b"sc" | b"Succeeds" | b"succ" => "\u{227B}",
+        b"prcue" | b"PrecedesSlantEqual" | b"preccurlyeq" => "\u{227C}",
+        b"sccue" | b"SucceedsSlantEqual" | b"succcurlyeq" => "\u{227D}",
+        b"prsim" | b"precsim" | b"PrecedesTilde" => "\u{227E}",
+        b"scsim" | b"succsim" | b"SucceedsTilde" => "\u{227F}",
+        b"npr" | b"nprec" | b"NotPrecedes" => "\u{2280}",
+        b"nsc" | b"nsucc" | b"NotSucceeds" => "\u{2281}",
+        b"sub" | b"subset" => "\u{2282}",
+        b"sup" | b"supset" | b"Superset" => "\u{2283}",
+        b"nsub" => "\u{2284}",
+        b"nsup" => "\u{2285}",
+        b"sube" | b"SubsetEqual" | b"subseteq" => "\u{2286}",
+        b"supe" | b"supseteq" | b"SupersetEqual" => "\u{2287}",
+        b"nsube" | b"nsubseteq" | b"NotSubsetEqual" => "\u{2288}",
+        b"nsupe" | b"nsupseteq" | b"NotSupersetEqual" => "\u{2289}",
+        b"subne" | b"subsetneq" => "\u{228A}",
+        b"supne" | b"supsetneq" => "\u{228B}",
+        b"cupdot" => "\u{228D}",
+        b"uplus" | b"UnionPlus" => "\u{228E}",
+        b"sqsub" | b"SquareSubset" | b"sqsubset" => "\u{228F}",
+        b"sqsup" | b"SquareSuperset" | b"sqsupset" => "\u{2290}",
+        b"sqsube" | b"SquareSubsetEqual" | b"sqsubseteq" => "\u{2291}",
+        b"sqsupe" | b"SquareSupersetEqual" | b"sqsupseteq" => "\u{2292}",
+        b"sqcap" | b"SquareIntersection" => "\u{2293}",
+        b"sqcup" | b"SquareUnion" => "\u{2294}",
+        b"oplus" | b"CirclePlus" => "\u{2295}",
+        b"ominus" | b"CircleMinus" => "\u{2296}",
+        b"otimes" | b"CircleTimes" => "\u{2297}",
+        b"osol" => "\u{2298}",
+        b"odot" | b"CircleDot" => "\u{2299}",
+        b"ocir" | b"circledcirc" => "\u{229A}",
+        b"oast" | b"circledast" => "\u{229B}",
+        b"odash" | b"circleddash" => "\u{229D}",
+        b"plusb" | b"boxplus" => "\u{229E}",
+        b"minusb" | b"boxminus" => "\u{229F}",
+        b"timesb" | b"boxtimes" => "\u{22A0}",
+        b"sdotb" | b"dotsquare" => "\u{22A1}",
+        b"vdash" | b"RightTee" => "\u{22A2}",
+        b"dashv" | b"LeftTee" => "\u{22A3}",
+        b"top" | b"DownTee" => "\u{22A4}",
+        b"bottom" | b"bot" | b"perp" | b"UpTee" => "\u{22A5}",
+        b"models" => "\u{22A7}",
+        b"vDash" | b"DoubleRightTee" => "\u{22A8}",
+        b"Vdash" => "\u{22A9}",
+        b"Vvdash" => "\u{22AA}",
+        b"VDash" => "\u{22AB}",
+        b"nvdash" => "\u{22AC}",
+        b"nvDash" => "\u{22AD}",
+        b"nVdash" => "\u{22AE}",
+        b"nVDash" => "\u{22AF}",
+        b"prurel" => "\u{22B0}",
+        b"vltri" | b"vartriangleleft" | b"LeftTriangle" => "\u{22B2}",
+        b"vrtri" | b"vartriangleright" | b"RightTriangle" => "\u{22B3}",
+        b"ltrie" | b"trianglelefteq" | b"LeftTriangleEqual" => "\u{22B4}",
+        b"rtrie" | b"trianglerighteq" | b"RightTriangleEqual" => "\u{22B5}",
+        b"origof" => "\u{22B6}",
+        b"imof" => "\u{22B7}",
+        b"mumap" | b"multimap" => "\u{22B8}",
+        b"hercon" => "\u{22B9}",
+        b"intcal" | b"intercal" => "\u{22BA}",
+        b"veebar" => "\u{22BB}",
+        b"barvee" => "\u{22BD}",
+        b"angrtvb" => "\u{22BE}",
+        b"lrtri" => "\u{22BF}",
+        b"xwedge" | b"Wedge" | b"bigwedge" => "\u{22C0}",
+        b"xvee" | b"Vee" | b"bigvee" => "\u{22C1}",
+        b"xcap" | b"Intersection" | b"bigcap" => "\u{22C2}",
+        b"xcup" | b"Union" | b"bigcup" => "\u{22C3}",
+        b"diam" | b"diamond" | b"Diamond" => "\u{22C4}",
+        b"sdot" => "\u{22C5}",
+        b"sstarf" | b"Star" => "\u{22C6}",
+        b"divonx" | b"divideontimes" => "\u{22C7}",
+        b"bowtie" => "\u{22C8}",
+        b"ltimes" => "\u{22C9}",
+        b"rtimes" => "\u{22CA}",
+        b"lthree" | b"leftthreetimes" => "\u{22CB}",
+        b"rthree" | b"rightthreetimes" => "\u{22CC}",
+        b"bsime" | b"backsimeq" => "\u{22CD}",
+        b"cuvee" | b"curlyvee" => "\u{22CE}",
+        b"cuwed" | b"curlywedge" => "\u{22CF}",
+        b"Sub" | b"Subset" => "\u{22D0}",
+        b"Sup" | b"Supset" => "\u{22D1}",
+        b"Cap" => "\u{22D2}",
+        b"Cup" => "\u{22D3}",
+        b"fork" | b"pitchfork" => "\u{22D4}",
+        b"epar" => "\u{22D5}",
+        b"ltdot" | b"lessdot" => "\u{22D6}",
+        b"gtdot" | b"gtrdot" => "\u{22D7}",
+        b"Ll" => "\u{22D8}",
+        b"Gg" | b"ggg" => "\u{22D9}",
+        b"leg" | b"LessEqualGreater" | b"lesseqgtr" => "\u{22DA}",
+        b"gel" | b"gtreqless" | b"GreaterEqualLess" => "\u{22DB}",
+        b"cuepr" | b"curlyeqprec" => "\u{22DE}",
+        b"cuesc" | b"curlyeqsucc" => "\u{22DF}",
+        b"nprcue" | b"NotPrecedesSlantEqual" => "\u{22E0}",
+        b"nsccue" | b"NotSucceedsSlantEqual" => "\u{22E1}",
+        b"nsqsube" | b"NotSquareSubsetEqual" => "\u{22E2}",
+        b"nsqsupe" | b"NotSquareSupersetEqual" => "\u{22E3}",
+        b"lnsim" => "\u{22E6}",
+        b"gnsim" => "\u{22E7}",
+        b"prnsim" | b"precnsim" => "\u{22E8}",
+        b"scnsim" | b"succnsim" => "\u{22E9}",
+        b"nltri" | b"ntriangleleft" | b"NotLeftTriangle" => "\u{22EA}",
+        b"nrtri" | b"ntriangleright" | b"NotRightTriangle" => "\u{22EB}",
+        b"nltrie" | b"ntrianglelefteq" | b"NotLeftTriangleEqual" => "\u{22EC}",
+        b"nrtrie" | b"ntrianglerighteq" | b"NotRightTriangleEqual" => "\u{22ED}",
+        b"vellip" => "\u{22EE}",
+        b"ctdot" => "\u{22EF}",
+        b"utdot" => "\u{22F0}",
+        b"dtdot" => "\u{22F1}",
+        b"disin" => "\u{22F2}",
+        b"isinsv" => "\u{22F3}",
+        b"isins" => "\u{22F4}",
+        b"isindot" => "\u{22F5}",
+        b"notinvc" => "\u{22F6}",
+        b"notinvb" => "\u{22F7}",
+        b"isinE" => "\u{22F9}",
+        b"nisd" => "\u{22FA}",
+        b"xnis" => "\u{22FB}",
+        b"nis" => "\u{22FC}",
+        b"notnivc" => "\u{22FD}",
+        b"notnivb" => "\u{22FE}",
+        b"barwed" | b"barwedge" => "\u{2305}",
+        b"Barwed" | b"doublebarwedge" => "\u{2306}",
+        b"lceil" | b"LeftCeiling" => "\u{2308}",
+        b"rceil" | b"RightCeiling" => "\u{2309}",
+        b"lfloor" | b"LeftFloor" => "\u{230A}",
+        b"rfloor" | b"RightFloor" => "\u{230B}",
+        b"drcrop" => "\u{230C}",
+        b"dlcrop" => "\u{230D}",
+        b"urcrop" => "\u{230E}",
+        b"ulcrop" => "\u{230F}",
+        b"bnot" => "\u{2310}",
+        b"profline" => "\u{2312}",
+        b"profsurf" => "\u{2313}",
+        b"telrec" => "\u{2315}",
+        b"target" => "\u{2316}",
+        b"ulcorn" | b"ulcorner" => "\u{231C}",
+        b"urcorn" | b"urcorner" => "\u{231D}",
+        b"dlcorn" | b"llcorner" => "\u{231E}",
+        b"drcorn" | b"lrcorner" => "\u{231F}",
+        b"frown" | b"sfrown" => "\u{2322}",
+        b"smile" | b"ssmile" => "\u{2323}",
+        b"cylcty" => "\u{232D}",
+        b"profalar" => "\u{232E}",
+        b"topbot" => "\u{2336}",
+        b"ovbar" => "\u{233D}",
+        b"solbar" => "\u{233F}",
+        b"angzarr" => "\u{237C}",
+        b"lmoust" | b"lmoustache" => "\u{23B0}",
+        b"rmoust" | b"rmoustache" => "\u{23B1}",
+        b"tbrk" | b"OverBracket" => "\u{23B4}",
+        b"bbrk" | b"UnderBracket" => "\u{23B5}",
+        b"bbrktbrk" => "\u{23B6}",
+        b"OverParenthesis" => "\u{23DC}",
+        b"UnderParenthesis" => "\u{23DD}",
+        b"OverBrace" => "\u{23DE}",
+        b"UnderBrace" => "\u{23DF}",
+        b"trpezium" => "\u{23E2}",
+        b"elinters" => "\u{23E7}",
+        b"blank" => "\u{2423}",
+        b"oS" | b"circledS" => "\u{24C8}",
+        b"boxh" | b"HorizontalLine" => "\u{2500}",
+        b"boxv" => "\u{2502}",
+        b"boxdr" => "\u{250C}",
+        b"boxdl" => "\u{2510}",
+        b"boxur" => "\u{2514}",
+        b"boxul" => "\u{2518}",
+        b"boxvr" => "\u{251C}",
+        b"boxvl" => "\u{2524}",
+        b"boxhd" => "\u{252C}",
+        b"boxhu" => "\u{2534}",
+        b"boxvh" => "\u{253C}",
+        b"boxH" => "\u{2550}",
+        b"boxV" => "\u{2551}",
+        b"boxdR" => "\u{2552}",
+        b"boxDr" => "\u{2553}",
+        b"boxDR" => "\u{2554}",
+        b"boxdL" => "\u{2555}",
+        b"boxDl" => "\u{2556}",
+        b"boxDL" => "\u{2557}",
+        b"boxuR" => "\u{2558}",
+        b"boxUr" => "\u{2559}",
+        b"boxUR" => "\u{255A}",
+        b"boxuL" => "\u{255B}",
+        b"boxUl" => "\u{255C}",
+        b"boxUL" => "\u{255D}",
+        b"boxvR" => "\u{255E}",
+        b"boxVr" => "\u{255F}",
+        b"boxVR" => "\u{2560}",
+        b"boxvL" => "\u{2561}",
+        b"boxVl" => "\u{2562}",
+        b"boxVL" => "\u{2563}",
+        b"boxHd" => "\u{2564}",
+        b"boxhD" => "\u{2565}",
+        b"boxHD" => "\u{2566}",
+        b"boxHu" => "\u{2567}",
+        b"boxhU" => "\u{2568}",
+        b"boxHU" => "\u{2569}",
+        b"boxvH" => "\u{256A}",
+        b"boxVh" => "\u{256B}",
+        b"boxVH" => "\u{256C}",
+        b"uhblk" => "\u{2580}",
+        b"lhblk" => "\u{2584}",
+        b"block" => "\u{2588}",
+        b"blk14" => "\u{2591}",
+        b"blk12" => "\u{2592}",
+        b"blk34" => "\u{2593}",
+        b"squ" | b"square" | b"Square" => "\u{25A1}",
+        b"squf" | b"squarf" | b"blacksquare" | b"FilledVerySmallSquare" => "\u{25AA}",
+        b"EmptyVerySmallSquare" => "\u{25AB}",
+        b"rect" => "\u{25AD}",
+        b"marker" => "\u{25AE}",
+        b"fltns" => "\u{25B1}",
+        b"xutri" | b"bigtriangleup" => "\u{25B3}",
+        b"utrif" | b"blacktriangle" => "\u{25B4}",
+        b"utri" | b"triangle" => "\u{25B5}",
+        b"rtrif" | b"blacktriangleright" => "\u{25B8}",
+        b"rtri" | b"triangleright" => "\u{25B9}",
+        b"xdtri" | b"bigtriangledown" => "\u{25BD}",
+        b"dtrif" | b"blacktriangledown" => "\u{25BE}",
+        b"dtri" | b"triangledown" => "\u{25BF}",
+        b"ltrif" | b"blacktriangleleft" => "\u{25C2}",
+        b"ltri" | b"triangleleft" => "\u{25C3}",
+        b"loz" | b"lozenge" => "\u{25CA}",
+        b"cir" => "\u{25CB}",
+        b"tridot" => "\u{25EC}",
+        b"xcirc" | b"bigcirc" => "\u{25EF}",
+        b"ultri" => "\u{25F8}",
+        b"urtri" => "\u{25F9}",
+        b"lltri" => "\u{25FA}",
+        b"EmptySmallSquare" => "\u{25FB}",
+        b"FilledSmallSquare" => "\u{25FC}",
+        b"starf" | b"bigstar" => "\u{2605}",
+        b"star" => "\u{2606}",
+        b"phone" => "\u{260E}",
+        b"female" => "\u{2640}",
+        b"male" => "\u{2642}",
+        b"spades" | b"spadesuit" => "\u{2660}",
+        b"clubs" | b"clubsuit" => "\u{2663}",
+        b"hearts" | b"heartsuit" => "\u{2665}",
+        b"diams" | b"diamondsuit" => "\u{2666}",
+        b"sung" => "\u{266A}",
+        b"flat" => "\u{266D}",
+        b"natur" | b"natural" => "\u{266E}",
+        b"sharp" => "\u{266F}",
+        b"check" | b"checkmark" => "\u{2713}",
+        b"cross" => "\u{2717}",
+        b"malt" | b"maltese" => "\u{2720}",
+        b"sext" => "\u{2736}",
+        b"VerticalSeparator" => "\u{2758}",
+        b"lbbrk" => "\u{2772}",
+        b"rbbrk" => "\u{2773}",
+        b"lobrk" | b"LeftDoubleBracket" => "\u{27E6}",
+        b"robrk" | b"RightDoubleBracket" => "\u{27E7}",
+        b"lang" | b"LeftAngleBracket" | b"langle" => "\u{27E8}",
+        b"rang" | b"RightAngleBracket" | b"rangle" => "\u{27E9}",
+        b"Lang" => "\u{27EA}",
+        b"Rang" => "\u{27EB}",
+        b"loang" => "\u{27EC}",
+        b"roang" => "\u{27ED}",
+        b"xlarr" | b"longleftarrow" | b"LongLeftArrow" => "\u{27F5}",
+        b"xrarr" | b"longrightarrow" | b"LongRightArrow" => "\u{27F6}",
+        b"xharr" | b"longleftrightarrow" | b"LongLeftRightArrow" => "\u{27F7}",
+        b"xlArr" | b"Longleftarrow" | b"DoubleLongLeftArrow" => "\u{27F8}",
+        b"xrArr" | b"Longrightarrow" | b"DoubleLongRightArrow" => "\u{27F9}",
+        b"xhArr" | b"Longleftrightarrow" | b"DoubleLongLeftRightArrow" => "\u{27FA}",
+        b"xmap" | b"longmapsto" => "\u{27FC}",
+        b"dzigrarr" => "\u{27FF}",
+        b"nvlArr" => "\u{2902}",
+        b"nvrArr" => "\u{2903}",
+        b"nvHarr" => "\u{2904}",
+        b"Map" => "\u{2905}",
+        b"lbarr" => "\u{290C}",
+        b"rbarr" | b"bkarow" => "\u{290D}",
+        b"lBarr" => "\u{290E}",
+        b"rBarr" | b"dbkarow" => "\u{290F}",
+        b"RBarr" | b"drbkarow" => "\u{2910}",
+        b"DDotrahd" => "\u{2911}",
+        b"UpArrowBar" => "\u{2912}",
+        b"DownArrowBar" => "\u{2913}",
+        b"Rarrtl" => "\u{2916}",
+        b"latail" => "\u{2919}",
+        b"ratail" => "\u{291A}",
+        b"lAtail" => "\u{291B}",
+        b"rAtail" => "\u{291C}",
+        b"larrfs" => "\u{291D}",
+        b"rarrfs" => "\u{291E}",
+        b"larrbfs" => "\u{291F}",
+        b"rarrbfs" => "\u{2920}",
+        b"nwarhk" => "\u{2923}",
+        b"nearhk" => "\u{2924}",
+        b"searhk" | b"hksearow" => "\u{2925}",
+        b"swarhk" | b"hkswarow" => "\u{2926}",
+        b"nwnear" => "\u{2927}",
+        b"nesear" | b"toea" => "\u{2928}",
+        b"seswar" | b"tosa" => "\u{2929}",
+        b"swnwar" => "\u{292A}",
+        b"rarrc" => "\u{2933}",
+        b"cudarrr" => "\u{2935}",
+        b"ldca" => "\u{2936}",
+        b"rdca" => "\u{2937}",
+        b"cudarrl" => "\u{2938}",
+        b"larrpl" => "\u{2939}",
+        b"curarrm" => "\u{293C}",
+        b"cularrp" => "\u{293D}",
+        b"rarrpl" => "\u{2945}",
+        b"harrcir" => "\u{2948}",
+        b"Uarrocir" => "\u{2949}",
+        b"lurdshar" => "\u{294A}",
+        b"ldrushar" => "\u{294B}",
+        b"LeftRightVector" => "\u{294E}",
+        b"RightUpDownVector" => "\u{294F}",
+        b"DownLeftRightVector" => "\u{2950}",
+        b"LeftUpDownVector" => "\u{2951}",
+        b"LeftVectorBar" => "\u{2952}",
+        b"RightVectorBar" => "\u{2953}",
+        b"RightUpVectorBar" => "\u{2954}",
+        b"RightDownVectorBar" => "\u{2955}",
+        b"DownLeftVectorBar" => "\u{2956}",
+        b"DownRightVectorBar" => "\u{2957}",
+        b"LeftUpVectorBar" => "\u{2958}",
+        b"LeftDownVectorBar" => "\u{2959}",
+        b"LeftTeeVector" => "\u{295A}",
+        b"RightTeeVector" => "\u{295B}",
+        b"RightUpTeeVector" => "\u{295C}",
+        b"RightDownTeeVector" => "\u{295D}",
+        b"DownLeftTeeVector" => "\u{295E}",
+        b"DownRightTeeVector" => "\u{295F}",
+        b"LeftUpTeeVector" => "\u{2960}",
+        b"LeftDownTeeVector" => "\u{2961}",
+        b"lHar" => "\u{2962}",
+        b"uHar" => "\u{2963}",
+        b"rHar" => "\u{2964}",
+        b"dHar" => "\u{2965}",
+        b"luruhar" => "\u{2966}",
+        b"ldrdhar" => "\u{2967}",
+        b"ruluhar" => "\u{2968}",
+        b"rdldhar" => "\u{2969}",
+        b"lharul" => "\u{296A}",
+        b"llhard" => "\u{296B}",
+        b"rharul" => "\u{296C}",
+        b"lrhard" => "\u{296D}",
+        b"udhar" | b"UpEquilibrium" => "\u{296E}",
+        b"duhar" | b"ReverseUpEquilibrium" => "\u{296F}",
+        b"RoundImplies" => "\u{2970}",
+        b"erarr" => "\u{2971}",
+        b"simrarr" => "\u{2972}",
+        b"larrsim" => "\u{2973}",
+        b"rarrsim" => "\u{2974}",
+        b"rarrap" => "\u{2975}",
+        b"ltlarr" => "\u{2976}",
+        b"gtrarr" => "\u{2978}",
+        b"subrarr" => "\u{2979}",
+        b"suplarr" => "\u{297B}",
+        b"lfisht" => "\u{297C}",
+        b"rfisht" => "\u{297D}",
+        b"ufisht" => "\u{297E}",
+        b"dfisht" => "\u{297F}",
+        b"lopar" => "\u{2985}",
+        b"ropar" => "\u{2986}",
+        b"lbrke" => "\u{298B}",
+        b"rbrke" => "\u{298C}",
+        b"lbrkslu" => "\u{298D}",
+        b"rbrksld" => "\u{298E}",
+        b"lbrksld" => "\u{298F}",
+        b"rbrkslu" => "\u{2990}",
+        b"langd" => "\u{2991}",
+        b"rangd" => "\u{2992}",
+        b"lparlt" => "\u{2993}",
+        b"rpargt" => "\u{2994}",
+        b"gtlPar" => "\u{2995}",
+        b"ltrPar" => "\u{2996}",
+        b"vzigzag" => "\u{299A}",
+        b"vangrt" => "\u{299C}",
+        b"angrtvbd" => "\u{299D}",
+        b"ange" => "\u{29A4}",
+        b"range" => "\u{29A5}",
+        b"dwangle" => "\u{29A6}",
+        b"uwangle" => "\u{29A7}",
+        b"angmsdaa" => "\u{29A8}",
+        b"angmsdab" => "\u{29A9}",
+        b"angmsdac" => "\u{29AA}",
+        b"angmsdad" => "\u{29AB}",
+        b"angmsdae" => "\u{29AC}",
+        b"angmsdaf" => "\u{29AD}",
+        b"angmsdag" => "\u{29AE}",
+        b"angmsdah" => "\u{29AF}",
+        b"bemptyv" => "\u{29B0}",
+        b"demptyv" => "\u{29B1}",
+        b"cemptyv" => "\u{29B2}",
+        b"raemptyv" => "\u{29B3}",
+        b"laemptyv" => "\u{29B4}",
+        b"ohbar" => "\u{29B5}",
+        b"omid" => "\u{29B6}",
+        b"opar" => "\u{29B7}",
+        b"operp" => "\u{29B9}",
+        b"olcross" => "\u{29BB}",
+        b"odsold" => "\u{29BC}",
+        b"olcir" => "\u{29BE}",
+        b"ofcir" => "\u{29BF}",
+        b"olt" => "\u{29C0}",
+        b"ogt" => "\u{29C1}",
+        b"cirscir" => "\u{29C2}",
+        b"cirE" => "\u{29C3}",
+        b"solb" => "\u{29C4}",
+        b"bsolb" => "\u{29C5}",
+        b"boxbox" => "\u{29C9}",
+        b"trisb" => "\u{29CD}",
+        b"rtriltri" => "\u{29CE}",
+        b"LeftTriangleBar" => "\u{29CF}",
+        b"RightTriangleBar" => "\u{29D0}",
+        b"race" => "\u{29DA}",
+        b"iinfin" => "\u{29DC}",
+        b"infintie" => "\u{29DD}",
+        b"nvinfin" => "\u{29DE}",
+        b"eparsl" => "\u{29E3}",
+        b"smeparsl" => "\u{29E4}",
+        b"eqvparsl" => "\u{29E5}",
+        b"lozf" | b"blacklozenge" => "\u{29EB}",
+        b"RuleDelayed" => "\u{29F4}",
+        b"dsol" => "\u{29F6}",
+        b"xodot" | b"bigodot" => "\u{2A00}",
+        b"xoplus" | b"bigoplus" => "\u{2A01}",
+        b"xotime" | b"bigotimes" => "\u{2A02}",
+        b"xuplus" | b"biguplus" => "\u{2A04}",
+        b"xsqcup" | b"bigsqcup" => "\u{2A06}",
+        b"qint" | b"iiiint" => "\u{2A0C}",
+        b"fpartint" => "\u{2A0D}",
+        b"cirfnint" => "\u{2A10}",
+        b"awint" => "\u{2A11}",
+        b"rppolint" => "\u{2A12}",
+        b"scpolint" => "\u{2A13}",
+        b"npolint" => "\u{2A14}",
+        b"pointint" => "\u{2A15}",
+        b"quatint" => "\u{2A16}",
+        b"intlarhk" => "\u{2A17}",
+        b"pluscir" => "\u{2A22}",
+        b"plusacir" => "\u{2A23}",
+        b"simplus" => "\u{2A24}",
+        b"plusdu" => "\u{2A25}",
+        b"plussim" => "\u{2A26}",
+        b"plustwo" => "\u{2A27}",
+        b"mcomma" => "\u{2A29}",
+        b"minusdu" => "\u{2A2A}",
+        b"loplus" => "\u{2A2D}",
+        b"roplus" => "\u{2A2E}",
+        b"Cross" => "\u{2A2F}",
+        b"timesd" => "\u{2A30}",
+        b"timesbar" => "\u{2A31}",
+        b"smashp" => "\u{2A33}",
+        b"lotimes" => "\u{2A34}",
+        b"rotimes" => "\u{2A35}",
+        b"otimesas" => "\u{2A36}",
+        b"Otimes" => "\u{2A37}",
+        b"odiv" => "\u{2A38}",
+        b"triplus" => "\u{2A39}",
+        b"triminus" => "\u{2A3A}",
+        b"tritime" => "\u{2A3B}",
+        b"iprod" | b"intprod" => "\u{2A3C}",
+        b"amalg" => "\u{2A3F}",
+        b"capdot" => "\u{2A40}",
+        b"ncup" => "\u{2A42}",
+        b"ncap" => "\u{2A43}",
+        b"capand" => "\u{2A44}",
+        b"cupor" => "\u{2A45}",
+        b"cupcap" => "\u{2A46}",
+        b"capcup" => "\u{2A47}",
+        b"cupbrcap" => "\u{2A48}",
+        b"capbrcup" => "\u{2A49}",
+        b"cupcup" => "\u{2A4A}",
+        b"capcap" => "\u{2A4B}",
+        b"ccups" => "\u{2A4C}",
+        b"ccaps" => "\u{2A4D}",
+        b"ccupssm" => "\u{2A50}",
+        b"And" => "\u{2A53}",
+        b"Or" => "\u{2A54}",
+        b"andand" => "\u{2A55}",
+        b"oror" => "\u{2A56}",
+        b"orslope" => "\u{2A57}",
+        b"andslope" => "\u{2A58}",
+        b"andv" => "\u{2A5A}",
+        b"orv" => "\u{2A5B}",
+        b"andd" => "\u{2A5C}",
+        b"ord" => "\u{2A5D}",
+        b"wedbar" => "\u{2A5F}",
+        b"sdote" => "\u{2A66}",
+        b"simdot" => "\u{2A6A}",
+        b"congdot" => "\u{2A6D}",
+        b"easter" => "\u{2A6E}",
+        b"apacir" => "\u{2A6F}",
+        b"apE" => "\u{2A70}",
+        b"eplus" => "\u{2A71}",
+        b"pluse" => "\u{2A72}",
+        b"Esim" => "\u{2A73}",
+        b"Colone" => "\u{2A74}",
+        b"Equal" => "\u{2A75}",
+        b"eDDot" | b"ddotseq" => "\u{2A77}",
+        b"equivDD" => "\u{2A78}",
+        b"ltcir" => "\u{2A79}",
+        b"gtcir" => "\u{2A7A}",
+        b"ltquest" => "\u{2A7B}",
+        b"gtquest" => "\u{2A7C}",
+        b"les" | b"LessSlantEqual" | b"leqslant" => "\u{2A7D}",
+        b"ges" | b"GreaterSlantEqual" | b"geqslant" => "\u{2A7E}",
+        b"lesdot" => "\u{2A7F}",
+        b"gesdot" => "\u{2A80}",
+        b"lesdoto" => "\u{2A81}",
+        b"gesdoto" => "\u{2A82}",
+        b"lesdotor" => "\u{2A83}",
+        b"gesdotol" => "\u{2A84}",
+        b"lap" | b"lessapprox" => "\u{2A85}",
+        b"gap" | b"gtrapprox" => "\u{2A86}",
+        b"lne" | b"lneq" => "\u{2A87}",
+        b"gne" | b"gneq" => "\u{2A88}",
+        b"lnap" | b"lnapprox" => "\u{2A89}",
+        b"gnap" | b"gnapprox" => "\u{2A8A}",
+        b"lEg" | b"lesseqqgtr" => "\u{2A8B}",
+        b"gEl" | b"gtreqqless" => "\u{2A8C}",
+        b"lsime" => "\u{2A8D}",
+        b"gsime" => "\u{2A8E}",
+        b"lsimg" => "\u{2A8F}",
+        b"gsiml" => "\u{2A90}",
+        b"lgE" => "\u{2A91}",
+        b"glE" => "\u{2A92}",
+        b"lesges" => "\u{2A93}",
+        b"gesles" => "\u{2A94}",
+        b"els" | b"eqslantless" => "\u{2A95}",
+        b"egs" | b"eqslantgtr" => "\u{2A96}",
+        b"elsdot" => "\u{2A97}",
+        b"egsdot" => "\u{2A98}",
+        b"el" => "\u{2A99}",
+        b"eg" => "\u{2A9A}",
+        b"siml" => "\u{2A9D}",
+        b"simg" => "\u{2A9E}",
+        b"simlE" => "\u{2A9F}",
+        b"simgE" => "\u{2AA0}",
+        b"LessLess" => "\u{2AA1}",
+        b"GreaterGreater" => "\u{2AA2}",
+        b"glj" => "\u{2AA4}",
+        b"gla" => "\u{2AA5}",
+        b"ltcc" => "\u{2AA6}",
+        b"gtcc" => "\u{2AA7}",
+        b"lescc" => "\u{2AA8}",
+        b"gescc" => "\u{2AA9}",
+        b"smt" => "\u{2AAA}",
+        b"lat" => "\u{2AAB}",
+        b"smte" => "\u{2AAC}",
+        b"late" => "\u{2AAD}",
+        b"bumpE" => "\u{2AAE}",
+        b"pre" | b"preceq" | b"PrecedesEqual" => "\u{2AAF}",
+        b"sce" | b"succeq" | b"SucceedsEqual" => "\u{2AB0}",
+        b"prE" => "\u{2AB3}",
+        b"scE" => "\u{2AB4}",
+        b"prnE" | b"precneqq" => "\u{2AB5}",
+        b"scnE" | b"succneqq" => "\u{2AB6}",
+        b"prap" | b"precapprox" => "\u{2AB7}",
+        b"scap" | b"succapprox" => "\u{2AB8}",
+        b"prnap" | b"precnapprox" => "\u{2AB9}",
+        b"scnap" | b"succnapprox" => "\u{2ABA}",
+        b"Pr" => "\u{2ABB}",
+        b"Sc" => "\u{2ABC}",
+        b"subdot" => "\u{2ABD}",
+        b"supdot" => "\u{2ABE}",
+        b"subplus" => "\u{2ABF}",
+        b"supplus" => "\u{2AC0}",
+        b"submult" => "\u{2AC1}",
+        b"supmult" => "\u{2AC2}",
+        b"subedot" => "\u{2AC3}",
+        b"supedot" => "\u{2AC4}",
+        b"subE" | b"subseteqq" => "\u{2AC5}",
+        b"supE" | b"supseteqq" => "\u{2AC6}",
+        b"subsim" => "\u{2AC7}",
+        b"supsim" => "\u{2AC8}",
+        b"subnE" | b"subsetneqq" => "\u{2ACB}",
+        b"supnE" | b"supsetneqq" => "\u{2ACC}",
+        b"csub" => "\u{2ACF}",
+        b"csup" => "\u{2AD0}",
+        b"csube" => "\u{2AD1}",
+        b"csupe" => "\u{2AD2}",
+        b"subsup" => "\u{2AD3}",
+        b"supsub" => "\u{2AD4}",
+        b"subsub" => "\u{2AD5}",
+        b"supsup" => "\u{2AD6}",
+        b"suphsub" => "\u{2AD7}",
+        b"supdsub" => "\u{2AD8}",
+        b"forkv" => "\u{2AD9}",
+        b"topfork" => "\u{2ADA}",
+        b"mlcp" => "\u{2ADB}",
+        b"Dashv" | b"DoubleLeftTee" => "\u{2AE4}",
+        b"Vdashl" => "\u{2AE6}",
+        b"Barv" => "\u{2AE7}",
+        b"vBar" => "\u{2AE8}",
+        b"vBarv" => "\u{2AE9}",
+        b"Vbar" => "\u{2AEB}",
+        b"Not" => "\u{2AEC}",
+        b"bNot" => "\u{2AED}",
+        b"rnmid" => "\u{2AEE}",
+        b"cirmid" => "\u{2AEF}",
+        b"midcir" => "\u{2AF0}",
+        b"topcir" => "\u{2AF1}",
+        b"nhpar" => "\u{2AF2}",
+        b"parsim" => "\u{2AF3}",
+        b"parsl" => "\u{2AFD}",
+        b"fflig" => "\u{FB00}",
+        b"filig" => "\u{FB01}",
+        b"fllig" => "\u{FB02}",
+        b"ffilig" => "\u{FB03}",
+        b"ffllig" => "\u{FB04}",
+        b"Ascr" => "\u{1D49}",
+        b"Cscr" => "\u{1D49}",
+        b"Dscr" => "\u{1D49}",
+        b"Gscr" => "\u{1D4A}",
+        b"Jscr" => "\u{1D4A}",
+        b"Kscr" => "\u{1D4A}",
+        b"Nscr" => "\u{1D4A}",
+        b"Oscr" => "\u{1D4A}",
+        b"Pscr" => "\u{1D4A}",
+        b"Qscr" => "\u{1D4A}",
+        b"Sscr" => "\u{1D4A}",
+        b"Tscr" => "\u{1D4A}",
+        b"Uscr" => "\u{1D4B}",
+        b"Vscr" => "\u{1D4B}",
+        b"Wscr" => "\u{1D4B}",
+        b"Xscr" => "\u{1D4B}",
+        b"Yscr" => "\u{1D4B}",
+        b"Zscr" => "\u{1D4B}",
+        b"ascr" => "\u{1D4B}",
+        b"bscr" => "\u{1D4B}",
+        b"cscr" => "\u{1D4B}",
+        b"dscr" => "\u{1D4B}",
+        b"fscr" => "\u{1D4B}",
+        b"hscr" => "\u{1D4B}",
+        b"iscr" => "\u{1D4B}",
+        b"jscr" => "\u{1D4B}",
+        b"kscr" => "\u{1D4C}",
+        b"lscr" => "\u{1D4C}",
+        b"mscr" => "\u{1D4C}",
+        b"nscr" => "\u{1D4C}",
+        b"pscr" => "\u{1D4C}",
+        b"qscr" => "\u{1D4C}",
+        b"rscr" => "\u{1D4C}",
+        b"sscr" => "\u{1D4C}",
+        b"tscr" => "\u{1D4C}",
+        b"uscr" => "\u{1D4C}",
+        b"vscr" => "\u{1D4C}",
+        b"wscr" => "\u{1D4C}",
+        b"xscr" => "\u{1D4C}",
+        b"yscr" => "\u{1D4C}",
+        b"zscr" => "\u{1D4C}",
+        b"Afr" => "\u{1D50}",
+        b"Bfr" => "\u{1D50}",
+        b"Dfr" => "\u{1D50}",
+        b"Efr" => "\u{1D50}",
+        b"Ffr" => "\u{1D50}",
+        b"Gfr" => "\u{1D50}",
+        b"Jfr" => "\u{1D50}",
+        b"Kfr" => "\u{1D50}",
+        b"Lfr" => "\u{1D50}",
+        b"Mfr" => "\u{1D51}",
+        b"Nfr" => "\u{1D51}",
+        b"Ofr" => "\u{1D51}",
+        b"Pfr" => "\u{1D51}",
+        b"Qfr" => "\u{1D51}",
+        b"Sfr" => "\u{1D51}",
+        b"Tfr" => "\u{1D51}",
+        b"Ufr" => "\u{1D51}",
+        b"Vfr" => "\u{1D51}",
+        b"Wfr" => "\u{1D51}",
+        b"Xfr" => "\u{1D51}",
+        b"Yfr" => "\u{1D51}",
+        b"afr" => "\u{1D51}",
+        b"bfr" => "\u{1D51}",
+        b"cfr" => "\u{1D52}",
+        b"dfr" => "\u{1D52}",
+        b"efr" => "\u{1D52}",
+        b"ffr" => "\u{1D52}",
+        b"gfr" => "\u{1D52}",
+        b"hfr" => "\u{1D52}",
+        b"ifr" => "\u{1D52}",
+        b"jfr" => "\u{1D52}",
+        b"kfr" => "\u{1D52}",
+        b"lfr" => "\u{1D52}",
+        b"mfr" => "\u{1D52}",
+        b"nfr" => "\u{1D52}",
+        b"ofr" => "\u{1D52}",
+        b"pfr" => "\u{1D52}",
+        b"qfr" => "\u{1D52}",
+        b"rfr" => "\u{1D52}",
+        b"sfr" => "\u{1D53}",
+        b"tfr" => "\u{1D53}",
+        b"ufr" => "\u{1D53}",
+        b"vfr" => "\u{1D53}",
+        b"wfr" => "\u{1D53}",
+        b"xfr" => "\u{1D53}",
+        b"yfr" => "\u{1D53}",
+        b"zfr" => "\u{1D53}",
+        b"Aopf" => "\u{1D53}",
+        b"Bopf" => "\u{1D53}",
+        b"Dopf" => "\u{1D53}",
+        b"Eopf" => "\u{1D53}",
+        b"Fopf" => "\u{1D53}",
+        b"Gopf" => "\u{1D53}",
+        b"Iopf" => "\u{1D54}",
+        b"Jopf" => "\u{1D54}",
+        b"Kopf" => "\u{1D54}",
+        b"Lopf" => "\u{1D54}",
+        b"Mopf" => "\u{1D54}",
+        b"Oopf" => "\u{1D54}",
+        b"Sopf" => "\u{1D54}",
+        b"Topf" => "\u{1D54}",
+        b"Uopf" => "\u{1D54}",
+        b"Vopf" => "\u{1D54}",
+        b"Wopf" => "\u{1D54}",
+        b"Xopf" => "\u{1D54}",
+        b"Yopf" => "\u{1D55}",
+        b"aopf" => "\u{1D55}",
+        b"bopf" => "\u{1D55}",
+        b"copf" => "\u{1D55}",
+        b"dopf" => "\u{1D55}",
+        b"eopf" => "\u{1D55}",
+        b"fopf" => "\u{1D55}",
+        b"gopf" => "\u{1D55}",
+        b"hopf" => "\u{1D55}",
+        b"iopf" => "\u{1D55}",
+        b"jopf" => "\u{1D55}",
+        b"kopf" => "\u{1D55}",
+        b"lopf" => "\u{1D55}",
+        b"mopf" => "\u{1D55}",
+        b"nopf" => "\u{1D55}",
+        b"oopf" => "\u{1D56}",
+        b"popf" => "\u{1D56}",
+        b"qopf" => "\u{1D56}",
+        b"ropf" => "\u{1D56}",
+        b"sopf" => "\u{1D56}",
+        b"topf" => "\u{1D56}",
+        b"uopf" => "\u{1D56}",
+        b"vopf" => "\u{1D56}",
+        b"wopf" => "\u{1D56}",
+        b"xopf" => "\u{1D56}",
+        b"yopf" => "\u{1D56}",
+        b"zopf" => "\u{1D56}",
+        _ => return None,
+    };
+    Some(s)
+}
+
+fn push_utf8(out: &mut Vec<u8>, code: char) {
+    let mut buf = [0u8; 4];
+    out.extend_from_slice(code.encode_utf8(&mut buf).as_bytes());
+}
+
+fn parse_number(bytes: &[u8], range: Range<usize>) -> Result<char, EscapeError> {
+    let code = if bytes.starts_with(b"x") {
+        parse_hexadecimal(&bytes[1..])
     } else {
-        buf.push((code >> 18 & 0x07) as u8 | TAG_FOUR_B);
-        buf.push((code >> 12 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code >> 6 & 0x3F) as u8 | TAG_CONT);
-        buf.push((code & 0x3F) as u8 | TAG_CONT);
+        parse_decimal(&bytes)
+    }?;
+    if code == 0 {
+        return Err(EscapeError::EntityWithNull(range));
+    }
+    match std::char::from_u32(code) {
+        Some(c) => Ok(c),
+        None => Err(EscapeError::InvalidCodepoint(code)),
     }
 }
 
@@ -5688,5 +1760,17 @@ fn test_escape() {
     assert_eq!(
         &*escape(b"prefix_\"a\"b&<>c"),
         "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
+    );
+}
+
+#[test]
+fn test_partial_escape() {
+    assert_eq!(&*partial_escape(b"test"), b"test");
+    assert_eq!(&*partial_escape(b"<test>"), b"&lt;test&gt;");
+    assert_eq!(&*partial_escape(b"\"a\"bc"), b"\"a\"bc");
+    assert_eq!(&*partial_escape(b"\"a\"b&c"), b"\"a\"b&amp;c");
+    assert_eq!(
+        &*partial_escape(b"prefix_\"a\"b&<>c"),
+        "prefix_\"a\"b&amp;&lt;&gt;c".as_bytes()
     );
 }

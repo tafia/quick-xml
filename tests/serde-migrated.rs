@@ -98,7 +98,6 @@ fn test_namespaces() {
 }
 
 #[test]
-#[ignore] // FIXME
 fn test_doctype() {
     #[derive(PartialEq, Serialize, Deserialize, Debug)]
     struct Envelope {
@@ -953,12 +952,12 @@ fn futile2() {
     #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
     struct Object {
         field: Option<Null>,
-    };
+    }
 
     #[derive(Eq, PartialEq, Debug, Serialize, Deserialize)]
     struct Stuff {
         stuff_field: Option<Object>,
-    };
+    }
 
     test_parse_ok(&[
         (

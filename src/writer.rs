@@ -1,9 +1,8 @@
 //! A module to handle `Writer`
 
+use crate::errors::{Error, Result};
+use crate::events::{attributes::Attribute, BytesStart, BytesText, Event};
 use std::io::Write;
-
-use errors::{Error, Result};
-use events::Event;
 
 /// XML writer.
 ///
@@ -12,7 +11,6 @@ use events::Event;
 /// # Examples
 ///
 /// ```rust
-/// # extern crate quick_xml;
 /// # fn main() {
 /// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
@@ -121,7 +119,7 @@ impl<W: Write> Writer<W> {
             }
             Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
             Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE", e, b">"),
+            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE ", e, b">"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
@@ -170,6 +168,136 @@ impl<W: Write> Writer<W> {
         }
         Ok(())
     }
+
+    /// Provides a simple, high-level API for writing XML elements.
+    ///
+    /// Returns an [ElementWriter] that simplifies setting attributes and writing content inside the element.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use quick_xml::Result;
+    /// # fn main() -> Result<()> {
+    /// use quick_xml::{Error, Writer};
+    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// use std::io::Cursor;
+    ///
+    /// let mut writer = Writer::new(Cursor::new(Vec::new()));
+    ///
+    /// // writes <tag attr1="value1"/>
+    /// writer.create_element("tag")
+    ///     .with_attribute(("attr1", "value1"))  // chain `with_attribute()` calls to add many attributes
+    ///     .write_empty()?;
+    ///
+    /// // writes <tag attr1="value1" attr2="value2">with some text inside</tag>
+    /// writer.create_element("tag")
+    ///     .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter())  // or add attributes from an iterator
+    ///     .write_text_content(BytesText::from_plain_str("with some text inside"))?;
+    ///
+    /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
+    /// writer.create_element("tag")
+    ///     .write_inner_content(|writer| {
+    ///         let fruits = ["apple", "orange"];
+    ///         for (quant, item) in fruits.iter().enumerate() {
+    ///             writer
+    ///                 .create_element("fruit")
+    ///                 .with_attribute(("quantity", quant.to_string().as_str()))
+    ///                 .write_text_content(BytesText::from_plain_str(item))?;
+    ///         }
+    ///         Ok(())
+    ///     })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn create_element<'a, N>(&'a mut self, name: &'a N) -> ElementWriter<W>
+    where
+        N: 'a + AsRef<[u8]> + ?Sized,
+    {
+        ElementWriter {
+            writer: self,
+            start_tag: BytesStart::borrowed_name(name.as_ref()),
+        }
+    }
+}
+
+pub struct ElementWriter<'a, W: Write> {
+    writer: &'a mut Writer<W>,
+    start_tag: BytesStart<'a>,
+}
+
+impl<'a, W: Write> ElementWriter<'a, W> {
+    /// Adds an attribute to this element.
+    pub fn with_attribute<'b, I>(mut self, attr: I) -> Self
+    where
+        I: Into<Attribute<'b>>,
+    {
+        self.start_tag.push_attribute(attr);
+        self
+    }
+
+    /// Add additional attributes to this element using an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    ///
+    /// [`Attribute`]: attributes/struct.Attributes.html
+    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        self.start_tag.extend_attributes(attributes);
+        self
+    }
+
+    /// Write some text inside the current element.
+    pub fn write_text_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+        self.writer.write_event(Event::Text(text))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Write a CData event `<![CDATA[...]]>` inside the current element.
+    pub fn write_cdata_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+        self.writer.write_event(Event::CData(text))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Write a processing instruction `<?...?>` inside the current element.
+    pub fn write_pi_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+        self.writer.write_event(Event::PI(text))?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+
+    /// Write an empty (self-closing) tag.
+    pub fn write_empty(self) -> Result<&'a mut Writer<W>> {
+        self.writer.write_event(Event::Empty(self.start_tag))?;
+        Ok(self.writer)
+    }
+
+    /// Create a new scope for writing XML inside the current element.
+    pub fn write_inner_content<F>(mut self, closure: F) -> Result<&'a mut Writer<W>>
+    where
+        F: Fn(&mut Writer<W>) -> Result<()>,
+    {
+        self.writer
+            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+        closure(&mut self.writer)?;
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
 }
 
 #[derive(Clone)]
@@ -210,7 +338,7 @@ impl Indentation {
 #[cfg(test)]
 mod indentation {
     use super::*;
-    use events::*;
+    use crate::events::*;
 
     #[test]
     fn self_closed() {
@@ -224,8 +352,8 @@ mod indentation {
             .expect("write tag failed");
 
         assert_eq!(
-            buffer,
-            br#"<self-closed attr1="value1" attr2="value2"/>"#.as_ref()
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<self-closed attr1="value1" attr2="value2"/>"#
         );
     }
 
@@ -246,10 +374,9 @@ mod indentation {
             .expect("write end tag failed");
 
         assert_eq!(
-            buffer,
-            br#"<paired attr1="value1" attr2="value2">
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
 </paired>"#
-                .as_ref()
         );
     }
 
@@ -275,11 +402,10 @@ mod indentation {
             .expect("write end tag failed");
 
         assert_eq!(
-            buffer,
-            br#"<paired attr1="value1" attr2="value2">
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
     <inner/>
 </paired>"#
-                .as_ref()
         );
     }
 
@@ -305,8 +431,8 @@ mod indentation {
             .expect("write end tag failed");
 
         assert_eq!(
-            buffer,
-            br#"<paired attr1="value1" attr2="value2">text</paired>"#.as_ref()
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">text</paired>"#
         );
     }
 
@@ -336,10 +462,9 @@ mod indentation {
             .expect("write end tag failed");
 
         assert_eq!(
-            buffer,
-            br#"<paired attr1="value1" attr2="value2">text<inner/>
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">text<inner/>
 </paired>"#
-                .as_ref()
         );
     }
 
@@ -371,13 +496,88 @@ mod indentation {
             .expect("write end tag 1 failed");
 
         assert_eq!(
-            buffer,
-            br#"<paired attr1="value1" attr2="value2">
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
     <paired attr1="value1" attr2="value2">
         <inner/>
     </paired>
 </paired>"#
-                .as_ref()
+        );
+    }
+    #[test]
+    fn element_writer_empty() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        writer
+            .create_element(b"empty")
+            .with_attribute(("attr1", "value1"))
+            .with_attribute(("attr2", "value2"))
+            .write_empty()
+            .expect("failure");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<empty attr1="value1" attr2="value2"/>"#
+        );
+    }
+
+    #[test]
+    fn element_writer_text() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        writer
+            .create_element("paired")
+            .with_attribute(("attr1", "value1"))
+            .with_attribute(("attr2", "value2"))
+            .write_text_content(BytesText::from_plain_str("text"))
+            .expect("failure");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">text</paired>"#
+        );
+    }
+
+    #[test]
+    fn element_writer_nested() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        writer
+            .create_element("outer")
+            .with_attribute(("attr1", "value1"))
+            .with_attribute(("attr2", "value2"))
+            .write_inner_content(|writer| {
+                let fruits = ["apple", "orange", "banana"];
+                for (quant, item) in fruits.iter().enumerate() {
+                    writer
+                        .create_element("fruit")
+                        .with_attribute(("quantity", quant.to_string().as_str()))
+                        .write_text_content(BytesText::from_plain_str(item))?;
+                }
+                writer
+                    .create_element("inner")
+                    .write_inner_content(|writer| {
+                        writer.create_element("empty").write_empty()?;
+                        Ok(())
+                    })?;
+
+                Ok(())
+            })
+            .expect("failure");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<outer attr1="value1" attr2="value2">
+    <fruit quantity="0">apple</fruit>
+    <fruit quantity="1">orange</fruit>
+    <fruit quantity="2">banana</fruit>
+    <inner>
+        <empty/>
+    </inner>
+</outer>"#
         );
     }
 }

@@ -33,7 +33,6 @@ fuzz_target!(|data: &[u8]| {
             Ok(Event::Decl(ref e)) => {
                 let _ = e.version();
                 let _ = e.encoding();
-                let _ = e.encoder();
                 let _ = e.standalone();
             }
             Ok(Event::End(_)) => (),
