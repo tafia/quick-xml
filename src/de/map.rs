@@ -107,8 +107,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                     // XML node
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
-                Some(Event::CData(_)) => {
-                    self.value = MapValue::InnerValue;
+                DeEvent::CData(_) => {
+                    self.state = State::InnerValue;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 // Used to deserialize collections of enums, like:

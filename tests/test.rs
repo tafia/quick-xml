@@ -1273,3 +1273,21 @@ fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
 
     Ok(())
 }
+
+#[cfg(feature = "serialize")]
+#[test]
+fn test_deserialize_cdata() -> Result<(), quick_xml::DeError> {
+    use quick_xml::de::from_str;
+
+    #[derive(Debug, Deserialize)]
+    pub struct Test {
+        #[serde(rename = "$value")]
+        pub url: String,
+    }
+
+    let imp_s = r#"<Test><![CDATA[a test value]]></Test>"#;
+    let item = from_str::<Test>(imp_s);
+    assert!(item.is_ok(), "{:?}", item);
+
+    Ok(())
+}
