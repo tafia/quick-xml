@@ -36,6 +36,8 @@
   ([#380](https://github.com/tafia/quick-xml/pull/380))
 - refactor: error variant `DeError::EndOfAttributes` renamed to `DeError::KeyNotFound`
   ([#380](https://github.com/tafia/quick-xml/pull/380))
+- test: add tests for malformed (but valid XML) input for trivial cases
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 

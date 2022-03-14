@@ -1015,6 +1015,15 @@ mod tests {
                         let item: Trivial<$type> = from_str($value).unwrap();
 
                         assert_eq!(item, Trivial { value: $expected });
+
+                        match from_str::<Trivial<$type>>(&format!("<outer>{}</outer>", $value)) {
+                            // Expected unexpected start element `<root>`
+                            Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"root"),
+                            x => panic!(
+                                r#"Expected `Err(DeError::UnexpectedStart("root"))`, but got `{:?}`"#,
+                                x
+                            ),
+                        }
                     }
                 };
             }
