@@ -733,21 +733,15 @@ mod tests {
     fn read_to_end() {
         use crate::de::DeEvent::*;
 
-        let mut reader = Reader::from_bytes(
-            r#"
+        let mut de = Deserializer::from_bytes(
+            br#"
             <root>
                 <tag a="1"><tag>text</tag>content</tag>
                 <tag a="2"><![CDATA[cdata content]]></tag>
                 <self-closed/>
             </root>
-            "#
-            .as_bytes(),
+            "#,
         );
-        reader
-            .expand_empty_elements(true)
-            .check_end_names(true)
-            .trim_text(true);
-        let mut de = Deserializer::new(SliceReader { reader });
 
         assert_eq!(
             de.next().unwrap(),
