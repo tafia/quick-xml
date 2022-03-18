@@ -92,6 +92,8 @@
 - [#118]: Remove `BytesStart::unescaped*` set of methods because they could return wrong results
   Use methods on `Attribute` instead
 
+- [#403]: Remove deprecated `quick_xml::de::from_bytes` and `Deserializer::from_borrowing_reader`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -109,6 +111,7 @@
 [#391]: https://github.com/tafia/quick-xml/pull/391
 [#393]: https://github.com/tafia/quick-xml/pull/393
 [#395]: https://github.com/tafia/quick-xml/pull/395
+[#403]: https://github.com/tafia/quick-xml/pull/403
 
 ## 0.23.0 -- 2022-05-08
 

@@ -301,15 +301,6 @@ where
 }
 
 /// Deserialize an instance of type `T` from bytes of XML text.
-#[deprecated = "Use `from_slice` instead"]
-pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
-where
-    T: Deserialize<'de>,
-{
-    from_slice(s)
-}
-
-/// Deserialize an instance of type `T` from bytes of XML text.
 pub fn from_slice<'de, T>(s: &'de [u8]) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
@@ -398,12 +389,6 @@ where
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
         }
-    }
-
-    /// Get a new deserializer from a regular BufRead
-    #[deprecated = "Use `Deserializer::new` instead"]
-    pub fn from_borrowing_reader(reader: R) -> Self {
-        Self::new(reader)
     }
 
     /// Set the maximum number of events that could be skipped during deserialization
