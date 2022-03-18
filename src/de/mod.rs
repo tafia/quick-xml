@@ -199,7 +199,7 @@ where
         .expand_empty_elements(true)
         .check_end_names(true)
         .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(IoReader {
+    let mut de = Deserializer::new(IoReader {
         reader,
         buf: Vec::new(),
     });
@@ -253,11 +253,6 @@ where
             peek: None,
             has_value_field: false,
         }
-    }
-
-    /// Get a new deserializer from a regular BufRead
-    pub fn from_borrowing_reader(reader: R) -> Self {
-        Self::new(reader)
     }
 
     fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
@@ -352,7 +347,7 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
             .expand_empty_elements(true)
             .check_end_names(true)
             .trim_text(true);
-        Self::from_borrowing_reader(SliceReader { reader })
+        Self::new(SliceReader { reader })
     }
 }
 
@@ -752,7 +747,7 @@ mod tests {
             .expand_empty_elements(true)
             .check_end_names(true)
             .trim_text(true);
-        let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
+        let mut de = Deserializer::new(SliceReader { reader });
 
         assert_eq!(
             de.next().unwrap(),
