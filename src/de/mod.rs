@@ -626,10 +626,7 @@ where
 /// A trait that borrows an XML reader that borrows from the input. For a &[u8]
 /// input the events will borrow from that input, whereas with a BufRead input
 /// all events will be converted to 'static, allocating whenever necessary.
-pub trait BorrowingReader<'i>
-where
-    Self: 'i,
-{
+pub trait BorrowingReader<'i> {
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<DeEvent<'i>, DeError>;
 
@@ -646,7 +643,7 @@ struct IoReader<R: BufRead> {
     buf: Vec<u8>,
 }
 
-impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
+impl<'i, R: BufRead> BorrowingReader<'i> for IoReader<R> {
     fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
         let event = loop {
             let e = self.reader.read_event(&mut self.buf)?;
