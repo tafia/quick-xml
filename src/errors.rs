@@ -133,7 +133,7 @@ impl std::error::Error for Error {
 pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
-    use super::Error;
+    use super::*;
     use std::fmt;
     use std::num::{ParseFloatError, ParseIntError};
 
@@ -170,7 +170,7 @@ pub mod serialize {
     }
 
     impl fmt::Display for DeError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 DeError::Custom(s) => write!(f, "{}", s),
                 DeError::Xml(e) => write!(f, "{}", e),
@@ -218,6 +218,13 @@ pub mod serialize {
     impl From<Error> for DeError {
         fn from(e: Error) -> Self {
             DeError::Xml(e)
+        }
+    }
+
+    impl From<EscapeError> for DeError {
+        #[inline]
+        fn from(e: EscapeError) -> Self {
+            Self::Xml(e.into())
         }
     }
 

@@ -113,7 +113,7 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
-    events::{BytesEnd, BytesStart, BytesText, Event},
+    events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
 };
@@ -137,7 +137,7 @@ pub enum DeEvent<'a> {
     Text(BytesText<'a>),
     /// Unescaped character data between `Start` and `End` element,
     /// stored in `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesCData<'a>),
     /// End of XML document.
     Eof,
 }
@@ -316,19 +316,23 @@ where
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
     /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
-    fn next_text(&mut self) -> Result<BytesText<'de>, DeError> {
+    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) | DeEvent::CData(e) => Ok(e),
+            DeEvent::Text(e) if unescape => e.unescape().map_err(|e| DeError::Xml(e.into())),
+            DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
+            DeEvent::CData(e) => Ok(e),
             DeEvent::Start(e) => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) | DeEvent::CData(t) => t,
+                    DeEvent::Text(t) if unescape => t.unescape()?,
+                    DeEvent::Text(t) => BytesCData::new(t.into_inner()),
+                    DeEvent::CData(t) => t,
                     DeEvent::Start(_) => return Err(DeError::Start),
                     // We can get End event in case of `<tag></tag>` or `<tag/>` input
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
-                        return Ok(BytesText::from_escaped(&[] as &[u8]));
+                        return Ok(BytesCData::new(&[] as &[u8]));
                     }
                     DeEvent::End(_) => return Err(DeError::End),
                     DeEvent::Eof => return Err(DeError::Eof),
@@ -397,9 +401,9 @@ macro_rules! deserialize_type {
         where
             V: Visitor<'de>,
         {
-            let txt = self.next_text()?;
             // No need to unescape because valid integer representations cannot be escaped
-            let string = txt.decode(self.reader.decoder())?;
+            let text = self.next_text(false)?;
+            let string = text.decode(self.reader.decoder())?;
             visitor.$visit(string.parse()?)
         }
     };
@@ -438,9 +442,10 @@ where
     where
         V: Visitor<'de>,
     {
-        let txt = self.next_text()?;
+        // No need to unescape because valid integer representations cannot be escaped
+        let text = self.next_text(false)?;
 
-        deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
+        deserialize_bool(text.as_ref(), self.reader.decoder(), visitor)
     }
 
     /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
@@ -462,8 +467,8 @@ where
     where
         V: Visitor<'de>,
     {
-        let text = self.next_text()?;
-        let string = text.decode_and_escape(self.reader.decoder())?;
+        let text = self.next_text(true)?;
+        let string = text.decode(self.reader.decoder())?;
         match string {
             Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
             Cow::Owned(string) => visitor.visit_string(string),
@@ -474,16 +479,17 @@ where
     where
         V: Visitor<'de>,
     {
-        let text = self.next_text()?;
-        let value = text.escaped();
-        visitor.visit_bytes(value)
+        // No need to unescape because bytes gives access to the raw XML input
+        let text = self.next_text(false)?;
+        visitor.visit_bytes(&text)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
     {
-        let text = self.next_text()?;
+        // No need to unescape because bytes gives access to the raw XML input
+        let text = self.next_text(false)?;
         let value = text.into_inner().into_owned();
         visitor.visit_byte_buf(value)
     }
@@ -597,7 +603,8 @@ where
         V: Visitor<'de>,
     {
         match self.peek()? {
-            DeEvent::Text(t) | DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
@@ -790,7 +797,7 @@ mod tests {
         );
         assert_eq!(
             de.next().unwrap(),
-            CData(BytesText::from_plain_str("cdata content"))
+            CData(BytesCData::from_str("cdata content"))
         );
         assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
 

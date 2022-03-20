@@ -40,10 +40,13 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
-use crate::escape::{do_unescape, escape};
+use crate::escape::{do_unescape, escape, partial_escape};
 use crate::utils::write_cow_string;
 use crate::{errors::Error, errors::Result, reader::Reader};
 use attributes::{Attribute, Attributes};
+
+#[cfg(feature = "serialize")]
+use crate::escape::EscapeError;
 
 use memchr;
 
@@ -591,10 +594,22 @@ impl<'a> BytesText<'a> {
     }
 
     /// Extracts the inner `Cow` from the `BytesText` event container.
-    #[cfg(feature = "serialize")]
     #[inline]
-    pub(crate) fn into_inner(self) -> Cow<'a, [u8]> {
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
         self.content
+    }
+
+    /// Returns unescaped version of the text content, that can be written
+    /// as CDATA in XML
+    #[cfg(feature = "serialize")]
+    pub(crate) fn unescape(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
+        //TODO: need to think about better API instead of dozens similar functions
+        // Maybe use builder pattern. After that expose function as public API
+        //FIXME: need to take into account entities defined in the document
+        Ok(BytesCData::new(match do_unescape(&self.content, None)? {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(unescaped) => Cow::Owned(unescaped),
+        }))
     }
 
     /// gets escaped content
@@ -630,60 +645,6 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
-    }
-
-    /// Gets content of this text buffer in the specified encoding
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
-        Ok(match &self.content {
-            Cow::Borrowed(bytes) => {
-                #[cfg(feature = "encoding")]
-                {
-                    decoder.decode(bytes)
-                }
-                #[cfg(not(feature = "encoding"))]
-                {
-                    decoder.decode(bytes)?.into()
-                }
-            }
-            Cow::Owned(bytes) => {
-                #[cfg(feature = "encoding")]
-                let decoded = decoder.decode(bytes).into_owned();
-
-                #[cfg(not(feature = "encoding"))]
-                let decoded = decoder.decode(bytes)?.to_string();
-
-                decoded.into()
-            }
-        })
-    }
-
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode_and_escape(
-        &self,
-        decoder: crate::reader::Decoder,
-    ) -> Result<Cow<'a, str>> {
-        match self.decode(decoder)? {
-            Cow::Borrowed(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
-                match unescaped {
-                    Cow::Borrowed(unescaped) => {
-                        from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
-                    }
-                    Cow::Owned(unescaped) => String::from_utf8(unescaped)
-                        .map(|s| s.into())
-                        .map_err(|e| Error::Utf8(e.utf8_error())),
-                }
-            }
-            Cow::Owned(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
-                String::from_utf8(unescaped.into_owned())
-                    .map(|s| s.into())
-                    .map_err(|e| Error::Utf8(e.utf8_error()))
-            }
-        }
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -846,6 +807,117 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
     }
 }
 
+/// CDATA content contains unescaped data from the reader. If you want to write them as a text,
+/// [convert](Self::escape) it to [`BytesText`]
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesCData<'a> {
+    content: Cow<'a, [u8]>,
+}
+
+impl<'a> BytesCData<'a> {
+    /// Creates a new `BytesCData` from a byte sequence.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+
+    /// Creates a new `BytesCData` from a string
+    #[inline]
+    pub fn from_str(content: &'a str) -> Self {
+        Self::new(content.as_bytes())
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesCData<'static> {
+        BytesCData {
+            content: self.content.into_owned().into(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesCData` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    /// | `'`       | `&apos;`
+    /// | `"`       | `&quot;`
+    pub fn escape(self) -> BytesText<'a> {
+        BytesText::from_escaped(match escape(&self.content) {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
+        })
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// In XML text content, it is allowed (though not recommended) to leave
+    /// the quote special characters `"` and `'` unescaped.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    pub fn partial_escape(self) -> BytesText<'a> {
+        BytesText::from_escaped(match partial_escape(&self.content) {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
+        })
+    }
+
+    /// Gets content of this text buffer in the specified encoding
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+        Ok(match &self.content {
+            Cow::Borrowed(bytes) => {
+                #[cfg(feature = "encoding")]
+                {
+                    decoder.decode(bytes)
+                }
+                #[cfg(not(feature = "encoding"))]
+                {
+                    decoder.decode(bytes)?.into()
+                }
+            }
+            Cow::Owned(bytes) => {
+                #[cfg(feature = "encoding")]
+                let decoded = decoder.decode(bytes).into_owned();
+
+                #[cfg(not(feature = "encoding"))]
+                let decoded = decoder.decode(bytes)?.to_string();
+
+                decoded.into()
+            }
+        })
+    }
+}
+
+impl<'a> std::fmt::Debug for BytesCData<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "BytesCData {{ content: ")?;
+        write_cow_string(f, &self.content)?;
+        write!(f, " }}")
+    }
+}
+
 /// Event emitted by [`Reader::read_event`].
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
@@ -862,7 +934,7 @@ pub enum Event<'a> {
     /// Comment `<!-- ... -->`.
     Comment(BytesText<'a>),
     /// CData `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesCData<'a>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
@@ -915,6 +987,14 @@ impl<'a> Deref for BytesEnd<'a> {
 
 impl<'a> Deref for BytesText<'a> {
     type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
+impl<'a> Deref for BytesCData<'a> {
+    type Target = [u8];
+
     fn deref(&self) -> &[u8] {
         &*self.content
     }
