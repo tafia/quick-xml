@@ -9,7 +9,8 @@ use std::{fs::File, path::Path, str::from_utf8};
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::events::attributes::Attribute;
+use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -368,7 +369,7 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
         } else if uncased_starts_with(buf, b"![CDATA[") {
             debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
-            Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
+            Ok(Event::CData(BytesCData::new(&buf[8..buf.len() - 2])))
         } else if uncased_starts_with(buf, b"!DOCTYPE") {
             debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
             let start = buf[8..]

@@ -1,7 +1,7 @@
 //! A module to handle `Writer`
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesStart, BytesText, Event};
+use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 use std::io::Write;
 
 /// XML writer.
@@ -261,7 +261,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write a CData event `<![CDATA[...]]>` inside the current element.
-    pub fn write_cdata_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+    pub fn write_cdata_content(self, text: BytesCData) -> Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.to_borrowed()))?;
         self.writer.write_event(Event::CData(text))?;

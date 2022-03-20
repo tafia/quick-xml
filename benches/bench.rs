@@ -225,7 +225,7 @@ fn bench_quick_xml_one_cdata_event_trimmed(b: &mut Bencher) {
             .check_comments(false)
             .trim_text(true);
         match r.read_event(&mut buf) {
-            Ok(Event::CData(ref e)) => nbtxt += e.unescaped().unwrap().len(),
+            Ok(Event::CData(ref e)) => nbtxt += e.len(),
             something_else => panic!("Did not expect {:?}", something_else),
         };
 

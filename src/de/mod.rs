@@ -117,7 +117,7 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
-    events::{BytesEnd, BytesStart, BytesText, Event},
+    events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
 };
@@ -141,7 +141,7 @@ pub enum DeEvent<'a> {
     Text(BytesText<'a>),
     /// Unescaped character data between `Start` and `End` element,
     /// stored in `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesCData<'a>),
     /// End of XML document.
     Eof,
 }
@@ -300,18 +300,20 @@ where
     /// |`<tag ...>text</tag>`|`text`     |Complete tag consumed       |
     /// |`<tag/>`             |empty slice|Virtual end tag not consumed|
     /// |`</tag>`             |empty slice|Not consumed                |
-    fn next_text(&mut self) -> Result<BytesText<'de>, DeError> {
+    fn next_text(&mut self) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) | DeEvent::CData(e) => Ok(e),
+            DeEvent::Text(e) => e.unescape().map_err(|e| DeError::Xml(e.into())),
+            DeEvent::CData(e) => Ok(e),
             DeEvent::Eof => Err(DeError::Eof),
             DeEvent::Start(e) => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) | DeEvent::CData(t) => t,
+                    DeEvent::Text(t) => t.unescape().map_err(|e| DeError::Xml(e.into()))?,
+                    DeEvent::CData(t) => t,
                     DeEvent::Start(_) => return Err(DeError::Start),
                     DeEvent::End(end) if end.name() == e.name() => {
-                        return Ok(BytesText::from_escaped(&[] as &[u8]));
+                        return Ok(BytesCData::new(&[] as &[u8]));
                     }
                     DeEvent::End(_) => return Err(DeError::End),
                     DeEvent::Eof => return Err(DeError::Eof),
@@ -321,7 +323,7 @@ where
             }
             DeEvent::End(e) => {
                 self.peek = Some(DeEvent::End(e));
-                Ok(BytesText::from_escaped(&[] as &[u8]))
+                Ok(BytesCData::new(&[] as &[u8]))
             }
         }
     }
@@ -426,7 +428,7 @@ where
         V: Visitor<'de>,
     {
         let text = self.next_text()?;
-        let string = text.decode_and_escape(self.reader.decoder())?;
+        let string = text.decode(self.reader.decoder())?;
         match string {
             Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
             Cow::Owned(string) => visitor.visit_string(string),
@@ -438,8 +440,7 @@ where
         V: Visitor<'de>,
     {
         let text = self.next_text()?;
-        let value = text.escaped();
-        visitor.visit_bytes(value)
+        visitor.visit_bytes(&text)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -560,7 +561,8 @@ where
         V: Visitor<'de>,
     {
         match self.peek()? {
-            DeEvent::Text(t) | DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
@@ -772,7 +774,7 @@ mod tests {
         );
         assert_eq!(
             de.next().unwrap(),
-            CData(BytesText::from_plain_str("cdata content"))
+            CData(BytesCData::from_str("cdata content"))
         );
         assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
 
