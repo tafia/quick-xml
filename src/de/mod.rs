@@ -502,6 +502,116 @@
 //! <!-- ======================================================================================== -->
 //! <tr>
 //! <td>
+//! A sequence inside tag with a dedicated name:
+//!
+//! ```xml
+//! <any-tag>
+//!   <seq/>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <seq>
+//!     <item/>
+//!   </seq>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <seq>
+//!     <item/>
+//!     <item/>
+//!     <item/>
+//!   </seq>
+//! </any-tag>
+//! ```
+//! </td>
+//! <td>
+//!
+//! A struct with a field which have a sequence type, for example, [`Vec`]:
+//!
+//! ```
+//! # type Item = ();
+//! # /*
+//! type Item = ...;
+//! # */
+//!
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
+//! struct AnyName {
+//!   seq: Vec<Item>,
+//! }
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag><seq/></any-tag>"#).unwrap(),
+//! #   AnyName { seq: vec![] },
+//! # );
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag><seq><item/></seq></any-tag>"#).unwrap(),
+//! #   AnyName { seq: vec![()] },
+//! # );
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag><seq><item/><item/><item/></seq></any-tag>"#).unwrap(),
+//! #   AnyName { seq: vec![(), (), ()] },
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//! <!-- ======================================================================================== -->
+//! <tr>
+//! <td>
+//! A sequence inside tag without a dedicated name:
+//!
+//! ```xml
+//! <any-tag/>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <item/>
+//! </any-tag>
+//! ```
+//! ```xml
+//! <any-tag>
+//!   <item/>
+//!   <item/>
+//!   <item/>
+//! </any-tag>
+//! ```
+//! </td>
+//! <td>
+//!
+//! A struct with a field which have a sequence type, for example, [`Vec`],
+//! and marked with an `#[xml(flatten)]` attribute.
+//! See the [Advanced Mapping](#advanced-mapping) section for details:
+//!
+//! ```
+//! # type Item = ();
+//! # /*
+//! type Item = ...;
+//! # */
+//!
+//! # #[derive(Debug, PartialEq)]
+//! #[derive(quick_xml::Deserialize)]
+//! struct AnyName {
+//!   #[xml(flatten)]
+//!   seq: Vec<Item>,
+//! }
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag/>"#).unwrap(),
+//! #   AnyName { seq: vec![] },
+//! # );
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag><item/></any-tag>"#).unwrap(),
+//! #   AnyName { seq: vec![()] },
+//! # );
+//! # assert_eq!(
+//! #   quick_xml::de::from_str::<AnyName>(r#"<any-tag><item/><item/><item/></any-tag>"#).unwrap(),
+//! #   AnyName { seq: vec![(), (), ()] },
+//! # );
+//! ```
+//! </td>
+//! </tr>
+//! <!-- ======================================================================================== -->
+//! <tr>
+//! <td>
 //! A sequence with a strict order, probably with a mixed content
 //! (text and tags):
 //!
