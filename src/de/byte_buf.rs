@@ -1,12 +1,19 @@
 //! Helper types for tests
 
+use crate::utils::write_byte_string;
 use serde::de::{self, Deserialize, Deserializer, Error};
 use std::fmt;
 
 /// Wrapper around `Vec<u8>` that deserialized using `deserialize_byte_buf`
 /// instead of vector's generic `deserialize_seq`
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct ByteBuf(pub Vec<u8>);
+
+impl fmt::Debug for ByteBuf {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write_byte_string(f, &self.0)
+    }
+}
 
 impl<'de> Deserialize<'de> for ByteBuf {
     fn deserialize<D>(d: D) -> Result<Self, D::Error>
@@ -37,8 +44,14 @@ impl<'de> Deserialize<'de> for ByteBuf {
 
 /// Wrapper around `&[u8]` that deserialized using `deserialize_bytes`
 /// instead of vector's generic `deserialize_seq`
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Bytes<'de>(pub &'de [u8]);
+
+impl<'de> fmt::Debug for Bytes<'de> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write_byte_string(f, self.0)
+    }
+}
 
 impl<'de> Deserialize<'de> for Bytes<'de> {
     fn deserialize<D>(d: D) -> Result<Self, D::Error>
