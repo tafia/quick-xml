@@ -63,7 +63,6 @@
 //!   enum Language {
 //!     Rust,
 //!     Cpp,
-//!     #[serde(other)]
 //!     Other(String),
 //!   }
 //!   ```
@@ -402,7 +401,7 @@
 //!
 //! Names of the enum and struct does not matter.
 //!
-//! ```
+//! ```ignore
 //! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! #[serde(rename_all = "snake_case")]
 //! enum Choice {
@@ -530,7 +529,7 @@
 //!
 //! A struct with a field which have a sequence type, for example, [`Vec`]:
 //!
-//! ```
+//! ```ignore
 //! # type Item = ();
 //! # /*
 //! type Item = ...;
@@ -582,7 +581,7 @@
 //! and marked with an `#[xml(flatten)]` attribute.
 //! See the [Advanced Mapping](#advanced-mapping) section for details:
 //!
-//! ```
+//! ```ignore
 //! # type Item = ();
 //! # /*
 //! type Item = ...;
@@ -996,7 +995,8 @@
 //! - `#[xml(attribute = "attribute")]` -- when applied to a field, changes its XML
 //!   representation to an attribute with the name `attribute`. An XML element with
 //!   the same name will not be deserialized into that Rust field. The
-//!   ```no_run
+//!   ```ignore
+//!   # type Type = ();
 //!   # #[derive(quick_xml::Deserialize)] struct S {
 //!   #[xml(attribute = "attribute")]
 //!   field: Type,
@@ -1004,6 +1004,7 @@
 //!   ```
 //!   is fully equivalent to
 //!   ```no_run
+//!   # type Type = ();
 //!   # #[derive(serde::Deserialize)] struct S {
 //!   #[serde(rename = "@attribute")]
 //!   field: Type,
@@ -1015,7 +1016,8 @@
 //! - `#[xml(attribute)]` -- the shorten version of the previous one, when attribute
 //!   and element names already do not clash, but you want to explicitly mark that
 //!   this field should be deserialized from an attribute. The
-//!   ```no_run
+//!   ```ignore
+//!   # type Type = ();
 //!   # #[derive(quick_xml::Deserialize)] struct S {
 //!   #[xml(attribute)]
 //!   field: Type,
@@ -1023,6 +1025,7 @@
 //!   ```
 //!   is fully equivalent to
 //!   ```no_run
+//!   # type Type = ();
 //!   # #[derive(serde::Deserialize)] struct S {
 //!   #[serde(rename = "@field")]
 //!   field: Type,
@@ -1048,7 +1051,7 @@
 //! an XML node named `#text`. `quick_xml` provides a `#[xml(content)]` attribute
 //! for a field that allows extract that content:
 //!
-//! ```no_run
+//! ```ignore
 //! #[derive(quick_xml::Deserialize)]
 //! struct Xml {
 //!   attribute: String,
@@ -1094,7 +1097,8 @@
 //! be written as `{namespace}tag`. That is how the fields with an attribute
 //! `#[xml(namespace = ...)]` is represented. The
 //!
-//! ```no_run
+//! ```ignore
+//! # type Type = ();
 //! # #[derive(quick_xml::Deserialize)] struct S {
 //! #[xml(namespace = "namespace1")]
 //! field: Type,
@@ -1105,6 +1109,7 @@
 //! ```
 //! is fully equivalent to
 //! ```no_run
+//! # type Type = ();
 //! # #[derive(serde::Deserialize)] struct S {
 //! #[serde(rename = "{namespace1}field")]
 //! field: Type,
@@ -1137,7 +1142,8 @@
 //! and protect from misprints, `#[xml(flatten)]` can be used instead of
 //! `#[serde(flatten)]`:
 //!
-//! ```no_run
+//! ```ignore
+//! # type Type = ();
 //! # #[derive(quick_xml::Deserialize)] struct S {
 //! #[xml(flatten)]
 //! field: Type,
@@ -1145,6 +1151,7 @@
 //! ```
 //! is fully equivalent to
 //! ```no_run
+//! # type Type = ();
 //! # #[derive(serde::Deserialize)] struct S {
 //! #[serde(rename = "$flatten")]
 //! field: Type,
