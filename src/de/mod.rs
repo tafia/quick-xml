@@ -220,8 +220,8 @@
 //! ```ignore
 //! # type T = ();
 //! # type U = ();
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //!   #[xml(attribute = "field")]
 //!   attribute: T,
@@ -470,8 +470,8 @@
 //!   One,
 //!   Two,
 //! }
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //!   # field: (),
 //!   # /*
@@ -587,8 +587,8 @@
 //! type Item = ...;
 //! # */
 //!
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //!   #[xml(flatten)]
 //!   seq: Vec<Item>,
@@ -773,8 +773,8 @@
 //! type One = ...;
 //! type Two = ...;
 //! # */
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //! # attribute: (),
 //! # /*
@@ -809,8 +809,8 @@
 //! # */
 //! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct NamedTuple(One, String, String, Two, One);
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //! # attribute: (),
 //! # /*
@@ -874,8 +874,8 @@
 //!   #[serde(rename = "$value")]
 //!   Other(String),
 //! }
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //! # attribute: (),
 //! # /*
@@ -916,8 +916,8 @@
 //!   #[serde(rename = "$value")]
 //!   Other(String),
 //! }
-//! # #[derive(Debug, PartialEq)]
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! # #[derive(Debug, PartialEq, serde::Deserialize)]
 //! struct AnyName {
 //! # attribute: (),
 //! # /*
@@ -955,11 +955,9 @@
 //!
 //! # Advanced Mapping
 //!
-//! For implementing some specific XML features `quick_xml` provides its own
-//! `Deserialize` derive macro with some useful attributes, that all have
-//! a form `#[xml(...)]`. You should use that derive instead of the `serde`
-//! one. It is just thin wrapper that processes `#[xml(...)]` attributes and
-//! pass all other to the original `serde` derive macro.
+//! For implementing some specific XML features `quick_xml` provides a helper
+//! macro `#[quick_xml::xml]` that, when applied on `struct`s or `enum`s, process
+//! some useful attributes on fields, that all have a form of `#[xml(...)]`.
 //!
 //! Because `serde` has no interface that would allow to pass hints from the
 //! type to a deserializer, all helper attributes are implemented as renames
@@ -997,7 +995,7 @@
 //!   the same name will not be deserialized into that Rust field. The
 //!   ```ignore
 //!   # type Type = ();
-//!   # #[derive(quick_xml::Deserialize)] struct S {
+//!   # #[quick_xml::xml] #[derive(serde::Deserialize)] struct S {
 //!   #[xml(attribute = "attribute")]
 //!   field: Type,
 //!   # }
@@ -1018,7 +1016,7 @@
 //!   this field should be deserialized from an attribute. The
 //!   ```ignore
 //!   # type Type = ();
-//!   # #[derive(quick_xml::Deserialize)] struct S {
+//!   # #[quick_xml::xml] #[derive(serde::Deserialize)] struct S {
 //!   #[xml(attribute)]
 //!   field: Type,
 //!   # }
@@ -1052,7 +1050,8 @@
 //! for a field that allows extract that content:
 //!
 //! ```ignore
-//! #[derive(quick_xml::Deserialize)]
+//! #[quick_xml::xml]
+//! #[derive(serde::Deserialize)]
 //! struct Xml {
 //!   attribute: String,
 //!
@@ -1099,7 +1098,7 @@
 //!
 //! ```ignore
 //! # type Type = ();
-//! # #[derive(quick_xml::Deserialize)] struct S {
+//! # #[quick_xml::xml] #[derive(serde::Deserialize)] struct S {
 //! #[xml(namespace = "namespace1")]
 //! field: Type,
 //!
@@ -1144,7 +1143,7 @@
 //!
 //! ```ignore
 //! # type Type = ();
-//! # #[derive(quick_xml::Deserialize)] struct S {
+//! # #[quick_xml::xml] #[derive(serde::Deserialize)] struct S {
 //! #[xml(flatten)]
 //! field: Type,
 //! # }
