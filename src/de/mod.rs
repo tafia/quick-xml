@@ -296,18 +296,35 @@ where
         }
     }
 
-    /// Consumes an one XML element, returns associated text or empty string:
+    /// Consumes a one XML element or an XML tree, returns associated text or
+    /// an empty string.
     ///
-    /// |XML                  |Result     |Comments                    |
-    /// |---------------------|-----------|----------------------------|
-    /// |`<tag ...>text</tag>`|`text`     |Complete tag consumed       |
-    /// |`<tag/>`             |empty slice|Virtual end tag not consumed|
-    /// |`</tag>`             |empty slice|Not consumed                |
+    /// # Handling events
+    ///
+    /// The table below shows how events is handled by this method:
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|----------------------------------------
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Result determined by the second table
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::End`]
+    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    ///
+    /// Second event, consumed if [`DeEvent::Start`] was received:
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|----------------------------------------------------------------------------------
+    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`DeError::Start`]
+    /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::End`]
+    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
     fn next_text(&mut self) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e.unescape()?),
             DeEvent::CData(e) => Ok(e),
-            DeEvent::Eof => Err(DeError::Eof),
             DeEvent::Start(e) => {
                 // allow one nested level
                 let inner = self.next()?;
@@ -315,6 +332,8 @@ where
                     DeEvent::Text(t) => t.unescape()?,
                     DeEvent::CData(t) => t,
                     DeEvent::Start(_) => return Err(DeError::Start),
+                    // We can get End event in case of `<tag></tag>` or `<tag/>` input
+                    // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
                         return Ok(BytesCData::new(&[] as &[u8]));
                     }
@@ -324,10 +343,8 @@ where
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            DeEvent::End(e) => {
-                self.peek = Some(DeEvent::End(e));
-                Ok(BytesCData::new(&[] as &[u8]))
-            }
+            DeEvent::End(_) => Err(DeError::End),
+            DeEvent::Eof => Err(DeError::Eof),
         }
     }
 
@@ -2527,6 +2544,36 @@ mod tests {
 
                 list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
             }
+        }
+    }
+
+    /// Ensures, that [`Deserializer::next_text()`] never can get an `End` event,
+    /// because parser reports error early
+    #[test]
+    fn next_text() {
+        match from_str::<String>(r#"</root>"#) {
+            Err(DeError::Xml(Error::EndEventMismatch { expected, found })) => {
+                assert_eq!(expected, "");
+                assert_eq!(found, "root");
+            }
+            x => panic!(
+                r#"Expected `Err(Xml(EndEventMismatch("", "root")))`, but found {:?}"#,
+                x
+            ),
+        }
+
+        let s: String = from_str(r#"<root></root>"#).unwrap();
+        assert_eq!(s, "");
+
+        match from_str::<String>(r#"<root></other>"#) {
+            Err(DeError::Xml(Error::EndEventMismatch { expected, found })) => {
+                assert_eq!(expected, "root");
+                assert_eq!(found, "other");
+            }
+            x => panic!(
+                r#"Expected `Err(Xml(EndEventMismatch("root", "other")))`, but found {:?}"#,
+                x
+            ),
         }
     }
 }
