@@ -325,7 +325,7 @@ impl<'a> BytesStart<'a> {
         let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
-        bytes.extend_from_slice(a.key);
+        bytes.extend_from_slice(a.key.as_ref());
         bytes.extend_from_slice(b"=\"");
         bytes.extend_from_slice(&*a.value);
         bytes.push(b'"');
@@ -361,7 +361,7 @@ impl<'a> BytesStart<'a> {
     ) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes() {
             let a = a?;
-            if a.key == attr_name.as_ref() {
+            if a.key.as_ref() == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
@@ -449,10 +449,10 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
         match self.element.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key == b"version" => Ok(a.value),
+            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
+                let found = from_utf8(a.key.as_ref()).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes

@@ -1,8 +1,8 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::name::Namespace;
 use quick_xml::name::ResolveResult::*;
-use quick_xml::name::{Namespace, QName};
 use quick_xml::Reader;
 use std::borrow::Cow;
 
@@ -157,9 +157,9 @@ fn attributes_empty_ns() {
         .attributes()
         .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
         // we don't care about xmlns attributes for this test
-        .filter(|kv| !kv.key.starts_with(b"xmlns"))
+        .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
         .map(|Attribute { key: name, value }| {
-            let (opt_ns, local_name) = r.attribute_namespace(QName(name), &ns_buf);
+            let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
             (opt_ns, local_name.into_inner(), value)
         });
     assert_eq!(
@@ -198,9 +198,9 @@ fn attributes_empty_ns_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(QName(name), &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)
             });
         assert_eq!(
@@ -259,9 +259,9 @@ fn default_ns_shadowing_empty() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(QName(name), &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -318,9 +318,9 @@ fn default_ns_shadowing_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(QName(name), &ns_buf);
+                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not

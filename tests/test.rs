@@ -1,3 +1,4 @@
+use quick_xml::name::QName;
 use quick_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
 use std::{borrow::Cow, io::Cursor};
 
@@ -36,14 +37,14 @@ fn test_attributes_empty() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: QName(b"att1"),
                     value: Cow::Borrowed(b"a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att2",
+                    key: QName(b"att2"),
                     value: Cow::Borrowed(b"b"),
                 }))
             );
@@ -65,7 +66,7 @@ fn test_attribute_equal() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: QName(b"att1"),
                     value: Cow::Borrowed(b"a=b"),
                 }))
             );

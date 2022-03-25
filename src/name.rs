@@ -361,6 +361,7 @@ impl NamespaceResolver {
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
+                let k = k.as_ref(); //TODO: Use QName API
                 if k.starts_with(b"xmlns") {
                     match k.get(5) {
                         None => {

@@ -50,6 +50,7 @@
 - [#393]: `event_namespace` and `attribute_namespace` now accept `QName`
   and returns `ResolveResult` and `LocalName`, `read_event_namespaced` now
   returns `ResolveResult` instead of `Option<[u8]>`
+- [#393]: Types of `Attribute::key` and `Attr::key()` changed to `QName`
 
 ### New Tests
 
