@@ -275,7 +275,7 @@ where
                     let key = if let Some(p) = self
                         .unflatten_fields
                         .iter()
-                        .position(|f| e.name() == &f[UNFLATTEN_PREFIX.len()..])
+                        .position(|f| e.name().as_ref() == &f[UNFLATTEN_PREFIX.len()..])
                     {
                         // Used to deserialize elements, like:
                         // <root>
@@ -290,7 +290,7 @@ where
                         // }
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
-                        let name = Cow::Borrowed(e.local_name());
+                        let name = Cow::Borrowed(e.local_name().into_inner());
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
                     key.map(Some)
@@ -606,7 +606,7 @@ where
                 // Stop iteration after reaching a closing tag
                 DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
                 // This is a unmatched closing tag, so the XML is invalid
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),

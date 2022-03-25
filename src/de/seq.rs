@@ -15,10 +15,10 @@ pub fn not_in(
     decoder: Decoder,
 ) -> Result<bool, DeError> {
     #[cfg(not(feature = "encoding"))]
-    let tag = Cow::Borrowed(decoder.decode(start.name())?);
+    let tag = Cow::Borrowed(decoder.decode(start.name().into_inner())?);
 
     #[cfg(feature = "encoding")]
-    let tag = decoder.decode(start.name());
+    let tag = decoder.decode(start.name().into_inner());
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }

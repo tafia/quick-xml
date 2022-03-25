@@ -1,8 +1,8 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
-use quick_xml::name::Namespace;
 use quick_xml::name::ResolveResult::*;
+use quick_xml::name::{Namespace, QName};
 use quick_xml::Reader;
 use std::borrow::Cow;
 
@@ -219,7 +219,7 @@ fn attributes_empty_ns_expanded() {
     }
 
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Unbound, End(e))) => assert_eq!(b"a", e.name()),
+        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
         e => panic!("Expecting End event, got {:?}", e),
     }
 }
@@ -238,7 +238,7 @@ fn default_ns_shadowing_empty() {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), b"e");
+                assert_eq!(e.name(), QName(b"e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -249,7 +249,7 @@ fn default_ns_shadowing_empty() {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Empty(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), b"e");
+                assert_eq!(e.name(), QName(b"e"));
                 e
             }
             e => panic!("Expecting Empty event, got {:?}", e),
@@ -277,7 +277,7 @@ fn default_ns_shadowing_empty() {
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), b"e");
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (<outer>), got {:?}", e),
     }
@@ -297,7 +297,7 @@ fn default_ns_shadowing_expanded() {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), b"e");
+                assert_eq!(e.name(), QName(b"e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -309,7 +309,7 @@ fn default_ns_shadowing_expanded() {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
                 assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), b"e");
+                assert_eq!(e.name(), QName(b"e"));
                 e
             }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
@@ -336,7 +336,7 @@ fn default_ns_shadowing_expanded() {
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-            assert_eq!(e.name(), b"e");
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
@@ -344,7 +344,7 @@ fn default_ns_shadowing_expanded() {
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
             assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), b"e");
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (</outer>), got {:?}", e),
     }

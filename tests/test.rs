@@ -923,7 +923,7 @@ fn test_issue299() -> Result<(), Error> {
     loop {
         match reader.read_event_unbuffered()? {
             Start(e) | Empty(e) => {
-                let attr_count = match e.name() {
+                let attr_count = match e.name().as_ref() {
                     b"MICEX_DOC" => 1,
                     b"SECURITY" => 4,
                     b"RECORDS" => 26,
@@ -933,7 +933,7 @@ fn test_issue299() -> Result<(), Error> {
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
                     "mismatch att count on '{:?}'",
-                    reader.decoder().decode(e.name())
+                    reader.decoder().decode(e.name().as_ref())
                 );
             }
             Eof => break,

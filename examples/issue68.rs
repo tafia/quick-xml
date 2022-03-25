@@ -83,11 +83,11 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
 
     loop {
         match reader.read_namespaced_event(&mut buf, &mut ns_buffer) {
-            Ok((namespace_value, Event::Start(e))) => {
-                let namespace_value = Option::<Namespace>::try_from(namespace_value)
+            Ok((ns, Event::Start(e))) => {
+                let ns = Option::<Namespace>::try_from(ns)
                     .unwrap_or_default() // Treat unknown prefixes as not bound to any namespace
                     .unwrap_or(Namespace(b""));
-                match (depth, state, namespace_value.as_ref(), e.local_name()) {
+                match (depth, state, ns.as_ref(), e.local_name().as_ref()) {
                     (0, State::Root, b"DAV:", b"multistatus") => state = State::MultiStatus,
                     (1, State::MultiStatus, b"DAV:", b"response") => {
                         state = State::Response;
@@ -100,12 +100,11 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
                 }
                 depth += 1;
             }
-            Ok((namespace_value, Event::End(e))) => {
-                let namespace_value = Option::<Namespace>::try_from(namespace_value)
+            Ok((ns, Event::End(e))) => {
+                let ns = Option::<Namespace>::try_from(ns)
                     .unwrap_or_default() // Treat unknown prefixes as not bound to any namespace
                     .unwrap_or(Namespace(b""));
-                let local_name = e.local_name();
-                match (depth, state, namespace_value.as_ref(), local_name) {
+                match (depth, state, ns.as_ref(), e.local_name().as_ref()) {
                     (1, State::MultiStatus, b"DAV:", b"multistatus") => state = State::Root,
                     (2, State::MultiStatus, b"DAV:", b"multistatus") => state = State::MultiStatus,
                     _ => {}

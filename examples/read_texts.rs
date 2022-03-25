@@ -13,7 +13,7 @@ fn main() {
 
     loop {
         match reader.read_event(&mut buf) {
-            Ok(Event::Start(ref e)) if e.name() == b"tag2" => {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == b"tag2" => {
                 txt.push(
                     reader
                         .read_text(b"tag2", &mut Vec::new())

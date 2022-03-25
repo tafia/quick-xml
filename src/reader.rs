@@ -45,7 +45,7 @@ enum TagState {
 /// loop {
 ///     match reader.read_event(&mut buf) {
 ///         Ok(Event::Start(ref e)) => {
-///             match e.name() {
+///             match e.name().as_ref() {
 ///                 b"tag1" => println!("attributes values: {:?}",
 ///                                     e.attributes().map(|a| a.unwrap().value)
 ///                                     .collect::<Vec<_>>()),
@@ -603,7 +603,7 @@ impl<R: BufRead> Reader<R> {
     ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
     ///         Ok((Bound(ns), Event::Start(e))) => {
     ///             count += 1;
-    ///             match (ns.as_ref(), e.local_name()) {
+    ///             match (ns.as_ref(), e.local_name().as_ref()) {
     ///                 (b"www.xxxx", b"tag1") => (),
     ///                 (b"www.yyyy", b"tag2") => (),
     ///                 (ns, n) => panic!("Namespace and local name mismatch"),
@@ -642,7 +642,7 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
                 Ok((
-                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::Start(e),
                 ))
             }
@@ -657,7 +657,7 @@ impl<R: BufRead> Reader<R> {
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::Empty(e),
                 ))
             }
@@ -666,7 +666,7 @@ impl<R: BufRead> Reader<R> {
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::End(e),
                 ))
             }
@@ -780,13 +780,13 @@ impl<R: BufRead> Reader<R> {
         let end = end.as_ref();
         loop {
             match self.read_event(buf) {
-                Ok(Event::End(ref e)) if e.name() == end => {
+                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
+                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
                 Err(e) => return Err(e),
                 Ok(Event::Eof) => {
                     return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
@@ -835,7 +835,7 @@ impl<R: BufRead> Reader<R> {
     pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
         let s = match self.read_event(buf) {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
-            Ok(Event::End(ref e)) if e.name() == end.as_ref() => return Ok("".to_string()),
+            Ok(Event::End(ref e)) if e.name().as_ref() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),
@@ -883,7 +883,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// loop {
     ///     match reader.read_event(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => match e.name() {
+    ///         Ok(Event::Start(ref e)) => match e.name().as_ref() {
     ///             b"tag1" | b"tag2" => (),
     ///             tag => {
     ///                 assert_eq!(b"tag3", tag);
@@ -946,13 +946,13 @@ impl<'a> Reader<&'a [u8]> {
         let end = end.as_ref();
         loop {
             match self.read_event_unbuffered() {
-                Ok(Event::End(ref e)) if e.name() == end => {
+                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name() == end => depth += 1,
+                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
                 Err(e) => return Err(e),
                 Ok(Event::Eof) => {
                     return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));

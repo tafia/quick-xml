@@ -52,6 +52,8 @@
   and returns `ResolveResult` and `LocalName`, `read_event_namespaced` now
   returns `ResolveResult` instead of `Option<[u8]>`
 - [#393]: Types of `Attribute::key` and `Attr::key()` changed to `QName`
+- [#393]: Now `BytesStart::name()` and `BytesEnd::name()` returns `QName`, and
+  `BytesStart::local_name()` and `BytesEnd::local_name()` returns `LocalName`
 
 ### New Tests
 

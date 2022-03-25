@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     custom_entities.insert(cap[1].to_vec(), cap[2].to_vec());
                 }
             }
-            Ok(Event::Start(ref e)) => match e.name() {
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 b"test" => println!(
                     "attributes values: {:?}",
                     e.attributes()

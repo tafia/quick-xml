@@ -13,7 +13,7 @@ macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
         match $r.read_event(&mut buf).unwrap() {
-            $t(ref e) if e.name() == $bytes => (),
+            $t(ref e) if e.name().as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
                 stringify!($t),

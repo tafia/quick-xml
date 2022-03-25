@@ -514,16 +514,16 @@ where
         match self.write.back() {
             // Skip all subtree, if we skip a start event
             Some(DeEvent::Start(e)) => {
-                let end = e.name().to_owned();
+                let end = e.name().as_ref().to_owned();
                 let mut depth = 0;
                 loop {
                     let event = self.next()?;
                     match event {
-                        DeEvent::Start(ref e) if e.name() == end => {
+                        DeEvent::Start(ref e) if e.name().as_ref() == end => {
                             self.skip_event(event)?;
                             depth += 1;
                         }
-                        DeEvent::End(ref e) if e.name() == end => {
+                        DeEvent::End(ref e) if e.name().as_ref() == end => {
                             self.skip_event(event)?;
                             if depth == 0 {
                                 return Ok(());
@@ -571,7 +571,9 @@ where
             let e = self.next()?;
             match e {
                 DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+                DeEvent::End(e) => {
+                    return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned()))
+                }
                 DeEvent::Eof => return Ok(None),
                 _ => (), // ignore texts
             }
@@ -631,20 +633,24 @@ where
                     DeEvent::Text(t) if unescape => t.unescape()?,
                     DeEvent::Text(t) => BytesCData::new(t.into_inner()),
                     DeEvent::CData(t) => t,
-                    DeEvent::Start(s) => return Err(DeError::UnexpectedStart(s.name().to_owned())),
+                    DeEvent::Start(s) => {
+                        return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
+                    }
                     // We can get End event in case of `<tag></tag>` or `<tag/>` input
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
                         return Ok(BytesCData::new(&[] as &[u8]));
                     }
-                    DeEvent::End(end) => return Err(DeError::UnexpectedEnd(end.name().to_owned())),
+                    DeEvent::End(end) => {
+                        return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
+                    }
                     DeEvent::Eof => return Err(DeError::UnexpectedEof),
                 };
-                self.read_to_end(e.name())?;
+                self.read_to_end(e.name().as_ref())?;
                 Ok(t)
             }
-            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().to_owned())),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -662,10 +668,10 @@ where
         let mut depth = 0;
         loop {
             match self.read.pop_front() {
-                Some(DeEvent::Start(e)) if e.name() == name => {
+                Some(DeEvent::Start(e)) if e.name().as_ref() == name => {
                     depth += 1;
                 }
-                Some(DeEvent::End(e)) if e.name() == name => {
+                Some(DeEvent::End(e)) if e.name().as_ref() == name => {
                     if depth == 0 {
                         return Ok(());
                     }
@@ -685,8 +691,8 @@ where
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         // First one might be in self.peek
         match self.next()? {
-            DeEvent::Start(e) => self.reader.read_to_end(e.name())?,
-            DeEvent::End(e) if e.name() == name => return Ok(()),
+            DeEvent::Start(e) => self.reader.read_to_end(e.name().as_ref())?,
+            DeEvent::End(e) if e.name().as_ref() == name => return Ok(()),
             _ => (),
         }
         self.reader.read_to_end(name)
@@ -751,7 +757,7 @@ where
     {
         // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
-            let name = e.name().to_vec();
+            let name = e.name().as_ref().to_vec();
             let map = map::MapAccess::new(self, e, fields)?;
             let value = visitor.visit_map(map)?;
             self.read_to_end(&name)?;
@@ -785,11 +791,11 @@ where
     {
         match self.next()? {
             DeEvent::Start(s) => {
-                self.read_to_end(s.name())?;
+                self.read_to_end(s.name().as_ref())?;
                 visitor.visit_unit()
             }
             DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -892,8 +898,8 @@ where
         V: Visitor<'de>,
     {
         match self.next()? {
-            DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Start(e) => self.read_to_end(e.name().as_ref())?,
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
             _ => (),
         }
