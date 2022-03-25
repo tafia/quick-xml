@@ -67,7 +67,7 @@ where
 
     fn unit_variant(self) -> Result<(), DeError> {
         match self.de.next()? {
-            DeEvent::Start(e) => self.de.read_to_end(e.name().as_ref()),
+            DeEvent::Start(e) => self.de.read_to_end(e.name()),
             DeEvent::Text(_) | DeEvent::CData(_) => Ok(()),
             _ => unreachable!(),
         }
