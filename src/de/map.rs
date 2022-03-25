@@ -11,25 +11,72 @@ use crate::{
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use std::borrow::Cow;
 
-/// Representing state of the `MapAccess` accessor.
-enum State {
-    /// `next_key_seed` not yet called. This is initial state and state after deserializing
-    /// value (calling `next_value_seed`).
-    Empty,
-    /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
-    /// Next call to the `next_value_seed` will deserialize type from the attribute value
-    Attribute,
-    /// Next event returned will be a [`DeEvent::Start`], which represents a key.
-    /// Value should be deserialized from that XML node:
+/// Defines a source that should be used to deserialize a value in next call of
+/// [ `next_value_seed()`](de::MapAccess::next_value_seed)
+#[derive(Debug, PartialEq)]
+enum ValueSource {
+    /// Source not specified, because `next_key_seed` not yet called.
+    /// This is an initial state and state after deserializing value
+    /// (after call of `next_value_seed`).
     ///
+    /// Attempt to call `next_value_seed` while accessor in this state would
+    /// return a [`DeError::KeyNotRead`] error.
+    Unknown,
+    /// Next value should be deserialized from an attribute value.
+    Attribute,
+    /// Next value should be deserialized from an element with a dedicated name.
+    /// If deserialized type is a sequence, then that sequence will collect all
+    /// elements with the same name until it will be filled. If not all elements
+    /// would be consumed, the rest will be ignored.
+    ///
+    /// That state is set when call to [`peek()`] returns a [`Start`] event, which
+    /// [`name()`] represents a tag name. That name will be deserialized as a key.
+    ///
+    /// When in this state, next event, returned by [`next()`], will be a [`Start`],
+    /// which represents both a key, and a value. Value would be deserialized from
+    /// the whole element and how is will be done determined by the value deserializer.
+    /// The [`MapAccess`] do not consume any events in that state.
+    ///
+    /// An illustration below shows, what data is used to deserialize key and value:
     /// ```xml
     /// <any-tag>
     ///     <key>...</key>
-    /// <!--^^^^^^^^^^^^^^ - this node will be used to deserialize map value -->
+    /// <!--^^^^^^^^^^^^^^ - this node will be used to deserialize a map value -->
     /// </any-tag>
     /// ```
+    ///
+    /// Although value deserializer will have access to the full content of a `<key>`
+    /// node, it should not use the name of the node (`key`) in their implementation.
+    /// This is because this name always be fixed and equal to the map or struct key,
+    /// therefore a little sense to use it.
+    ///
+    /// Similar [`Self::Content`] variant is used, when value deserializer wants to
+    /// use `key` with benefit.
+    ///
+    /// [`peek()`]: Deserializer::peek()
+    /// [`next()`]: Deserializer::next()
+    /// [`Start`]: DeEvent::Start
+    /// [`name()`]: BytesStart::name()
     Nested,
-    /// Value should be deserialized from the text content of the XML node:
+    /// Next value should be deserialized from an element with an any name, except
+    /// names, listed individually. Corresponding tag name will always associated
+    /// with a field with name [`INNER_VALUE`].
+    ///
+    /// That state is set when call to [`peek()`] returns a [`Start`] event, which
+    /// [`name()`] represents a tag name _and_ that tag name is not listed in the
+    /// list of known fields (which for a struct would be a list with field names).
+    ///
+    /// The behavior in that state is mostly identical to that in [`Self::Nested`],
+    /// but because key is not strictly defined, it would be worth to use it when
+    /// deserialize value, which means, that you can deserialize enums from it --
+    /// `key` would be used as discriminator.
+    ///
+    /// [`peek()`]: Deserializer::peek()
+    /// [`Start`]: DeEvent::Start
+    /// [`name()`]: BytesStart::name()
+    Content,
+    /// Value should be deserialized from the text content of the XML node, which
+    /// represented or by ordinary text node, or by CDATA node:
     ///
     /// ```xml
     /// <any-tag>
@@ -37,11 +84,52 @@ enum State {
     /// <!--     ^^^^^^^^^^^^ - this will be used to deserialize map value -->
     /// </any-tag>
     /// ```
-    InnerValue,
+    /// ```xml
+    /// <any-tag>
+    ///     <key><![CDATA[cdata content]]></key>
+    /// <!--              ^^^^^^^^^^^^^ - this will be used to deserialize map value -->
+    /// </any-tag>
+    /// ```
+    Text,
 }
 
-/// A deserializer for `Attributes`
-pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de>> {
+/// A deserializer that extracts map-like structures from an XML. This
+/// deserializer represent a one XML tag:
+///
+/// ```xml
+/// <tag>...</tag>
+/// ```
+///
+/// Name of this tag is stored in a [`Self::start`] property.
+///
+/// Map keys could be deserialized from three places:
+/// - attributes
+/// - elements
+/// - implicit `#text` node of the element
+///
+/// Deserialization from attributes is simple -- each attribute name mapped to
+/// a map key name and each attribute value mapped to a primitive value
+/// (numbers, boolean, strings or unit structs / enum variants) or to an
+/// [`xs:list`]. The latter allows deserialize a sequence of primitive types
+/// from an attribute value.
+///
+/// Deserialization from elements more complicated.
+///
+/// # Lifetimes
+///
+/// `'de` lifetime represents a buffer, from which deserialized values can
+/// borrow their data. Depending on the underlying reader, there can be an
+/// internal buffer of deserializer (i.e. deserializer itself) or an input
+/// (in that case it is possible to approach zero-cost deserialization).
+///
+/// `'a` lifetime represents a parent deserializer, which could own the data
+/// buffer.
+///
+/// [`xs:list`]: SimpleTypeDeserializer
+pub(crate) struct MapAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
     de: &'a mut Deserializer<'de, R>,
@@ -53,12 +141,15 @@ pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de>> {
     position: usize,
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
-    state: State,
+    source: ValueSource,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
+impl<'de, 'a, R> MapAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     /// Create a new MapAccess
     pub fn new(
         de: &'a mut Deserializer<'de, R>,
@@ -70,7 +161,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
             de,
             start,
             position,
-            state: State::Empty,
+            source: ValueSource::Unknown,
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -88,13 +179,18 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
     }
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
+impl<'de, 'a, R> de::MapAccess<'de> for MapAccess<'de, 'a, R>
+where
+    R: BorrowingReader<'de>,
+{
     type Error = DeError;
 
     fn next_key_seed<K: DeserializeSeed<'de>>(
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Self::Error> {
+        debug_assert_eq!(self.source, ValueSource::Unknown);
+
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
 
@@ -102,7 +198,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
         attributes.position = self.position;
         if let Some(a) = attributes.next().transpose()? {
             // try getting map from attributes (key= "value")
-            self.state = State::Attribute;
+            self.source = ValueSource::Attribute;
             seed.deserialize(EscapedDeserializer::new(
                 Cow::Borrowed(a.key),
                 decoder,
@@ -113,7 +209,7 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 DeEvent::Text(_) | DeEvent::CData(_) => {
-                    self.state = State::InnerValue;
+                    self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
@@ -136,10 +232,11 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
-                    self.state = State::Nested;
+                    self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
+                    self.source = ValueSource::Nested;
                     let key = if let Some(p) = self
                         .unflatten_fields
                         .iter()
@@ -156,11 +253,9 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.state = State::Nested;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name());
-                        self.state = State::Nested;
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
                     key.map(Some)
@@ -174,8 +269,8 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
         &mut self,
         seed: K,
     ) -> Result<K::Value, Self::Error> {
-        match std::mem::replace(&mut self.state, State::Empty) {
-            State::Attribute => {
+        match std::mem::replace(&mut self.source, ValueSource::Unknown) {
+            ValueSource::Attribute => {
                 let decoder = self.de.reader.decoder();
                 match self.next_attr()? {
                     Some(a) => {
@@ -185,30 +280,32 @@ impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a,
                         let value: Vec<_> = a.value.into_owned();
                         seed.deserialize(SimpleTypeDeserializer::new(value.into(), true, decoder))
                     }
-                    // We set `Attribute` state only when we are sure that `next_attr()` returns a value
+                    // SAFETY: We set `Attribute` source only when we are sure that `next_attr()` returns a value
                     None => unreachable!(),
                 }
             }
             // This case are checked by "de::tests::xml_schema_lists::element" tests
-            State::InnerValue => {
+            ValueSource::Text => {
                 let decoder = self.de.reader.decoder();
                 match self.de.next()? {
                     DeEvent::Text(e) => {
-                        //TODO: It is better to store event content as part of state
+                        //TODO: It is better to store event content as part of source
                         seed.deserialize(SimpleTypeDeserializer::new(e.into_inner(), true, decoder))
                     }
                     // It is better to format similar code similarly, but rustfmt disagree
                     #[rustfmt::skip]
                     DeEvent::CData(e) => {
-                        //TODO: It is better to store event content as part of state
+                        //TODO: It is better to store event content as part of source
                         seed.deserialize(SimpleTypeDeserializer::new(e.into_inner(), false, decoder))
                     }
-                    // SAFETY: We set `InnerValue` only when we seen `Text` or `CData`
+                    // SAFETY: We set `Text` only when we seen `Text` or `CData`
                     _ => unreachable!(),
                 }
             }
-            State::Nested => seed.deserialize(&mut *self.de),
-            State::Empty => Err(DeError::EndOfAttributes),
+            // In both cases we get to a deserializer full access to the data
+            // The difference in the handling of sequences by SeqAccess
+            ValueSource::Nested | ValueSource::Content => seed.deserialize(&mut *self.de),
+            ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
     }
 }

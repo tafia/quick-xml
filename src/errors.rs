@@ -152,11 +152,12 @@ pub mod serialize {
         InvalidFloat(ParseFloatError),
         /// Cannot parse specified value to boolean
         InvalidBoolean(String),
-        /// Unexpected end of attributes.
+        /// This error indicates an error in the [`Deserialize`](serde::Deserialize)
+        /// implementation when read a map or a struct: `MapAccess::next_value[_seed]`
+        /// was called before `MapAccess::next_key[_seed]`.
         ///
-        /// Usually this indicates an error in the `Deserialize` implementation when read map:
-        /// `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`
-        EndOfAttributes,
+        /// You should check your types, that implemented corresponding trait.
+        KeyNotRead,
         /// Deserializer encounter a start tag with a specified name when this is
         /// not expecting. This happens when you try to deserialize a primitive
         /// value (numbers, strings, booleans) from an XML element.
@@ -189,7 +190,7 @@ pub mod serialize {
                 DeError::InvalidInt(e) => write!(f, "{}", e),
                 DeError::InvalidFloat(e) => write!(f, "{}", e),
                 DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
-                DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
+                DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
                     f.write_str("Unexpected `Event::Start(")?;
                     write_byte_string(f, &e)?;
