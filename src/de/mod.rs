@@ -260,7 +260,7 @@ where
 
     fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
         if self.peek.is_none() {
-            self.peek = Some(self.next()?);
+            self.peek = Some(self.reader.next()?);
         }
         match self.peek.as_ref() {
             Some(v) => Ok(v),
