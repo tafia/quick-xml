@@ -1,10 +1,15 @@
 #![cfg(feature = "serialize")]
 
+#[cfg(test)]
+extern crate pretty_assertions;
 extern crate quick_xml;
 extern crate serde;
 
 use quick_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
 type Err = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -32,7 +37,7 @@ struct Tag {
 
 #[test]
 fn get_bucket_tagging() -> Result<(), Err> {
-    let src = " 
+    let src = "
     <GetBucketTaggingOutput>
        <TagSet>
           <Tag>

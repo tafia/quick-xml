@@ -1,3 +1,5 @@
+#[cfg(test)]
+extern crate pretty_assertions;
 extern crate quick_xml;
 #[cfg(feature = "serialize")]
 extern crate serde;
@@ -7,6 +9,9 @@ use std::{borrow::Cow, io::Cursor};
 
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_sample() {

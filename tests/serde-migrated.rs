@@ -1,5 +1,7 @@
 #![cfg(feature = "serialize")]
 
+#[cfg(test)]
+extern crate pretty_assertions;
 extern crate quick_xml;
 extern crate serde;
 
@@ -8,6 +10,9 @@ use std::fmt::Debug;
 use quick_xml::de::from_str;
 use serde::{de, ser};
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
 enum Animal {

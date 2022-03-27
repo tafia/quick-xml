@@ -332,6 +332,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use serde::ser::SerializeMap;
     use serde::{Serialize, Serializer as SerSerializer};
 
@@ -636,6 +637,7 @@ mod tests {
 
         mod externally_tagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Serialize)]
             enum Node {
@@ -789,6 +791,7 @@ mod tests {
 
         mod internally_tagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Serialize)]
             #[serde(tag = "tag")]
@@ -915,6 +918,7 @@ mod tests {
 
         mod adjacently_tagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Serialize)]
             #[serde(tag = "tag", content = "content")]
@@ -1055,6 +1059,7 @@ mod tests {
 
         mod untagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Serialize)]
             #[serde(untagged)]

@@ -1,8 +1,10 @@
 #![feature(test)]
 
+extern crate pretty_assertions;
 extern crate quick_xml;
 extern crate test;
 
+use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use test::Bencher;

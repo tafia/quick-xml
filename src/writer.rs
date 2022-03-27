@@ -339,6 +339,7 @@ impl Indentation {
 mod indentation {
     use super::*;
     use crate::events::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn self_closed() {

@@ -1,4 +1,7 @@
+extern crate pretty_assertions;
 extern crate quick_xml;
+
+use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 // a structure to capture the rows we've extracted

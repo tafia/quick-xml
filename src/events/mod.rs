@@ -1040,6 +1040,7 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn local_name() {

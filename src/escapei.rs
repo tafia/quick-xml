@@ -5,6 +5,9 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 /// Error for XML escape/unescqpe.
 #[derive(Debug)]
 pub enum EscapeError {

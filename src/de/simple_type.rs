@@ -847,6 +847,7 @@ mod tests {
     /// Tests for deserialize atomic and union values, as defined in XSD specification
     mod atomic {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         /// Checks that given `$input` successfully deserializing into given `$result`
         macro_rules! deserialized_to {
@@ -991,6 +992,7 @@ mod tests {
     /// Module for testing list accessor
     mod list {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[test]
         fn empty() {
@@ -1077,6 +1079,7 @@ mod tests {
 
     mod utf8 {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         simple!(utf8, i8_:  i8  = "-2" => -2);
         simple!(utf8, i16_: i16 = "-2" => -2);
@@ -1138,6 +1141,7 @@ mod tests {
     #[cfg(feature = "encoding")]
     mod utf16 {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         fn to_utf16(string: &str) -> Vec<u8> {
             let mut bytes = Vec::new();

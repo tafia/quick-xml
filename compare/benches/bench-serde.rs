@@ -1,10 +1,12 @@
 #![feature(test)]
 
+extern crate pretty_assertions;
 extern crate quick_xml;
 extern crate serde;
 extern crate serde_xml_rs;
 extern crate test;
 
+use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use test::Bencher;
 

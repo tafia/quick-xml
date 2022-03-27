@@ -23,6 +23,7 @@ memchr = "2.3.4"
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
+pretty_assertions = "1.2"
 regex = "1"
 
 [lib]

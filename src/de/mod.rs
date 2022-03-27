@@ -715,6 +715,7 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 mod tests {
     use super::*;
     use crate::de::byte_buf::ByteBuf;
+    use pretty_assertions::assert_eq;
     use serde::de::IgnoredAny;
     use serde::Deserialize;
 
@@ -1005,6 +1006,7 @@ mod tests {
             #[rustfmt::skip] // tests formatted in a table
             mod text {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 in_struct!(i8_:  i8  = "<root>-42</root>", -42i8);
                 in_struct!(i16_: i16 = "<root>-4200</root>", -4200i16);
@@ -1043,6 +1045,7 @@ mod tests {
             #[rustfmt::skip] // tests formatted in a table
             mod cdata {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 in_struct!(i8_:  i8  = "<root><![CDATA[-42]]></root>", -42i8);
                 in_struct!(i16_: i16 = "<root><![CDATA[-4200]]></root>", -4200i16);
@@ -1255,6 +1258,7 @@ mod tests {
 
     mod unit {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Unit;
@@ -1292,6 +1296,7 @@ mod tests {
 
     mod newtype {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Newtype(bool);
@@ -1311,6 +1316,7 @@ mod tests {
 
     mod tuple {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[test]
         fn simple() {
@@ -1328,6 +1334,7 @@ mod tests {
 
     mod tuple_struct {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Tuple(f32, String);
@@ -1425,6 +1432,7 @@ mod tests {
 
     mod map {
         use super::*;
+        use pretty_assertions::assert_eq;
         use std::collections::HashMap;
         use std::iter::FromIterator;
 
@@ -1469,6 +1477,7 @@ mod tests {
 
     mod struct_ {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Struct {
@@ -1563,6 +1572,7 @@ mod tests {
 
     mod nested_struct {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Struct {
@@ -1606,6 +1616,7 @@ mod tests {
 
     mod flatten_struct {
         use super::*;
+        use pretty_assertions::assert_eq;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Struct {
@@ -1652,6 +1663,7 @@ mod tests {
 
         mod externally_tagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Debug, Deserialize, PartialEq)]
             enum Node {
@@ -1706,6 +1718,7 @@ mod tests {
 
             mod struct_ {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -1736,6 +1749,7 @@ mod tests {
 
             mod nested_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -1768,6 +1782,7 @@ mod tests {
 
             mod flatten_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -1837,6 +1852,7 @@ mod tests {
 
             mod unit {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -1853,6 +1869,7 @@ mod tests {
 
             mod newtype {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -1872,6 +1889,7 @@ mod tests {
 
             mod struct_ {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -1905,6 +1923,7 @@ mod tests {
 
             mod nested_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -1939,6 +1958,7 @@ mod tests {
 
             mod flatten_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -2010,6 +2030,7 @@ mod tests {
 
             mod unit {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -2026,6 +2047,7 @@ mod tests {
 
             mod newtype {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -2044,6 +2066,8 @@ mod tests {
 
             mod tuple_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
+
                 #[test]
                 fn elements() {
                     let data: Workaround = from_str(
@@ -2065,6 +2089,7 @@ mod tests {
 
             mod struct_ {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -2098,6 +2123,7 @@ mod tests {
 
             mod nested_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn elements() {
@@ -2139,6 +2165,7 @@ mod tests {
 
             mod flatten_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -2174,6 +2201,7 @@ mod tests {
 
         mod untagged {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Debug, Deserialize, PartialEq)]
             #[serde(untagged)]
@@ -2237,6 +2265,7 @@ mod tests {
 
             mod struct_ {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -2269,6 +2298,7 @@ mod tests {
 
             mod nested_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -2302,6 +2332,7 @@ mod tests {
 
             mod flatten_struct {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
@@ -2371,6 +2402,7 @@ mod tests {
         /// according to the `xs:list` XML Schema type
         mod attribute {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Debug, Deserialize, PartialEq)]
             struct List<T> {
@@ -2423,6 +2455,7 @@ mod tests {
 
             mod text {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 list!(i8_:  i8  = "<root>1 -2  3</root>" => vec![1, -2, 3]);
                 list!(i16_: i16 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
@@ -2458,6 +2491,7 @@ mod tests {
 
             mod cdata {
                 use super::*;
+                use pretty_assertions::assert_eq;
 
                 list!(i8_:  i8  = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
                 list!(i16_: i16 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
