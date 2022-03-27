@@ -2,6 +2,7 @@
 
 use fast_xml::events::Event;
 use fast_xml::Reader;
+use pretty_assertions::assert_eq;
 use test::Bencher;
 
 #[bench]

@@ -4,6 +4,9 @@ use std::{borrow::Cow, io::Cursor};
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 #[test]
 fn test_sample() {
     let src: &[u8] = include_bytes!("sample_rss.xml");

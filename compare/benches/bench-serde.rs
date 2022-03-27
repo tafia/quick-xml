@@ -1,5 +1,6 @@
 #![feature(test)]
 
+use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use test::Bencher;
 

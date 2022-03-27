@@ -1,5 +1,6 @@
 #![feature(test)]
 
+use pretty_assertions::assert_eq;
 use fast_xml::{events::Event, Reader};
 use test::Bencher;
 use xml::reader::{EventReader, XmlEvent};

@@ -11,7 +11,7 @@ use std::io::Write;
 /// # Examples
 ///
 /// ```rust
-/// # fn main() {
+/// # use pretty_assertions::assert_eq;
 /// use fast_xml::{Reader, Writer};
 /// use fast_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
@@ -52,7 +52,6 @@ use std::io::Write;
 /// let result = writer.into_inner().into_inner();
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
-/// # }
 /// ```
 #[derive(Clone)]
 pub struct Writer<W: Write> {
@@ -339,6 +338,7 @@ impl Indentation {
 mod indentation {
     use super::*;
     use crate::events::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn self_closed() {

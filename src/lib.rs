@@ -73,6 +73,7 @@
 //! ### Writer
 //!
 //! ```rust
+//! # use pretty_assertions::assert_eq;
 //! use fast_xml::Writer;
 //! use fast_xml::events::{Event, BytesEnd, BytesStart};
 //! use fast_xml::Reader;

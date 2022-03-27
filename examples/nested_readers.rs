@@ -1,5 +1,7 @@
 use fast_xml::events::Event;
 use fast_xml::Reader;
+use pretty_assertions::assert_eq;
+
 // a structure to capture the rows we've extracted
 // from a ECMA-376 table in document.xml
 #[derive(Debug, Clone)]

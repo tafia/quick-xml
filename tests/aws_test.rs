@@ -3,6 +3,9 @@
 use fast_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+use pretty_assertions::assert_eq;
+
 type Err = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

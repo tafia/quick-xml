@@ -298,6 +298,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use fast_xml::events::attributes::Attribute;
     ///
     /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
@@ -318,6 +319,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use fast_xml::events::attributes::Attribute;
     ///
     /// let features = Attribute::from(("features", "Bells & whistles"));
@@ -445,6 +447,7 @@ impl<'a> Iterator for Attributes<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn regular() {

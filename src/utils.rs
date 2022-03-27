@@ -31,6 +31,7 @@ pub fn write_byte_string(f: &mut Formatter<'_>, byte_string: &[u8]) -> Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     struct ByteString(Vec<u8>);
 

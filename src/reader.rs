@@ -782,6 +782,7 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use fast_xml::Reader;
     /// use fast_xml::events::Event;
     ///
@@ -823,6 +824,7 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use std::{str, io::Cursor};
     /// use fast_xml::Reader;
     /// use fast_xml::events::Event;
