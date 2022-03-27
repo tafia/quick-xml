@@ -143,7 +143,7 @@ impl<'a> Attribute<'a> {
     /// instead use one of:
     ///
     /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`unescaped_value_with_custom_entities()`], as it doesn't allocate when no escape sequences are used.
     ///
     /// [`unescaped_value_with_custom_entities()`]: #method.unescaped_value_with_custom_entities
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode

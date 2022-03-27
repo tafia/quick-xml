@@ -65,10 +65,12 @@ fn main() -> Result<(), fast_xml::Error> {
     assert_eq!(found_tables.len(), 2);
     // pretty print the table
     println!("{:#?}", found_tables);
+    assert_eq!(found_tables[0].index, 2);
     assert_eq!(found_tables[0].rows.len(), 2);
     assert_eq!(found_tables[0].rows[0].len(), 4);
     assert_eq!(found_tables[0].rows[1].len(), 4);
 
+    assert_eq!(found_tables[1].index, 2);
     assert_eq!(found_tables[1].rows.len(), 2);
     assert_eq!(found_tables[1].rows[0].len(), 4);
     assert_eq!(found_tables[1].rows[1].len(), 4);
