@@ -1232,19 +1232,26 @@ fn test_issue299() -> Result<(), Error> {
 fn test_issue305_unflatten_namespace() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct NamespaceBug {
         #[serde(rename = "$unflatten=d:test2")]
         test2: String,
     }
 
-    let _namespace_bug: NamespaceBug = from_str(
+    let namespace_bug: NamespaceBug = from_str(
         r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <d:test xmlns:d="works">
         <d:test2>doesntwork</d:test2>
     </d:test>"#,
     )?;
+
+    assert_eq!(
+        namespace_bug,
+        NamespaceBug {
+            test2: "doesntwork".into(),
+        }
+    );
 
     Ok(())
 }
@@ -1254,10 +1261,10 @@ fn test_issue305_unflatten_namespace() -> Result<(), quick_xml::DeError> {
 fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct InnerNestingBug {}
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct NestingBug {
         // comment out one of these fields and it works
         #[serde(rename = "$unflatten=outer1")]
@@ -1267,7 +1274,7 @@ fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
         outer2: String,
     }
 
-    let _nesting_bug: NestingBug = from_str::<NestingBug>(
+    let nesting_bug: NestingBug = from_str::<NestingBug>(
         r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <root>
@@ -1275,6 +1282,14 @@ fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
         <outer2></outer2>
     </root>"#,
     )?;
+
+    assert_eq!(
+        nesting_bug,
+        NestingBug {
+            outer1: InnerNestingBug {},
+            outer2: "".into(),
+        }
+    );
 
     Ok(())
 }
