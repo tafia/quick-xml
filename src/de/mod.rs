@@ -226,6 +226,8 @@ use crate::{
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
 use std::borrow::Cow;
+#[cfg(feature = "overlapped-lists")]
+use std::collections::VecDeque;
 use std::io::BufRead;
 
 pub(crate) const INNER_VALUE: &str = "$value";
@@ -248,12 +250,35 @@ pub enum DeEvent<'a> {
     Eof,
 }
 
-/// An xml deserializer
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A structure that deserializes XML into Rust values.
 pub struct Deserializer<'de, R>
 where
     R: XmlRead<'de>,
 {
+    /// An XML reader that streams events into this deserializer
     reader: R,
+
+    /// When deserializing sequences sometimes we have to skip unwanted events.
+    /// That events should be stored and then replayed. This is a replay buffer,
+    /// that streams events while not empty. When it exhausted, events will
+    /// requested from [`Self::reader`].
+    #[cfg(feature = "overlapped-lists")]
+    read: VecDeque<DeEvent<'de>>,
+    /// When deserializing sequences sometimes we have to skip events, because XML
+    /// is tolerant to elements order and even if in the XSD order is strictly
+    /// specified (using `xs:sequence`) most of XML parsers allows order violations.
+    /// That means, that elements, forming a sequence, could be overlapped with
+    /// other elements, do not related to that sequence.
+    ///
+    /// In order to support this, deserializer will scan events and skip unwanted
+    /// events, store them here. After call [`Self::start_replay()`] all events
+    /// moved from this to [`Self::read`].
+    #[cfg(feature = "overlapped-lists")]
+    write: VecDeque<DeEvent<'de>>,
+
+    #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
 }
 
@@ -345,6 +370,13 @@ where
     pub fn new(reader: R) -> Self {
         Deserializer {
             reader,
+
+            #[cfg(feature = "overlapped-lists")]
+            read: VecDeque::new(),
+            #[cfg(feature = "overlapped-lists")]
+            write: VecDeque::new(),
+
+            #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
         }
     }
@@ -355,6 +387,20 @@ where
         Self::new(reader)
     }
 
+    #[cfg(feature = "overlapped-lists")]
+    fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
+        if self.read.is_empty() {
+            self.read.push_front(self.reader.next()?);
+        }
+        if let Some(event) = self.read.front() {
+            return Ok(&event);
+        }
+        // SAFETY: `self.read` was filled in the code above.
+        // NOTE: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
+        // if unsafe code will be allowed
+        unreachable!()
+    }
+    #[cfg(not(feature = "overlapped-lists"))]
     fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
         if self.peek.is_none() {
             self.peek = Some(self.reader.next()?);
@@ -370,10 +416,67 @@ where
     }
 
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
+        // Replay skipped or peeked events
+        #[cfg(feature = "overlapped-lists")]
+        if let Some(event) = self.read.pop_front() {
+            return Ok(event);
+        }
+        #[cfg(not(feature = "overlapped-lists"))]
         if let Some(e) = self.peek.take() {
             return Ok(e);
         }
         self.reader.next()
+    }
+
+    /// Extracts XML tree of events from and stores them in the skipped events
+    /// buffer from which they can be retrieved later. You MUST call
+    /// [`Self::start_replay()`] after calling this to give access to the skipped
+    /// events and release internal buffers.
+    #[cfg(feature = "overlapped-lists")]
+    fn skip(&mut self) -> Result<(), DeError> {
+        let event = self.next()?;
+        self.write.push_back(event);
+        match self.write.back() {
+            // Skip all subtree, if we skip a start event
+            Some(DeEvent::Start(e)) => {
+                let end = e.name().to_owned();
+                let mut depth = 0;
+                loop {
+                    let event = self.next()?;
+                    match event {
+                        DeEvent::Start(ref e) if e.name() == end => {
+                            self.write.push_back(event);
+                            depth += 1;
+                        }
+                        DeEvent::End(ref e) if e.name() == end => {
+                            self.write.push_back(event);
+                            if depth == 0 {
+                                return Ok(());
+                            }
+                            depth -= 1;
+                        }
+                        _ => self.write.push_back(event),
+                    }
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Moves all buffered events to the end of [`Self::write`] buffer and swaps
+    /// read and write buffers.
+    ///
+    /// After calling this method, [`Self::peek()`] and [`Self::next()`] starts
+    /// return events that was skipped previously by calling [`Self::skip()`],
+    /// and only when all that events will be consumed, the deserializer starts
+    /// to drain events from underlying reader.
+    ///
+    /// This method MUST be called if any number of [`Self::skip()`] was called
+    /// after [`Self::new()`] or `start_replay()` or you'll lost events.
+    #[cfg(feature = "overlapped-lists")]
+    fn start_replay(&mut self) {
+        self.write.append(&mut self.read);
+        std::mem::swap(&mut self.read, &mut self.write);
     }
 
     fn next_start(&mut self) -> Result<Option<BytesStart<'de>>, DeError> {
@@ -465,6 +568,33 @@ where
         self.reader.decoder()
     }
 
+    /// Drops all events until event with [name](BytesEnd::name()) `name` won't be
+    /// dropped. This method should be called after [`Self::next()`]
+    #[cfg(feature = "overlapped-lists")]
+    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
+        let mut depth = 0;
+        loop {
+            match self.read.pop_front() {
+                Some(DeEvent::Start(e)) if e.name() == name => {
+                    depth += 1;
+                }
+                Some(DeEvent::End(e)) if e.name() == name => {
+                    if depth == 0 {
+                        return Ok(());
+                    }
+                    depth -= 1;
+                }
+
+                // Drop all other skipped events
+                Some(_) => continue,
+
+                // If we do not have skipped events, use effective reading that will
+                // not allocate memory for events
+                None => return self.reader.read_to_end(name),
+            }
+        }
+    }
+    #[cfg(not(feature = "overlapped-lists"))]
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         // First one might be in self.peek
         match self.next()? {
@@ -638,7 +768,10 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?)
+        let seq = visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?);
+        #[cfg(feature = "overlapped-lists")]
+        self.start_replay();
+        seq
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -792,6 +925,251 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[cfg(feature = "overlapped-lists")]
+    mod skip {
+        use super::*;
+        use crate::de::DeEvent::*;
+        use crate::events::{BytesEnd, BytesText};
+        use pretty_assertions::assert_eq;
+
+        /// Checks that `peek()` and `read()` behaves correctly after `skip()`
+        #[test]
+        fn read_and_peek() {
+            let mut de = Deserializer::from_slice(
+                br#"
+                <root>
+                    <inner>
+                        text
+                        <inner/>
+                    </inner>
+                    <next/>
+                    <target/>
+                </root>
+                "#,
+            );
+
+            // Initial conditions - both are empty
+            assert_eq!(de.read, vec![]);
+            assert_eq!(de.write, vec![]);
+
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"root"))
+            );
+            assert_eq!(
+                de.peek().unwrap(),
+                &Start(BytesStart::borrowed_name(b"inner"))
+            );
+
+            // Should skip first <inner> tree
+            de.skip().unwrap();
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::borrowed_name(b"inner")),
+                    Text(BytesText::from_escaped_str("text")),
+                    Start(BytesStart::borrowed_name(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                ]
+            );
+
+            // Consume <next/>. Now unconsumed XML looks like:
+            //
+            //   <inner>
+            //     text
+            //     <inner/>
+            //   </inner>
+            //   <target/>
+            // </root>
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"next"))
+            );
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"next")));
+
+            // We finish writing. Next call to `next()` should start replay that messages:
+            //
+            //   <inner>
+            //     text
+            //     <inner/>
+            //   </inner>
+            //
+            // and after that stream that messages:
+            //
+            //   <target/>
+            // </root>
+            de.start_replay();
+            assert_eq!(
+                de.read,
+                vec![
+                    Start(BytesStart::borrowed_name(b"inner")),
+                    Text(BytesText::from_escaped_str("text")),
+                    Start(BytesStart::borrowed_name(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                ]
+            );
+            assert_eq!(de.write, vec![]);
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"inner"))
+            );
+
+            // Skip `#text` node and consume <inner/> after it
+            de.skip().unwrap();
+            assert_eq!(
+                de.read,
+                vec![
+                    Start(BytesStart::borrowed_name(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                    End(BytesEnd::borrowed(b"inner")),
+                ]
+            );
+            assert_eq!(
+                de.write,
+                vec![
+                    // This comment here to keep the same formatting of both arrays
+                    // otherwise rustfmt suggest one-line it
+                    Text(BytesText::from_escaped_str("text")),
+                ]
+            );
+
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"inner"))
+            );
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"inner")));
+
+            // We finish writing. Next call to `next()` should start replay messages:
+            //
+            //     text
+            //   </inner>
+            //
+            // and after that stream that messages:
+            //
+            //   <target/>
+            // </root>
+            de.start_replay();
+            assert_eq!(
+                de.read,
+                vec![
+                    Text(BytesText::from_escaped_str("text")),
+                    End(BytesEnd::borrowed(b"inner")),
+                ]
+            );
+            assert_eq!(de.write, vec![]);
+            assert_eq!(
+                de.next().unwrap(),
+                Text(BytesText::from_escaped_str("text"))
+            );
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"inner")));
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"target"))
+            );
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"target")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        }
+
+        /// Checks that `read_to_end()` behaves correctly after `skip()`
+        #[test]
+        fn read_to_end() {
+            let mut de = Deserializer::from_slice(
+                br#"
+                <root>
+                    <skip>
+                        text
+                        <skip/>
+                    </skip>
+                    <target>
+                        <target/>
+                    </target>
+                </root>
+                "#,
+            );
+
+            // Initial conditions - both are empty
+            assert_eq!(de.read, vec![]);
+            assert_eq!(de.write, vec![]);
+
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"root"))
+            );
+
+            // Skip the <skip> tree
+            de.skip().unwrap();
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    Text(BytesText::from_escaped_str("text")),
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                ]
+            );
+
+            // Drop all events thet represents <target> tree. Now unconsumed XML looks like:
+            //
+            //   <skip>
+            //     text
+            //     <skip/>
+            //   </skip>
+            // </root>
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"target"))
+            );
+            de.read_to_end(b"target").unwrap();
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    Text(BytesText::from_escaped_str("text")),
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                ]
+            );
+
+            // We finish writing. Next call to `next()` should start replay that messages:
+            //
+            //   <skip>
+            //     text
+            //     <skip/>
+            //   </skip>
+            //
+            // and after that stream that messages:
+            //
+            // </root>
+            de.start_replay();
+            assert_eq!(
+                de.read,
+                vec![
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    Text(BytesText::from_escaped_str("text")),
+                    Start(BytesStart::borrowed_name(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                    End(BytesEnd::borrowed(b"skip")),
+                ]
+            );
+            assert_eq!(de.write, vec![]);
+
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::borrowed_name(b"skip"))
+            );
+            de.read_to_end(b"skip").unwrap();
+
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        }
+    }
 
     #[test]
     fn read_to_end() {

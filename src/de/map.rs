@@ -105,6 +105,9 @@ enum ValueSource {
     /// [list of known fields]: MapAccess::fields
     Content,
     /// Next value should be deserialized from an element with a dedicated name.
+    /// If deserialized type is a sequence, then that sequence will collect all
+    /// elements with the same name until it will be filled. If not all elements
+    /// would be consumed, the rest will be ignored.
     ///
     /// That state is set when call to [`peek()`] returns a [`Start`] event, which
     /// [`name()`] represents a field name. That name will be deserialized as a key.
@@ -569,7 +572,11 @@ where
     map: &'m mut MapAccess<'de, 'a, R>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
-    /// Iteration will stop when found a tag that does not pass this filter.
+    /// When feature `overlapped-lists` is not activated, iteration will stop
+    /// when found a tag that does not pass this filter.
+    ///
+    /// When feature `overlapped-lists` is activated, all tags, that not pass
+    /// this check, will be skipped.
     filter: TagFilter<'de>,
 }
 
@@ -584,20 +591,29 @@ where
         T: DeserializeSeed<'de>,
     {
         let decoder = self.map.de.reader.decoder();
-        match self.map.de.peek()? {
-            // Stop iteration when list elements ends
-            DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => Ok(None),
+        loop {
+            break match self.map.de.peek()? {
+                // If we see a tag that we not interested, skip it
+                #[cfg(feature = "overlapped-lists")]
+                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => {
+                    self.map.de.skip()?;
+                    continue;
+                }
+                // Stop iteration when list elements ends
+                #[cfg(not(feature = "overlapped-lists"))]
+                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => Ok(None),
 
-            // Stop iteration after reaching a closing tag
-            DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
-            // This is a unmatched closing tag, so the XML is invalid
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
-            // We cannot get `Eof` legally, because we always inside of the
-            // opened tag `self.map.start`
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+                // Stop iteration after reaching a closing tag
+                DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
+                // This is a unmatched closing tag, so the XML is invalid
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+                // We cannot get `Eof` legally, because we always inside of the
+                // opened tag `self.map.start`
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
 
-            // Start(tag), Text, CData
-            _ => seed.deserialize(&mut *self.map.de).map(Some),
+                // Start(tag), Text, CData
+                _ => seed.deserialize(&mut *self.map.de).map(Some),
+            };
         }
     }
 }

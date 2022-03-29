@@ -82,7 +82,11 @@ where
     de: &'a mut Deserializer<'de, R>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
-    /// Iteration will stop when found a tag that does not pass this filter.
+    /// When feature `overlapped-lists` is not activated, iteration will stop
+    /// when found a tag that does not pass this filter.
+    ///
+    /// When feature `overlapped-lists` is activated, all tags, that not pass
+    /// this check, will be skipped.
     filter: TagFilter<'de>,
 }
 
@@ -113,15 +117,23 @@ where
         T: DeserializeSeed<'de>,
     {
         let decoder = self.de.reader.decoder();
-        match self.de.peek()? {
-            // Stop iteration when list elements ends
-            DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
-            // This is unmatched End tag at top-level
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
-            DeEvent::Eof => Ok(None),
+        loop {
+            break match self.de.peek()? {
+                // If we see a tag that we not interested, skip it
+                #[cfg(feature = "overlapped-lists")]
+                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
+                    self.de.skip()?;
+                    continue;
+                }
+                // Stop iteration when list elements ends
+                #[cfg(not(feature = "overlapped-lists"))]
+                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
+                DeEvent::End(_) => Ok(None),
+                DeEvent::Eof => Ok(None),
 
-            // Start(tag), Text, CData
-            _ => seed.deserialize(&mut *self.de).map(Some),
+                // Start(tag), Text, CData
+                _ => seed.deserialize(&mut *self.de).map(Some),
+            };
         }
     }
 }

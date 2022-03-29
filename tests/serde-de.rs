@@ -738,6 +738,8 @@ mod seq {
             /// That fields should be skipped during deserialization
             mod unknown_items {
                 use super::*;
+                #[cfg(not(feature = "overlapped-lists"))]
+                use pretty_assertions::assert_eq;
 
                 #[test]
                 fn before() {
@@ -771,7 +773,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    from_str::<List>(
+                    let data = from_str::<List>(
                         r#"
                         <root>
                             <item/>
@@ -780,8 +782,21 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -791,6 +806,8 @@ mod seq {
             /// fields comes in an arbitrary order
             mod field_before_list {
                 use super::*;
+                #[cfg(not(feature = "overlapped-lists"))]
+                use pretty_assertions::assert_eq;
 
                 #[derive(Debug, PartialEq, Deserialize)]
                 struct Root {
@@ -830,7 +847,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    from_str::<Root>(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <item/>
@@ -839,8 +856,21 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -850,6 +880,8 @@ mod seq {
             /// fields comes in an arbitrary order
             mod field_after_list {
                 use super::*;
+                #[cfg(not(feature = "overlapped-lists"))]
+                use pretty_assertions::assert_eq;
 
                 #[derive(Debug, PartialEq, Deserialize)]
                 struct Root {
@@ -889,7 +921,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    from_str::<Root>(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <item/>
@@ -898,8 +930,21 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -907,6 +952,8 @@ mod seq {
             /// Lists should be deserialized even when them overlaps
             mod two_lists {
                 use super::*;
+                #[cfg(not(feature = "overlapped-lists"))]
+                use pretty_assertions::assert_eq;
 
                 #[derive(Debug, PartialEq, Deserialize)]
                 struct Pair {
@@ -932,7 +979,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    from_str::<Pair>(
+                    let data = from_str::<Pair>(
                         r#"
                         <root>
                             <item/>
@@ -942,8 +989,21 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1117,7 +1177,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: List = from_str(
+                    let data = from_str::<List>(
                         r#"
                         <root>
                             <item/>
@@ -1126,15 +1186,24 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         List {
                             item: vec![(), (), ()],
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1200,7 +1269,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <item/>
@@ -1209,16 +1278,27 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             node: (),
                             item: vec![(), (), ()],
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "duplicate field `item`")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1284,7 +1364,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <item/>
@@ -1293,16 +1373,27 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             item: vec![(), (), ()],
                             node: (),
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "duplicate field `item`")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1344,7 +1435,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Pair = from_str(
+                    let data = from_str::<Pair>(
                         r#"
                         <root>
                             <item/>
@@ -1354,16 +1445,25 @@ mod seq {
                             <item/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Pair {
                             item: vec![(), (), ()],
                             element: vec![(), ()],
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1713,7 +1813,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <one/>
@@ -1722,16 +1822,27 @@ mod seq {
                             <three/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             node: (),
                             item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1798,7 +1909,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <one/>
@@ -1807,16 +1918,27 @@ mod seq {
                             <three/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                             node: (),
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -1894,7 +2016,7 @@ mod seq {
                     /// elements in an XML, and the first element is a fixed-name one
                     #[test]
                     fn overlapped_fixed_before() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <element/>
@@ -1904,23 +2026,34 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: [(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 2")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
 
                     /// A list with fixed-name elements are mixed with a list with variable-name
                     /// elements in an XML, and the first element is a variable-name one
                     #[test]
                     fn overlapped_fixed_after() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -1930,16 +2063,27 @@ mod seq {
                                 <element/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: [(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
 
@@ -2012,7 +2156,7 @@ mod seq {
                     /// elements in an XML, and the first element is a fixed-name one
                     #[test]
                     fn overlapped_fixed_before() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <element/>
@@ -2022,23 +2166,34 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: [(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 2")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
 
                     /// A list with fixed-name elements are mixed with a list with variable-name
                     /// elements in an XML, and the first element is a variable-name one
                     #[test]
                     fn overlapped_fixed_after() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -2048,16 +2203,27 @@ mod seq {
                                 <element/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: [(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
 
@@ -2105,7 +2271,7 @@ mod seq {
                     #[test]
                     #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
                     fn overlapped() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -2115,16 +2281,27 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: [Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: [Choice2::First, Choice2::Second],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
             }
@@ -2331,7 +2508,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <one/>
@@ -2340,16 +2517,25 @@ mod seq {
                             <three/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             node: (),
                             item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -2416,7 +2602,7 @@ mod seq {
 
                 #[test]
                 fn overlapped() {
-                    let data: Root = from_str(
+                    let data = from_str::<Root>(
                         r#"
                         <root>
                             <one/>
@@ -2425,16 +2611,25 @@ mod seq {
                             <three/>
                         </root>
                         "#,
-                    )
-                    .unwrap();
+                    );
 
+                    #[cfg(feature = "overlapped-lists")]
                     assert_eq!(
-                        data,
+                        data.unwrap(),
                         Root {
                             item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                             node: (),
                         }
                     );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                            e
+                        ),
+                    }
                 }
             }
 
@@ -2512,7 +2707,7 @@ mod seq {
                     /// elements in an XML, and the first element is a fixed-name one
                     #[test]
                     fn overlapped_fixed_before() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <element/>
@@ -2522,23 +2717,32 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: vec![(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `element`"),
+                            e => panic!(
+                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
 
                     /// A list with fixed-name elements are mixed with a list with variable-name
                     /// elements in an XML, and the first element is a variable-name one
                     #[test]
                     fn overlapped_fixed_after() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -2548,16 +2752,25 @@ mod seq {
                                 <element/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: vec![(), ()],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
+                            e => panic!(
+                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
 
@@ -2630,7 +2843,7 @@ mod seq {
                     /// elements in an XML, and the first element is a fixed-name one
                     #[test]
                     fn overlapped_fixed_before() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <element/>
@@ -2640,23 +2853,32 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 element: vec![(), ()],
                                 item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `element`"),
+                            e => panic!(
+                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
 
                     /// A list with fixed-name elements are mixed with a list with variable-name
                     /// elements in an XML, and the first element is a variable-name one
                     #[test]
                     fn overlapped_fixed_after() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -2666,16 +2888,25 @@ mod seq {
                                 <element/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 element: vec![(), ()],
                                 item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
+                            e => panic!(
+                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
 
@@ -2723,7 +2954,7 @@ mod seq {
                     #[test]
                     #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
                     fn overlapped() {
-                        let data: Pair = from_str(
+                        let data = from_str::<Pair>(
                             r#"
                             <root>
                                 <one/>
@@ -2733,16 +2964,27 @@ mod seq {
                                 <three/>
                             </root>
                             "#,
-                        )
-                        .unwrap();
+                        );
 
+                        #[cfg(feature = "overlapped-lists")]
                         assert_eq!(
-                            data,
+                            data.unwrap(),
                             Pair {
                                 item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: vec![Choice2::First, Choice2::Second],
                             }
                         );
+
+                        #[cfg(not(feature = "overlapped-lists"))]
+                        match data {
+                            Err(DeError::Custom(e)) => {
+                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                            }
+                            e => panic!(
+                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                e
+                            ),
+                        }
                     }
                 }
             }

@@ -10,6 +10,11 @@
 
 ## Unreleased
 
+### New Features
+
+- [#387]: Allow overlapping between elements of sequence and other elements
+  (using new feature `overlapped-lists`)
+
 ### Bug Fixes
 
 - [#9]: Deserialization erroneously was successful in some cases where error is expected.
