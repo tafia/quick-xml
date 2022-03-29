@@ -105,10 +105,19 @@ where
         T: DeserializeSeed<'de>,
     {
         let decoder = self.de.reader.decoder();
-        match self.de.peek()? {
-            DeEvent::Eof | DeEvent::End(_) => Ok(None),
-            DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
-            _ => seed.deserialize(&mut *self.de).map(Some),
+        loop {
+            break match self.de.peek()? {
+                // If we see a tag that we not interested, skip it
+                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
+                    self.de.skip()?;
+                    continue;
+                }
+                DeEvent::End(_) => Ok(None),
+                DeEvent::Eof => Ok(None),
+
+                // Start(tag), Text, CData
+                _ => seed.deserialize(&mut *self.de).map(Some),
+            };
         }
     }
 }

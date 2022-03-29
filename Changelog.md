@@ -45,6 +45,8 @@
   ([#380](https://github.com/tafia/quick-xml/pull/380))
 - fix: allow to have an ordinary elements together with a `$value` field
   ([#380](https://github.com/tafia/quick-xml/pull/380))
+- fix: allow overlapping between elements of sequence and other elements
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 
