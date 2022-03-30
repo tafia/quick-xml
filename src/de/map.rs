@@ -2,6 +2,7 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
+    de::seq::not_in,
     de::{deserialize_bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::IterState,
@@ -43,12 +44,14 @@ enum ValueSource {
     /// </any-tag>
     /// ```
     Text,
-    /// Next value should be deserialized from an element with an any name.
-    /// Corresponding tag name will always be associated with a field with name
-    /// [`INNER_VALUE`].
+    /// Next value should be deserialized from an element with an any name, except
+    /// elements with a name matching one of the struct fields. Corresponding tag
+    /// name will always be associated with a field with name [`INNER_VALUE`].
     ///
-    /// That state is set when call to [`peek()`] returns a [`Start`] event
-    /// _and_ struct has a field with a special name [`INNER_VALUE`].
+    /// That state is set when call to [`peek()`] returns a [`Start`] event, which
+    /// [`name()`] is not listed in the [list of known fields] (which for a struct
+    /// is a list of field names, and for a map that is an empty list), _and_
+    /// struct has a field with a special name [`INNER_VALUE`].
     ///
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
@@ -97,7 +100,9 @@ enum ValueSource {
     /// [`Start`]: DeEvent::Start
     /// [`peek()`]: Deserializer::peek()
     /// [`next()`]: Deserializer::next()
+    /// [`name()`]: BytesStart::name()
     /// [`Text`]: Self::Text
+    /// [list of known fields]: MapAccess::fields
     Content,
     /// Next value should be deserialized from an element with a dedicated name.
     ///
@@ -135,7 +140,24 @@ enum ValueSource {
     Nested,
 }
 
-/// A deserializer for `Attributes`
+/// A deserializer that extracts map-like structures from an XML. This deserializer
+/// represents a one XML tag:
+///
+/// ```xml
+/// <tag>...</tag>
+/// ```
+///
+/// Name of this tag is stored in a [`Self::start`] property.
+///
+/// # Lifetimes
+///
+/// - `'de` lifetime represents a buffer, from which deserialized values can
+///   borrow their data. Depending on the underlying reader, there can be an
+///   internal buffer of deserializer (i.e. deserializer itself) or an input
+///   (in that case it is possible to approach zero-copy deserialization).
+///
+/// - `'a` lifetime represents a parent deserializer, which could own the data
+///   buffer.
 pub(crate) struct MapAccess<'de, 'a, R>
 where
     R: XmlRead<'de>,
@@ -149,6 +171,8 @@ where
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
     source: ValueSource,
+    /// List of field names of the struct. It is empty for maps
+    fields: &'static [&'static str],
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -161,13 +185,14 @@ where
     pub fn new(
         de: &'a mut Deserializer<'de, R>,
         start: BytesStart<'de>,
-        fields: &[&'static str],
+        fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
         Ok(MapAccess {
             de,
             start,
             iter: IterState::new(0, false),
             source: ValueSource::Unknown,
+            fields,
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -230,7 +255,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(_) if has_value_field => {
+                DeEvent::Start(e) if has_value_field && not_in(self.fields, e, decoder)? => {
                     self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }

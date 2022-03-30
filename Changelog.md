@@ -14,6 +14,7 @@
 
 - [#9]: Deserialization erroneously was successful in some cases where error is expected.
   This broke deserialization of untagged enums which rely on error if variant cannot be parsed
+- [#387]: Allow to have an ordinary elements together with a `$value` field
 
 ### Misc Changes
 
