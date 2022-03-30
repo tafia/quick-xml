@@ -2,14 +2,14 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
-    de::seq::not_in,
+    de::seq::{not_in, TagFilter},
     de::{deserialize_bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::IterState,
     events::{BytesCData, BytesStart},
     reader::Decoder,
 };
-use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
+use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
@@ -312,7 +312,10 @@ where
             // is implicit and equals to the `INNER_VALUE` constant, and the value
             // is a `Text` or a `CData` event (the value deserializer will see one
             // of that events)
-            ValueSource::Text => seed.deserialize(MapValueDeserializer { map: self }),
+            ValueSource::Text => seed.deserialize(MapValueDeserializer {
+                map: self,
+                allow_start: false,
+            }),
             // This arm processes the following XML shape:
             // <any-tag>
             //   <any>...</any>
@@ -320,7 +323,10 @@ where
             // The whole map represented by an `<any-tag>` element, the map key
             // is implicit and equals to the `INNER_VALUE` constant, and the value
             // is a `Start` event (the value deserializer will see that event)
-            ValueSource::Content => seed.deserialize(MapValueDeserializer { map: self }),
+            ValueSource::Content => seed.deserialize(MapValueDeserializer {
+                map: self,
+                allow_start: false,
+            }),
             // This arm processes the following XML shape:
             // <any-tag>
             //   <tag>...</tag>
@@ -328,7 +334,10 @@ where
             // The whole map represented by an `<any-tag>` element, the map key
             // is a `tag`, and the value is a `Start` event (the value deserializer
             // will see that event)
-            ValueSource::Nested => seed.deserialize(&mut *self.de),
+            ValueSource::Nested => seed.deserialize(MapValueDeserializer {
+                map: self,
+                allow_start: true,
+            }),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
     }
@@ -364,6 +373,82 @@ where
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
     map: &'m mut MapAccess<'de, 'a, R>,
+    /// Determines, should [`Deserializer::next_text_impl()`] expand the second
+    /// level of tags or not.
+    ///
+    /// If this field is `true`, we process the following XML shape:
+    ///
+    /// ```xml
+    /// <any-tag>
+    ///   <tag>...</tag>
+    /// </any-tag>
+    /// ```
+    ///
+    /// The whole map represented by an `<any-tag>` element, the map key is a `tag`,
+    /// and the value starts with is a `Start("tag")` (the value deserializer will
+    /// see that event first) and extended to the matching `End("tag")` event.
+    /// In order to deserialize primitives (such as `usize`) we need to allow to
+    /// look inside the one levels of tags, so the
+    ///
+    /// ```xml
+    /// <tag>42<tag>
+    /// ```
+    ///
+    /// could be deserialized into `42usize` without problems, and at the same time
+    ///
+    /// ```xml
+    /// <tag>
+    ///   <key1/>
+    ///   <key2/>
+    ///   <!--...-->
+    /// <tag>
+    /// ```
+    /// could be deserialized to a struct.
+    ///
+    /// If this field is `false`, we processes the one of following XML shapes:
+    ///
+    /// ```xml
+    /// <any-tag>
+    ///   text value
+    /// </any-tag>
+    /// ```
+    /// ```xml
+    /// <any-tag>
+    ///   <![CDATA[cdata value]]>
+    /// </any-tag>
+    /// ```
+    /// ```xml
+    /// <any-tag>
+    ///   <any>...</any>
+    /// </any-tag>
+    /// ```
+    ///
+    /// The whole map represented by an `<any-tag>` element, the map key is
+    /// implicit and equals to the [`INNER_VALUE`] constant, and the value is
+    /// a [`Text`], a [`CData`], or a [`Start`] event (the value deserializer
+    /// will see one of those events). In the first two cases the value of this
+    /// field do not matter (because we already see the textual event and there
+    /// no reasons to look "inside" something), but in the last case the primitives
+    /// should raise a deserialization error, because that means that you trying
+    /// to deserialize the following struct:
+    ///
+    /// ```ignore
+    /// struct AnyName {
+    ///   #[serde(rename = "$value")]
+    ///   any_name: String,
+    /// }
+    /// ```
+    /// which means that `any_name` should get a content of the `<any-tag>` element.
+    ///
+    /// Changing this can be valuable for <https://github.com/tafia/quick-xml/issues/383>,
+    /// but those fields should be explicitly marked that they want to get any
+    /// possible markup as a `String` and that mark is different from marking them
+    /// as accepting "text content" which the currently `$value` means.
+    ///
+    /// [`Text`]: DeEvent::Text
+    /// [`CData`]: DeEvent::CData
+    /// [`Start`]: DeEvent::Start
+    allow_start: bool,
 }
 
 impl<'de, 'a, 'm, R> MapValueDeserializer<'de, 'a, 'm, R>
@@ -373,7 +458,7 @@ where
     /// Returns a text event, used inside [`deserialize_primitives!()`]
     #[inline]
     fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
-        self.map.de.next_text_impl(unescape, false)
+        self.map.de.next_text_impl(unescape, self.allow_start)
     }
 
     /// Returns a decoder, used inside [`deserialize_primitives!()`]
@@ -396,10 +481,6 @@ where
     forward!(deserialize_unit_struct(name: &'static str));
     forward!(deserialize_newtype_struct(name: &'static str));
 
-    forward!(deserialize_seq);
-    forward!(deserialize_tuple(len: usize));
-    forward!(deserialize_tuple_struct(name: &'static str, len: usize));
-
     forward!(deserialize_map);
     forward!(deserialize_struct(
         name: &'static str,
@@ -414,8 +495,101 @@ where
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
 
+    /// Tuple representation is the same as [sequences](#method.deserialize_seq).
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    /// Named tuple representation is the same as [unnamed tuples](#method.deserialize_tuple).
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let filter = if self.allow_start {
+            match self.map.de.peek()? {
+                // Clone is cheap if event borrows from the input
+                DeEvent::Start(e) => TagFilter::Include(e.clone()),
+                // SAFETY: we use that deserializer with `allow_start == true`
+                // only from the `MapAccess::next_value_seed` and only when we
+                // peeked `Start` event
+                _ => unreachable!(),
+            }
+        } else {
+            TagFilter::Exclude(self.map.fields)
+        };
+        let seq = visitor.visit_seq(MapValueSeqAccess {
+            map: self.map,
+            filter,
+        });
+        #[cfg(feature = "overlapped-lists")]
+        self.map.de.start_replay();
+        seq
+    }
+
     #[inline]
     fn is_human_readable(&self) -> bool {
         self.map.de.is_human_readable()
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// An accessor to sequence elements forming a value for struct field.
+/// Technically, this sequence is flattened out into structure and sequence
+/// elements are overlapped with other fields of a structure
+struct MapValueSeqAccess<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    /// Accessor to a map that creates this accessor and to a deserializer for
+    /// a sequence items.
+    map: &'m mut MapAccess<'de, 'a, R>,
+    /// Filter that determines whether a tag is a part of this sequence.
+    ///
+    /// Iteration will stop when found a tag that does not pass this filter.
+    filter: TagFilter<'de>,
+}
+
+impl<'de, 'a, 'm, R> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    type Error = DeError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        let decoder = self.map.de.reader.decoder();
+        match self.map.de.peek()? {
+            // Stop iteration when list elements ends
+            DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => Ok(None),
+
+            // Stop iteration after reaching a closing tag
+            DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
+            // This is a unmatched closing tag, so the XML is invalid
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            // We cannot get `Eof` legally, because we always inside of the
+            // opened tag `self.map.start`
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+
+            // Start(tag), Text, CData
+            _ => seed.deserialize(&mut *self.map.de).map(Some),
+        }
     }
 }

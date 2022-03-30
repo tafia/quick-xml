@@ -1,7 +1,7 @@
 use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
 use crate::events::BytesStart;
 use crate::reader::Decoder;
-use serde::de::{self, DeserializeSeed};
+use serde::de::{DeserializeSeed, SeqAccess};
 #[cfg(not(feature = "encoding"))]
 use std::borrow::Cow;
 
@@ -43,7 +43,7 @@ pub fn not_in(
 /// `'de` represents a lifetime of the XML input, when filter stores the
 /// dedicated tag name
 #[derive(Debug)]
-enum TagFilter<'de> {
+pub enum TagFilter<'de> {
     /// A `SeqAccess` interested only in tags with specified name to deserialize
     /// an XML like this:
     ///
@@ -65,7 +65,7 @@ enum TagFilter<'de> {
 }
 
 impl<'de> TagFilter<'de> {
-    fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
+    pub fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
             Self::Exclude(fields) => not_in(fields, start, decoder),
@@ -74,21 +74,23 @@ impl<'de> TagFilter<'de> {
 }
 
 /// A SeqAccess
-pub struct SeqAccess<'de, 'a, R>
+pub struct TopLevelSeqAccess<'de, 'a, R>
 where
     R: XmlRead<'de>,
 {
     /// Deserializer used to deserialize sequence items
     de: &'a mut Deserializer<'de, R>,
     /// Filter that determines whether a tag is a part of this sequence.
+    ///
+    /// Iteration will stop when found a tag that does not pass this filter.
     filter: TagFilter<'de>,
 }
 
-impl<'a, 'de, R> SeqAccess<'de, 'a, R>
+impl<'a, 'de, R> TopLevelSeqAccess<'de, 'a, R>
 where
     R: XmlRead<'de>,
 {
-    /// Get a new SeqAccess
+    /// Creates a new accessor to a top-level sequence of XML elements.
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
         let filter = if de.has_value_field {
             TagFilter::Exclude(&[])
@@ -104,7 +106,7 @@ where
     }
 }
 
-impl<'de, 'a, R> de::SeqAccess<'de> for SeqAccess<'de, 'a, R>
+impl<'de, 'a, R> SeqAccess<'de> for TopLevelSeqAccess<'de, 'a, R>
 where
     R: XmlRead<'de>,
 {
@@ -116,8 +118,13 @@ where
     {
         let decoder = self.de.reader.decoder();
         match self.de.peek()? {
-            DeEvent::Eof | DeEvent::End(_) => Ok(None),
+            // Stop iteration when list elements ends
             DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
+            // This is unmatched End tag at top-level
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => Ok(None),
+
+            // Start(tag), Text, CData
             _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }

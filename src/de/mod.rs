@@ -649,7 +649,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(seq::SeqAccess::new(self)?)
+        visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
