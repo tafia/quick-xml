@@ -1,24 +1,19 @@
 use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
-use crate::{events::BytesStart, reader::Decoder};
+use crate::events::BytesStart;
 use serde::de::{self, DeserializeSeed};
 
 #[derive(Debug)]
 enum Names {
     Unknown,
-    Peek(String),
+    Peek(Vec<u8>),
 }
 
 impl Names {
-    fn is_valid(&self, decoder: Decoder, start: &BytesStart) -> Result<bool, DeError> {
-        #[cfg(not(feature = "encoding"))]
-        let name = decoder.decode(start.name())?;
-        #[cfg(feature = "encoding")]
-        let name = decoder.decode(start.name());
-        let res = match self {
+    fn is_valid(&self, start: &BytesStart) -> bool {
+        match self {
             Names::Unknown => true,
-            Names::Peek(n) => &**n == &*name,
-        };
-        Ok(res)
+            Names::Peek(n) => n == start.name(),
+        }
     }
 }
 
@@ -37,16 +32,11 @@ where
 {
     /// Get a new SeqAccess
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
-        let decoder = de.reader.decoder();
         let names = if de.has_value_field {
             Names::Unknown
         } else {
             if let DeEvent::Start(e) = de.peek()? {
-                #[cfg(not(feature = "encoding"))]
-                let name = decoder.decode(e.name())?.to_owned();
-                #[cfg(feature = "encoding")]
-                let name = decoder.decode(e.name()).into_owned();
-                Names::Peek(name)
+                Names::Peek(e.name().to_vec())
             } else {
                 Names::Unknown
             }
@@ -65,10 +55,9 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
         match self.de.peek()? {
             DeEvent::Eof | DeEvent::End(_) => Ok(None),
-            DeEvent::Start(e) if !self.names.is_valid(decoder, e)? => Ok(None),
+            DeEvent::Start(e) if !self.names.is_valid(e) => Ok(None),
             _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }
