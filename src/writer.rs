@@ -220,6 +220,8 @@ impl<W: Write> Writer<W> {
     }
 }
 
+/// A struct to write an element. Contains methods to add attributes and inner
+/// elements to the element
 pub struct ElementWriter<'a, W: Write> {
     writer: &'a mut Writer<W>,
     start_tag: BytesStart<'a>,

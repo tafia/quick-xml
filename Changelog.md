@@ -19,6 +19,8 @@
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
+- fix: `ElementWriter`, introduced in [#274](https://github.com/tafia/quick-xml/pull/274)
+  (0.23.0-alpha2) now available to end users
 
 ## 0.23.0-alpha3
 
