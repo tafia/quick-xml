@@ -2,6 +2,7 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
+    de::seq::is_unknown,
     de::simple_type::SimpleTypeDeserializer,
     de::{deserialize_bool, BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
@@ -144,6 +145,8 @@ where
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
     source: ValueSource,
+    /// List of field names of the struct
+    fields: &'static [&'static str],
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -156,7 +159,7 @@ where
     pub fn new(
         de: &'a mut Deserializer<'de, R>,
         start: BytesStart<'de>,
-        fields: &[&'static str],
+        fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
         let position = start.attributes().position;
         Ok(MapAccess {
@@ -164,6 +167,7 @@ where
             start,
             position,
             source: ValueSource::Unknown,
+            fields,
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -233,7 +237,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(_) if has_value_field => {
+                DeEvent::Start(e) if has_value_field && is_unknown(self.fields, e, decoder)? => {
                     self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
