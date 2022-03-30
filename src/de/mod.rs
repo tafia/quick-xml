@@ -707,7 +707,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let seq = visitor.visit_seq(seq::SeqAccess::new(self)?);
+        let seq = visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?);
         self.start_replay();
         seq
     }

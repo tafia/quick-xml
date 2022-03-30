@@ -1,7 +1,7 @@
 use crate::de::{BorrowingReader, DeError, DeEvent, Deserializer};
 use crate::events::BytesStart;
 use crate::reader::Decoder;
-use serde::de::{self, DeserializeSeed};
+use serde::de::{DeserializeSeed, SeqAccess};
 #[cfg(not(feature = "encoding"))]
 use std::borrow::Cow;
 
@@ -38,7 +38,7 @@ pub fn is_unknown(
 /// in a struct. To prevent this we use an `Exclude` filter, that filters out
 /// any known names of a struct fields.
 #[derive(Debug)]
-enum TagFilter {
+pub enum TagFilter {
     /// A `SeqAccess` interested only in tags with specified name to deserialize
     /// XML like this:
     ///
@@ -58,7 +58,7 @@ enum TagFilter {
 }
 
 impl TagFilter {
-    fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
+    pub fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n == start.name()),
             Self::Exclude(fields) => is_unknown(fields, start, decoder),
@@ -67,19 +67,22 @@ impl TagFilter {
 }
 
 /// A SeqAccess
-pub struct SeqAccess<'de, 'a, R>
+pub struct TopLevelSeqAccess<'de, 'a, R>
 where
     R: BorrowingReader<'de>,
 {
+    /// Deserializer used to deserialize sequence items
     de: &'a mut Deserializer<'de, R>,
+    /// Tag name of elements that should be deserialized. All other tags will be
+    /// skipped
     filter: TagFilter,
 }
 
-impl<'a, 'de, R> SeqAccess<'de, 'a, R>
+impl<'a, 'de, R> TopLevelSeqAccess<'de, 'a, R>
 where
     R: BorrowingReader<'de>,
 {
-    /// Get a new SeqAccess
+    /// Creates a new accessor to a top-level sequence of XML elements.
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
         let filter = if de.has_value_field {
             TagFilter::Exclude(&[])
@@ -90,11 +93,11 @@ where
                 TagFilter::Exclude(&[])
             }
         };
-        Ok(SeqAccess { de, filter })
+        Ok(Self { de, filter })
     }
 }
 
-impl<'de, 'a, R> de::SeqAccess<'de> for SeqAccess<'de, 'a, R>
+impl<'de, 'a, R> SeqAccess<'de> for TopLevelSeqAccess<'de, 'a, R>
 where
     R: BorrowingReader<'de>,
 {
@@ -112,7 +115,8 @@ where
                     self.de.skip()?;
                     continue;
                 }
-                DeEvent::End(_) => Ok(None),
+                // This is unmatched End tag at top-level
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
                 DeEvent::Eof => Ok(None),
 
                 // Start(tag), Text, CData

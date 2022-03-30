@@ -2,7 +2,7 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
-    de::seq::is_unknown,
+    de::seq::{is_unknown, TagFilter},
     de::simple_type::SimpleTypeDeserializer,
     de::{deserialize_bool, BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
@@ -10,7 +10,7 @@ use crate::{
     events::{BytesCData, BytesStart},
     reader::Decoder,
 };
-use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
+use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 
@@ -395,10 +395,6 @@ where
     forward!(deserialize_unit_struct(name: &'static str));
     forward!(deserialize_newtype_struct(name: &'static str));
 
-    forward!(deserialize_seq);
-    forward!(deserialize_tuple(len: usize));
-    forward!(deserialize_tuple_struct(name: &'static str, len: usize));
-
     forward!(deserialize_map);
     forward!(deserialize_struct(
         name: &'static str,
@@ -413,8 +409,103 @@ where
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
 
+    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        // If sequence deserialized for the `INNER_VALUE` special field, accept
+        // any tag names except that that represents other struct fields
+        let filter = if self.content {
+            TagFilter::Exclude(self.map.fields)
+        } else {
+            match self.map.de.peek()? {
+                DeEvent::Start(e) => TagFilter::Include(e.name().to_vec()),
+                // SAFETY: we use that deserializer only from the `MapAccess::next_value_seed`
+                // and only when we peeked `Start` event
+                _ => unreachable!(),
+            }
+        };
+        let seq = visitor.visit_seq(MapValueSeqAccess {
+            map: self.map,
+            filter,
+        });
+        self.map.de.start_replay();
+        seq
+    }
+
     #[inline]
     fn is_human_readable(&self) -> bool {
         self.map.de.is_human_readable()
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+/// An accessor to sequence elements forming a value for struct field.
+/// Technically, this sequence is flattened out into structure and sequence
+/// elements are overlapped with other fields of a structure
+struct MapValueSeqAccess<'de, 'a, 'm, R>
+where
+    R: BorrowingReader<'de>,
+{
+    /// Accessor to a map that creates this accessor and to a deserializer for
+    /// a sequence items.
+    map: &'m mut MapAccess<'de, 'a, R>,
+    /// Tag name of elements that should be deserialized. All other tags will be
+    /// skipped
+    filter: TagFilter,
+}
+
+impl<'de, 'a, 'm, R> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R>
+where
+    R: BorrowingReader<'de>,
+{
+    type Error = DeError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        let decoder = self.map.de.reader.decoder();
+        loop {
+            break match self.map.de.peek()? {
+                // If we see a tag that we not interested, skip it
+                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => {
+                    self.map.de.skip()?;
+                    continue;
+                }
+                // Stop iteration after reaching a closing tag
+                DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
+                // This is a unmatched closing tag, so the XML is invalid
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+                // We cannot get `Eof` legally, because we always inside of the
+                // opened tag `self.map.start`
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
+
+                // Start(tag), Text, CData
+                _ => seed.deserialize(&mut *self.map.de).map(Some),
+            };
+        }
     }
 }
