@@ -24,6 +24,8 @@
 - fix: do not unescape CDATA content because it never escaped by design
   ([#311](https://github.com/tafia/quick-xml/issues/311))
 - feat: add support for XML Schema `xs:list` ([#376](https://github.com/tafia/quick-xml/pull/376))
+- refactor: error variants `DeError::Text` and `DeError::InvalidEnum` removed because they are not used
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 
