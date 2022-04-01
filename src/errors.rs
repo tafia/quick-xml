@@ -137,10 +137,6 @@ pub mod serialize {
         Eof,
         /// Invalid value for a boolean
         InvalidBoolean(String),
-        /// Invalid event for Enum
-        InvalidEnum(crate::events::Event<'static>),
-        /// Expecting Text event
-        Text,
         /// Expecting Start event
         Start,
         /// Expecting End event
@@ -159,12 +155,6 @@ pub mod serialize {
                 DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
                 DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
                 DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
-                DeError::InvalidEnum(e) => write!(
-                    f,
-                    "Invalid event for Enum, expecting Text or Start, got: {:?}",
-                    e
-                ),
-                DeError::Text => write!(f, "Expecting Text event"),
                 DeError::Start => write!(f, "Expecting Start event"),
                 DeError::End => write!(f, "Expecting End event"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
