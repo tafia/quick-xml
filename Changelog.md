@@ -10,6 +10,11 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- [#9]: Deserialization erroneously was successful in some cases where error is expected.
+  This broke deserialization of untagged enums which rely on error if variant cannot be parsed
+
 ### Misc Changes
 
 - [#8]: Changes in the error type `DeError`:
