@@ -129,20 +129,6 @@ struct Foo {
 }
 ```
 
-### Unflattening structs into verbose XML
-
-If your XML files look like `<root><first>value</first><second>value</second></root>`, you can
-(de)serialize them with the special name prefix `$unflatten=`:
-
-```rust,ignore
-struct Root {
-    #[serde(rename = "$unflatten=first")]
-    first: String,
-    #[serde(rename = "$unflatten=second")]
-    other_field: String,
-}
-```
-
 ### Serializing unit variants as primitives
 
 The `$primitive` prefix lets you serialize enum variants without associated values (internally referred to as _unit variants_) as primitive strings rather than self-closing tags. Consider the following definitions:

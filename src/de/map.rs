@@ -4,7 +4,7 @@ use crate::{
     de::escape::EscapedDeserializer,
     de::seq::{not_in, TagFilter},
     de::simple_type::SimpleTypeDeserializer,
-    de::{str2bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
+    de::{str2bool, DeEvent, Deserializer, XmlRead, INNER_VALUE},
     errors::serialize::DeError,
     events::attributes::IterState,
     events::BytesStart,
@@ -187,8 +187,6 @@ where
     /// <tag>value for INNER_VALUE field<tag>
     /// ```
     has_value_field: bool,
-    /// list of fields yet to unflatten (defined as starting with $unflatten=)
-    unflatten_fields: Vec<&'static [u8]>,
 }
 
 impl<'de, 'a, R> MapAccess<'de, 'a, R>
@@ -208,11 +206,6 @@ where
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&INNER_VALUE),
-            unflatten_fields: fields
-                .iter()
-                .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
-                .map(|f| f.as_bytes())
-                .collect(),
         })
     }
 }
@@ -275,28 +268,9 @@ where
                 }
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
-                    let key = if let Some(p) = self
-                        .unflatten_fields
-                        .iter()
-                        .position(|f| e.name().as_ref() == &f[UNFLATTEN_PREFIX.len()..])
-                    {
-                        // Used to deserialize elements, like:
-                        // <root>
-                        //   <xxx>test</xxx>
-                        // </root>
-                        //
-                        // into
-                        //
-                        // struct Root {
-                        //     #[serde(rename = "$unflatten=xxx")]
-                        //     xxx: String,
-                        // }
-                        seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
-                    } else {
-                        let name = Cow::Borrowed(e.local_name().into_inner());
-                        seed.deserialize(EscapedDeserializer::new(name, decoder, false))
-                    };
-                    key.map(Some)
+                    let name = Cow::Borrowed(e.local_name().into_inner());
+                    seed.deserialize(EscapedDeserializer::new(name, decoder, false))
+                        .map(Some)
                 }
                 // Stop iteration after reaching a closing tag
                 DeEvent::End(e) if e.name() == self.start.name() => Ok(None),

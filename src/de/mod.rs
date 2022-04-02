@@ -125,7 +125,6 @@ use std::io::BufRead;
 use std::num::NonZeroUsize;
 
 pub(crate) const INNER_VALUE: &str = "$value";
-pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 pub(crate) const PRIMITIVE_PREFIX: &str = "$primitive=";
 
 /// Simplified event which contains only these variants that used by deserializer

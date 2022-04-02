@@ -16,6 +16,12 @@
 
 ### Misc Changes
 
+- [#490]: Removed `$unflatten=` special prefix for fields for serde (de)serializer, because:
+  - it is useless for deserializer
+  - serializer was rewritten and does not require it anymore
+
+[#490]: https://github.com/tafia/quick-xml/pull/490
+
 ## 0.26.0 -- 2022-10-23
 
 ### Misc Changes
