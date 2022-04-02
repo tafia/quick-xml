@@ -390,48 +390,34 @@ impl<'a> BytesDecl<'a> {
     /// Gets xml version, including quotes (' or ")
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
-        match self.element.attributes().next() {
-            Some(Err(e)) => Err(e),
-            Some(Ok(Attribute {
-                key: b"version",
-                value: v,
-            })) => Ok(v),
+        match self.element.attributes().with_checks(false).next() {
+            Some(Ok(a)) if a.key == b"version" => Ok(a.value),
+            // first attribute was not "version"
             Some(Ok(a)) => {
                 let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
+            // error parsing attributes
+            Some(Err(e)) => Err(e),
+            // no attributes
             None => Err(Error::XmlDeclWithoutVersion(None)),
         }
     }
 
     /// Gets xml encoding, including quotes (' or ")
     pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        for a in self.element.attributes() {
-            match a {
-                Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"encoding",
-                    value: v,
-                }) => return Some(Ok(v)),
-                _ => (),
-            }
-        }
-        None
+        self.element
+            .try_get_attribute("encoding")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
     }
 
     /// Gets xml standalone, including quotes (' or ")
     pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        for a in self.element.attributes() {
-            match a {
-                Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"standalone",
-                    value: v,
-                }) => return Some(Ok(v)),
-                _ => (),
-            }
-        }
-        None
+        self.element
+            .try_get_attribute("standalone")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
     }
 
     /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
