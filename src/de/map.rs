@@ -173,6 +173,14 @@ where
     source: ValueSource,
     /// List of field names of the struct. It is empty for maps
     fields: &'static [&'static str],
+    /// If `true`, then the deserialized struct has a field with a special name:
+    /// [`INNER_VALUE`]. That field should be deserialized from the text content
+    /// of an XML node:
+    ///
+    /// ```xml
+    /// <tag>value for INNER_VALUE field<tag>
+    /// ```
+    has_value_field: bool,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -193,6 +201,7 @@ where
             iter: IterState::new(0, false),
             source: ValueSource::Unknown,
             fields,
+            has_value_field: fields.contains(&INNER_VALUE),
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -217,7 +226,6 @@ where
         // FIXME: There error positions counted from end of tag name - need global position
         let slice = self.start.attributes_raw();
         let decoder = self.de.reader.decoder();
-        let has_value_field = self.de.has_value_field;
 
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
@@ -255,7 +263,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(e) if has_value_field && not_in(self.fields, e, decoder)? => {
+                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
                     self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }

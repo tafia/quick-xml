@@ -15,6 +15,9 @@
 - [#9]: Deserialization erroneously was successful in some cases where error is expected.
   This broke deserialization of untagged enums which rely on error if variant cannot be parsed
 - [#387]: Allow to have an ordinary elements together with a `$value` field
+- [#387]: Internal deserializer state can be broken when deserializing a map with
+  a sequence field (such as `Vec<T>`), where elements of this sequence contains
+  another sequence. This error affects only users with the `serialize` feature enabled
 
 ### Misc Changes
 
