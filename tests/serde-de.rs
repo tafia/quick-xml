@@ -551,8 +551,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                 }
             }
 
@@ -564,8 +564,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                 }
             }
 
@@ -577,8 +577,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                 }
             }
         }

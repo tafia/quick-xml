@@ -17,6 +17,9 @@
   |-------|---------------------------------------------------------------------
   |~~`DeError::Text`~~|Removed because never raised
   |~~`DeError::InvalidEnum`~~|Removed because never raised
+  |`DeError::Xml`|Renamed to `DeError::InvalidXml` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Int`|Renamed to `DeError::InvalidInt` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Float`|Renamed to `DeError::InvalidFloat` for consistency with `DeError::InvalidBoolean`
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 
