@@ -20,6 +20,10 @@
   |`DeError::Xml`|Renamed to `DeError::InvalidXml` for consistency with `DeError::InvalidBoolean`
   |`DeError::Int`|Renamed to `DeError::InvalidInt` for consistency with `DeError::InvalidBoolean`
   |`DeError::Float`|Renamed to `DeError::InvalidFloat` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Start`|Renamed to `DeError::UnexpectedStart` and tag name added to an error
+  |`DeError::End`|Renamed to `DeError::UnexpectedEnd` and tag name added to an error
+  |`DeEvent::Eof`|Renamed to `DeError::UnexpectedEof`
+  |`DeError::ExpectedStart`|Added
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 

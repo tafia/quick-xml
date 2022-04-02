@@ -22,8 +22,8 @@ where
     // If type was deserialized, the whole XML document should be consumed
     if let Ok(_) = result {
         match <()>::deserialize(&mut de) {
-            Err(DeError::Eof) => (),
-            e => panic!("Expected end `Eof`, but got {:?}", e),
+            Err(DeError::UnexpectedEof) => (),
+            e => panic!("Expected end `UnexpectedEof`, but got {:?}", e),
         }
     }
 
@@ -212,8 +212,8 @@ fn without_value() {
 fn ignored_any() {
     let err = from_str::<IgnoredAny>("");
     match err {
-        Err(DeError::Eof) => {}
-        other => panic!("Expected `Eof`, found {:?}", other),
+        Err(DeError::UnexpectedEof) => {}
+        other => panic!("Expected `UnexpectedEof`, found {:?}", other),
     }
 
     from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
@@ -236,8 +236,8 @@ mod trivial {
                 let item = from_str::<$type>($value).unwrap_err();
 
                 match item {
-                    DeError::Eof => (),
-                    _ => panic!("Expected `Eof`, found {:?}", item),
+                    DeError::UnexpectedEof => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", item),
                 }
             }
         };
@@ -274,8 +274,8 @@ mod trivial {
                 let item = from_str::<()>($value).unwrap_err();
 
                 match item {
-                    DeError::Eof => (),
-                    _ => panic!("Expected `Eof`, found {:?}", item),
+                    DeError::UnexpectedEof => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", item),
                 }
             }
         };
@@ -513,8 +513,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
 
                 match data {
-                    Err(DeError::Eof) => (),
-                    _ => panic!("Expected `Eof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
                 }
             }
 
@@ -523,8 +523,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
 
                 match data {
-                    Err(DeError::Eof) => (),
-                    _ => panic!("Expected `Eof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
                 }
             }
 
@@ -533,8 +533,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
 
                 match data {
-                    Err(DeError::Eof) => (),
-                    _ => panic!("Expected `Eof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
                 }
             }
         }
