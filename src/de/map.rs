@@ -147,6 +147,14 @@ where
     source: ValueSource,
     /// List of field names of the struct
     fields: &'static [&'static str],
+    /// If `true`, then deserialized struct have a field with a special name
+    /// [`INNER_VALUE`]. That field should be deserialized from the text content
+    /// of an XML node:
+    ///
+    /// ```xml
+    /// <tag>value for INNER_VALUE field<tag>
+    /// ```
+    has_value_field: bool,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -168,6 +176,7 @@ where
             position,
             source: ValueSource::Unknown,
             fields,
+            has_value_field: fields.contains(&INNER_VALUE),
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -198,7 +207,6 @@ where
         debug_assert_eq!(self.source, ValueSource::Unknown);
 
         let decoder = self.de.reader.decoder();
-        let has_value_field = self.de.has_value_field;
 
         let mut attributes = self.start.attributes();
         attributes.position = self.position;
@@ -237,7 +245,9 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(e) if has_value_field && is_unknown(self.fields, e, decoder)? => {
+                DeEvent::Start(e)
+                    if self.has_value_field && is_unknown(self.fields, e, decoder)? =>
+                {
                     self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }

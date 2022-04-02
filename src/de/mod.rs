@@ -275,14 +275,6 @@ where
     /// events, store them here. After call [`Self::start_replay()`] all events
     /// moved from this to [`Self::read`].
     write: VecDeque<DeEvent<'de>>,
-    /// Special sing that deserialized struct have a field with the special
-    /// name (see constant [`INNER_VALUE`]). That field should be deserialized
-    /// from the text content of the XML node:
-    ///
-    /// ```xml
-    /// <tag>value for INNER_VALUE field<tag>
-    /// ```
-    has_value_field: bool,
 }
 
 /// Deserialize an instance of type T from a string of XML text.
@@ -381,7 +373,6 @@ where
             reader,
             read: VecDeque::new(),
             write: VecDeque::new(),
-            has_value_field: false,
         }
     }
 
@@ -602,10 +593,8 @@ where
         // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
             let name = e.name().to_vec();
-            self.has_value_field = fields.contains(&INNER_VALUE);
             let map = map::MapAccess::new(self, e, fields)?;
             let value = visitor.visit_map(map)?;
-            self.has_value_field = false;
             self.read_to_end(&name)?;
             Ok(value)
         } else {

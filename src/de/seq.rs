@@ -84,14 +84,10 @@ where
 {
     /// Creates a new accessor to a top-level sequence of XML elements.
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
-        let filter = if de.has_value_field {
-            TagFilter::Exclude(&[])
+        let filter = if let DeEvent::Start(e) = de.peek()? {
+            TagFilter::Include(e.name().to_vec())
         } else {
-            if let DeEvent::Start(e) = de.peek()? {
-                TagFilter::Include(e.name().to_vec())
-            } else {
-                TagFilter::Exclude(&[])
-            }
+            TagFilter::Exclude(&[])
         };
         Ok(Self { de, filter })
     }
