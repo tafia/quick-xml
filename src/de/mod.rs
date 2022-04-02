@@ -1416,8 +1416,8 @@ mod tests {
                         from_str::<$type>(r#"<root float="42" string="answer"></mismatched>"#);
 
                     match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                        Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                     }
                 }
 
@@ -1428,8 +1428,8 @@ mod tests {
                     );
 
                     match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                        Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                     }
                 }
 
@@ -1439,8 +1439,8 @@ mod tests {
                         from_str::<$type>(r#"<root float="42"><string>answer</mismatched></root>"#);
 
                     match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
+                        Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                        _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
                     }
                 }
             }
@@ -2552,12 +2552,12 @@ mod tests {
     #[test]
     fn next_text() {
         match from_str::<String>(r#"</root>"#) {
-            Err(DeError::Xml(Error::EndEventMismatch { expected, found })) => {
+            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                 assert_eq!(expected, "");
                 assert_eq!(found, "root");
             }
             x => panic!(
-                r#"Expected `Err(Xml(EndEventMismatch("", "root")))`, but found {:?}"#,
+                r#"Expected `Err(InvalidXml(EndEventMismatch("", "root")))`, but found {:?}"#,
                 x
             ),
         }
@@ -2566,12 +2566,12 @@ mod tests {
         assert_eq!(s, "");
 
         match from_str::<String>(r#"<root></other>"#) {
-            Err(DeError::Xml(Error::EndEventMismatch { expected, found })) => {
+            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                 assert_eq!(expected, "root");
                 assert_eq!(found, "other");
             }
             x => panic!(
-                r#"Expected `Err(Xml(EndEventMismatch("root", "other")))`, but found {:?}"#,
+                r#"Expected `Err(InvalidXml(EndEventMismatch("root", "other")))`, but found {:?}"#,
                 x
             ),
         }

@@ -26,6 +26,10 @@
 - feat: add support for XML Schema `xs:list` ([#376](https://github.com/tafia/quick-xml/pull/376))
 - refactor: error variants `DeError::Text` and `DeError::InvalidEnum` removed because they are not used
   ([#380](https://github.com/tafia/quick-xml/pull/380))
+- refactor: error variants `DeError::Xml`, `DeError::Int` and `DeError::Float`
+  renamed to `DeError::InvalidXml`, `DeError::InvalidInt` and `DeError::InvalidFloat`
+  for unification with `DeError::InvalidBoolean`
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 

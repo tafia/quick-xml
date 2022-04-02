@@ -143,12 +143,14 @@ pub mod serialize {
     pub enum DeError {
         /// Serde custom error
         Custom(String),
-        /// Cannot parse to integer
-        Int(ParseIntError),
-        /// Cannot parse to float
-        Float(ParseFloatError),
         /// Xml parsing error
-        Xml(Error),
+        InvalidXml(Error),
+        /// Cannot parse to integer
+        InvalidInt(ParseIntError),
+        /// Cannot parse to float
+        InvalidFloat(ParseFloatError),
+        /// Cannot parse specified value to boolean
+        InvalidBoolean(String),
         /// Unexpected end of attributes.
         ///
         /// Usually this indicates an error in the `Deserialize` implementation when read map:
@@ -156,8 +158,6 @@ pub mod serialize {
         EndOfAttributes,
         /// Unexpected end of file
         Eof,
-        /// Invalid value for a boolean
-        InvalidBoolean(String),
         /// Expecting Start event
         Start,
         /// Expecting End event
@@ -170,12 +170,12 @@ pub mod serialize {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
             match self {
                 DeError::Custom(s) => write!(f, "{}", s),
-                DeError::Xml(e) => write!(f, "{}", e),
-                DeError::Int(e) => write!(f, "{}", e),
-                DeError::Float(e) => write!(f, "{}", e),
+                DeError::InvalidXml(e) => write!(f, "{}", e),
+                DeError::InvalidInt(e) => write!(f, "{}", e),
+                DeError::InvalidFloat(e) => write!(f, "{}", e),
+                DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
                 DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
                 DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
-                DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
                 DeError::Start => write!(f, "Expecting Start event"),
                 DeError::End => write!(f, "Expecting End event"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
@@ -186,9 +186,9 @@ pub mod serialize {
     impl ::std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                DeError::Int(e) => Some(e),
-                DeError::Float(e) => Some(e),
-                DeError::Xml(e) => Some(e),
+                DeError::InvalidXml(e) => Some(e),
+                DeError::InvalidInt(e) => Some(e),
+                DeError::InvalidFloat(e) => Some(e),
                 _ => None,
             }
         }
@@ -208,32 +208,32 @@ pub mod serialize {
 
     impl From<Error> for DeError {
         fn from(e: Error) -> Self {
-            DeError::Xml(e)
+            DeError::InvalidXml(e)
         }
     }
 
     impl From<EscapeError> for DeError {
         #[inline]
         fn from(e: EscapeError) -> Self {
-            Self::Xml(e.into())
+            Self::InvalidXml(e.into())
         }
     }
 
     impl From<FromUtf8Error> for DeError {
         fn from(e: FromUtf8Error) -> Self {
-            Self::Xml(e.utf8_error().into())
+            Self::InvalidXml(e.utf8_error().into())
         }
     }
 
     impl From<ParseIntError> for DeError {
         fn from(e: ParseIntError) -> Self {
-            DeError::Int(e)
+            DeError::InvalidInt(e)
         }
     }
 
     impl From<ParseFloatError> for DeError {
         fn from(e: ParseFloatError) -> Self {
-            DeError::Float(e)
+            DeError::InvalidFloat(e)
         }
     }
 }
