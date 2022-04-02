@@ -289,7 +289,7 @@ where
             let e = self.next()?;
             match e {
                 DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(_) => return Err(DeError::End),
+                DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
                 DeEvent::Eof => return Ok(None),
                 _ => (), // ignore texts
             }
@@ -306,21 +306,21 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Result determined by the second table
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::End`]
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::UnexpectedEnd`]
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::UnexpectedEof`]
     ///
     /// Second event, consumed if [`DeEvent::Start`] was received:
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------------------------------------------------
-    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`DeError::Start`]
+    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`DeError::UnexpectedStart`]
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::End`]
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::UnexpectedEnd`]
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::UnexpectedEof`]
     fn next_text(&mut self) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e.unescape()?),
@@ -331,20 +331,20 @@ where
                 let t = match inner {
                     DeEvent::Text(t) => t.unescape()?,
                     DeEvent::CData(t) => t,
-                    DeEvent::Start(_) => return Err(DeError::Start),
+                    DeEvent::Start(s) => return Err(DeError::UnexpectedStart(s.name().to_owned())),
                     // We can get End event in case of `<tag></tag>` or `<tag/>` input
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
                         return Ok(BytesCData::new(&[] as &[u8]));
                     }
-                    DeEvent::End(_) => return Err(DeError::End),
-                    DeEvent::Eof => return Err(DeError::Eof),
+                    DeEvent::End(end) => return Err(DeError::UnexpectedEnd(end.name().to_owned())),
+                    DeEvent::Eof => return Err(DeError::UnexpectedEof),
                 };
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            DeEvent::End(_) => Err(DeError::End),
-            DeEvent::Eof => Err(DeError::Eof),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
 
@@ -415,7 +415,7 @@ where
             self.read_to_end(&name)?;
             Ok(value)
         } else {
-            Err(DeError::Start)
+            Err(DeError::ExpectedStart)
         }
     }
 
@@ -486,10 +486,10 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|-------------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to corresponding `End` event
-    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`DeError::End`]
+    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`UnexpectedEnd("tag")`](DeError::UnexpectedEnd)
     /// |[`DeEvent::Text`] |`text content`             |Calls `visitor.visit_unit()`. Text content is ignored
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Calls `visitor.visit_unit()`. CDATA content is ignored
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -500,8 +500,8 @@ where
                 visitor.visit_unit()
             }
             DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
-            DeEvent::End(_) => Err(DeError::End),
-            DeEvent::Eof => Err(DeError::Eof),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
 
@@ -608,8 +608,8 @@ where
     {
         match self.next()? {
             DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(_) => return Err(DeError::End),
-            DeEvent::Eof => return Err(DeError::Eof),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => return Err(DeError::UnexpectedEof),
             _ => (),
         }
         visitor.visit_unit()
@@ -686,7 +686,7 @@ impl<'i, R: BufRead> BorrowingReader<'i> for IoReader<R> {
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         match self.reader.read_to_end(name, &mut self.buf) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
     }
@@ -718,7 +718,7 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         match self.reader.read_to_end_unbuffered(name) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
     }
@@ -935,7 +935,7 @@ mod tests {
                     let item = from_str::<$type>($value).unwrap_err();
 
                     match item {
-                        DeError::Eof => (),
+                        DeError::UnexpectedEof => (),
                         _ => panic!("Expected `Eof`, found {:?}", item),
                     }
                 }
@@ -973,7 +973,7 @@ mod tests {
                     let item = from_str::<()>($value).unwrap_err();
 
                     match item {
-                        DeError::Eof => (),
+                        DeError::UnexpectedEof => (),
                         _ => panic!("Expected `Eof`, found {:?}", item),
                     }
                 }
@@ -1262,7 +1262,7 @@ mod tests {
     fn ignored_any() {
         let err = from_str::<IgnoredAny>("");
         match err {
-            Err(DeError::Eof) => {}
+            Err(DeError::UnexpectedEof) => {}
             other => panic!("Expected `Eof`, found {:?}", other),
         }
 
@@ -1380,7 +1380,7 @@ mod tests {
                     let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
 
                     match data {
-                        Err(DeError::Eof) => (),
+                        Err(DeError::UnexpectedEof) => (),
                         _ => panic!("Expected `Eof`, found {:?}", data),
                     }
                 }
@@ -1390,7 +1390,7 @@ mod tests {
                     let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
 
                     match data {
-                        Err(DeError::Eof) => (),
+                        Err(DeError::UnexpectedEof) => (),
                         _ => panic!("Expected `Eof`, found {:?}", data),
                     }
                 }
@@ -1400,7 +1400,7 @@ mod tests {
                     let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
 
                     match data {
-                        Err(DeError::Eof) => (),
+                        Err(DeError::UnexpectedEof) => (),
                         _ => panic!("Expected `Eof`, found {:?}", data),
                     }
                 }

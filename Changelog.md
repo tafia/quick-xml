@@ -30,6 +30,10 @@
   renamed to `DeError::InvalidXml`, `DeError::InvalidInt` and `DeError::InvalidFloat`
   for unification with `DeError::InvalidBoolean`
   ([#380](https://github.com/tafia/quick-xml/pull/380))
+- refactor: error variants `DeError::Start` and `DeError::End` renamed to `DeError::UnexpectedStart`
+  and `DeError::UnexpectedEnd` and information about found tag name is added tho this variants.
+  `DeEvent::Eof` renamed to `DeError::UnexpectedEof`. Added new variant `DeError::ExpectedStart`
+  ([#380](https://github.com/tafia/quick-xml/pull/380))
 
 ## 0.23.0-alpha3
 

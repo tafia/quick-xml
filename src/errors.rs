@@ -134,6 +134,7 @@ pub mod serialize {
 
     use super::Error;
     use crate::escape::EscapeError;
+    use crate::utils::write_byte_string;
     use std::fmt;
     use std::num::{ParseFloatError, ParseIntError};
     use std::string::FromUtf8Error;
@@ -156,12 +157,26 @@ pub mod serialize {
         /// Usually this indicates an error in the `Deserialize` implementation when read map:
         /// `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`
         EndOfAttributes,
+        /// Deserializer encounter a start tag with a specified name when this is
+        /// not expecting. This happens when you try to deserialize a primitive
+        /// value (numbers, strings, booleans) from an XML element.
+        UnexpectedStart(Vec<u8>),
+        /// Deserializer encounter an end tag with a specified name when this is
+        /// not expecting. Usually that should not be possible, because XML reader
+        /// is not able to produce such stream of events that lead to this error.
+        ///
+        /// If you get this error this likely indicates and error in the `quick_xml`.
+        /// Please open an issue at <https://github.com/tafia/quick-xml> and attach
+        /// your types and XML input.
+        UnexpectedEnd(Vec<u8>),
         /// Unexpected end of file
-        Eof,
-        /// Expecting Start event
-        Start,
-        /// Expecting End event
-        End,
+        UnexpectedEof,
+        /// This error indicates that [`deserialize_struct`] was called, but there
+        /// is no any XML element in the input. That means that you try to deserialize
+        /// a struct not from an XML element.
+        ///
+        /// [`deserialize_struct`]: serde::de::Deserializer::deserialize_struct
+        ExpectedStart,
         /// Unsupported operation
         Unsupported(&'static str),
     }
@@ -175,9 +190,18 @@ pub mod serialize {
                 DeError::InvalidFloat(e) => write!(f, "{}", e),
                 DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
                 DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
-                DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
-                DeError::Start => write!(f, "Expecting Start event"),
-                DeError::End => write!(f, "Expecting End event"),
+                DeError::UnexpectedStart(e) => {
+                    f.write_str("Unexpected `Event::Start(")?;
+                    write_byte_string(f, &e)?;
+                    f.write_str(")`")
+                }
+                DeError::UnexpectedEnd(e) => {
+                    f.write_str("Unexpected `Event::End(")?;
+                    write_byte_string(f, &e)?;
+                    f.write_str(")`")
+                }
+                DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
+                DeError::ExpectedStart => write!(f, "Expecting Start event"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
             }
         }
