@@ -1,7 +1,7 @@
 //! Serde `Deserializer` module
 
 use crate::de::deserialize_bool;
-use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
+use crate::{errors::serialize::DeError, escape::unescape, reader::Decoder};
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any};
 use std::borrow::Cow;
@@ -32,7 +32,7 @@ impl<'a> EscapedDeserializer<'a> {
     }
     fn unescaped(&self) -> Result<Cow<[u8]>, DeError> {
         if self.escaped {
-            unescape(&self.escaped_value).map_err(|e| DeError::Xml(Error::EscapeError(e)))
+            Ok(unescape(&self.escaped_value)?)
         } else {
             Ok(Cow::Borrowed(&self.escaped_value))
         }

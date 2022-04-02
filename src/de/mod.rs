@@ -305,14 +305,14 @@ where
     /// |`</tag>`             |empty slice|Not consumed                |
     fn next_text(&mut self) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) => e.unescape().map_err(|e| DeError::Xml(e.into())),
+            DeEvent::Text(e) => Ok(e.unescape()?),
             DeEvent::CData(e) => Ok(e),
             DeEvent::Eof => Err(DeError::Eof),
             DeEvent::Start(e) => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) => t.unescape().map_err(|e| DeError::Xml(e.into()))?,
+                    DeEvent::Text(t) => t.unescape()?,
                     DeEvent::CData(t) => t,
                     DeEvent::Start(_) => return Err(DeError::Start),
                     DeEvent::End(end) if end.name() == e.name() => {
