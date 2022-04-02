@@ -3,12 +3,14 @@
 use crate::{
     de::escape::EscapedDeserializer,
     de::simple_type::SimpleTypeDeserializer,
-    de::{BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
+    de::{deserialize_bool, BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::Attribute,
-    events::BytesStart,
+    events::{BytesCData, BytesStart},
+    reader::Decoder,
 };
-use serde::de::{self, DeserializeSeed, IntoDeserializer};
+use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
+use serde::serde_if_integer128;
 use std::borrow::Cow;
 
 /// Defines a source that should be used to deserialize a value in next call of
@@ -304,8 +306,111 @@ where
             }
             // In both cases we get to a deserializer full access to the data
             // The difference in the handling of sequences by SeqAccess
-            ValueSource::Nested | ValueSource::Content => seed.deserialize(&mut *self.de),
+            ValueSource::Nested => seed.deserialize(MapValueDeserializer {
+                map: self,
+                content: false,
+            }),
+            ValueSource::Content => seed.deserialize(MapValueDeserializer {
+                map: self,
+                content: true,
+            }),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+macro_rules! forward {
+    (
+        $deserialize:ident
+        $(
+            ($($name:ident : $type:ty),*)
+        )?
+    ) => {
+        #[inline]
+        fn $deserialize<V: Visitor<'de>>(
+            self,
+            $($($name: $type,)*)?
+            visitor: V
+        ) -> Result<V::Value, Self::Error> {
+            self.map.de.$deserialize($($($name,)*)? visitor)
+        }
+    };
+}
+
+/// A deserializer for a value of map or struct. That deserializer slightly
+/// differently process events for a primitive types and sequences.
+struct MapValueDeserializer<'de, 'a, 'm, R>
+where
+    R: BorrowingReader<'de>,
+{
+    /// Access to the map that created this deserializer. Gives access to the
+    /// context, such as list of fields, that current map known about.
+    map: &'m mut MapAccess<'de, 'a, R>,
+    /// Determines if field with a dedicated name or a field  that accepts any
+    /// content is deserialized. If `true`, the deserialized content is for
+    /// [`INNER_VALUE`] field, otherwise for a field which name matched the tag
+    /// name (`self.map.start.name()`).
+    ///
+    /// If `true`, then only text and CDATA events is allowed to return from
+    /// `Self::next_text()`, otherwise they also can be returned from one nested
+    /// level of tags. This allows deserialize primitives (such as numbers) from
+    /// elements that represents structure fields, because all deserializers get
+    /// the full data, including surrounding tag, not only tag content.
+    content: bool,
+}
+
+impl<'de, 'a, 'm, R> MapValueDeserializer<'de, 'a, 'm, R>
+where
+    R: BorrowingReader<'de>,
+{
+    /// Returns a text event, used inside `deserialize_primitives!()`
+    #[inline]
+    fn next_text(&mut self) -> Result<BytesCData<'de>, DeError> {
+        self.map.de.next_text_impl(!self.content)
+    }
+
+    /// Returns a decoder, used inside `deserialize_primitives!()`
+    #[inline]
+    fn decoder(&self) -> Decoder {
+        self.map.de.reader.decoder()
+    }
+}
+
+impl<'de, 'a, 'm, R> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R>
+where
+    R: BorrowingReader<'de>,
+{
+    type Error = DeError;
+
+    deserialize_primitives!(mut);
+
+    forward!(deserialize_option);
+    forward!(deserialize_unit);
+    forward!(deserialize_unit_struct(name: &'static str));
+    forward!(deserialize_newtype_struct(name: &'static str));
+
+    forward!(deserialize_seq);
+    forward!(deserialize_tuple(len: usize));
+    forward!(deserialize_tuple_struct(name: &'static str, len: usize));
+
+    forward!(deserialize_map);
+    forward!(deserialize_struct(
+        name: &'static str,
+        fields: &'static [&'static str]
+    ));
+
+    forward!(deserialize_enum(
+        name: &'static str,
+        variants: &'static [&'static str]
+    ));
+
+    forward!(deserialize_any);
+    forward!(deserialize_ignored_any);
+
+    #[inline]
+    fn is_human_readable(&self) -> bool {
+        self.map.de.is_human_readable()
     }
 }
