@@ -2,12 +2,15 @@
 // criterion::black_box is deprecated in since criterion 0.7.
 // Running benchmarks assumed on current Rust version, so this should be fine
 #![allow(clippy::incompatible_msrv)]
+
 use criterion::{self, criterion_group, criterion_main, Criterion};
 use pretty_assertions::assert_eq;
 use quick_xml::escape::{escape, unescape};
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::reader::{NsReader, Reader};
+use std::borrow::Cow;
 use std::hint::black_box;
 
 static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
@@ -247,6 +250,74 @@ fn attributes(c: &mut Criterion) {
             assert_eq!(count, 150);
         })
     });
+
+    group.finish();
+}
+
+/// Benchmarks normalizing attribute values
+fn attribute_value_normalization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attribute_value_normalization");
+
+    group.bench_function("noop_short", |b| {
+        let attr = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"foobar"),
+        };
+        b.iter(|| {
+            criterion::black_box(attr.normalized_value()).unwrap();
+        })
+    });
+
+    group.bench_function("noop_long", |b| {
+        let attr = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(LOREM_IPSUM_TEXT.as_bytes()),
+        };
+        b.iter(|| {
+            criterion::black_box(attr.normalized_value()).unwrap();
+        })
+    });
+
+    group.bench_function("replacement_chars", |b| {
+        let attr = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"just a bit\n of text without\tany entities"),
+        };
+        b.iter(|| {
+            criterion::black_box(attr.normalized_value()).unwrap();
+        })
+    });
+
+    group.bench_function("char_reference", |b| {
+        let attr1 = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;"),
+        };
+        let attr2 = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"&#38;&#60;"),
+        };
+        b.iter(|| {
+            criterion::black_box(attr1.normalized_value()).unwrap();
+            criterion::black_box(attr2.normalized_value()).unwrap();
+        })
+    });
+
+    group.bench_function("entity_reference", |b| {
+        let attr1 = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"age &gt; 72 &amp;&amp; age &lt; 21"),
+        };
+        let attr2 = Attribute {
+            key: QName(b"foo"),
+            value: Cow::Borrowed(b"&quot;what&apos;s that?&quot;"),
+        };
+        b.iter(|| {
+            criterion::black_box(attr1.normalized_value()).unwrap();
+            criterion::black_box(attr2.normalized_value()).unwrap();
+        })
+    });
+
     group.finish();
 }
 
@@ -359,6 +430,7 @@ criterion_group!(
     read_resolved_event_into,
     one_event,
     attributes,
+    attribute_value_normalization,
     escaping,
     unescaping,
 );

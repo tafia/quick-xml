@@ -16,12 +16,21 @@
 
 ### New Features
 
+- [#379]: Improved compliance with the XML attribute value normalization process by
+  adding `Attribute::normalized_value()` and `Attribute::normalized_value_with()`,
+  which ought to be used in place of `Attribute::unescape_value()` and
+  `Attribute::unescape_value_with()`
+
 ### Bug Fixes
 
 - [#936]: Fix incorrect result of `.read_text()` when it is called after reading `Text` or `GeneralRef` event.
 
 ### Misc Changes
 
+- [#379]: Added tests for attribute value normalization
+
+
+[#379]: https://github.com/tafia/quick-xml/pull/379
 [#936]: https://github.com/tafia/quick-xml/pull/936
 
 

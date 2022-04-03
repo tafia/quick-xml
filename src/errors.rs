@@ -253,6 +253,7 @@ impl From<EscapeError> for Error {
 }
 
 impl From<AttrError> for Error {
+    /// Creates a new `Error::InvalidAttr` from the given error
     #[inline]
     fn from(error: AttrError) -> Self {
         Self::InvalidAttr(error)
