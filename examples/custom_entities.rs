@@ -154,7 +154,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let label = attrs.next().unwrap()?;
         assert_eq!(label.key, QName(b"label"));
         assert_eq!(
-            label.decode_and_unescape_value_with(reader.decoder(), |ent| reader.get_entity(ent))?,
+            label
+                .decoded_and_normalized_value_with(reader.decoder(), 9, |e| reader.get_entity(e))?,
             "Message: hello world"
         );
 
@@ -185,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let attr = attrs.next().unwrap()?;
         assert_eq!(attr.key, QName(b"attr"));
         assert_eq!(
-            attr.decode_and_unescape_value_with(reader.decoder(), |ent| reader.get_entity(ent))?,
+            attr.decoded_and_normalized_value_with(reader.decoder(), 9, |e| reader.get_entity(e))?,
             "Message: hello world"
         );
 
