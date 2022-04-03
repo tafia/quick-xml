@@ -380,3 +380,237 @@ impl NamespaceResolver {
             .and_then(|n| n.namespace(buffer))
     }
 }
+
+#[cfg(test)]
+mod namespaces {
+    use super::*;
+
+    /// Unprefixed attribute names (resolved with `false` flag) never have a namespace
+    /// according to <https://www.w3.org/TR/xml-names11/#defaulting>:
+    ///
+    /// > A default namespace declaration applies to all unprefixed element names
+    /// > within its scope. Default namespace declarations do not apply directly
+    /// > to attribute names; the interpretation of unprefixed attributes is
+    /// > determined by the element on which they appear.
+    mod unprefixed {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Basic tests that checks that basic resolver functionality is working
+        #[test]
+        fn basic() {
+            let name = QName(b"simple");
+            let ns = Namespace(b"default");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns='default'", 0), &mut buffer);
+            assert_eq!(buffer, b"default");
+
+            // Check that tags without namespaces does not change result
+            resolver.push(&BytesStart::borrowed(b"", 0), &mut buffer);
+            assert_eq!(buffer, b"default");
+            resolver.pop(&mut buffer);
+
+            assert_eq!(buffer, b"default");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(ns), LocalName(b"simple"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(ns));
+        }
+
+        /// Test adding a second level of namespaces, which replaces the previous binding
+        #[test]
+        fn override_namespace() {
+            let name = QName(b"simple");
+            let old_ns = Namespace(b"old");
+            let new_ns = Namespace(b"new");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(b" xmlns='new'", 0), &mut buffer);
+
+            assert_eq!(buffer, b"oldnew");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(new_ns), LocalName(b"simple"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(new_ns));
+
+            resolver.pop(&mut buffer);
+            assert_eq!(buffer, b"old");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(old_ns), LocalName(b"simple"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(old_ns));
+        }
+
+        /// Test adding a second level of namespaces, which reset the previous binding
+        /// to not bound state by specifying an empty namespace name.
+        ///
+        /// See <https://www.w3.org/TR/xml-names11/#scoping>
+        #[test]
+        fn reset() {
+            let name = QName(b"simple");
+            let old_ns = Namespace(b"old");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(b" xmlns=''", 0), &mut buffer);
+
+            assert_eq!(buffer, b"old");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(resolver.find(name, &buffer), None);
+
+            resolver.pop(&mut buffer);
+            assert_eq!(buffer, b"old");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(old_ns), LocalName(b"simple"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"simple"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(old_ns));
+        }
+    }
+
+    mod declared_prefix {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Basic tests that checks that basic resolver functionality is working
+        #[test]
+        fn basic() {
+            let name = QName(b"p:with-declared-prefix");
+            let ns = Namespace(b"default");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns:p='default'", 0), &mut buffer);
+            assert_eq!(buffer, b"pdefault");
+
+            // Check that tags without namespaces does not change result
+            resolver.push(&BytesStart::borrowed(b"", 0), &mut buffer);
+            assert_eq!(buffer, b"pdefault");
+            resolver.pop(&mut buffer);
+
+            assert_eq!(buffer, b"pdefault");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (Some(ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(ns));
+        }
+
+        /// Test adding a second level of namespaces, which replaces the previous binding
+        #[test]
+        fn override_namespace() {
+            let name = QName(b"p:with-declared-prefix");
+            let old_ns = Namespace(b"old");
+            let new_ns = Namespace(b"new");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns:p='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(b" xmlns:p='new'", 0), &mut buffer);
+
+            assert_eq!(buffer, b"poldpnew");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(new_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (Some(new_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(new_ns));
+
+            resolver.pop(&mut buffer);
+            assert_eq!(buffer, b"pold");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(old_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (Some(old_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(old_ns));
+        }
+
+        /// Test adding a second level of namespaces, which reset the previous binding
+        /// to not bound state by specifying an empty namespace name.
+        ///
+        /// See <https://www.w3.org/TR/xml-names11/#scoping>
+        #[test]
+        fn reset() {
+            let name = QName(b"p:with-declared-prefix");
+            let old_ns = Namespace(b"old");
+
+            let mut resolver = NamespaceResolver::default();
+            let mut buffer = Vec::new();
+
+            resolver.push(&BytesStart::borrowed(b" xmlns:p='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(b" xmlns:p=''", 0), &mut buffer);
+
+            assert_eq!(buffer, b"poldp");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (None, LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (None, LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(resolver.find(name, &buffer), None);
+
+            resolver.pop(&mut buffer);
+            assert_eq!(buffer, b"pold");
+            assert_eq!(
+                resolver.resolve(name, &buffer, true),
+                (Some(old_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(
+                resolver.resolve(name, &buffer, false),
+                (Some(old_ns), LocalName(b"with-declared-prefix"))
+            );
+            assert_eq!(resolver.find(name, &buffer), Some(old_ns));
+        }
+    }
+
+    //TODO: resolver should return an error for undeclared prefixes - add test when it will do that
+}

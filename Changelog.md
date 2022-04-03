@@ -51,6 +51,7 @@
 
 - [#9]: Added tests for incorrect nested tags in input
 - [#387]: Added a bunch of tests for sequences deserialization
+- [#393]: Added more tests for namespace resolver
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
