@@ -44,14 +44,13 @@ static INPUTS: &[(&str, &str)] = &[
     ("players.xml", PLAYERS),
 ];
 
-// TODO: use fully normalized attribute values
 fn parse_document_from_str(doc: &str) -> XmlResult<()> {
     let mut r = Reader::from_str(doc);
     loop {
         match black_box(r.read_event()?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decode_and_normalize_value(r.decoder(), 128)?);
                 }
             }
             Event::Text(e) => {

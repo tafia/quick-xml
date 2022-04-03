@@ -15,9 +15,16 @@
 
 ### New Features
 
+- [#379]: Improved compliance with the XML attribute value normalization process by
+  adding `Attribute::normalized_value()` and `Attribute::normalized_value_with()`,
+  which ought to be used in place of `Attribute::unescape_value()` and
+  `Attribute::unescape_value_with()`
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#379]: https://github.com/tafia/quick-xml/pull/379
 
 
 ## 0.38.0 -- 2025-06-28
