@@ -12,12 +12,19 @@
 
 ### New Features
 
+- [#379]: Improved compliance with the XML attribute value normalization process by
+  adding `Attribute::normalized_value()` and `Attribute::normalized_value_with()`,
+  which ought to be used in place of `Attribute::unescape_value()` and
+  `Attribute::unescape_value_with()`
+
 ### Bug Fixes
 
 ### Misc Changes
 
+- [#379]: Added tests for attribute value normalization
 - [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
 
+[#379]: https://github.com/tafia/quick-xml/pull/379
 [#650]: https://github.com/tafia/quick-xml/issues/650
 
 
@@ -57,9 +64,6 @@ resolve predefined entities.
   - `quick_xml::escape::resolve_html5_entity`
 - [#753]: Added parser for processing instructions: `quick_xml::reader::PiParser`.
 - [#754]: Added parser for elements: `quick_xml::reader::ElementParser`.
-
-### Bug Fixes
-
 - [#622]: Fix wrong disregarding of not closed markup, such as lone `<`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(DoubleHyphenInComment)`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(MissingDoctypeName)`.
@@ -119,7 +123,6 @@ resolve predefined entities.
 [`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
 [`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
 [`Text`]: https://docs.rs/quick-xml/latest/quick_xml/de/struct.Text.html
-
 
 ## 0.31.0 -- 2023-10-22
 
@@ -290,6 +293,10 @@ serde >= 1.0.181
 - [#565]: Correctly set minimum required version of tokio dependency to 1.10
 - [#565]: Fix compilation error when build with serde <1.0.139
 
+
+### New Tests
+
+- [#379]: Added tests for attribute value normalization
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
