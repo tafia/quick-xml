@@ -26,6 +26,19 @@
   methods which returns XML EOL normalized strings.
 - [#806]: Add `BytesText::html_content`, `BytesCData::html_content` and `BytesRef::html_content`
   methods which returns HTML EOL normalized strings.
+- [#371]: Improved compliance with the XML attribute value normalization process by adding
+  - `Attribute::normalized_value()`
+  - `Attribute::normalized_value_with()`
+  - `Attribute::decoded_and_normalized_value()`
+  - `Attribute::decoded_and_normalized_value_with()`
+
+  which ought to be used in place of deprecated
+  - `Attribute::unescape_value()`
+  - `Attribute::unescape_value_with()`
+  - `Attribute::decode_and_unescape_value()`
+  - `Attribute::decode_and_unescape_value_with()`
+
+  Deprecated functions now behaves the same as newly added.
 
 ### Bug Fixes
 
