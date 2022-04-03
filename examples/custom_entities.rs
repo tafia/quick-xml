@@ -4,6 +4,7 @@
 //! - decode attribute values
 //!
 //! NB: this example is deliberately kept simple:
+//! * it assumes only XML 1.0 dialect (most widely used in the world)
 //! * it assumes that the XML file is UTF-8 encoded (custom_entities must only contain UTF-8 data)
 //! * it only handles internal entities;
 //! * the regex in this example is simple but brittle;
@@ -19,6 +20,7 @@ use quick_xml::escape::EscapeError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
+use quick_xml::XmlVersion;
 use regex::bytes::Regex;
 
 use pretty_assertions::assert_eq;
@@ -154,7 +156,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let label = attrs.next().unwrap()?;
         assert_eq!(label.key, QName(b"label"));
         assert_eq!(
-            label.decode_and_unescape_value_with(reader.decoder(), |ent| reader.get_entity(ent))?,
+            label.decoded_and_normalized_value_with(
+                XmlVersion::V1_0,
+                reader.decoder(),
+                9,
+                |e| reader.get_entity(e)
+            )?,
             "Message: hello world"
         );
 
@@ -185,7 +192,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let attr = attrs.next().unwrap()?;
         assert_eq!(attr.key, QName(b"attr"));
         assert_eq!(
-            attr.decode_and_unescape_value_with(reader.decoder(), |ent| reader.get_entity(ent))?,
+            attr.decoded_and_normalized_value_with(XmlVersion::V1_0, reader.decoder(), 9, |e| {
+                reader.get_entity(e)
+            })?,
             "Message: hello world"
         );
 

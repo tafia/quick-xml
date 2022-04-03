@@ -71,6 +71,8 @@ pub mod serde_helpers;
 pub mod utils;
 pub mod writer;
 
+use std::borrow::Cow;
+
 // reexports
 pub use crate::encoding::Decoder;
 #[cfg(feature = "serialize")]
@@ -89,6 +91,24 @@ pub enum XmlVersion {
     V1_0,
     /// [Version 1.1](https://www.w3.org/TR/xml11/)
     V1_1,
+}
+
+impl XmlVersion {
+    pub(crate) fn normalize_attribute_value<'input, 'entity, F>(
+        &self,
+        value: &'input str,
+        depth: usize,
+        resolve_entity: F,
+    ) -> std::result::Result<Cow<'input, str>, escape::EscapeError>
+    where
+        // the lifetime of the output comes from a capture or is `'static`
+        F: FnMut(&str) -> Option<&'entity str>,
+    {
+        match self {
+            Self::V1_0 => escape::normalize_xml10_attribute_value(value, depth, resolve_entity),
+            Self::V1_1 => escape::normalize_xml11_attribute_value(value, depth, resolve_entity),
+        }
+    }
 }
 
 impl Default for XmlVersion {

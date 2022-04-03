@@ -247,6 +247,50 @@ fn attributes(c: &mut Criterion) {
             assert_eq!(count, 150);
         })
     });
+
+    group.finish();
+}
+
+/// Benchmarks normalizing attribute values
+fn attribute_value_normalization(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attribute_value_normalization");
+
+    group.bench_function("noop_short", |b| {
+        b.iter(|| {
+            black_box(unescape("foobar")).unwrap();
+        })
+    });
+
+    group.bench_function("noop_long", |b| {
+        b.iter(|| {
+            black_box(unescape("just a bit of text without any entities")).unwrap();
+        })
+    });
+
+    group.bench_function("replacement_chars", |b| {
+        b.iter(|| {
+            black_box(unescape("just a bit\n of text without\tany entities")).unwrap();
+        })
+    });
+
+    group.bench_function("char_reference", |b| {
+        b.iter(|| {
+            let text = "prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
+            black_box(unescape(text)).unwrap();
+            let text = "&#38;&#60;";
+            black_box(unescape(text)).unwrap();
+        })
+    });
+
+    group.bench_function("entity_reference", |b| {
+        b.iter(|| {
+            let text = "age &gt; 72 &amp;&amp; age &lt; 21";
+            black_box(unescape(text)).unwrap();
+            let text = "&quot;what&apos;s that?&quot;";
+            black_box(unescape(text)).unwrap();
+        })
+    });
+
     group.finish();
 }
 
@@ -359,6 +403,7 @@ criterion_group!(
     read_resolved_event_into,
     one_event,
     attributes,
+    attribute_value_normalization,
     escaping,
     unescaping,
 );

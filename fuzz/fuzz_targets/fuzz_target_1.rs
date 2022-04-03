@@ -2,7 +2,7 @@
 use libfuzzer_sys::fuzz_target;
 use std::hint::black_box;
 
-use quick_xml::{events::Event, reader::Reader, writer::Writer};
+use quick_xml::{events::Event, reader::Reader, writer::Writer, XmlVersion};
 use std::io::Cursor;
 
 macro_rules! debug_format {
@@ -15,6 +15,7 @@ fn round_trip<R>(reader: &mut Reader<R>) -> ()
 where
     R: std::io::BufRead,
 {
+    let mut version = XmlVersion::V1_0;
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = vec![];
     let config = reader.config_mut();
@@ -34,14 +35,14 @@ where
                 debug_format!(e.name());
                 for a in e.attributes() {
                     debug_format!(a);
-                    if a.ok().map_or(false, |a| a.unescape_value().is_err()) {
+                    if a.ok()
+                        .map_or(false, |a| a.normalized_value(version).is_err())
+                    {
                         break;
                     }
                 }
             }
-            Ok(Event::Text(ref e))
-            | Ok(Event::Comment(ref e))
-            | Ok(Event::DocType(ref e)) => {
+            Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e)) | Ok(Event::DocType(ref e)) => {
                 debug_format!(e);
                 if let Err(err) = e.decode() {
                     debug_format!(err);
@@ -68,6 +69,10 @@ where
                 let _ = black_box(e.version());
                 let _ = black_box(e.encoding());
                 let _ = black_box(e.standalone());
+                match e.xml_version() {
+                    Ok(v) => version = v,
+                    Err(_) => break,
+                }
             }
             Ok(Event::End(e)) => {
                 debug_format!(e.local_name());

@@ -2711,6 +2711,15 @@ mod normalization {
                 normalize_xml10_attribute_value("string with &#x20; character", 5, |_| { None }),
                 Ok("string with   character".into())
             );
+
+            assert_eq!(
+                normalize_xml11_attribute_value("string with &#32; character", 5, |_| { None }),
+                Ok("string with   character".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("string with &#x20; character", 5, |_| { None }),
+                Ok("string with   character".into())
+            );
         }
 
         #[test]
@@ -2731,9 +2740,41 @@ mod normalization {
                 }),
                 Ok("string with recursive entity 2 reference".into())
             );
-            // Special case: '&' should not threated as unterminated reference, but everything '&...' should
+            // Special case: '&' should not treated as unterminated reference, but everything '&...' should
             assert_eq!(
                 normalize_xml10_attribute_value(
+                    "string with &entity;amp; reference",
+                    5,
+                    |entity| {
+                        match entity {
+                            "entity" => Some("&amp;"),
+                            "amp" => Some("&"),
+                            _ => None,
+                        }
+                    }
+                ),
+                Ok("string with &amp; reference".into())
+            );
+
+            assert_eq!(
+                normalize_xml11_attribute_value("string with &entity; reference", 5, |_| {
+                    Some("replacement")
+                }),
+                Ok("string with replacement reference".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("string with &entity-1; reference", 5, |entity| {
+                    match entity {
+                        "entity-1" => Some("recursive &entity-2;"),
+                        "entity-2" => Some("entity&#32;2"),
+                        _ => None,
+                    }
+                }),
+                Ok("string with recursive entity 2 reference".into())
+            );
+            // Special case: '&' should not treated as unterminated reference, but everything '&...' should
+            assert_eq!(
+                normalize_xml11_attribute_value(
                     "string with &entity;amp; reference",
                     5,
                     |entity| {
@@ -2768,6 +2809,25 @@ mod normalization {
                 ),
                 Err(EscapeError::UnterminatedEntity(21..47))
             );
+
+            assert_eq!(
+                normalize_xml11_attribute_value(
+                    "string with unclosed &entity reference",
+                    //                    ^ = 21           ^ = 38
+                    5,
+                    |_| Some("replacement")
+                ),
+                Err(EscapeError::UnterminatedEntity(21..38))
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value(
+                    "string with unclosed &#32 (character) reference",
+                    //                    ^ = 21                    ^ = 47
+                    5,
+                    |_| None
+                ),
+                Err(EscapeError::UnterminatedEntity(21..47))
+            );
         }
 
         #[test]
@@ -2784,12 +2844,32 @@ mod normalization {
                     "entity".to_string(),
                 ))
             );
+
+            assert_eq!(
+                normalize_xml11_attribute_value(
+                    "string with unknown &entity; reference",
+                    //                   ^     ^ = 21..27
+                    5,
+                    |_| None
+                ),
+                Err(EscapeError::UnrecognizedEntity(
+                    21..27,
+                    "entity".to_string(),
+                ))
+            );
         }
 
         #[test]
         fn recursive_entity() {
             assert_eq!(
                 normalize_xml10_attribute_value("&entity; reference", 5, |_| Some(
+                    "recursive &entity;"
+                )),
+                Err(EscapeError::TooManyNestedEntities),
+            );
+
+            assert_eq!(
+                normalize_xml11_attribute_value("&entity; reference", 5, |_| Some(
                     "recursive &entity;"
                 )),
                 Err(EscapeError::TooManyNestedEntities),

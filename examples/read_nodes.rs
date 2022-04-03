@@ -6,6 +6,7 @@ use quick_xml::events::attributes::AttrError;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
+use quick_xml::XmlVersion;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -70,8 +71,12 @@ impl Translation {
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
-                b"Language" => lang = a.decode_and_unescape_value(reader.decoder())?,
-                b"Tag" => tag = a.decode_and_unescape_value(reader.decoder())?,
+                b"Language" => {
+                    lang = a.decoded_and_normalized_value(XmlVersion::V1_0, reader.decoder())?
+                }
+                b"Tag" => {
+                    tag = a.decoded_and_normalized_value(XmlVersion::V1_0, reader.decoder())?
+                }
                 _ => (),
             }
         }
@@ -141,7 +146,7 @@ fn main() -> Result<(), AppError> {
                                             Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
                                         })
                                         .unwrap().to_string();
-                                    let value = a.decode_and_unescape_value(reader.decoder()).or_else(|err| {
+                                    let value = a.decoded_and_normalized_value(XmlVersion::V1_0, reader.decoder()).or_else(|err| {
                                             dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
                                             Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
                                     }).unwrap().to_string();

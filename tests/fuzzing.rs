@@ -3,6 +3,7 @@
 use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
+use quick_xml::XmlVersion;
 
 #[test]
 fn fuzz_53() {
@@ -31,7 +32,8 @@ fn fuzz_101() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| {
-                        a.decode_and_unescape_value(reader.decoder()).is_err()
+                        a.decoded_and_normalized_value(XmlVersion::V1_0, reader.decoder())
+                            .is_err()
                     }) {
                         break;
                     }
