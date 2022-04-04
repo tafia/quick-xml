@@ -143,6 +143,7 @@ pub mod escape {
     pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
 }
 pub mod events;
+mod name;
 mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
