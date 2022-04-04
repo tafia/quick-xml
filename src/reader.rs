@@ -102,8 +102,14 @@ pub struct Reader<R: BufRead> {
     /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
     /// for that field for details
     opened_starts: Vec<usize>,
-    /// a buffer to manage namespaces
+
+    /// A buffer to manage namespaces
     ns_resolver: NamespaceResolver,
+    /// For `Empty` events keep the 'scope' of the namespace on the stack artificially. That way, the
+    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
+    /// pop as the first operation in the next `next()` call.
+    pending_pop: bool,
+
     #[cfg(feature = "encoding")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
@@ -127,7 +133,10 @@ impl<R: BufRead> Reader<R> {
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
+
             ns_resolver: NamespaceResolver::default(),
+            pending_pop: false,
+
             #[cfg(feature = "encoding")]
             encoding: ::encoding_rs::UTF_8,
             #[cfg(feature = "encoding")]
@@ -607,13 +616,16 @@ impl<R: BufRead> Reader<R> {
         buf: &'b mut Vec<u8>,
         namespace_buffer: &'c mut Vec<u8>,
     ) -> Result<(Option<&'c [u8]>, Event<'b>)> {
-        self.ns_resolver.pop(namespace_buffer);
+        if self.pending_pop {
+            self.ns_resolver.pop(namespace_buffer);
+        }
+        self.pending_pop = false;
         match self.read_event(buf) {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
                 Ok((
-                    self.ns_resolver.find(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::Start(e),
                 ))
             }
@@ -626,18 +638,18 @@ impl<R: BufRead> Reader<R> {
                 self.ns_resolver.push(&e, namespace_buffer);
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_resolver.pending_pop = true;
+                self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::Empty(e),
                 ))
             }
             Ok(Event::End(e)) => {
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_resolver.pending_pop = true;
+                self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), namespace_buffer),
                     Event::End(e),
                 ))
             }
@@ -1504,10 +1516,6 @@ struct NamespaceResolver {
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: i32,
-    /// For `Empty` events keep the 'scope' of the element on the stack artificially. That way, the
-    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
-    /// pop as the first operation in the next `next()` call.
-    pending_pop: bool,
 }
 
 impl NamespaceResolver {
@@ -1539,10 +1547,6 @@ impl NamespaceResolver {
     ///
     /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     fn pop(&mut self, buffer: &mut Vec<u8>) {
-        if !self.pending_pop {
-            return;
-        }
-        self.pending_pop = false;
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
