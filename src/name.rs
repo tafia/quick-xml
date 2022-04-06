@@ -23,6 +23,52 @@ impl<'a> QName<'a> {
         self.0
     }
 
+    /// Returns local part of this qualified name.
+    ///
+    /// All content up to and including the first `:` character is removed from
+    /// the tag name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use quick_xml::name::QName;
+    /// let simple = QName(b"simple-name");
+    /// assert_eq!(simple.local_name().as_ref(), b"simple-name");
+    ///
+    /// let qname = QName(b"namespace:simple-name");
+    /// assert_eq!(qname.local_name().as_ref(), b"simple-name");
+    /// ```
+    pub fn local_name(&self) -> LocalName<'a> {
+        LocalName(self.index().map_or(self.0, |i| &self.0[i + 1..]))
+    }
+
+    /// Returns namespace part of this qualified name or `None` if namespace part
+    /// is not defined (symbol `':'` not found).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::convert::AsRef;
+    /// # use quick_xml::name::QName;
+    /// let simple = QName(b"simple-name");
+    /// assert_eq!(simple.prefix(), None);
+    ///
+    /// let qname = QName(b"prefix:simple-name");
+    /// assert_eq!(qname.prefix().as_ref().map(|n| n.as_ref()), Some(b"prefix".as_ref()));
+    /// ```
+    pub fn prefix(&self) -> Option<Prefix<'a>> {
+        self.index().map(|i| Prefix(&self.0[..i]))
+    }
+
+    /// The same as `(qname.local_name(), qname.prefix())`, but does only one
+    /// lookup for a `':'` symbol.
+    pub fn decompose(&self) -> (LocalName<'a>, Option<Prefix<'a>>) {
+        match self.index() {
+            None => (LocalName(self.0), None),
+            Some(i) => (LocalName(&self.0[i + 1..]), Some(Prefix(&self.0[..i]))),
+        }
+    }
+
     /// Returns the index in the name where prefix ended
     #[inline(always)]
     fn index(&self) -> Option<usize> {
@@ -214,6 +260,17 @@ struct NamespaceEntry {
 }
 
 impl NamespaceEntry {
+    /// Get the namespace prefix, bound to this namespace declaration, or `None`,
+    /// if this declaration is for default namespace (`xmlns="..."`).
+    #[inline]
+    fn prefix<'b>(&self, ns_buffer: &'b [u8]) -> Option<Prefix<'b>> {
+        if self.prefix_len == 0 {
+            None
+        } else {
+            Some(Prefix(&ns_buffer[self.start..self.start + self.prefix_len]))
+        }
+    }
+
     /// Gets the namespace name (the URI) slice out of namespace buffer
     ///
     /// Returns `None` if namespace for this prefix was explicitly removed from
@@ -231,12 +288,14 @@ impl NamespaceEntry {
     /// Check if the namespace matches the potentially qualified name
     #[inline]
     fn is_match(&self, buffer: &[u8], name: QName) -> bool {
-        let qname = name.into_inner();
-        if self.prefix_len == 0 {
-            !qname.contains(&b':')
-        } else {
-            qname.get(self.prefix_len).map_or(false, |n| *n == b':')
-                && qname.starts_with(&buffer[self.start..self.start + self.prefix_len])
+        match (self.prefix(buffer), name.prefix()) {
+            // If both parts has no prefixes -> matched
+            (None, None) => true,
+            // If one part has prefix but other is not -> not matched
+            (None, Some(_)) => false,
+            (Some(_), None) => false,
+            // Otherwise check that prefixes the same
+            (Some(definition), Some(usage)) => definition == usage,
         }
     }
 }
