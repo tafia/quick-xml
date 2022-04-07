@@ -63,6 +63,10 @@ jobs:
       env:
         LLVM_PROFILE_FILE: coverage/serialize-escape-html-%p-%m.profraw
       run: cargo test --features serialize,escape-html
+    - name: Run tests (serialize+span)
+      env:
+        LLVM_PROFILE_FILE: coverage/serialize-span-%p-%m.profraw
+      run: cargo test --features serialize,span
     - name: Run tests (all features)
       env:
         LLVM_PROFILE_FILE: coverage/all-features-%p-%m.profraw

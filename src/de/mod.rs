@@ -1885,6 +1885,11 @@ mod map;
 mod simple_type;
 mod var;
 
+#[cfg(feature = "span")]
+use crate::events::Spanned;
+#[cfg(feature = "span")]
+use crate::reader::Span;
+
 pub use crate::errors::serialize::DeError;
 use crate::{
     encoding::Decoder,
@@ -1907,7 +1912,7 @@ pub(crate) const TEXT_KEY: &str = "$text";
 pub(crate) const VALUE_KEY: &str = "$value";
 
 /// Simplified event which contains only these variants that used by deserializer
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeEvent<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
@@ -1920,6 +1925,31 @@ pub enum DeEvent<'a> {
     CData(BytesCData<'a>),
     /// End of XML document.
     Eof,
+}
+
+#[cfg(feature = "span")]
+impl<'a> Spanned for DeEvent<'a> {
+    #[inline]
+    fn span(&self) -> Span {
+        match self {
+            DeEvent::Start(e) => e.span(),
+            DeEvent::End(e) => e.span(),
+            DeEvent::Text(e) => e.span(),
+            DeEvent::CData(e) => e.span(),
+            DeEvent::Eof => Span::default(),
+        }
+    }
+
+    #[inline]
+    fn with_span(self, span: Span) -> Self {
+        match self {
+            DeEvent::Start(e) => DeEvent::Start(e.with_span(span)),
+            DeEvent::End(e) => DeEvent::End(e.with_span(span)),
+            DeEvent::Text(e) => DeEvent::Text(e.with_span(span)),
+            DeEvent::CData(e) => DeEvent::CData(e.with_span(span)),
+            DeEvent::Eof => DeEvent::Eof,
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2662,12 +2692,49 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// Helper function that removes span information from the events
+    fn next<'de>(de: &mut Deserializer<'de, SliceReader<'de>>) -> DeEvent<'de> {
+        let event = de.next().unwrap();
+
+        // We do not test correctness of spans here so just clear them
+        #[cfg(feature = "span")]
+        let event = event.with_span(Span::default());
+
+        event
+    }
+
+    /// Helper function that removes span information from the events
+    fn peek<'de>(de: &mut Deserializer<'de, SliceReader<'de>>) -> DeEvent<'de> {
+        let event = de.peek().unwrap().clone();
+
+        // We do not test correctness of spans here so just clear them
+        #[cfg(feature = "span")]
+        let event = event.with_span(Span::default());
+
+        event
+    }
+
     #[cfg(feature = "overlapped-lists")]
     mod skip {
         use super::*;
         use crate::de::DeEvent::*;
         use crate::events::{BytesEnd, BytesText};
         use pretty_assertions::assert_eq;
+
+        fn clear<'de>(events: &VecDeque<DeEvent<'de>>) -> Vec<DeEvent<'de>> {
+            events
+                .iter()
+                .map(|event| {
+                    let event = event.clone();
+
+                    // We do not test correctness of spans here so just clear them
+                    #[cfg(feature = "span")]
+                    let event = event.with_span(Span::default());
+
+                    event
+                })
+                .collect()
+        }
 
         /// Checks that `peek()` and `read()` behaves correctly after `skip()`
         #[test]
@@ -2689,8 +2756,8 @@ mod tests {
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
-            assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("inner")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("root")));
+            assert_eq!(peek(&mut de), Start(BytesStart::new("inner")));
 
             // Mark that start_replay() should begin replay from this point
             let checkpoint = de.skip_checkpoint();
@@ -2700,7 +2767,7 @@ mod tests {
             de.skip().unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("inner")),
                     Text(BytesText::from_escaped("text")),
@@ -2718,8 +2785,8 @@ mod tests {
             //   </inner>
             //   <target/>
             // </root>
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("next")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("next")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("next")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("next")));
 
             // We finish writing. Next call to `next()` should start replay that messages:
             //
@@ -2734,7 +2801,7 @@ mod tests {
             // </root>
             de.start_replay(checkpoint);
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Start(BytesStart::new("inner")),
                     Text(BytesText::from_escaped("text")),
@@ -2744,7 +2811,7 @@ mod tests {
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("inner")));
 
             // Mark that start_replay() should begin replay from this point
             let checkpoint = de.skip_checkpoint();
@@ -2753,7 +2820,7 @@ mod tests {
             // Skip `$text` node and consume <inner/> after it
             de.skip().unwrap();
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -2761,7 +2828,7 @@ mod tests {
                 ]
             );
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
@@ -2769,8 +2836,8 @@ mod tests {
                 ]
             );
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("inner")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("inner")));
 
             // We finish writing. Next call to `next()` should start replay messages:
             //
@@ -2783,19 +2850,19 @@ mod tests {
             // </root>
             de.start_replay(checkpoint);
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Text(BytesText::from_escaped("text")),
                     End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(de.next().unwrap(), Text(BytesText::from_escaped("text")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
-            assert_eq!(de.next().unwrap(), Eof);
+            assert_eq!(next(&mut de), Text(BytesText::from_escaped("text")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("inner")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("target")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("target")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("root")));
+            assert_eq!(next(&mut de), Eof);
         }
 
         /// Checks that `read_to_end()` behaves correctly after `skip()`
@@ -2819,7 +2886,7 @@ mod tests {
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("root")));
 
             // Mark that start_replay() should begin replay from this point
             let checkpoint = de.skip_checkpoint();
@@ -2829,7 +2896,7 @@ mod tests {
             de.skip().unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped("text")),
@@ -2846,11 +2913,11 @@ mod tests {
             //     <skip/>
             //   </skip>
             // </root>
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("target")));
             de.read_to_end(QName(b"target")).unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped("text")),
@@ -2872,7 +2939,7 @@ mod tests {
             // </root>
             de.start_replay(checkpoint);
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped("text")),
@@ -2883,11 +2950,11 @@ mod tests {
             );
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skip")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("skip")));
             de.read_to_end(QName(b"skip")).unwrap();
 
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
-            assert_eq!(de.next().unwrap(), Eof);
+            assert_eq!(next(&mut de), End(BytesEnd::new("root")));
+            assert_eq!(next(&mut de), Eof);
         }
 
         /// Checks that replay replayes only part of events
@@ -2913,7 +2980,7 @@ mod tests {
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("root")));
 
             // start_replay() should start replay from this point
             let checkpoint1 = de.skip_checkpoint();
@@ -2924,7 +2991,7 @@ mod tests {
             de.skip().unwrap(); // skipped-2
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -2935,10 +3002,10 @@ mod tests {
 
             ////////////////////////////////////////////////////////////////////////////////////////
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
-            assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("skipped-3")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("inner")));
+            assert_eq!(peek(&mut de), Start(BytesStart::new("skipped-3")));
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
@@ -2946,7 +3013,7 @@ mod tests {
                 ]
             );
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -2964,7 +3031,7 @@ mod tests {
             de.skip().unwrap(); // skipped-4
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     // checkpoint 1
                     Start(BytesStart::new("skipped-1")),
@@ -2978,11 +3045,11 @@ mod tests {
                     End(BytesEnd::new("skipped-4")),
                 ]
             );
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target-2")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target-2")));
-            assert_eq!(de.peek().unwrap(), &End(BytesEnd::new("inner")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("target-2")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("target-2")));
+            assert_eq!(peek(&mut de), End(BytesEnd::new("inner")));
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
@@ -2990,7 +3057,7 @@ mod tests {
                 ]
             );
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     // checkpoint 1
                     Start(BytesStart::new("skipped-1")),
@@ -3008,7 +3075,7 @@ mod tests {
             // Start replay events from checkpoint 2
             de.start_replay(checkpoint2);
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Start(BytesStart::new("skipped-3")),
                     End(BytesEnd::new("skipped-3")),
@@ -3018,7 +3085,7 @@ mod tests {
                 ]
             );
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -3028,15 +3095,15 @@ mod tests {
             );
 
             // Replayed events
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-3")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-3")));
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-4")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-4")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("skipped-3")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("skipped-3")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("skipped-4")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("skipped-4")));
 
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("inner")));
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -3048,12 +3115,12 @@ mod tests {
             ////////////////////////////////////////////////////////////////////////////////////////
 
             // New events
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target-1")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target-1")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("target-1")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("target-1")));
 
             assert_eq!(de.read, vec![]);
             assert_eq!(
-                de.write,
+                clear(&de.write),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -3065,7 +3132,7 @@ mod tests {
             // Start replay events from checkpoint 1
             de.start_replay(checkpoint1);
             assert_eq!(
-                de.read,
+                clear(&de.read),
                 vec![
                     Start(BytesStart::new("skipped-1")),
                     End(BytesEnd::new("skipped-1")),
@@ -3076,17 +3143,17 @@ mod tests {
             assert_eq!(de.write, vec![]);
 
             // Replayed events
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-1")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-1")));
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-2")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-2")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("skipped-1")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("skipped-1")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("skipped-2")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("skipped-2")));
 
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
             // New events
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
-            assert_eq!(de.next().unwrap(), Eof);
+            assert_eq!(next(&mut de), End(BytesEnd::new("root")));
+            assert_eq!(next(&mut de), Eof);
         }
 
         /// Checks that limiting buffer size works correctly
@@ -3132,7 +3199,7 @@ mod tests {
             let checkpoint = de.skip_checkpoint();
             de.skip().unwrap();
             de.start_replay(checkpoint);
-            assert_eq!(de.read, vec![Start(BytesStart::new("root")), Eof]);
+            assert_eq!(clear(&de.read), vec![Start(BytesStart::new("root")), Eof]);
         }
     }
 
@@ -3153,34 +3220,34 @@ mod tests {
                 "#,
             );
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("root")));
 
             assert_eq!(
-                de.next().unwrap(),
+                next(&mut de),
                 Start(BytesStart::from_content(r#"tag a="1""#, 3))
             );
             assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
             assert_eq!(
-                de.next().unwrap(),
+                next(&mut de),
                 Start(BytesStart::from_content(r#"tag a="2""#, 3))
             );
-            assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
+            assert_eq!(next(&mut de), CData(BytesCData::new("cdata content")));
+            assert_eq!(next(&mut de), End(BytesEnd::new("tag")));
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("self-closed")));
             assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
-            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
-            assert_eq!(de.next().unwrap(), Eof);
+            assert_eq!(next(&mut de), End(BytesEnd::new("root")));
+            assert_eq!(next(&mut de), Eof);
         }
 
         #[test]
         fn invalid_xml() {
             let mut de = Deserializer::from_str("<tag><tag></tag>");
 
-            assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
-            assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
+            assert_eq!(next(&mut de), Start(BytesStart::new("tag")));
+            assert_eq!(peek(&mut de), Start(BytesStart::new("tag")));
 
             match de.read_to_end(QName(b"tag")) {
                 Err(DeError::UnexpectedEof) => (),
@@ -3241,6 +3308,11 @@ mod tests {
 
         loop {
             let event = reader.next().unwrap();
+
+            // We do not test correctness of spans here so just clear them
+            #[cfg(feature = "span")]
+            let event = event.with_span(Span::default());
+
             if let DeEvent::Eof = event {
                 break;
             }

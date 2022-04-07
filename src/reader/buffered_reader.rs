@@ -350,6 +350,8 @@ impl<R: BufRead> Reader<R> {
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
+    /// # #[cfg(feature = "span")]
+    /// # use quick_xml::events::Spanned;
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::reader::Reader;
     ///
@@ -368,6 +370,9 @@ impl<R: BufRead> Reader<R> {
     ///
     /// let start = BytesStart::new("outer");
     /// let end   = start.to_end().into_owned();
+    ///
+    /// # #[cfg(feature = "span")]
+    /// # let start = start.with_span(5..12);
     ///
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Start(start));
