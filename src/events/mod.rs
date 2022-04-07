@@ -375,6 +375,8 @@ impl<'a> std::fmt::Debug for BytesStart<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
@@ -605,6 +607,8 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A struct to manage `Event::End` events
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
@@ -661,6 +665,8 @@ impl<'a> std::fmt::Debug for BytesEnd<'a> {
         write!(f, " }}")
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Data from various events (most notably, `Event::Text`) that stored in XML
 /// in escaped form. Internally data is stored in escaped form
@@ -927,6 +933,8 @@ impl<'a> std::fmt::Debug for BytesText<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// CDATA content contains unescaped data from the reader. If you want to write them as a text,
 /// [convert](Self::escape) it to [`BytesText`]
 #[derive(Clone, Eq, PartialEq)]
@@ -1038,6 +1046,8 @@ impl<'a> std::fmt::Debug for BytesCData<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// Event emitted by [`Reader::read_event`].
 ///
 /// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
@@ -1083,6 +1093,8 @@ impl<'a> Event<'a> {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 impl<'a> Deref for BytesStart<'a> {
     type Target = [u8];
@@ -1142,6 +1154,8 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
         self
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod test {
