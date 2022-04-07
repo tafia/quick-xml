@@ -10,7 +10,7 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use crate::name::NamespaceResolver;
+use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
 
 use memchr;
 
@@ -544,13 +544,18 @@ impl<R: BufRead> Reader<R> {
     /// can be defined on the same element as the attribute in question.
     ///
     /// *Unqualified* event inherits the current *default namespace*.
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'n`: lifetime of an element name
+    /// - `'ns`: lifetime of a namespaces buffer, where all found namespaces are stored
     #[inline]
-    pub fn event_namespace<'a, 'b, 'c>(
-        &'a self,
-        qname: &'b [u8],
-        namespace_buffer: &'c [u8],
-    ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.ns_resolver.resolve(qname, namespace_buffer, true)
+    pub fn event_namespace<'n, 'ns>(
+        &self,
+        name: QName<'n>,
+        namespace_buffer: &'ns [u8],
+    ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
+        self.ns_resolver.resolve(name, namespace_buffer, true)
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
@@ -560,13 +565,18 @@ impl<R: BufRead> Reader<R> {
     /// can be defined on the same element as the attribute in question.
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'n`: lifetime of an attribute
+    /// - `'ns`: lifetime of a namespaces buffer, where all found namespaces are stored
     #[inline]
-    pub fn attribute_namespace<'a, 'b, 'c>(
-        &'a self,
-        qname: &'b [u8],
-        namespace_buffer: &'c [u8],
-    ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.ns_resolver.resolve(qname, namespace_buffer, false)
+    pub fn attribute_namespace<'n, 'ns>(
+        &self,
+        name: QName<'n>,
+        namespace_buffer: &'ns [u8],
+    ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
+        self.ns_resolver.resolve(name, namespace_buffer, false)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -591,8 +601,9 @@ impl<R: BufRead> Reader<R> {
     /// loop {
     ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
     ///         Ok((ref ns, Event::Start(ref e))) => {
+    ///             let ns = ns.map(|ns| ns.into_inner());
     ///             count += 1;
-    ///             match (*ns, e.local_name()) {
+    ///             match (ns, e.local_name()) {
     ///                 (Some(b"www.xxxx"), b"tag1") => (),
     ///                 (Some(b"www.yyyy"), b"tag2") => (),
     ///                 (ns, n) => panic!("Namespace and local name mismatch"),
@@ -611,11 +622,11 @@ impl<R: BufRead> Reader<R> {
     /// println!("Found {} start events", count);
     /// println!("Text events: {:?}", txt);
     /// ```
-    pub fn read_namespaced_event<'a, 'b, 'c>(
-        &'a mut self,
+    pub fn read_namespaced_event<'b, 'ns>(
+        &mut self,
         buf: &'b mut Vec<u8>,
-        namespace_buffer: &'c mut Vec<u8>,
-    ) -> Result<(Option<&'c [u8]>, Event<'b>)> {
+        namespace_buffer: &'ns mut Vec<u8>,
+    ) -> Result<(Option<Namespace<'ns>>, Event<'b>)> {
         if self.pending_pop {
             self.ns_resolver.pop(namespace_buffer);
         }
@@ -625,7 +636,7 @@ impl<R: BufRead> Reader<R> {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
                 Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
                     Event::Start(e),
                 ))
             }
@@ -640,7 +651,7 @@ impl<R: BufRead> Reader<R> {
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
                     Event::Empty(e),
                 ))
             }
@@ -649,7 +660,7 @@ impl<R: BufRead> Reader<R> {
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    self.ns_resolver.find(QName(e.name()), namespace_buffer),
                     Event::End(e),
                 ))
             }

@@ -14,6 +14,8 @@
 
 - [#387]: Allow overlapping between elements of sequence and other elements
   (using new feature `overlapped-lists`)
+- [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, and `Prefix`
+  wrappers around byte arrays
 
 ### Bug Fixes
 
@@ -42,6 +44,9 @@
 
 - [#391]: Added code coverage
 
+- [#393]: `event_namespace` and `attribute_namespace` now accept `QName`
+  and returns `Namespace` and `LocalName`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -51,6 +56,7 @@
 [#9]: https://github.com/Mingun/fast-xml/pull/9
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
+[#393]: https://github.com/tafia/quick-xml/pull/393
 
 ## 0.23.0 -- 2022-05-08
 

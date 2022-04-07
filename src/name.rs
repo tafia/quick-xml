@@ -5,6 +5,178 @@
 
 use crate::events::attributes::Attribute;
 use crate::events::BytesStart;
+use crate::utils::write_byte_string;
+use memchr::memchr;
+use std::fmt::{self, Debug, Formatter};
+
+/// A [qualified name] of an element or an attribute, including an optional
+/// namespace [prefix](Prefix) and a [local name](LocalName).
+///
+/// [qualified name]: https://www.w3.org/TR/xml-names11/#dt-qualname
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct QName<'a>(pub &'a [u8]);
+impl<'a> QName<'a> {
+    /// Converts this name to an internal slice representation.
+    #[inline(always)]
+    pub fn into_inner(self) -> &'a [u8] {
+        self.0
+    }
+
+    /// Returns the index in the name where prefix ended
+    #[inline(always)]
+    fn index(&self) -> Option<usize> {
+        memchr(b':', self.0)
+    }
+}
+impl<'a> Debug for QName<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "QName(")?;
+        write_byte_string(f, self.0)?;
+        write!(f, ")")
+    }
+}
+impl<'a> AsRef<[u8]> for QName<'a> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A [local (unqualified) name] of an element or an attribute, i.e. a name
+/// without [prefix](Prefix).
+///
+/// [local (unqualified) name]: https://www.w3.org/TR/xml-names11/#dt-localname
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct LocalName<'a>(&'a [u8]);
+impl<'a> LocalName<'a> {
+    /// Converts this name to an internal slice representation.
+    #[inline(always)]
+    pub fn into_inner(self) -> &'a [u8] {
+        self.0
+    }
+}
+impl<'a> Debug for LocalName<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "LocalName(")?;
+        write_byte_string(f, self.0)?;
+        write!(f, ")")
+    }
+}
+impl<'a> AsRef<[u8]> for LocalName<'a> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+impl<'a> From<QName<'a>> for LocalName<'a> {
+    /// Creates `LocalName` from a [`QName`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use quick_xml::name::{LocalName, QName};
+    ///
+    /// let local: LocalName = QName(b"unprefixed").into();
+    /// assert_eq!(local.as_ref(), b"unprefixed");
+    ///
+    /// let local: LocalName = QName(b"some:prefix").into();
+    /// assert_eq!(local.as_ref(), b"prefix");
+    /// ```
+    #[inline]
+    fn from(name: QName<'a>) -> Self {
+        Self(name.index().map_or(&name.0, |i| &name.0[i + 1..]))
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A [namespace prefix] part of the [qualified name](QName) of an element tag
+/// or an attribute: a `prefix` in `<prefix:local-element-name>` or
+/// `prefix:local-attribute-name="attribute value"`.
+///
+/// [namespace prefix]: https://www.w3.org/TR/xml-names11/#dt-prefix
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct Prefix<'a>(&'a [u8]);
+impl<'a> Prefix<'a> {
+    /// Extracts internal slice
+    #[inline(always)]
+    pub fn into_inner(self) -> &'a [u8] {
+        self.0
+    }
+}
+impl<'a> Debug for Prefix<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Prefix(")?;
+        write_byte_string(f, self.0)?;
+        write!(f, ")")
+    }
+}
+impl<'a> AsRef<[u8]> for Prefix<'a> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A [namespace name] that is declared in a `xmlns[:prefix]="namespace name"`.
+///
+/// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct Namespace<'a>(pub &'a [u8]);
+impl<'a> Namespace<'a> {
+    /// Converts this namespace to an internal slice representation.
+    ///
+    /// This is [non-normalized] attribute value, i.e. any entity references is
+    /// not expanded and space characters are not removed. This means, that
+    /// different byte slices, returned from this method, can represent the same
+    /// namespace and would be treated by parser as identical.
+    ///
+    /// For example, if the entity **eacute** has been defined to be **é**,
+    /// the empty tags below all contain namespace declarations binding the
+    /// prefix `p` to the same [IRI reference], `http://example.org/rosé`.
+    ///
+    /// ```xml
+    /// <p:foo xmlns:p="http://example.org/rosé" />
+    /// <p:foo xmlns:p="http://example.org/ros&#xe9;" />
+    /// <p:foo xmlns:p="http://example.org/ros&#xE9;" />
+    /// <p:foo xmlns:p="http://example.org/ros&#233;" />
+    /// <p:foo xmlns:p="http://example.org/ros&eacute;" />
+    /// ```
+    ///
+    /// This is because XML entity references are expanded during attribute value
+    /// normalization.
+    ///
+    /// [non-normalized]: https://www.w3.org/TR/REC-xml/#AVNormalize
+    /// [IRI reference]: https://datatracker.ietf.org/doc/html/rfc3987
+    #[inline(always)]
+    pub fn into_inner(self) -> &'a [u8] {
+        self.0
+    }
+    //TODO: implement value normalization and use it when comparing namespaces
+}
+impl<'a> Debug for Namespace<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "Namespace(")?;
+        write_byte_string(f, self.0)?;
+        write!(f, ")")
+    }
+}
+impl<'a> AsRef<[u8]> for Namespace<'a> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An entry that contains index into the buffer with namespace bindings.
 ///
@@ -47,18 +219,19 @@ impl NamespaceEntry {
     /// Returns `None` if namespace for this prefix was explicitly removed from
     /// scope, using `xmlns[:prefix]=""`
     #[inline]
-    fn namespace<'b>(&self, buffer: &'b [u8]) -> Option<&'b [u8]> {
+    fn namespace<'b>(&self, buffer: &'b [u8]) -> Option<Namespace<'b>> {
         if self.value_len == 0 {
             None
         } else {
             let start = self.start + self.prefix_len;
-            Some(&buffer[start..start + self.value_len])
+            Some(Namespace(&buffer[start..start + self.value_len]))
         }
     }
 
     /// Check if the namespace matches the potentially qualified name
     #[inline]
-    fn is_match(&self, buffer: &[u8], qname: &[u8]) -> bool {
+    fn is_match(&self, buffer: &[u8], name: QName) -> bool {
+        let qname = name.into_inner();
         if self.prefix_len == 0 {
             !qname.contains(&b':')
         } else {
@@ -72,7 +245,7 @@ impl NamespaceEntry {
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Default, Clone)]
-pub struct NamespaceResolver {
+pub(crate) struct NamespaceResolver {
     /// A stack of namespace bindings to prefixes that currently in scope
     bindings: Vec<NamespaceEntry>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
@@ -165,21 +338,22 @@ impl NamespaceResolver {
     #[inline]
     pub fn resolve<'n, 'ns>(
         &self,
-        qname: &'n [u8],
+        name: QName<'n>,
         buffer: &'ns [u8],
         use_default: bool,
-    ) -> (Option<&'ns [u8]>, &'n [u8]) {
+    ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
+        let qname = name.into_inner();
         self.bindings
             .iter()
-            .rfind(|n| n.is_match(buffer, qname))
-            .map_or((None, qname), |n| {
+            .rfind(|n| n.is_match(buffer, name))
+            .map_or((None, LocalName(qname)), |n| {
                 let len = n.prefix_len;
                 if len > 0 {
-                    (n.namespace(buffer), &qname[len + 1..])
+                    (n.namespace(buffer), LocalName(&qname[len + 1..]))
                 } else if use_default {
-                    (n.namespace(buffer), qname)
+                    (n.namespace(buffer), LocalName(qname))
                 } else {
-                    (None, qname)
+                    (None, LocalName(qname))
                 }
             })
     }
@@ -199,7 +373,7 @@ impl NamespaceResolver {
     /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
     /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
     #[inline]
-    pub fn find<'ns>(&self, element_name: &[u8], buffer: &'ns [u8]) -> Option<&'ns [u8]> {
+    pub fn find<'ns>(&self, element_name: QName, buffer: &'ns [u8]) -> Option<Namespace<'ns>> {
         self.bindings
             .iter()
             .rfind(|n| n.is_match(buffer, element_name))

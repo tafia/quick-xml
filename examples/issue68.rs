@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use quick_xml::events::Event;
+use quick_xml::name::Namespace;
 use quick_xml::Reader;
 use std::io::Read;
 
@@ -82,8 +83,8 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
     loop {
         match reader.read_namespaced_event(&mut buf, &mut ns_buffer) {
             Ok((namespace_value, Event::Start(e))) => {
-                let namespace_value = namespace_value.unwrap_or_default();
-                match (depth, state, namespace_value, e.local_name()) {
+                let namespace_value = namespace_value.unwrap_or(Namespace(b""));
+                match (depth, state, namespace_value.as_ref(), e.local_name()) {
                     (0, State::Root, b"DAV:", b"multistatus") => state = State::MultiStatus,
                     (1, State::MultiStatus, b"DAV:", b"response") => {
                         state = State::Response;
@@ -97,9 +98,9 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
                 depth += 1;
             }
             Ok((namespace_value, Event::End(e))) => {
-                let namespace_value = namespace_value.unwrap_or_default();
+                let namespace_value = namespace_value.unwrap_or(Namespace(b""));
                 let local_name = e.local_name();
-                match (depth, state, &*namespace_value, local_name) {
+                match (depth, state, namespace_value.as_ref(), local_name) {
                     (1, State::MultiStatus, b"DAV:", b"multistatus") => state = State::Root,
                     (2, State::MultiStatus, b"DAV:", b"multistatus") => state = State::MultiStatus,
                     _ => {}

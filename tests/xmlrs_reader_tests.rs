@@ -1,4 +1,5 @@
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::Namespace;
 use quick_xml::{Reader, Result};
 use std::borrow::Cow;
 use std::str::from_utf8;
@@ -426,9 +427,14 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     }
 }
 
-fn namespace_name(n: &Option<&[u8]>, name: &[u8]) -> String {
-    match *n {
-        Some(n) => format!("{{{}}}{}", from_utf8(n).unwrap(), from_utf8(name).unwrap()),
+fn namespace_name(n: &Option<Namespace>, name: &[u8]) -> String {
+    match n {
+        // Produces string '{namespace}local_name'
+        Some(n) => format!(
+            "{{{}}}{}",
+            from_utf8(n.as_ref()).unwrap(),
+            from_utf8(name).unwrap()
+        ),
         None => from_utf8(name).unwrap().to_owned(),
     }
 }
@@ -463,7 +469,7 @@ fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
     decoded
 }
 
-fn xmlrs_display(opt_event: &Result<(Option<&[u8]>, Event)>, reader: &Reader<&[u8]>) -> String {
+fn xmlrs_display(opt_event: &Result<(Option<Namespace>, Event)>, reader: &Reader<&[u8]>) -> String {
     match opt_event {
         Ok((ref n, Event::Start(ref e))) => {
             let name = namespace_name(n, decode(e.name(), reader).as_bytes());
