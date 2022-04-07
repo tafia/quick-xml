@@ -14,9 +14,9 @@
 
 - [#387]: Allow overlapping between elements of sequence and other elements
   (using new feature `overlapped-lists`)
-- [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, and `Prefix`
-  wrappers around byte arrays and `ResolveResult` with the result of prefix
-  resolution to namespace
+- [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
+  and `PrefixDeclaration` wrappers around byte arrays and `ResolveResult` with
+  the result of namespace resolution
 
 ### Bug Fixes
 
@@ -28,6 +28,7 @@
   another sequence. This error affects only users with the `serialize` feature enabled
 - [#393]: Now `event_namespace`, `attribute_namespace` and `read_event_namespaced`
   returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
+- [#393]: Fix breaking processing after encounter an attribute with a reserved name (started with "xmlns")
 
 ### Misc Changes
 

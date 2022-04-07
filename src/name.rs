@@ -71,6 +71,41 @@ impl<'a> QName<'a> {
         }
     }
 
+    /// If that `QName` represents `"xmlns"` series of names, returns `Some`,
+    /// otherwise `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use quick_xml::name::{QName, PrefixDeclaration};
+    /// let qname = QName(b"xmlns");
+    /// assert_eq!(qname.as_namespace_binding(), Some(PrefixDeclaration::Default));
+    ///
+    /// let qname = QName(b"xmlns:prefix");
+    /// assert_eq!(qname.as_namespace_binding(), Some(PrefixDeclaration::Named(b"prefix")));
+    ///
+    /// // Be aware that this method does not check the validity of the prefix - it can be empty!
+    /// let qname = QName(b"xmlns:");
+    /// assert_eq!(qname.as_namespace_binding(), Some(PrefixDeclaration::Named(b"")));
+    ///
+    /// let qname = QName(b"other-name");
+    /// assert_eq!(qname.as_namespace_binding(), None);
+    ///
+    /// // https://www.w3.org/TR/xml-names11/#xmlReserved
+    /// let qname = QName(b"xmlns-reserved-name");
+    /// assert_eq!(qname.as_namespace_binding(), None);
+    /// ```
+    pub fn as_namespace_binding(&self) -> Option<PrefixDeclaration<'a>> {
+        if self.0.starts_with(b"xmlns") {
+            return match self.0.get(5) {
+                None => Some(PrefixDeclaration::Default),
+                Some(&b':') => Some(PrefixDeclaration::Named(&self.0[6..])),
+                _ => None,
+            };
+        }
+        None
+    }
+
     /// Returns the index in the name where prefix ended
     #[inline(always)]
     fn index(&self) -> Option<usize> {
@@ -169,6 +204,19 @@ impl<'a> AsRef<[u8]> for Prefix<'a> {
     fn as_ref(&self) -> &[u8] {
         self.0
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A namespace prefix declaration, `xmlns` or `xmlns:<name>`, as defined in
+/// [XML Schema specification](https://www.w3.org/TR/xml-names/#ns-decl)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PrefixDeclaration<'a> {
+    /// XML attribute binds a default namespace. Corresponds to `xmlns` in in `xmlns="..."`
+    Default,
+    /// XML attribute binds a specified prefix to a namespace. Corresponds to a
+    /// `prefix` in `xmlns:prefix="..."`, which is stored as payload of this variant.
+    Named(&'a [u8]),
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -361,32 +409,29 @@ impl NamespaceResolver {
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
-                let k = k.as_ref(); //TODO: Use QName API
-                if k.starts_with(b"xmlns") {
-                    match k.get(5) {
-                        None => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&*v);
-                            self.bindings.push(NamespaceEntry {
-                                start,
-                                prefix_len: 0,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        Some(&b':') => {
-                            let start = buffer.len();
-                            buffer.extend_from_slice(&k[6..]);
-                            buffer.extend_from_slice(&*v);
-                            self.bindings.push(NamespaceEntry {
-                                start,
-                                prefix_len: k.len() - 6,
-                                value_len: v.len(),
-                                level,
-                            });
-                        }
-                        _ => break,
+                match k.as_namespace_binding() {
+                    Some(PrefixDeclaration::Default) => {
+                        let start = buffer.len();
+                        buffer.extend_from_slice(&*v);
+                        self.bindings.push(NamespaceEntry {
+                            start,
+                            prefix_len: 0,
+                            value_len: v.len(),
+                            level,
+                        });
                     }
+                    Some(PrefixDeclaration::Named(prefix)) => {
+                        let start = buffer.len();
+                        buffer.extend_from_slice(prefix);
+                        buffer.extend_from_slice(&*v);
+                        self.bindings.push(NamespaceEntry {
+                            start,
+                            prefix_len: prefix.len(),
+                            value_len: v.len(),
+                            level,
+                        });
+                    }
+                    None => {}
                 }
             } else {
                 break;

@@ -157,7 +157,7 @@ fn attributes_empty_ns() {
         .attributes()
         .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
         // we don't care about xmlns attributes for this test
-        .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
+        .filter(|kv| kv.key.as_namespace_binding().is_none())
         .map(|Attribute { key: name, value }| {
             let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
             (opt_ns, local_name.into_inner(), value)
@@ -198,7 +198,7 @@ fn attributes_empty_ns_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)
@@ -259,7 +259,7 @@ fn default_ns_shadowing_empty() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)
@@ -318,7 +318,7 @@ fn default_ns_shadowing_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.as_ref().starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name.into_inner(), value)

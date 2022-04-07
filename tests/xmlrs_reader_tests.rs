@@ -444,11 +444,10 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     for a in e.attributes() {
         match a {
             Ok(a) => {
-                let key = a.key.as_ref();
-                if !key.starts_with(b"xmlns") {
+                if a.key.as_namespace_binding().is_none() {
                     atts.push(format!(
                         "{}=\"{}\"",
-                        from_utf8(key).unwrap(),
+                        from_utf8(a.key.as_ref()).unwrap(),
                         from_utf8(&*a.unescaped_value().unwrap()).unwrap()
                     ));
                 }
