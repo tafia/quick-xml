@@ -403,35 +403,19 @@ impl<R: BufRead> Reader<R> {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    #[cfg(feature = "encoding")]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
                 let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+
                 // Try getting encoding from the declaration event
+                #[cfg(feature = "encoding")]
                 if let Some(enc) = event.encoder() {
                     self.encoding = enc;
                     self.is_encoding_set = true;
                 }
-                Ok(Event::Decl(event))
-            } else {
-                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
-            }
-        } else {
-            self.buf_position -= len;
-            Err(Error::UnexpectedEof("XmlDecl".to_string()))
-        }
-    }
 
-    /// reads `BytesElement` starting with a `?`,
-    /// return `Decl` or `PI` event
-    #[cfg(not(feature = "encoding"))]
-    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let len = buf.len();
-        if len > 2 && buf[len - 1] == b'?' {
-            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
                 Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
