@@ -350,8 +350,8 @@ impl<R: BufRead> Reader<R> {
             };
             match self.opened_starts.pop() {
                 Some(start) => {
-                    if name != &self.opened_buffer[start..] {
-                        let expected = &self.opened_buffer[start..];
+                    let expected = &self.opened_buffer[start..];
+                    if name != expected {
                         mismatch_err(expected, name, &mut self.buf_position)
                     } else {
                         self.opened_buffer.truncate(start);
