@@ -10,7 +10,7 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use crate::name::{LocalName, Namespace, NamespaceResolver, QName};
+use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 
 use memchr;
 
@@ -554,7 +554,7 @@ impl<R: BufRead> Reader<R> {
         &self,
         name: QName<'n>,
         namespace_buffer: &'ns [u8],
-    ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
+    ) -> (ResolveResult<'ns>, LocalName<'n>) {
         self.ns_resolver.resolve(name, namespace_buffer, true)
     }
 
@@ -575,7 +575,7 @@ impl<R: BufRead> Reader<R> {
         &self,
         name: QName<'n>,
         namespace_buffer: &'ns [u8],
-    ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
+    ) -> (ResolveResult<'ns>, LocalName<'n>) {
         self.ns_resolver.resolve(name, namespace_buffer, false)
     }
 
@@ -587,6 +587,7 @@ impl<R: BufRead> Reader<R> {
     /// use std::str::from_utf8;
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
+    /// use quick_xml::name::ResolveResult::*;
     ///
     /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
     ///                 <y:tag2><!--Test comment-->Test</y:tag2>
@@ -600,15 +601,20 @@ impl<R: BufRead> Reader<R> {
     /// let mut txt = Vec::new();
     /// loop {
     ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
-    ///         Ok((ref ns, Event::Start(ref e))) => {
-    ///             let ns = ns.map(|ns| ns.into_inner());
+    ///         Ok((Bound(ns), Event::Start(e))) => {
     ///             count += 1;
-    ///             match (ns, e.local_name()) {
-    ///                 (Some(b"www.xxxx"), b"tag1") => (),
-    ///                 (Some(b"www.yyyy"), b"tag2") => (),
+    ///             match (ns.as_ref(), e.local_name()) {
+    ///                 (b"www.xxxx", b"tag1") => (),
+    ///                 (b"www.yyyy", b"tag2") => (),
     ///                 (ns, n) => panic!("Namespace and local name mismatch"),
     ///             }
-    ///             println!("Resolved namespace: {:?}", ns.and_then(|ns| from_utf8(ns).ok()));
+    ///             println!("Resolved namespace: {:?}", ns);
+    ///         }
+    ///         Ok((Unbound, Event::Start(_))) => {
+    ///             panic!("Element not in any namespace")
+    ///         },
+    ///         Ok((Unknown(p), Event::Start(_))) => {
+    ///             panic!("Undeclared namespace prefix {:?}", String::from_utf8(p))
     ///         }
     ///         Ok((_, Event::Text(e))) => {
     ///             txt.push(e.unescape_and_decode(&reader).expect("Error!"))
@@ -626,13 +632,13 @@ impl<R: BufRead> Reader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
         namespace_buffer: &'ns mut Vec<u8>,
-    ) -> Result<(Option<Namespace<'ns>>, Event<'b>)> {
+    ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
         if self.pending_pop {
             self.ns_resolver.pop(namespace_buffer);
         }
         self.pending_pop = false;
         match self.read_event(buf) {
-            Ok(Event::Eof) => Ok((None, Event::Eof)),
+            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
                 Ok((
@@ -664,7 +670,7 @@ impl<R: BufRead> Reader<R> {
                     Event::End(e),
                 ))
             }
-            Ok(e) => Ok((None, e)),
+            Ok(e) => Ok((ResolveResult::Unbound, e)),
             Err(e) => Err(e),
         }
     }

@@ -1,6 +1,7 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::name::ResolveResult::*;
 use quick_xml::name::{Namespace, QName};
 use quick_xml::Reader;
 use std::borrow::Cow;
@@ -15,7 +16,7 @@ fn namespace() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
             e
@@ -24,7 +25,7 @@ fn namespace() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -33,12 +34,12 @@ fn namespace() {
     // "in namespace!"
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         //TODO: Check in specification, it is true that namespace should be empty?
-        Ok((ns, Text(_))) => assert_eq!(ns, None),
+        Ok((ns, Text(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting text content with no namespace, got {:?}", e),
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -47,7 +48,7 @@ fn namespace() {
 
     // </a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
 }
@@ -62,7 +63,7 @@ fn default_namespace() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
             e
@@ -71,7 +72,7 @@ fn default_namespace() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -79,7 +80,7 @@ fn default_namespace() {
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -89,7 +90,7 @@ fn default_namespace() {
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
 }
@@ -104,7 +105,7 @@ fn default_namespace_reset() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer start element with to resolve to 'www1', got {:?}",
             e
@@ -113,7 +114,7 @@ fn default_namespace_reset() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting inner start element with no namespace, got {:?}",
             e
@@ -121,13 +122,13 @@ fn default_namespace_reset() {
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting inner end element with no namespace, got {:?}", e),
     }
 
     // </a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer end element with to resolve to 'www1', got {:?}",
             e
@@ -148,7 +149,7 @@ fn attributes_empty_ns() {
     let mut ns_buf = Vec::new();
 
     let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, Empty(e))) => e,
+        Ok((Unbound, Empty(e))) => e,
         e => panic!("Expecting Empty event, got {:?}", e),
     };
 
@@ -163,12 +164,12 @@ fn attributes_empty_ns() {
         });
     assert_eq!(
         attrs.next(),
-        Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
     );
     assert_eq!(
         attrs.next(),
         Some((
-            Some(Namespace(b"urn:example:r")),
+            Bound(Namespace(b"urn:example:r")),
             &b"att2"[..],
             Cow::Borrowed(&b"b"[..])
         ))
@@ -189,7 +190,7 @@ fn attributes_empty_ns_expanded() {
     let mut ns_buf = Vec::new();
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((None, Start(e))) => e,
+            Ok((Unbound, Start(e))) => e,
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
@@ -204,12 +205,12 @@ fn attributes_empty_ns_expanded() {
             });
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(
             attrs.next(),
             Some((
-                Some(Namespace(b"urn:example:r")),
+                Bound(Namespace(b"urn:example:r")),
                 &b"att2"[..],
                 Cow::Borrowed(&b"b"[..])
             ))
@@ -218,7 +219,7 @@ fn attributes_empty_ns_expanded() {
     }
 
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, End(e))) => assert_eq!(b"a", e.name()),
+        Ok((Unbound, End(e))) => assert_eq!(b"a", e.name()),
         e => panic!("Expecting End event, got {:?}", e),
     }
 }
@@ -236,7 +237,7 @@ fn default_ns_shadowing_empty() {
     {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Some(Namespace(b"urn:example:o")));
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
                 assert_eq!(e.name(), b"e");
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
@@ -247,7 +248,7 @@ fn default_ns_shadowing_empty() {
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Empty(e))) => {
-                assert_eq!(ns, Some(Namespace(b"urn:example:i")));
+                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
                 assert_eq!(e.name(), b"e");
                 e
             }
@@ -267,7 +268,7 @@ fn default_ns_shadowing_empty() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
@@ -275,7 +276,7 @@ fn default_ns_shadowing_empty() {
     // </outer>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Some(Namespace(b"urn:example:o")));
+            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
             assert_eq!(e.name(), b"e");
         }
         e => panic!("Expected End event (<outer>), got {:?}", e),
@@ -295,7 +296,7 @@ fn default_ns_shadowing_expanded() {
     {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Some(Namespace(b"urn:example:o")));
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
                 assert_eq!(e.name(), b"e");
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
@@ -307,7 +308,7 @@ fn default_ns_shadowing_expanded() {
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Some(Namespace(b"urn:example:i")));
+                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
                 assert_eq!(e.name(), b"e");
                 e
             }
@@ -326,7 +327,7 @@ fn default_ns_shadowing_expanded() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
@@ -334,7 +335,7 @@ fn default_ns_shadowing_expanded() {
     // virtual </inner>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Some(Namespace(b"urn:example:i")));
+            assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
             assert_eq!(e.name(), b"e");
         }
         e => panic!("Expected End event (</inner>), got {:?}", e),
@@ -342,7 +343,7 @@ fn default_ns_shadowing_expanded() {
     // </outer>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Some(Namespace(b"urn:example:o")));
+            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
             assert_eq!(e.name(), b"e");
         }
         e => panic!("Expected End event (</outer>), got {:?}", e),

@@ -15,7 +15,8 @@
 - [#387]: Allow overlapping between elements of sequence and other elements
   (using new feature `overlapped-lists`)
 - [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, and `Prefix`
-  wrappers around byte arrays
+  wrappers around byte arrays and `ResolveResult` with the result of prefix
+  resolution to namespace
 
 ### Bug Fixes
 
@@ -25,6 +26,8 @@
 - [#387]: Internal deserializer state can be broken when deserializing a map with
   a sequence field (such as `Vec<T>`), where elements of this sequence contains
   another sequence. This error affects only users with the `serialize` feature enabled
+- [#393]: Now `event_namespace`, `attribute_namespace` and `read_event_namespaced`
+  returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
 
 ### Misc Changes
 
@@ -45,7 +48,8 @@
 - [#391]: Added code coverage
 
 - [#393]: `event_namespace` and `attribute_namespace` now accept `QName`
-  and returns `Namespace` and `LocalName`
+  and returns `ResolveResult` and `LocalName`, `read_event_namespaced` now
+  returns `ResolveResult` instead of `Option<[u8]>`
 
 ### New Tests
 
