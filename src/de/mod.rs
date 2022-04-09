@@ -161,7 +161,7 @@ where
     has_value_field: bool,
 }
 
-/// Deserialize an instance of type T from a string of XML text.
+/// Deserialize an instance of type `T` from a string of XML text.
 pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
@@ -169,16 +169,16 @@ where
     from_bytes(s.as_bytes())
 }
 
-/// Deserialize a xml slice of bytes
+/// Deserialize an instance of type `T` from bytes of XML text.
 pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
-    let mut de = Deserializer::from_bytes(s);
+    let mut de = Deserializer::from_slice(s);
     T::deserialize(&mut de)
 }
 
-/// Deserialize an instance of type T from bytes of XML text.
+/// Deserialize an instance of type `T` from bytes of XML text.
 pub fn from_slice<T>(b: &[u8]) -> Result<T, DeError>
 where
     T: DeserializeOwned,
@@ -186,21 +186,15 @@ where
     from_reader(b)
 }
 
-/// Deserialize from a reader
+/// Deserialize from a reader. This method will do internal copies of data
+/// readed from `reader`. If you want have a `&[u8]` or `&str` input and want
+/// to borrow as much as possible, use [`from_bytes`] or [`from_str`]
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
     R: BufRead,
     T: DeserializeOwned,
 {
-    let mut reader = Reader::from_reader(reader);
-    reader
-        .expand_empty_elements(true)
-        .check_end_names(true)
-        .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(IoReader {
-        reader,
-        buf: Vec::new(),
-    });
+    let mut de = Deserializer::from_reader(reader);
     T::deserialize(&mut de)
 }
 
@@ -244,7 +238,13 @@ impl<'de, R> Deserializer<'de, R>
 where
     R: BorrowingReader<'de>,
 {
-    /// Get a new deserializer
+    /// Create an XML deserializer from one of the possible quick_xml input sources.
+    ///
+    /// Typically it is more convenient to use one of these methods instead:
+    ///
+    ///  - [`Deserializer::from_str`]
+    ///  - [`Deserializer::from_slice`]
+    ///  - [`Deserializer::from_reader`]
     pub fn new(reader: R) -> Self {
         Deserializer {
             reader,
@@ -338,17 +338,39 @@ where
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
     pub fn from_str(s: &'de str) -> Self {
-        Self::from_bytes(s.as_bytes())
+        Self::from_slice(s.as_bytes())
     }
 
     /// Create new deserializer that will borrow data from the specified byte array
-    pub fn from_bytes(bytes: &'de [u8]) -> Self {
+    pub fn from_slice(bytes: &'de [u8]) -> Self {
         let mut reader = Reader::from_bytes(bytes);
         reader
             .expand_empty_elements(true)
             .check_end_names(true)
             .trim_text(true);
-        Self::from_borrowing_reader(SliceReader { reader })
+        Self::new(SliceReader { reader })
+    }
+}
+
+impl<'de, R> Deserializer<'de, IoReader<R>>
+where
+    R: BufRead,
+{
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer. If you already have a string or a byte array, use
+    /// [`Self::from_str`] or [`Self::from_slice`] instead, because they will
+    /// borrow instead of copy, whenever possible
+    pub fn from_reader(reader: R) -> Self {
+        let mut reader = Reader::from_reader(reader);
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+
+        Self::new(IoReader {
+            reader,
+            buf: Vec::new(),
+        })
     }
 }
 
@@ -620,7 +642,7 @@ where
     }
 }
 
-/// A trait that borrows an XML reader that borrows from the input. For a &[u8]
+/// A trait that borrows an XML reader that borrows from the input. For a `&[u8]`
 /// input the events will borrow from that input, whereas with a BufRead input
 /// all events will be converted to 'static, allocating whenever necessary.
 pub trait BorrowingReader<'i> {
@@ -635,7 +657,11 @@ pub trait BorrowingReader<'i> {
     fn decoder(&self) -> Decoder;
 }
 
-struct IoReader<R: BufRead> {
+/// XML input source that reads from a std::io input stream.
+///
+/// You cannot create it, it is created automatically when you call
+/// [`Deserializer::from_reader`]
+pub struct IoReader<R: BufRead> {
     reader: Reader<R>,
     buf: Vec<u8>,
 }
@@ -672,7 +698,11 @@ impl<'i, R: BufRead> BorrowingReader<'i> for IoReader<R> {
     }
 }
 
-struct SliceReader<'de> {
+/// XML input source that reads from a slice of bytes and can borrow from it.
+///
+/// You cannot create it, it is created automatically when you call
+/// [`Deserializer::from_str`] or [`Deserializer::from_slice`]
+pub struct SliceReader<'de> {
     reader: Reader<&'de [u8]>,
 }
 
@@ -733,21 +763,15 @@ mod tests {
     fn read_to_end() {
         use crate::de::DeEvent::*;
 
-        let mut reader = Reader::from_bytes(
-            r#"
+        let mut de = Deserializer::from_slice(
+            br#"
             <root>
                 <tag a="1"><tag>text</tag>content</tag>
                 <tag a="2"><![CDATA[cdata content]]></tag>
                 <self-closed/>
             </root>
-            "#
-            .as_bytes(),
+            "#,
         );
-        reader
-            .expand_empty_elements(true)
-            .check_end_names(true)
-            .trim_text(true);
-        let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
 
         assert_eq!(
             de.next().unwrap(),
