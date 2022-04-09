@@ -14,7 +14,7 @@
 - fix: allow to deserialize `unit`s from any data in attribute values and text nodes
 - refactor: unify errors when EOF encountered during serde deserialization
 - test: ensure that after deserializing all XML was consumed
-- feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
+- feat: add `Deserializer::from_str`, `Deserializer::from_slice` and `Deserializer::from_reader`
 - refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.
