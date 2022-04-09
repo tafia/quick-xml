@@ -15,6 +15,8 @@
 - refactor: unify errors when EOF encountered during serde deserialization
 - test: ensure that after deserializing all XML was consumed
 - feat: add `Deserializer::from_str`, `Deserializer::from_slice` and `Deserializer::from_reader`
+- refactor: deprecate `from_bytes` and `Deserializer::from_borrowing_reader` because
+  they are fully equivalent to `from_slice` and `Deserializer::new`
 - refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.

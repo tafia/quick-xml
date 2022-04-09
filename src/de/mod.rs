@@ -166,11 +166,20 @@ pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
-    from_bytes(s.as_bytes())
+    from_slice(s.as_bytes())
 }
 
 /// Deserialize an instance of type `T` from bytes of XML text.
+#[deprecated = "Use `from_slice` instead"]
 pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
+    from_slice(s)
+}
+
+/// Deserialize an instance of type `T` from bytes of XML text.
+pub fn from_slice<'de, T>(s: &'de [u8]) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
@@ -178,17 +187,9 @@ where
     T::deserialize(&mut de)
 }
 
-/// Deserialize an instance of type `T` from bytes of XML text.
-pub fn from_slice<T>(b: &[u8]) -> Result<T, DeError>
-where
-    T: DeserializeOwned,
-{
-    from_reader(b)
-}
-
 /// Deserialize from a reader. This method will do internal copies of data
 /// readed from `reader`. If you want have a `&[u8]` or `&str` input and want
-/// to borrow as much as possible, use [`from_bytes`] or [`from_str`]
+/// to borrow as much as possible, use [`from_slice`] or [`from_str`]
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
     R: BufRead,
@@ -254,6 +255,7 @@ where
     }
 
     /// Get a new deserializer from a regular BufRead
+    #[deprecated = "Use `Deserializer::new` instead"]
     pub fn from_borrowing_reader(reader: R) -> Self {
         Self::new(reader)
     }
