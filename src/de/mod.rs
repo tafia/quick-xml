@@ -147,7 +147,7 @@ pub enum DeEvent<'a> {
 /// An xml deserializer
 pub struct Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     reader: R,
     peek: Option<DeEvent<'de>>,
@@ -236,7 +236,7 @@ where
 
 impl<'de, R> Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     /// Create an XML deserializer from one of the possible quick_xml input sources.
     ///
@@ -390,7 +390,7 @@ macro_rules! deserialize_type {
 
 impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
 
@@ -642,10 +642,13 @@ where
     }
 }
 
-/// A trait that borrows an XML reader that borrows from the input. For a `&[u8]`
-/// input the events will borrow from that input, whereas with a BufRead input
-/// all events will be converted to 'static, allocating whenever necessary.
-pub trait BorrowingReader<'i> {
+/// Trait used by the deserializer for iterating over input. This is manually
+/// "specialized" for iterating over `&[u8]`.
+///
+/// You do not need to implement this trait, it is needed to abstract from
+/// [borrowing](SliceReader) and [copying](IoReader) data sources and reuse code in
+/// deserializer
+pub trait XmlRead<'i> {
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<DeEvent<'i>, DeError>;
 
@@ -666,7 +669,7 @@ pub struct IoReader<R: BufRead> {
     buf: Vec<u8>,
 }
 
-impl<'i, R: BufRead> BorrowingReader<'i> for IoReader<R> {
+impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
         let event = loop {
             let e = self.reader.read_event(&mut self.buf)?;
@@ -706,7 +709,7 @@ pub struct SliceReader<'de> {
     reader: Reader<&'de [u8]>,
 }
 
-impl<'de> BorrowingReader<'de> for SliceReader<'de> {
+impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         loop {
             let e = self.reader.read_event_unbuffered()?;
