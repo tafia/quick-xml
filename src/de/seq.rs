@@ -1,4 +1,4 @@
-use crate::de::{BorrowingReader, DeError, DeEvent, Deserializer};
+use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
 use crate::{events::BytesStart, reader::Decoder};
 use serde::de::{self, DeserializeSeed};
 
@@ -25,7 +25,7 @@ impl Names {
 /// A SeqAccess
 pub struct SeqAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
     names: Names,
@@ -33,7 +33,7 @@ where
 
 impl<'a, 'de, R> SeqAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     /// Get a new SeqAccess
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
@@ -57,7 +57,7 @@ where
 
 impl<'de, 'a, R> de::SeqAccess<'de> for SeqAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
 

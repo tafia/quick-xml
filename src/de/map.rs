@@ -2,7 +2,7 @@
 
 use crate::{
     de::escape::EscapedDeserializer,
-    de::{BorrowingReader, DeEvent, Deserializer, INNER_VALUE, UNFLATTEN_PREFIX},
+    de::{DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::Attribute,
     events::BytesStart,
@@ -29,7 +29,10 @@ enum State {
 }
 
 /// A deserializer for `Attributes`
-pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de>> {
+pub(crate) struct MapAccess<'de, 'a, R>
+where
+    R: XmlRead<'de>,
+{
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
     de: &'a mut Deserializer<'de, R>,
@@ -46,7 +49,10 @@ pub(crate) struct MapAccess<'de, 'a, R: BorrowingReader<'de>> {
     unflatten_fields: Vec<&'static [u8]>,
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
+impl<'de, 'a, R> MapAccess<'de, 'a, R>
+where
+    R: XmlRead<'de>,
+{
     /// Create a new MapAccess
     pub fn new(
         de: &'a mut Deserializer<'de, R>,
@@ -76,7 +82,10 @@ impl<'de, 'a, R: BorrowingReader<'de>> MapAccess<'de, 'a, R> {
     }
 }
 
-impl<'de, 'a, R: BorrowingReader<'de>> de::MapAccess<'de> for MapAccess<'de, 'a, R> {
+impl<'de, 'a, R> de::MapAccess<'de> for MapAccess<'de, 'a, R>
+where
+    R: XmlRead<'de>,
+{
     type Error = DeError;
 
     fn next_key_seed<K: DeserializeSeed<'de>>(

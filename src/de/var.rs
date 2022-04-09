@@ -1,5 +1,5 @@
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, DeEvent, Deserializer},
+    de::{escape::EscapedDeserializer, DeEvent, Deserializer, XmlRead},
     errors::serialize::DeError,
 };
 use serde::de::{self, DeserializeSeed, Deserializer as SerdeDeserializer, Visitor};
@@ -8,14 +8,14 @@ use std::borrow::Cow;
 /// An enum access
 pub struct EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
 }
 
 impl<'de, 'a, R> EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Self {
         EnumAccess { de }
@@ -24,7 +24,7 @@ where
 
 impl<'de, 'a, R> de::EnumAccess<'de> for EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
     type Variant = VariantAccess<'de, 'a, R>;
@@ -50,14 +50,14 @@ where
 
 pub struct VariantAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
 }
 
 impl<'de, 'a, R> de::VariantAccess<'de> for VariantAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
 
