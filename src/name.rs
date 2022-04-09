@@ -284,20 +284,6 @@ impl NamespaceEntry {
             Some(Namespace(&buffer[start..start + self.value_len]))
         }
     }
-
-    /// Check if the namespace matches the potentially qualified name
-    #[inline]
-    fn is_match(&self, buffer: &[u8], name: QName) -> bool {
-        match (self.prefix(buffer), name.prefix()) {
-            // If both parts has no prefixes -> matched
-            (None, None) => true,
-            // If one part has prefix but other is not -> not matched
-            (None, Some(_)) => false,
-            (Some(_), None) => false,
-            // Otherwise check that prefixes the same
-            (Some(definition), Some(usage)) => definition == usage,
-        }
-    }
 }
 
 /// A namespace management buffer.
@@ -401,20 +387,8 @@ impl NamespaceResolver {
         buffer: &'ns [u8],
         use_default: bool,
     ) -> (Option<Namespace<'ns>>, LocalName<'n>) {
-        let qname = name.into_inner();
-        self.bindings
-            .iter()
-            .rfind(|n| n.is_match(buffer, name))
-            .map_or((None, LocalName(qname)), |n| {
-                let len = n.prefix_len;
-                if len > 0 {
-                    (n.namespace(buffer), LocalName(&qname[len + 1..]))
-                } else if use_default {
-                    (n.namespace(buffer), LocalName(qname))
-                } else {
-                    (None, LocalName(qname))
-                }
-            })
+        let (local_name, prefix) = name.decompose();
+        (self.resolve_prefix(prefix, buffer, use_default), local_name)
     }
 
     /// Finds a [namespace name] for a given qualified **element name**, borrow
@@ -433,10 +407,36 @@ impl NamespaceResolver {
     /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
     #[inline]
     pub fn find<'ns>(&self, element_name: QName, buffer: &'ns [u8]) -> Option<Namespace<'ns>> {
+        self.resolve_prefix(element_name.prefix(), buffer, true)
+    }
+
+    fn resolve_prefix<'ns>(
+        &self,
+        prefix: Option<Prefix>,
+        buffer: &'ns [u8],
+        use_default: bool,
+    ) -> Option<Namespace<'ns>> {
         self.bindings
             .iter()
-            .rfind(|n| n.is_match(buffer, element_name))
-            .and_then(|n| n.namespace(buffer))
+            // Find the last defined binding that corresponds to the given prefix
+            .rev()
+            .find_map(|n| match (n.prefix(buffer), prefix) {
+                // This is default namespace definition and name has no explicit prefix
+                (None, None) if use_default => Some(n.namespace(buffer)),
+                (None, None) => Some(None),
+
+                // One part has prefix but other is not -> skip
+                (None, Some(_)) => None,
+                (Some(_), None) => None,
+
+                // Prefixes does not match -> skip
+                (Some(definition), Some(usage)) if definition != usage => None,
+
+                // Prefixes the same, returns corresponding namespace
+                _ => Some(n.namespace(buffer)),
+            })
+            // If no entry found for specified prefix, resolution is unsuccessful
+            .unwrap_or_default()
     }
 }
 
