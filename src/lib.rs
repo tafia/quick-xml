@@ -144,7 +144,9 @@ pub mod events;
 mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
-mod utils;
+/// Not an official API, public for integration tests
+#[doc(hidden)]
+pub mod utils;
 mod writer;
 
 // reexports
