@@ -105,8 +105,6 @@
 //! }
 //! ```
 
-#[cfg(test)]
-mod byte_buf;
 mod escape;
 mod map;
 mod seq;
@@ -742,7 +740,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::de::byte_buf::ByteBuf;
+    use crate::utils::ByteBuf;
     use pretty_assertions::assert_eq;
     use serde::de::IgnoredAny;
     use serde::Deserialize;
