@@ -27,8 +27,6 @@ pub enum Error {
     TextNotFound,
     /// `Event::XmlDecl` must start with *version* attribute
     XmlDeclWithoutVersion(Option<String>),
-    /// Attribute Name contains quote, position relative to start of owning tag is provided
-    NameWithQuote(usize),
     /// Attribute key not followed by with `=`, position relative to start of owning tag is provided
     NoEqAfterName(usize),
     /// Attribute value not quoted, position relative to start of owning tag is provided
@@ -89,12 +87,6 @@ impl std::fmt::Display for Error {
             Error::XmlDeclWithoutVersion(e) => write!(
                 f,
                 "XmlDecl must start with 'version' attribute, found {:?}",
-                e
-            ),
-            Error::NameWithQuote(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute key cannot contain quote",
                 e
             ),
             Error::NoEqAfterName(e) => write!(

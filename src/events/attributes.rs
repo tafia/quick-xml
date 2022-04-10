@@ -386,9 +386,6 @@ impl<'a> Iterator for Attributes<'a> {
             .find(|&(_, &b)| b == b'=' || is_whitespace(b))
         {
             Some((i, &b'=')) => i,
-            Some((i, &b'\'')) | Some((i, &b'"')) if self.with_checks => {
-                err!(Error::NameWithQuote(i));
-            }
             Some((i, _)) => {
                 // consume until `=` or return if html
                 match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
