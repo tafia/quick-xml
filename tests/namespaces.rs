@@ -349,3 +349,29 @@ fn default_ns_shadowing_expanded() {
         e => panic!("Expected End event (</outer>), got {:?}", e),
     }
 }
+
+/// Although the XML specification [recommends against] the use of names where
+/// the local name portion begins with the letters "xml" (case insensitive),
+/// it also specifies, that processors *MUST NOT* treat them as fatal errors.
+/// That means, that processing should continue -- in our case we should read
+/// an XML event and user should be able to check constraints later if he/she wish.
+///
+/// [recommends against]: https://www.w3.org/TR/xml-names11/#xmlReserved
+#[test]
+fn reserved_name() {
+    // Name "xmlns-something" is reserved according to spec, because started with "xml"
+    let mut r = Reader::from_str(r#"<a xmlns-something="reserved attribute name" xmlns="www1"/>"#);
+    r.trim_text(true);
+
+    let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
+
+    // <a />
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        e => panic!(
+            "Expected empty element bound to namespace 'www1', got {:?}",
+            e
+        ),
+    }
+}
