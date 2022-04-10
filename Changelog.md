@@ -40,6 +40,7 @@
   `Reader::into_underlying_reader()` to `Reader::into_inner()`
 - refactor: now `Attributes::next()` returns a new type `AttrError` when attribute parsing failed
   ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- test: properly test all paths of attributes parsing ([#4](https://github.com/Mingun/fast-xml/pull/4))
 
 ## 0.23.0-alpha3
 

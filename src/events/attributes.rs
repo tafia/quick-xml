@@ -572,76 +572,1459 @@ impl std::error::Error for AttrError {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Checks, how parsing of XML-style attributes works. Each attribute should
+/// have a value, enclosed in single or double quotes.
 #[cfg(test)]
-mod tests {
+mod xml {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn regular() {
-        let event = b"name a='a' b = 'b'";
-        let mut attributes = Attributes::new(event, 0);
-        attributes.with_checks(true);
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
-        assert_eq!(&*a.value, b"a");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
-        assert_eq!(&*a.value, b"b");
-        assert!(attributes.next().is_none());
+    /// Checked attribute is the single attribute
+    mod single {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::new(br#"tag key='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::new(br#"tag key="value""#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::new(br#"tag key=value"#, 3);
+            //                                 0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(8))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::new(br#"tag key"#, 3);
+            //                                 0      ^ = 7
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(7))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::new(br#"tag 'key'='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::new(br#"tag key&jey='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::new(br#"tag key="#, 3);
+            //                                 0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(8))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Checked attribute is the first attribute in the list of many attributes
+    mod first {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::new(br#"tag key='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::new(br#"tag key="value" regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::new(br#"tag key=value regular='attribute'"#, 3);
+            //                                 0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(8))));
+            // check error recovery
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::new(br#"tag key regular='attribute'"#, 3);
+            //                                 0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(8))));
+            // check error recovery
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::new(br#"tag 'key'='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::new(br#"tag key&jey='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`.
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::new(br#"tag key= regular='attribute'"#, 3);
+            //                                 0        ^ = 9
+
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
+            // Because we do not check validity of keys and values during parsing,
+            // "error='recovery'" is considered, as unquoted attribute value and
+            // skipped during recovery and iteration finished
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::new(br#"tag key= regular= 'attribute'"#, 3);
+            //                                 0        ^ = 9               ^ = 29
+
+            // In that case "regular=" considered as unquoted value
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
+            // In that case "'attribute'" considered as a key, because we do not check
+            // validity of key names
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(29))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::new(br#"tag key= regular ='attribute'"#, 3);
+            //                                 0        ^ = 9               ^ = 29
+
+            // In that case "regular" considered as unquoted value
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
+            // In that case "='attribute'" considered as a key, because we do not check
+            // validity of key names
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(29))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::new(br#"tag key= regular = 'attribute'"#, 3);
+            //                                 0        ^ = 9     ^ = 19     ^ = 30
+
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
+            // In that case second "=" considered as a key, because we do not check
+            // validity of key names
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(19))));
+            // In that case "'attribute'" considered as a key, because we do not check
+            // validity of key names
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(30))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Copy of single, but with additional spaces in markup
+    mod sparsed {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::new(br#"tag key = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::new(br#"tag key = "value" "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::new(br#"tag key = value "#, 3);
+            //                                 0         ^ = 10
+
+            assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(10))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::new(br#"tag key "#, 3);
+            //                                 0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(8))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::new(br#"tag 'key' = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::new(br#"tag key&jey = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::new(br#"tag key = "#, 3);
+            //                                 0         ^ = 10
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(10))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Checks that duplicated attributes correctly reported and recovering is
+    /// possible after that
+    mod duplicated {
+        use super::*;
+
+        mod with_check {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// Attribute have a value enclosed in single quotes
+            #[test]
+            fn single_quoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key='dup' another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value enclosed in double quotes
+            #[test]
+            fn double_quoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key="dup" another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value, not enclosed in quotes
+            #[test]
+            fn unquoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key=dup another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Only attribute key is present
+            #[test]
+            fn key_only() {
+                let mut iter = Attributes::new(br#"tag key='value' key another=''"#, 3);
+                //                                 0                   ^ = 20
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(20))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+        }
+
+        /// Check for duplicated names is disabled
+        mod without_check {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// Attribute have a value enclosed in single quotes
+            #[test]
+            fn single_quoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key='dup' another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"dup"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value enclosed in double quotes
+            #[test]
+            fn double_quoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key="dup" another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"dup"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value, not enclosed in quotes
+            #[test]
+            fn unquoted() {
+                let mut iter = Attributes::new(br#"tag key='value' key=dup another=''"#, 3);
+                //                                 0                   ^ = 20
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(20))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Only attribute key is present
+            #[test]
+            fn key_only() {
+                let mut iter = Attributes::new(br#"tag key='value' key another=''"#, 3);
+                //                                 0                   ^ = 20
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(20))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+        }
     }
 
     #[test]
     fn mixed_quote() {
-        let event = b"name a='a' b = \"b\" c='cc\"cc'";
-        let mut attributes = Attributes::new(event, 0);
-        attributes.with_checks(true);
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
-        assert_eq!(&*a.value, b"a");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
-        assert_eq!(&*a.value, b"b");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"c");
-        assert_eq!(&*a.value, b"cc\"cc");
-        assert!(attributes.next().is_none());
+        let mut iter = Attributes::new(br#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
+
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"a",
+                value: Cow::Borrowed(b"a"),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"b",
+                value: Cow::Borrowed(b"b"),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"c",
+                value: Cow::Borrowed(br#"cc"cc"#),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"d",
+                value: Cow::Borrowed(b"dd'dd"),
+            }))
+        );
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None);
+    }
+}
+
+/// Checks, how parsing of HTML-style attributes works. Each attribute can be
+/// in three forms:
+/// - XML-like: have a value, enclosed in single or double quotes
+/// - have a value, do not enclosed in quotes
+/// - without value, key only
+#[cfg(test)]
+mod html {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    /// Checked attribute is the single attribute
+    mod single {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::html(br#"tag key='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::html(br#"tag key="value""#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::html(br#"tag key=value"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::html(br#"tag key"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::html(br#"tag 'key'='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::html(br#"tag key&jey='value'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::html(br#"tag key="#, 3);
+            //                                  0       ^ = 8
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(8))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Checked attribute is the first attribute in the list of many attributes
+    mod first {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::html(br#"tag key='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::html(br#"tag key="value" regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::html(br#"tag key=value regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::html(br#"tag key regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::html(br#"tag 'key'='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::html(br#"tag key&jey='value' regular='attribute'"#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"regular",
+                    value: Cow::Borrowed(b"attribute"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::html(br#"tag key= regular='attribute'"#, 3);
+
+            // Because we do not check validity of keys and values during parsing,
+            // "regular='attribute'" is considered as unquoted attribute value
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"regular='attribute'"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::html(br#"tag key= regular= 'attribute'"#, 3);
+
+            // Because we do not check validity of keys and values during parsing,
+            // "regular=" is considered as unquoted attribute value
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"regular="),
+                }))
+            );
+            // Because we do not check validity of keys and values during parsing,
+            // "'attribute'" is considered as key-only attribute
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'attribute'",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::html(br#"tag key= regular ='attribute'"#, 3);
+
+            // Because we do not check validity of keys and values during parsing,
+            // "regular" is considered as unquoted attribute value
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"regular"),
+                }))
+            );
+            // Because we do not check validity of keys and values during parsing,
+            // "='attribute'" is considered as key-only attribute
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"='attribute'",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+
+            ////////////////////////////////////////////////////////////////////
+
+            let mut iter = Attributes::html(br#"tag key= regular = 'attribute'"#, 3);
+            //                                  0        ^ = 9     ^ = 19     ^ = 30
+
+            // Because we do not check validity of keys and values during parsing,
+            // "regular" is considered as unquoted attribute value
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"regular"),
+                }))
+            );
+            // Because we do not check validity of keys and values during parsing,
+            // "=" is considered as key-only attribute
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"=",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            // Because we do not check validity of keys and values during parsing,
+            // "'attribute'" is considered as key-only attribute
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'attribute'",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Copy of single, but with additional spaces in markup
+    mod sparsed {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Attribute have a value enclosed in single quotes
+        #[test]
+        fn single_quoted() {
+            let mut iter = Attributes::html(br#"tag key = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value enclosed in double quotes
+        #[test]
+        fn double_quoted() {
+            let mut iter = Attributes::html(br#"tag key = "value" "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute have a value, not enclosed in quotes
+        #[test]
+        fn unquoted() {
+            let mut iter = Attributes::html(br#"tag key = value "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Only attribute key is present
+        #[test]
+        fn key_only() {
+            let mut iter = Attributes::html(br#"tag key "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key",
+                    value: Cow::Borrowed(&[]),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key is started with an invalid symbol (a single quote in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_start_invalid() {
+            let mut iter = Attributes::html(br#"tag 'key' = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"'key'",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Key contains an invalid symbol (an ampersand in this test).
+        /// Because we do not check validity of keys and values during parsing,
+        /// that invalid attribute will be returned
+        #[test]
+        fn key_contains_invalid() {
+            let mut iter = Attributes::html(br#"tag key&jey = 'value' "#, 3);
+
+            assert_eq!(
+                iter.next(),
+                Some(Ok(Attribute {
+                    key: b"key&jey",
+                    value: Cow::Borrowed(b"value"),
+                }))
+            );
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+
+        /// Attribute value is missing after `=`
+        #[test]
+        fn missed_value() {
+            let mut iter = Attributes::html(br#"tag key = "#, 3);
+            //                                  0         ^ = 10
+
+            assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(10))));
+            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), None);
+        }
+    }
+
+    /// Checks that duplicated attributes correctly reported and recovering is
+    /// possible after that
+    mod duplicated {
+        use super::*;
+
+        mod with_check {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// Attribute have a value enclosed in single quotes
+            #[test]
+            fn single_quoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key='dup' another=''"#, 3);
+                //                                  0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value enclosed in double quotes
+            #[test]
+            fn double_quoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key="dup" another=''"#, 3);
+                //                                  0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value, not enclosed in quotes
+            #[test]
+            fn unquoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key=dup another=''"#, 3);
+                //                                  0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Only attribute key is present
+            #[test]
+            fn key_only() {
+                let mut iter = Attributes::html(br#"tag key='value' key another=''"#, 3);
+                //                                  0   ^ = 4       ^ = 16
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(iter.next(), Some(Err(AttrError::Duplicated(16, 4))));
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+        }
+
+        /// Check for duplicated names is disabled
+        mod without_check {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// Attribute have a value enclosed in single quotes
+            #[test]
+            fn single_quoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key='dup' another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"dup"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value enclosed in double quotes
+            #[test]
+            fn double_quoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key="dup" another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"dup"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Attribute have a value, not enclosed in quotes
+            #[test]
+            fn unquoted() {
+                let mut iter = Attributes::html(br#"tag key='value' key=dup another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"dup"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+
+            /// Only attribute key is present
+            #[test]
+            fn key_only() {
+                let mut iter = Attributes::html(br#"tag key='value' key another=''"#, 3);
+                iter.with_checks(false);
+
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(b"value"),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"key",
+                        value: Cow::Borrowed(&[]),
+                    }))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(Ok(Attribute {
+                        key: b"another",
+                        value: Cow::Borrowed(b""),
+                    }))
+                );
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next(), None);
+            }
+        }
     }
 
     #[test]
-    fn html_fail() {
-        let event = b"name a='a' b=b c";
-        let mut attributes = Attributes::new(event, 0);
-        attributes.with_checks(true);
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
-        assert_eq!(&*a.value, b"a");
-        assert!(attributes.next().unwrap().is_err());
-    }
+    fn mixed_quote() {
+        let mut iter = Attributes::html(br#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
 
-    #[test]
-    fn html_ok() {
-        let event = b"name a='a' e b=b c d ee=ee";
-        let mut attributes = Attributes::html(event, 0);
-        attributes.with_checks(true);
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"a");
-        assert_eq!(&*a.value, b"a");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"e");
-        assert_eq!(&*a.value, b"");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"b");
-        assert_eq!(&*a.value, b"b");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"c");
-        assert_eq!(&*a.value, b"");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"d");
-        assert_eq!(&*a.value, b"");
-        let a = attributes.next().unwrap().unwrap();
-        assert_eq!(a.key, b"ee");
-        assert_eq!(&*a.value, b"ee");
-        assert!(attributes.next().is_none());
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"a",
+                value: Cow::Borrowed(b"a"),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"b",
+                value: Cow::Borrowed(b"b"),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"c",
+                value: Cow::Borrowed(br#"cc"cc"#),
+            }))
+        );
+        assert_eq!(
+            iter.next(),
+            Some(Ok(Attribute {
+                key: b"d",
+                value: Cow::Borrowed(b"dd'dd"),
+            }))
+        );
+        assert_eq!(iter.next(), None);
+        assert_eq!(iter.next(), None);
     }
 }
