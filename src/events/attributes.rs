@@ -7,62 +7,6 @@ use crate::escape::{do_unescape, escape};
 use crate::reader::{is_whitespace, Reader};
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 
-/// Iterator over XML attributes.
-///
-/// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
-/// The duplicate check can be turned off by calling [`with_checks(false)`].
-///
-/// [`with_checks(false)`]: #method.with_checks
-#[derive(Clone, Debug)]
-pub struct Attributes<'a> {
-    /// slice of `Element` corresponding to attributes
-    bytes: &'a [u8],
-    /// current position of the iterator
-    pub(crate) position: usize,
-    /// if true, checks for duplicate names
-    with_checks: bool,
-    /// allows attribute without quote or `=`
-    html: bool,
-    /// if `with_checks`, contains the ranges corresponding to the
-    /// attribute names already parsed in this `Element`
-    consumed: Vec<Range<usize>>,
-}
-
-impl<'a> Attributes<'a> {
-    /// Creates a new attribute iterator from a buffer.
-    pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
-        Attributes {
-            bytes: buf,
-            position: pos,
-            html: false,
-            with_checks: true,
-            consumed: Vec::new(),
-        }
-    }
-
-    /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
-    pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
-        Attributes {
-            bytes: buf,
-            position: pos,
-            html: true,
-            with_checks: true,
-            consumed: Vec::new(),
-        }
-    }
-
-    /// Changes whether attributes should be checked for uniqueness.
-    ///
-    /// The XML specification requires attribute keys in the same element to be unique. This check
-    /// can be disabled to improve performance slightly.
-    ///
-    /// (`true` by default)
-    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
-        self.with_checks = val;
-        self
-    }
-}
-
 /// A struct representing a key/value XML attribute.
 ///
 /// Field `value` stores raw bytes, possibly containing escape-sequences. Most users will likely
@@ -330,6 +274,64 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
             key: val.0.as_bytes(),
             value: escape(val.1.as_bytes()),
         }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Iterator over XML attributes.
+///
+/// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
+/// The duplicate check can be turned off by calling [`with_checks(false)`].
+///
+/// [`with_checks(false)`]: #method.with_checks
+#[derive(Clone, Debug)]
+pub struct Attributes<'a> {
+    /// slice of `Element` corresponding to attributes
+    bytes: &'a [u8],
+    /// current position of the iterator
+    pub(crate) position: usize,
+    /// if true, checks for duplicate names
+    with_checks: bool,
+    /// allows attribute without quote or `=`
+    html: bool,
+    /// if `with_checks`, contains the ranges corresponding to the
+    /// attribute names already parsed in this `Element`
+    consumed: Vec<Range<usize>>,
+}
+
+impl<'a> Attributes<'a> {
+    /// Creates a new attribute iterator from a buffer.
+    pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
+        Attributes {
+            bytes: buf,
+            position: pos,
+            html: false,
+            with_checks: true,
+            consumed: Vec::new(),
+        }
+    }
+
+    /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
+    pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
+        Attributes {
+            bytes: buf,
+            position: pos,
+            html: true,
+            with_checks: true,
+            consumed: Vec::new(),
+        }
+    }
+
+    /// Changes whether attributes should be checked for uniqueness.
+    ///
+    /// The XML specification requires attribute keys in the same element to be unique. This check
+    /// can be disabled to improve performance slightly.
+    ///
+    /// (`true` by default)
+    pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
+        self.with_checks = val;
+        self
     }
 }
 
