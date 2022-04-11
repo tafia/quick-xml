@@ -27,13 +27,15 @@ pub enum Error {
     TextNotFound,
     /// `Event::XmlDecl` must start with *version* attribute
     XmlDeclWithoutVersion(Option<String>),
-    /// Attribute Name contains quote
+    /// Attribute Name contains quote, position relative to start of owning tag is provided
     NameWithQuote(usize),
-    /// Attribute key not followed by with `=`
+    /// Attribute key not followed by with `=`, position relative to start of owning tag is provided
     NoEqAfterName(usize),
-    /// Attribute value not quoted
+    /// Attribute value not quoted, position relative to start of owning tag is provided
     UnquotedValue(usize),
-    /// Duplicate attribute
+    /// Duplicate attribute, positions relative to start of owning tag is provided:
+    /// - position of the duplicate
+    /// - previous position
     DuplicatedAttribute(usize, usize),
     /// Escape error
     EscapeError(EscapeError),
@@ -73,7 +75,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Utf8(e) => write!(f, "UTF8 error: {}", e),
-            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}.", e),
+            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
             Error::EndEventMismatch { expected, found } => {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
             }
@@ -92,19 +94,19 @@ impl std::fmt::Display for Error {
             Error::NameWithQuote(e) => write!(
                 f,
                 "error while parsing attribute at position {}: \
-                 Attribute key cannot contain quote.",
+                 Attribute key cannot contain quote",
                 e
             ),
             Error::NoEqAfterName(e) => write!(
                 f,
                 "error while parsing attribute at position {}: \
-                 Attribute key must be directly followed by = or space",
+                 Attribute key must be directly followed by `=` or space",
                 e
             ),
             Error::UnquotedValue(e) => write!(
                 f,
                 "error while parsing attribute at position {}: \
-                 Attribute value must start with a quote.",
+                 Attribute value must start with a single or double quote",
                 e
             ),
             Error::DuplicatedAttribute(pos1, pos2) => write!(

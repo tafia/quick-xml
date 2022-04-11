@@ -161,7 +161,7 @@ fn sample_ns_short() {
 fn eof_1() {
     test(
         r#"<?xml"#,
-        r#"Error: Unexpected EOF during reading XmlDecl."#,
+        r#"Error: Unexpected EOF during reading XmlDecl"#,
         true,
     );
 }
@@ -170,7 +170,7 @@ fn eof_1() {
 fn bad_1() {
     test(
         r#"<?xml&.,"#,
-        r#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
+        r#"1:6 Error: Unexpected EOF during reading XmlDecl"#,
         true,
     );
 }
