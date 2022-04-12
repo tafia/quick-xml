@@ -2,7 +2,7 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result as XmlResult};
 use crate::escape::{do_unescape, escape};
 use crate::reader::{is_whitespace, Reader};
 use std::fmt::{Debug, Display, Formatter};
@@ -37,7 +37,7 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescaped_value_with_custom_entities()`](#method.unescaped_value_with_custom_entities)
-    pub fn unescaped_value(&self) -> Result<Cow<[u8]>> {
+    pub fn unescaped_value(&self) -> XmlResult<Cow<[u8]>> {
         self.make_unescaped_value(None)
     }
 
@@ -57,14 +57,14 @@ impl<'a> Attribute<'a> {
     pub fn unescaped_value_with_custom_entities(
         &self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<Cow<[u8]>> {
+    ) -> XmlResult<Cow<[u8]>> {
         self.make_unescaped_value(Some(custom_entities))
     }
 
     fn make_unescaped_value(
         &self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<[u8]>> {
+    ) -> XmlResult<Cow<[u8]>> {
         do_unescape(&*self.value, custom_entities).map_err(Error::EscapeError)
     }
 
@@ -78,7 +78,7 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
-    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> XmlResult<String> {
         self.do_unescape_and_decode_value(reader, None)
     }
 
@@ -100,7 +100,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         self.do_unescape_and_decode_value(reader, Some(custom_entities))
     }
 
@@ -110,7 +110,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         let decoded = reader.decode(&*self.value);
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
@@ -122,7 +122,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         let decoded = reader.decode(&*self.value)?;
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
@@ -140,7 +140,7 @@ impl<'a> Attribute<'a> {
     pub fn unescape_and_decode_without_bom<B: BufRead>(
         &self,
         reader: &mut Reader<B>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         self.do_unescape_and_decode_without_bom(reader, None)
     }
 
@@ -155,7 +155,7 @@ impl<'a> Attribute<'a> {
     pub fn unescape_and_decode_without_bom<B: BufRead>(
         &self,
         reader: &Reader<B>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         self.do_unescape_and_decode_without_bom(reader, None)
     }
 
@@ -175,7 +175,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &mut Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
     }
 
@@ -195,7 +195,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
     }
 
@@ -204,7 +204,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &mut Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         let decoded = reader.decode_without_bom(&*self.value);
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
@@ -216,7 +216,7 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+    ) -> XmlResult<String> {
         let decoded = reader.decode_without_bom(&*self.value)?;
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
@@ -337,7 +337,8 @@ impl<'a> Attributes<'a> {
 }
 
 impl<'a> Iterator for Attributes<'a> {
-    type Item = Result<Attribute<'a>>;
+    type Item = Result<Attribute<'a>, AttrError>;
+
     fn next(&mut self) -> Option<Self::Item> {
         let len = self.bytes.len();
 

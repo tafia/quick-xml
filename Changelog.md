@@ -38,6 +38,8 @@
   ([quick-xml#311](https://github.com/tafia/quick-xml/issues/311))
 - feat: add `Reader::get_ref()` and `Reader::get_mut()`, rename
   `Reader::into_underlying_reader()` to `Reader::into_inner()`
+- refactor: now `Attributes::next()` returns a new type `AttrError` when attribute parsing failed
+  ([#4](https://github.com/Mingun/fast-xml/pull/4))
 
 ## 0.23.0-alpha3
 

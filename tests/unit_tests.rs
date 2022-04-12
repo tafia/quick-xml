@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::io::Cursor;
 use std::str::from_utf8;
 
+use fast_xml::events::attributes::{AttrError, Attribute};
 use fast_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use fast_xml::{events::Event::*, Reader, Result, Writer};
 
@@ -314,6 +316,8 @@ fn test_write_empty_element_attrs() -> Result<()> {
 
 #[test]
 fn test_write_attrs() -> Result<()> {
+    type AttrResult<T> = std::result::Result<T, AttrError>;
+
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
@@ -324,7 +328,7 @@ fn test_write_attrs() -> Result<()> {
         let event = match reader.read_event(&mut buf)? {
             Eof => break,
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<Result<Vec<_>>>()?;
+                let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
                 elem.extend_attributes(attrs);
@@ -671,15 +675,21 @@ fn test_closing_bracket_in_single_quote_attr() {
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), ">".as_bytes()).into()),
-                x => panic!("expected attribute 'attr', got {:?}", x),
-            }
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "2".as_bytes()).into()),
-                x => panic!("expected attribute 'check', got {:?}", x),
-            }
-            assert!(attrs.next().is_none(), "expected only two attributes");
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"attr",
+                    value: Cow::Borrowed(b">"),
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"check",
+                    value: Cow::Borrowed(b"2"),
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
@@ -694,15 +704,21 @@ fn test_closing_bracket_in_double_quote_attr() {
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), ">".as_bytes()).into()),
-                x => panic!("expected attribute 'attr', got {:?}", x),
-            }
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "2".as_bytes()).into()),
-                x => panic!("expected attribute 'check', got {:?}", x),
-            }
-            assert!(attrs.next().is_none(), "expected only two attributes");
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"attr",
+                    value: Cow::Borrowed(b">"),
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"check",
+                    value: Cow::Borrowed(b"2"),
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
@@ -717,15 +733,21 @@ fn test_closing_bracket_in_double_quote_mixed() {
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), "'>'".as_bytes()).into()),
-                x => panic!("expected attribute 'attr', got {:?}", x),
-            }
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check".as_ref(), "'2'".as_bytes()).into()),
-                x => panic!("expected attribute 'check', got {:?}", x),
-            }
-            assert!(attrs.next().is_none(), "expected only two attributes");
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"attr",
+                    value: Cow::Borrowed(b"'>'"),
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"check",
+                    value: Cow::Borrowed(b"'2'"),
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
@@ -740,15 +762,21 @@ fn test_closing_bracket_in_single_quote_mixed() {
     match r.read_event(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("attr".as_bytes(), "\">\"".as_bytes()).into()),
-                x => panic!("expected attribute 'attr', got {:?}", x),
-            }
-            match attrs.next() {
-                Some(Ok(attr)) => assert_eq!(attr, ("check".as_bytes(), "\"2\"".as_bytes()).into()),
-                x => panic!("expected attribute 'check', got {:?}", x),
-            }
-            assert!(attrs.next().is_none(), "expected only two attributes");
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"attr",
+                    value: Cow::Borrowed(br#"">""#),
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
+                Some(Ok(Attribute {
+                    key: b"check",
+                    value: Cow::Borrowed(br#""2""#),
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }

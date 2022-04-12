@@ -456,7 +456,7 @@ impl<'a> BytesDecl<'a> {
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes
-            Some(Err(e)) => Err(e),
+            Some(Err(e)) => Err(e.into()),
             // no attributes
             None => Err(Error::XmlDeclWithoutVersion(None)),
         }

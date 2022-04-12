@@ -219,4 +219,11 @@ pub mod serialize {
             DeError::Float(e)
         }
     }
+
+    impl From<AttrError> for DeError {
+        #[inline]
+        fn from(e: AttrError) -> Self {
+            DeError::Xml(e.into())
+        }
+    }
 }
