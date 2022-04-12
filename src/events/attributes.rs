@@ -5,6 +5,7 @@
 use crate::errors::{Error, Result};
 use crate::escape::{do_unescape, escape};
 use crate::reader::{is_whitespace, Reader};
+use std::fmt::{Debug, Display, Formatter};
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 
 /// A struct representing a key/value XML attribute.
@@ -223,8 +224,8 @@ impl<'a> Attribute<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for Attribute<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a> Debug for Attribute<'a> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         use crate::utils::{write_byte_string, write_cow_string};
 
         write!(f, "Attribute {{ key: ")?;
@@ -394,12 +395,12 @@ impl<'a> Iterator for Attributes<'a> {
                         self.position = j - 1;
                         return attr!(start_key..i, 0..0);
                     }
-                    Some((j, _)) => err!(Error::NoEqAfterName(j)),
+                    Some((j, _)) => err!(AttrError::ExpectedEq(j)),
                     None if self.html => {
                         self.position = len;
                         return attr!(start_key..len, 0..0);
                     }
-                    None => err!(Error::NoEqAfterName(len)),
+                    None => err!(AttrError::ExpectedEq(len)),
                 }
             }
             None => return attr!(start_key..len),
@@ -413,7 +414,7 @@ impl<'a> Iterator for Attributes<'a> {
                 .find(|r| self.bytes[(*r).clone()] == self.bytes[start_key..end_key])
                 .map(|ref r| r.start)
             {
-                err!(Error::DuplicatedAttribute(start_key, start));
+                err!(AttrError::Duplicated(start_key, start));
             }
             self.consumed.push(start_key..end_key);
         }
@@ -426,7 +427,7 @@ impl<'a> Iterator for Attributes<'a> {
                         self.position = j + 1;
                         return attr!(start_key..end_key, i + 1..j);
                     }
-                    None => err!(Error::UnquotedValue(i)),
+                    None => err!(AttrError::UnquotedValue(i)),
                 }
             }
             Some((i, _)) if self.html => {
@@ -437,11 +438,138 @@ impl<'a> Iterator for Attributes<'a> {
                 self.position = j;
                 return attr!(start_key..end_key, i..j);
             }
-            Some((i, _)) => err!(Error::UnquotedValue(i)),
+            Some((i, _)) => err!(AttrError::UnquotedValue(i)),
             None => return attr!(start_key..end_key),
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Errors that can be raised during parsing attributes.
+///
+/// Recovery position in examples shows the position from which parsing of the
+/// next attribute will be attempted.
+#[derive(Debug, PartialEq)]
+pub enum AttrError {
+    /// Attribute key was not followed by `=`, position relative to the start of
+    /// the owning tag is provided.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag key another="attribute"/>
+    /// <!--     ^~~ error position, recovery position (8) -->
+    /// ```
+    ///
+    /// This error can be raised only when the iterator is in XML mode.
+    ExpectedEq(usize),
+    /// Attribute value was not found after `=`, position relative to the start
+    /// of the owning tag is provided.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag key = />
+    /// <!--       ^~~ error position, recovery position (10) -->
+    /// ```
+    ///
+    /// This error can be returned only for the last attribute in the list,
+    /// because otherwise any content after `=` will be threated as a value.
+    /// The XML
+    ///
+    /// ```xml
+    /// <tag key = another-key = "value"/>
+    /// <!--                   ^ ^- recovery position (24) -->
+    /// <!--                   '~~ error position (22) -->
+    /// ```
+    ///
+    /// will be treated as `Attribute { key = b"key", value = b"another-key" }`
+    /// and or [`Attribute`] is returned, or [`AttrError::UnquotedValue`] is raised,
+    /// depending on the parsing mode.
+    ExpectedValue(usize),
+    /// Attribute value is not quoted, position relative to the start of the
+    /// owning tag is provided.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag key = value />
+    /// <!--       ^    ^~~ recovery position (15) -->
+    /// <!--       '~~ error position (10) -->
+    /// ```
+    ///
+    /// This error can be raised only when the iterator is in XML mode.
+    UnquotedValue(usize),
+    /// Attribute value was not finished with a matching quote, position relative
+    /// to the start of owning tag and a quote is provided. That position is always
+    /// a last character in the tag content.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag key = "value  />
+    /// <tag key = 'value  />
+    /// <!--               ^~~ error position, recovery position (18) -->
+    /// ```
+    ///
+    /// This error can be returned only for the last attribute in the list,
+    /// because all input was consumed during scanning for a quote.
+    ExpectedQuote(usize, u8),
+    /// An attribute with the same name was already encountered. Two parameters
+    /// define (1) the error position relative to the start of the owning tag
+    /// for a new attribute and (2) the start position of a previously encountered
+    /// attribute with the same name.
+    ///
+    /// Example of input that raises this error:
+    ///
+    /// ```xml
+    /// <tag key = 'value'  key="value2" attr3='value3' />
+    /// <!-- ^              ^            ^~~ recovery position (32) -->
+    /// <!-- |              '~~ error position (19) -->
+    /// <!-- '~~ previous position (4) -->
+    /// ```
+    ///
+    /// This error is returned only when [`Attributes::with_checks()`] is set
+    /// to `true` (that is default behavior).
+    Duplicated(usize, usize),
+}
+
+impl Display for AttrError {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::ExpectedEq(pos) => write!(
+                f,
+                r#"position {}: attribute key must be directly followed by `=` or space"#,
+                pos
+            ),
+            Self::ExpectedValue(pos) => write!(
+                f,
+                r#"position {}: `=` must be followed by an attribute value"#,
+                pos
+            ),
+            Self::UnquotedValue(pos) => write!(
+                f,
+                r#"position {}: attribute value must be enclosed in `"` or `'`"#,
+                pos
+            ),
+            Self::ExpectedQuote(pos, quote) => write!(
+                f,
+                r#"position {}: missing closing quote `{}` in attribute value"#,
+                pos, *quote as char
+            ),
+            Self::Duplicated(pos1, pos2) => write!(
+                f,
+                r#"position {}: duplicated attribute, previous declaration at position {}"#,
+                pos1, pos2
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AttrError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod tests {

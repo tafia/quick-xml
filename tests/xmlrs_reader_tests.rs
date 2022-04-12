@@ -227,8 +227,8 @@ fn issue_83_duplicate_attributes() {
         r#"<hello><some-tag a='10' a="20"/></hello>"#,
         "
             |StartElement(hello)
-            |1:30 EmptyElement(some-tag, attr-error: error while parsing \
-                  attribute at position 16: Duplicate attribute at position 9 and 16)
+            |1:30 EmptyElement(some-tag, attr-error: error while parsing attribute: \
+                  position 16: duplicated attribute, previous declaration at position 9)
             |EndElement(hello)
             |EndDocument
         ",

@@ -1,6 +1,7 @@
 //! Error management module
 
 use crate::escape::EscapeError;
+use crate::events::attributes::AttrError;
 use std::str::Utf8Error;
 
 /// The error type used by this crate.
@@ -27,14 +28,8 @@ pub enum Error {
     TextNotFound,
     /// `Event::XmlDecl` must start with *version* attribute
     XmlDeclWithoutVersion(Option<String>),
-    /// Attribute key not followed by with `=`, position relative to start of owning tag is provided
-    NoEqAfterName(usize),
-    /// Attribute value not quoted, position relative to start of owning tag is provided
-    UnquotedValue(usize),
-    /// Duplicate attribute, positions relative to start of owning tag is provided:
-    /// - position of the duplicate
-    /// - previous position
-    DuplicatedAttribute(usize, usize),
+    /// Attribute parsing error
+    InvalidAttr(AttrError),
     /// Escape error
     EscapeError(EscapeError),
 }
@@ -60,6 +55,13 @@ impl From<EscapeError> for Error {
     #[inline]
     fn from(error: EscapeError) -> Error {
         Error::EscapeError(error)
+    }
+}
+
+impl From<AttrError> for Error {
+    #[inline]
+    fn from(error: AttrError) -> Self {
+        Error::InvalidAttr(error)
     }
 }
 
@@ -89,24 +91,7 @@ impl std::fmt::Display for Error {
                 "XmlDecl must start with 'version' attribute, found {:?}",
                 e
             ),
-            Error::NoEqAfterName(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute key must be directly followed by `=` or space",
-                e
-            ),
-            Error::UnquotedValue(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute value must start with a single or double quote",
-                e
-            ),
-            Error::DuplicatedAttribute(pos1, pos2) => write!(
-                f,
-                "error while parsing attribute at position {0}: \
-                 Duplicate attribute at position {1} and {0}",
-                pos1, pos2
-            ),
+            Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
         }
     }
@@ -117,6 +102,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(e) => Some(e),
             Error::Utf8(e) => Some(e),
+            Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
             _ => None,
         }
