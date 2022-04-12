@@ -4,11 +4,12 @@ use crate::{
     de::escape::EscapedDeserializer,
     de::{DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
-    events::attributes::Attribute,
+    events::attributes::IterState,
     events::BytesStart,
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use std::borrow::Cow;
+use std::ops::Range;
 
 /// Representing state of the `MapAccess` accessor.
 enum State {
@@ -17,7 +18,7 @@ enum State {
     Empty,
     /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
     /// Next call to the `next_value_seed` will deserialize type from the attribute value
-    Attribute,
+    Attribute(Range<usize>),
     /// The same as `InnerValue`
     Nested,
     /// Value should be deserialized from the text content of the XML node:
@@ -41,7 +42,7 @@ where
     /// do not store reference to `Attributes` itself but instead create
     /// a new object on each advance of `Attributes` iterator, so we need
     /// to restore last position before advance.
-    position: usize,
+    iter: IterState,
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
     state: State,
@@ -59,11 +60,10 @@ where
         start: BytesStart<'de>,
         fields: &[&'static str],
     ) -> Result<Self, DeError> {
-        let position = start.attributes().position;
         Ok(MapAccess {
             de,
             start,
-            position,
+            iter: IterState::new(0, false),
             state: State::Empty,
             unflatten_fields: fields
                 .iter()
@@ -71,14 +71,6 @@ where
                 .map(|f| f.as_bytes())
                 .collect(),
         })
-    }
-
-    fn next_attr(&mut self) -> Result<Option<Attribute>, DeError> {
-        let mut attributes = self.start.attributes();
-        attributes.position = self.position;
-        let next_att = attributes.next().transpose()?;
-        self.position = attributes.position;
-        Ok(next_att)
     }
 }
 
@@ -92,16 +84,17 @@ where
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Self::Error> {
+        // FIXME: There error positions counted from end of tag name - need global position
+        let slice = self.start.attributes_raw();
         let decoder = self.de.reader.decoder();
         let has_value_field = self.de.has_value_field;
 
-        let mut attributes = self.start.attributes();
-        attributes.position = self.position;
-        if let Some(a) = attributes.next().transpose()? {
+        if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
-            self.state = State::Attribute;
+            let (key, value) = a.into();
+            self.state = State::Attribute(value.unwrap_or_default());
             seed.deserialize(EscapedDeserializer::new(
-                Cow::Borrowed(a.key),
+                Cow::Borrowed(&slice[key]),
                 decoder,
                 false,
             ))
@@ -172,13 +165,15 @@ where
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.state, State::Empty) {
-            State::Attribute => {
+            State::Attribute(value) => {
+                let slice = self.start.attributes_raw();
                 let decoder = self.de.reader.decoder();
-                match self.next_attr()? {
-                    Some(a) => seed.deserialize(EscapedDeserializer::new(a.value, decoder, true)),
-                    // We set `Attribute` state only when we are sure that `next_attr()` returns a value
-                    None => unreachable!(),
-                }
+
+                seed.deserialize(EscapedDeserializer::new(
+                    Cow::Borrowed(&slice[value]),
+                    decoder,
+                    true,
+                ))
             }
             State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
             State::Empty => Err(DeError::EndOfAttributes),

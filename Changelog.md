@@ -41,6 +41,9 @@
 - refactor: now `Attributes::next()` returns a new type `AttrError` when attribute parsing failed
   ([#4](https://github.com/Mingun/fast-xml/pull/4))
 - test: properly test all paths of attributes parsing ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- feat: attribute iterator now implements `FusedIterator` ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- fix: fixed many errors in attribute parsing using iterator, returned from `attributes()`
+  or `html_attributes()` ([#4](https://github.com/Mingun/fast-xml/pull/4))
 
 ## 0.23.0-alpha3
 

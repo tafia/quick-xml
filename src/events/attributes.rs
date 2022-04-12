@@ -5,7 +5,9 @@
 use crate::errors::{Error, Result as XmlResult};
 use crate::escape::{do_unescape, escape};
 use crate::reader::{is_whitespace, Reader};
-use std::fmt::{Debug, Display, Formatter};
+use crate::utils::{write_byte_string, write_cow_string, Bytes};
+use std::fmt::{self, Debug, Display, Formatter};
+use std::iter::FusedIterator;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
 
 /// A struct representing a key/value XML attribute.
@@ -225,9 +227,7 @@ impl<'a> Attribute<'a> {
 }
 
 impl<'a> Debug for Attribute<'a> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        use crate::utils::{write_byte_string, write_cow_string};
-
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "Attribute {{ key: ")?;
         write_byte_string(f, self.key)?;
         write!(f, ", value: ")?;
@@ -278,6 +278,16 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     }
 }
 
+impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
+    #[inline]
+    fn from(attr: Attr<&'a [u8]>) -> Self {
+        Self {
+            key: attr.key(),
+            value: Cow::Borrowed(attr.value()),
+        }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Iterator over XML attributes.
@@ -290,37 +300,24 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
     bytes: &'a [u8],
-    /// current position of the iterator
-    pub(crate) position: usize,
-    /// if true, checks for duplicate names
-    with_checks: bool,
-    /// allows attribute without quote or `=`
-    html: bool,
-    /// if `with_checks`, contains the ranges corresponding to the
-    /// attribute names already parsed in this `Element`
-    consumed: Vec<Range<usize>>,
+    /// Iterator state, independent from the actual source of bytes
+    state: IterState,
 }
 
 impl<'a> Attributes<'a> {
     /// Creates a new attribute iterator from a buffer.
-    pub fn new(buf: &'a [u8], pos: usize) -> Attributes<'a> {
-        Attributes {
+    pub fn new(buf: &'a [u8], pos: usize) -> Self {
+        Self {
             bytes: buf,
-            position: pos,
-            html: false,
-            with_checks: true,
-            consumed: Vec::new(),
+            state: IterState::new(pos, false),
         }
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
-    pub fn html(buf: &'a [u8], pos: usize) -> Attributes<'a> {
-        Attributes {
+    pub fn html(buf: &'a [u8], pos: usize) -> Self {
+        Self {
             bytes: buf,
-            position: pos,
-            html: true,
-            with_checks: true,
-            consumed: Vec::new(),
+            state: IterState::new(pos, true),
         }
     }
 
@@ -331,7 +328,7 @@ impl<'a> Attributes<'a> {
     ///
     /// (`true` by default)
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
-        self.with_checks = val;
+        self.state.check_duplicates = val;
         self
     }
 }
@@ -339,111 +336,17 @@ impl<'a> Attributes<'a> {
 impl<'a> Iterator for Attributes<'a> {
     type Item = Result<Attribute<'a>, AttrError>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let len = self.bytes.len();
-
-        macro_rules! err {
-            ($err:expr) => {{
-                self.position = len;
-                return Some(Err($err.into()));
-            }};
-        }
-
-        macro_rules! attr {
-            ($key:expr) => {{
-                self.position = len;
-                if self.html {
-                    attr!($key, 0..0)
-                } else {
-                    None
-                }
-            }};
-            ($key:expr, $val:expr) => {
-                Some(Ok(Attribute {
-                    key: &self.bytes[$key],
-                    value: Cow::Borrowed(&self.bytes[$val]),
-                }))
-            };
-        }
-
-        if len <= self.position {
-            return None;
-        }
-
-        let mut bytes = self.bytes.iter().enumerate().skip(self.position);
-
-        // key starts after the whitespace
-        let start_key = match bytes
-            .by_ref()
-            .skip_while(|&(_, &b)| !is_whitespace(b))
-            .find(|&(_, &b)| !is_whitespace(b))
-        {
-            Some((i, _)) => i,
-            None => return attr!(self.position..len),
-        };
-
-        // key ends with either whitespace or =
-        let end_key = match bytes
-            .by_ref()
-            .find(|&(_, &b)| b == b'=' || is_whitespace(b))
-        {
-            Some((i, &b'=')) => i,
-            Some((i, _)) => {
-                // consume until `=` or return if html
-                match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
-                    Some((_, &b'=')) => i,
-                    Some((j, _)) if self.html => {
-                        self.position = j - 1;
-                        return attr!(start_key..i, 0..0);
-                    }
-                    Some((j, _)) => err!(AttrError::ExpectedEq(j)),
-                    None if self.html => {
-                        self.position = len;
-                        return attr!(start_key..len, 0..0);
-                    }
-                    None => err!(AttrError::ExpectedEq(len)),
-                }
-            }
-            None => return attr!(start_key..len),
-        };
-
-        if self.with_checks {
-            if let Some(start) = self
-                .consumed
-                .iter()
-                .filter(|r| r.len() == end_key - start_key)
-                .find(|r| self.bytes[(*r).clone()] == self.bytes[start_key..end_key])
-                .map(|ref r| r.start)
-            {
-                err!(AttrError::Duplicated(start_key, start));
-            }
-            self.consumed.push(start_key..end_key);
-        }
-
-        // value has quote if not html
-        match bytes.by_ref().find(|&(_, &b)| !is_whitespace(b)) {
-            Some((i, quote @ &b'\'')) | Some((i, quote @ &b'"')) => {
-                match bytes.by_ref().find(|&(_, &b)| b == *quote) {
-                    Some((j, _)) => {
-                        self.position = j + 1;
-                        return attr!(start_key..end_key, i + 1..j);
-                    }
-                    None => err!(AttrError::UnquotedValue(i)),
-                }
-            }
-            Some((i, _)) if self.html => {
-                let j = bytes
-                    .by_ref()
-                    .find(|&(_, &b)| is_whitespace(b))
-                    .map_or(len, |(j, _)| j);
-                self.position = j;
-                return attr!(start_key..end_key, i..j);
-            }
-            Some((i, _)) => err!(AttrError::UnquotedValue(i)),
-            None => return attr!(start_key..end_key),
+        match self.state.next(self.bytes) {
+            None => None,
+            Some(Ok(a)) => Some(Ok(a.map(|range| &self.bytes[range]).into())),
+            Some(Err(e)) => Some(Err(e)),
         }
     }
 }
+
+impl<'a> FusedIterator for Attributes<'a> {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -537,7 +440,7 @@ pub enum AttrError {
 }
 
 impl Display for AttrError {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::ExpectedEq(pos) => write!(
                 f,
@@ -569,6 +472,428 @@ impl Display for AttrError {
 }
 
 impl std::error::Error for AttrError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A struct representing a key/value XML or HTML [attribute].
+///
+/// [attribute]: https://www.w3.org/TR/xml11/#NT-Attribute
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Attr<T> {
+    /// Attribute with value enclosed in double quotes (`"`). Attribute key and
+    /// value provided. This is a canonical XML-style attribute.
+    DoubleQ(T, T),
+    /// Attribute with value enclosed in single quotes (`'`). Attribute key and
+    /// value provided. This is an XML-style attribute.
+    SingleQ(T, T),
+    /// Attribute with value not enclosed in quotes. Attribute key and value
+    /// provided. This is HTML-style attribute, it can be returned in HTML-mode
+    /// parsing only. In an XML mode [`AttrError::UnquotedValue`] will be raised
+    /// instead.
+    ///
+    /// Attribute value can be invalid according to the [HTML specification],
+    /// in particular, it can contain `"`, `'`, `=`, `<`, and <code>&#96;</code>
+    /// characters. The absence of the `>` character is nevertheless guaranteed,
+    /// since the parser extracts [events] based on them even before the start
+    /// of parsing attributes.
+    ///
+    /// [HTML specification]: https://html.spec.whatwg.org/#unquoted
+    /// [events]: crate::events::Event::Start
+    Unquoted(T, T),
+    /// Attribute without value. Attribute key provided. This is HTML-style attribute,
+    /// it can be returned in HTML-mode parsing only. In XML mode
+    /// [`AttrError::ExpectedEq`] will be raised instead.
+    Empty(T),
+}
+
+impl<T> Attr<T> {
+    /// Maps an `Attr<T>` to `Attr<U>` by applying a function to a contained key and value.
+    #[inline]
+    pub fn map<U, F>(self, mut f: F) -> Attr<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        match self {
+            Attr::DoubleQ(key, value) => Attr::DoubleQ(f(key), f(value)),
+            Attr::SingleQ(key, value) => Attr::SingleQ(f(key), f(value)),
+            Attr::Empty(key) => Attr::Empty(f(key)),
+            Attr::Unquoted(key, value) => Attr::Unquoted(f(key), f(value)),
+        }
+    }
+}
+
+impl<'a> Attr<&'a [u8]> {
+    /// Returns the key value
+    #[inline]
+    pub fn key(&self) -> &'a [u8] {
+        match self {
+            Attr::DoubleQ(key, _) => key,
+            Attr::SingleQ(key, _) => key,
+            Attr::Empty(key) => key,
+            Attr::Unquoted(key, _) => key,
+        }
+    }
+    /// Returns the attribute value. For [`Self::Empty`] variant an empty slice
+    /// is returned according to the [HTML specification].
+    ///
+    /// [HTML specification]: https://www.w3.org/TR/2012/WD-html-markup-20120329/syntax.html#syntax-attr-empty
+    #[inline]
+    pub fn value(&self) -> &'a [u8] {
+        match self {
+            Attr::DoubleQ(_, value) => value,
+            Attr::SingleQ(_, value) => value,
+            Attr::Empty(_) => &[],
+            Attr::Unquoted(_, value) => value,
+        }
+    }
+}
+
+impl<T: AsRef<[u8]>> Debug for Attr<T> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Attr::DoubleQ(key, value) => f
+                .debug_tuple("Attr::DoubleQ")
+                .field(&Bytes(key.as_ref()))
+                .field(&Bytes(value.as_ref()))
+                .finish(),
+            Attr::SingleQ(key, value) => f
+                .debug_tuple("Attr::SingleQ")
+                .field(&Bytes(key.as_ref()))
+                .field(&Bytes(value.as_ref()))
+                .finish(),
+            Attr::Empty(key) => f
+                .debug_tuple("Attr::Empty")
+                // Comment to prevent formatting and keep style consistent
+                .field(&Bytes(key.as_ref()))
+                .finish(),
+            Attr::Unquoted(key, value) => f
+                .debug_tuple("Attr::Unquoted")
+                .field(&Bytes(key.as_ref()))
+                .field(&Bytes(value.as_ref()))
+                .finish(),
+        }
+    }
+}
+
+/// Unpacks attribute key and value into tuple of this two elements.
+/// `None` value element is returned only for [`Attr::Empty`] variant.
+impl<T> From<Attr<T>> for (T, Option<T>) {
+    #[inline]
+    fn from(attr: Attr<T>) -> Self {
+        match attr {
+            Attr::DoubleQ(key, value) => (key, Some(value)),
+            Attr::SingleQ(key, value) => (key, Some(value)),
+            Attr::Empty(key) => (key, None),
+            Attr::Unquoted(key, value) => (key, Some(value)),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+type AttrResult = Result<Attr<Range<usize>>, AttrError>;
+
+#[derive(Clone, Copy, Debug)]
+enum State {
+    /// Iteration finished, iterator will return `None` to all [`IterState::next`]
+    /// requests.
+    Done,
+    /// The last attribute returned was deserialized successfully. Contains an
+    /// offset from which next attribute should be searched.
+    Next(usize),
+    /// The last attribute returns [`AttrError::UnquotedValue`], offset pointed
+    /// to the beginning of the value. Recover should skip a value
+    SkipValue(usize),
+    /// The last attribute returns [`AttrError::Duplicated`], offset pointed to
+    /// the equal (`=`) sign. Recover should skip it and a value
+    SkipEqValue(usize),
+}
+
+/// External iterator over spans of attribute key and value
+#[derive(Clone, Debug)]
+pub(crate) struct IterState {
+    /// Iteration state that determines what actions should be done before the
+    /// actual parsing of the next attribute
+    state: State,
+    /// If `true`, enables ability to parse unquoted values and key-only (empty)
+    /// attributes
+    html: bool,
+    /// If `true`, checks for duplicate names
+    check_duplicates: bool,
+    /// If `check_duplicates` is set, contains the ranges of already parsed attribute
+    /// names. We store a ranges instead of slices to able to report a previous
+    /// attribute position
+    keys: Vec<Range<usize>>,
+}
+
+impl IterState {
+    pub fn new(offset: usize, html: bool) -> Self {
+        Self {
+            state: State::Next(offset),
+            html,
+            check_duplicates: true,
+            keys: Vec::new(),
+        }
+    }
+
+    /// Recover from an error that could have been made on a previous step.
+    /// Returns an offset from which parsing should continue.
+    /// If there no input left, returns `None`.
+    fn recover(&self, slice: &[u8]) -> Option<usize> {
+        match self.state {
+            State::Done => None,
+            State::Next(offset) => Some(offset),
+            State::SkipValue(offset) => self.skip_value(slice, offset),
+            State::SkipEqValue(offset) => self.skip_eq_value(slice, offset),
+        }
+    }
+
+    /// Skip all characters up to first space symbol or end-of-input
+    #[inline]
+    fn skip_value(&self, slice: &[u8], offset: usize) -> Option<usize> {
+        let mut iter = (offset..).zip(slice[offset..].iter());
+
+        match iter.find(|(_, &b)| is_whitespace(b)) {
+            // Input: `    key  =  value `
+            //                     |    ^
+            //                offset    e
+            Some((e, _)) => Some(e),
+            // Input: `    key  =  value`
+            //                     |    ^
+            //                offset    e = len()
+            None => None,
+        }
+    }
+
+    /// Skip all characters up to first space symbol or end-of-input
+    #[inline]
+    fn skip_eq_value(&self, slice: &[u8], offset: usize) -> Option<usize> {
+        let mut iter = (offset..).zip(slice[offset..].iter());
+
+        // Skip all up to the quote and get the quote type
+        let quote = match iter.find(|(_, &b)| !is_whitespace(b)) {
+            // Input: `    key  =  "`
+            //                  |  ^
+            //             offset
+            Some((_, b'"')) => b'"',
+            // Input: `    key  =  '`
+            //                  |  ^
+            //             offset
+            Some((_, b'\'')) => b'\'',
+
+            // Input: `    key  =  x`
+            //                  |  ^
+            //             offset
+            Some((offset, _)) => return self.skip_value(slice, offset),
+            // Input: `    key  =  `
+            //                  |  ^
+            //             offset
+            None => return None,
+        };
+
+        match iter.find(|(_, &b)| b == quote) {
+            // Input: `    key  =  "   "`
+            //                         ^
+            Some((e, b'"')) => Some(e),
+            // Input: `    key  =  '   '`
+            //                         ^
+            Some((e, _)) => Some(e),
+
+            // Input: `    key  =  "   `
+            // Input: `    key  =  '   `
+            //                         ^
+            // Closing quote not found
+            None => None,
+        }
+    }
+
+    #[inline]
+    fn check_for_duplicates(
+        &mut self,
+        slice: &[u8],
+        key: Range<usize>,
+    ) -> Result<Range<usize>, AttrError> {
+        if self.check_duplicates {
+            if let Some(prev) = self
+                .keys
+                .iter()
+                .find(|r| slice[(*r).clone()] == slice[key.clone()])
+            {
+                return Err(AttrError::Duplicated(key.start, prev.start));
+            }
+            self.keys.push(key.clone());
+        }
+        Ok(key)
+    }
+
+    /// # Parameters
+    ///
+    /// - `slice`: content of the tag, used for checking for duplicates
+    /// - `key`: Range of key in slice, if iterator in HTML mode
+    /// - `offset`: Position of error if iterator in XML mode
+    #[inline]
+    fn key_only(&mut self, slice: &[u8], key: Range<usize>, offset: usize) -> Option<AttrResult> {
+        Some(if self.html {
+            self.check_for_duplicates(slice, key).map(Attr::Empty)
+        } else {
+            Err(AttrError::ExpectedEq(offset))
+        })
+    }
+
+    #[inline]
+    fn double_q(&mut self, key: Range<usize>, value: Range<usize>) -> Option<AttrResult> {
+        self.state = State::Next(value.end + 1); // +1 for `"`
+
+        Some(Ok(Attr::DoubleQ(key, value)))
+    }
+
+    #[inline]
+    fn single_q(&mut self, key: Range<usize>, value: Range<usize>) -> Option<AttrResult> {
+        self.state = State::Next(value.end + 1); // +1 for `'`
+
+        Some(Ok(Attr::SingleQ(key, value)))
+    }
+
+    pub fn next(&mut self, slice: &[u8]) -> Option<AttrResult> {
+        let mut iter = match self.recover(slice) {
+            Some(offset) => (offset..).zip(slice[offset..].iter()),
+            None => return None,
+        };
+
+        // Index where next key started
+        let start_key = match iter.find(|(_, &b)| !is_whitespace(b)) {
+            // Input: `    key`
+            //             ^
+            Some((s, _)) => s,
+            // Input: `    `
+            //             ^
+            None => {
+                // Because we reach end-of-input, stop iteration on next call
+                self.state = State::Done;
+                return None;
+            }
+        };
+        // Span of a key
+        let (key, offset) = match iter.find(|(_, &b)| b == b'=' || is_whitespace(b)) {
+            // Input: `    key=`
+            //             |  ^
+            //             s  e
+            Some((e, b'=')) => (start_key..e, e),
+
+            // Input: `    key `
+            //                ^
+            Some((e, _)) => match iter.find(|(_, &b)| !is_whitespace(b)) {
+                // Input: `    key  =`
+                //             |  | ^
+                //     start_key  e
+                Some((offset, b'=')) => (start_key..e, offset),
+                // Input: `    key  x`
+                //             |  | ^
+                //     start_key  e
+                // If HTML-like attributes is allowed, this is the result, otherwise error
+                Some((offset, _)) => {
+                    // In any case, recovering is not required
+                    self.state = State::Next(offset);
+                    return self.key_only(slice, start_key..e, offset);
+                }
+                // Input: `    key  `
+                //             |  | ^
+                //     start_key  e
+                // If HTML-like attributes is allowed, this is the result, otherwise error
+                None => {
+                    // Because we reach end-of-input, stop iteration on next call
+                    self.state = State::Done;
+                    return self.key_only(slice, start_key..e, slice.len());
+                }
+            },
+
+            // Input: `    key`
+            //             |  ^
+            //             s  e = len()
+            // If HTML-like attributes is allowed, this is the result, otherwise error
+            None => {
+                // Because we reach end-of-input, stop iteration on next call
+                self.state = State::Done;
+                let e = slice.len();
+                return self.key_only(slice, start_key..e, e);
+            }
+        };
+
+        let key = match self.check_for_duplicates(slice, key) {
+            Err(e) => {
+                self.state = State::SkipEqValue(offset);
+                return Some(Err(e));
+            }
+            Ok(key) => key,
+        };
+
+        ////////////////////////////////////////////////////////////////////////
+
+        // Gets the position of quote and quote type
+        let (start_value, quote) = match iter.find(|(_, &b)| !is_whitespace(b)) {
+            // Input: `    key  =  "`
+            //                     ^
+            Some((s, b'"')) => (s + 1, b'"'),
+            // Input: `    key  =  '`
+            //                     ^
+            Some((s, b'\'')) => (s + 1, b'\''),
+
+            // Input: `    key  =  x`
+            //                     ^
+            // If HTML-like attributes is allowed, this is the start of the value
+            Some((s, _)) if self.html => {
+                // We do not check validity of attribute value characters as required
+                // according to https://html.spec.whatwg.org/#unquoted. It can be done
+                // during validation phase
+                let end = match iter.find(|(_, &b)| is_whitespace(b)) {
+                    // Input: `    key  =  value `
+                    //                     |    ^
+                    //                     s    e
+                    Some((e, _)) => e,
+                    // Input: `    key  =  value`
+                    //                     |    ^
+                    //                     s    e = len()
+                    None => slice.len(),
+                };
+                self.state = State::Next(end);
+                return Some(Ok(Attr::Unquoted(key, s..end)));
+            }
+            // Input: `    key  =  x`
+            //                     ^
+            Some((s, _)) => {
+                self.state = State::SkipValue(s);
+                return Some(Err(AttrError::UnquotedValue(s)));
+            }
+
+            // Input: `    key  =  `
+            //                     ^
+            None => {
+                // Because we reach end-of-input, stop iteration on next call
+                self.state = State::Done;
+                return Some(Err(AttrError::ExpectedValue(slice.len())));
+            }
+        };
+
+        match iter.find(|(_, &b)| b == quote) {
+            // Input: `    key  =  "   "`
+            //                         ^
+            Some((e, b'"')) => self.double_q(key, start_value..e),
+            // Input: `    key  =  '   '`
+            //                         ^
+            Some((e, _)) => self.single_q(key, start_value..e),
+
+            // Input: `    key  =  "   `
+            // Input: `    key  =  '   `
+            //                         ^
+            // Closing quote not found
+            None => {
+                // Because we reach end-of-input, stop iteration on next call
+                self.state = State::Done;
+                return Some(Err(AttrError::ExpectedQuote(slice.len(), quote)));
+            }
+        }
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
