@@ -871,6 +871,35 @@ impl<R: BufRead> Reader<R> {
     pub fn into_underlying_reader(self) -> R {
         self.reader
     }
+
+    /// Returns a reference to the underlying reader
+    ///
+    /// Can be used e.g. to get progress information
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::{str, io::Cursor};
+    /// use quick_xml::Reader;
+    /// use quick_xml::events::Event;
+    ///
+    /// let xml = r#"<tag1 att1 = "test">
+    ///                 <tag2><!--Test comment-->Test</tag2>
+    ///                 <tag3>Test 2</tag3>
+    ///             </tag1>"#;
+    /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
+    /// let mut buf = Vec::new();
+    /// reader.read_event(&mut buf);
+    /// reader.read_event(&mut buf);
+    ///
+    /// let total_bytes = reader.underlying_reader_ref().get_ref().len();
+    /// let current_bytes = reader.buffer_position();
+    ///
+    /// assert_eq!(total_bytes, 129);
+    /// assert_eq!(current_bytes, 20);
+    /// println!("Current progress {}/{}bytes", current_bytes, total_bytes);
+    /// ```
+    pub fn underlying_reader_ref(&self) -> &R {&self.reader}
 }
 
 impl Reader<BufReader<File>> {
