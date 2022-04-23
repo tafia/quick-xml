@@ -159,20 +159,6 @@ impl<'a> BytesStart<'a> {
         BytesEnd::borrowed(self.name())
     }
 
-    /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
-    ///
-    /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
-    where
-        I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
-    {
-        self.extend_attributes(attributes);
-        self
-    }
-
     /// Gets the undecoded raw tag name as a `&[u8]`.
     #[inline]
     pub fn name(&self) -> &[u8] {
@@ -224,39 +210,6 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
-    }
-
-    /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self.buf, self.name_len)
-    }
-
-    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
-    pub fn html_attributes(&self) -> Attributes {
-        Attributes::html(self, self.name_len)
-    }
-
-    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
-    /// including the whitespace after the tag name if there is any.
-    #[inline]
-    pub fn attributes_raw(&self) -> &[u8] {
-        &self.buf[self.name_len..]
-    }
-
-    /// Add additional attributes to this tag using an iterator.
-    ///
-    /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
-    where
-        I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
-    {
-        for attr in attributes {
-            self.push_attribute(attr);
-        }
-        self
     }
 
     /// Returns the unescaped and decoded string value.
@@ -323,17 +276,6 @@ impl<'a> BytesStart<'a> {
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
-    /// Adds an attribute to this element.
-    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A) {
-        let a = attr.into();
-        let bytes = self.buf.to_mut();
-        bytes.push(b' ');
-        bytes.extend_from_slice(a.key);
-        bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(&*a.value);
-        bytes.push(b'"');
-    }
-
     /// Edit the name of the BytesStart in-place
     ///
     /// # Warning
@@ -345,11 +287,71 @@ impl<'a> BytesStart<'a> {
         self.name_len = name.len();
         self
     }
+}
+
+/// Attribute-related methods
+impl<'a> BytesStart<'a> {
+    /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        self.extend_attributes(attributes);
+        self
+    }
+
+    /// Add additional attributes to this tag using an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        for attr in attributes {
+            self.push_attribute(attr);
+        }
+        self
+    }
+
+    /// Adds an attribute to this element.
+    pub fn push_attribute<'b, A>(&mut self, attr: A)
+    where
+        A: Into<Attribute<'b>>,
+    {
+        let a = attr.into();
+        let bytes = self.buf.to_mut();
+        bytes.push(b' ');
+        bytes.extend_from_slice(a.key);
+        bytes.extend_from_slice(b"=\"");
+        bytes.extend_from_slice(&*a.value);
+        bytes.push(b'"');
+    }
 
     /// Remove all attributes from the ByteStart
     pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
         self.buf.to_mut().truncate(self.name_len);
         self
+    }
+
+    /// Returns an iterator over the attributes of this tag.
+    pub fn attributes(&self) -> Attributes {
+        Attributes::new(&self.buf, self.name_len)
+    }
+
+    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
+    pub fn html_attributes(&self) -> Attributes {
+        Attributes::html(self, self.name_len)
+    }
+
+    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
+    /// including the whitespace after the tag name if there is any.
+    #[inline]
+    pub fn attributes_raw(&self) -> &[u8] {
+        &self.buf[self.name_len..]
     }
 
     /// Try to get an attribute
