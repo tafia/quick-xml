@@ -1,9 +1,9 @@
 #![cfg(feature = "serialize")]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate serde;
 
-use quick_xml::{de::from_str, se::to_string};
+use fast_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -101,7 +101,7 @@ fn no_contiguous_fields() {
 </Xml>
 "#;
 
-    let xml: Xml = ::quick_xml::de::from_str(source).unwrap();
+    let xml: Xml = ::fast_xml::de::from_str(source).unwrap();
     assert_eq!(
         xml,
         Xml {
@@ -137,7 +137,7 @@ fn test_parse_unflatten_field() {
         field: "Foo".to_string(),
     };
 
-    let parsed: Unflatten = ::quick_xml::de::from_str(source).unwrap();
+    let parsed: Unflatten = ::fast_xml::de::from_str(source).unwrap();
     assert_eq!(&parsed, &expected);
 
     let stringified = to_string(&parsed).unwrap();

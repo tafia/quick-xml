@@ -1,10 +1,10 @@
 #![cfg(feature = "serialize")]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate regex;
 extern crate serde;
 
-use quick_xml::se::to_string;
+use fast_xml::se::to_string;
 use regex::Regex;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -54,7 +54,7 @@ fn test_nested() {
         number: "3-1".to_string(),
         adviser: t,
     };
-    let xml = quick_xml::se::to_string(&doc).unwrap();
+    let xml = fast_xml::se::to_string(&doc).unwrap();
 
     let str = r#"<classroom number="3-1">
                    <students>

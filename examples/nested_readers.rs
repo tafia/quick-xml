@@ -1,6 +1,6 @@
-extern crate quick_xml;
-use quick_xml::events::Event;
-use quick_xml::Reader;
+extern crate fast_xml;
+use fast_xml::events::Event;
+use fast_xml::Reader;
 // a structure to capture the rows we've extracted
 // from a ECMA-376 table in document.xml
 #[derive(Debug, Clone)]
@@ -11,7 +11,7 @@ struct TableStat {
 // demonstrate how to nest readers
 // This is useful for when you need to traverse
 // a few levels of a document to extract things.
-fn main() -> Result<(), quick_xml::Error> {
+fn main() -> Result<(), fast_xml::Error> {
     let mut buf = Vec::new();
     // buffer for nested reader
     let mut skip_buf = Vec::new();

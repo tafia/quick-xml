@@ -1,15 +1,15 @@
 #![feature(test)]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate test;
 extern crate xml;
 
-use quick_xml::{events::Event, Reader};
+use fast_xml::{events::Event, Reader};
 use test::Bencher;
 use xml::reader::{EventReader, XmlEvent};
 
 #[bench]
-fn bench_quick_xml(b: &mut Bencher) {
+fn bench_fast_xml(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = Reader::from_reader(src);

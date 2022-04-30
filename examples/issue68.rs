@@ -1,9 +1,9 @@
 #![allow(unused)]
 
-extern crate quick_xml;
+extern crate fast_xml;
 
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use fast_xml::events::Event;
+use fast_xml::Reader;
 use std::io::Read;
 
 struct Resource {

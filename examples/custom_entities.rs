@@ -7,11 +7,11 @@
 //! * the regex in this example is simple but brittle;
 //! * it does not support the use of entities in entity declaration.
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate regex;
 
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use fast_xml::events::Event;
+use fast_xml::Reader;
 use regex::bytes::Regex;
 use std::collections::HashMap;
 

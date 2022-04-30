@@ -127,8 +127,8 @@ impl<'a> BytesStart<'a> {
     /// # Example
     ///
     /// ```rust
-    /// # use quick_xml::{Error, Writer};
-    /// use quick_xml::events::{BytesStart, Event};
+    /// # use fast_xml::{Error, Writer};
+    /// use fast_xml::events::{BytesStart, Event};
     ///
     /// struct SomeStruct<'a> {
     ///     attrs: BytesStart<'a>,

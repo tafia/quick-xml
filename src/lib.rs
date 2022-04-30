@@ -2,7 +2,7 @@
 //!
 //! ## Description
 //!
-//! quick-xml contains two modes of operation:
+//! fast-xml contains two modes of operation:
 //!
 //! A streaming API based on the [StAX] model. This is suited for larger XML documents which
 //! cannot completely read into memory at once.
@@ -17,7 +17,7 @@
 //! Especially for nested XML elements, the user must keep track _where_ (how deep) in the XML document
 //! the current event is located. This is needed as the
 //!
-//! Furthermore, quick-xml also contains optional [Serde] support to directly serialize and deserialize from
+//! Furthermore, fast-xml also contains optional [Serde] support to directly serialize and deserialize from
 //! structs, without having to deal with the XML events.
 //!
 //! ## Examples
@@ -25,8 +25,8 @@
 //! ### Reader
 //!
 //! ```rust
-//! use quick_xml::Reader;
-//! use quick_xml::events::Event;
+//! use fast_xml::Reader;
+//! use fast_xml::events::Event;
 //!
 //! let xml = r#"<tag1 att1 = "test">
 //!                 <tag2><!--Test comment-->Test</tag2>
@@ -73,9 +73,9 @@
 //! ### Writer
 //!
 //! ```rust
-//! use quick_xml::Writer;
-//! use quick_xml::events::{Event, BytesEnd, BytesStart};
-//! use quick_xml::Reader;
+//! use fast_xml::Writer;
+//! use fast_xml::events::{Event, BytesEnd, BytesStart};
+//! use fast_xml::Reader;
 //! use std::io::Cursor;
 //! use std::iter;
 //!
@@ -120,7 +120,7 @@
 //!
 //! # Features
 //!
-//! quick-xml supports 2 additional features, non activated by default:
+//! fast-xml supports 2 additional features, non activated by default:
 //! - `encoding`: support non utf8 XMLs
 //! - `serialize`: support serde `Serialize`/`Deserialize`
 //!

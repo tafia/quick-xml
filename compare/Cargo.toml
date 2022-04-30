@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-quick-xml = { path = "..", features = ["serialize"] }
+fast-xml = { path = "..", features = ["serialize"] }
 xml-rs = "0.8.0"
 serde-xml-rs = "0.4.1"
 serde = { version = "1.0.103", features = [ "derive" ] }

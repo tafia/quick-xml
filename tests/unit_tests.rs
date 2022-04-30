@@ -1,8 +1,8 @@
 use std::io::Cursor;
 use std::str::from_utf8;
 
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::{events::Event::*, Reader, Result, Writer};
+use fast_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use fast_xml::{events::Event::*, Reader, Result, Writer};
 
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {

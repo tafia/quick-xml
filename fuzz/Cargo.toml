@@ -1,6 +1,6 @@
 
 [package]
-name = "quick-xml-fuzz"
+name = "fast-xml-fuzz"
 version = "0.0.1"
 authors = ["Automatically generated"]
 publish = false
@@ -8,7 +8,7 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies.quick-xml]
+[dependencies.fast-xml]
 path = ".."
 [dependencies.libfuzzer-sys]
 git = "https://github.com/rust-fuzz/libfuzzer-sys.git"

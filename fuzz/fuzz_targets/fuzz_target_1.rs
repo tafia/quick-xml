@@ -1,9 +1,9 @@
 #![no_main]
 #[macro_use] extern crate libfuzzer_sys;
-extern crate quick_xml;
+extern crate fast_xml;
 
-use quick_xml::Reader;
-use quick_xml::events::Event;
+use fast_xml::Reader;
+use fast_xml::events::Event;
 use std::io::Cursor;
 
 fuzz_target!(|data: &[u8]| {
@@ -24,7 +24,7 @@ fuzz_target!(|data: &[u8]| {
                 }
             }
             Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e))
-            | Ok(Event::CData(ref e)) | Ok(Event::PI(ref e)) 
+            | Ok(Event::CData(ref e)) | Ok(Event::PI(ref e))
             | Ok(Event::DocType(ref e)) => {
                 if e.unescaped().is_err() {
                     break;

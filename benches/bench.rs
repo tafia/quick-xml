@@ -1,14 +1,14 @@
 #![feature(test)]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate test;
 
-use quick_xml::events::Event;
-use quick_xml::Reader;
+use fast_xml::events::Event;
+use fast_xml::Reader;
 use test::Bencher;
 
 #[bench]
-fn bench_quick_xml_normal(b: &mut Bencher) {
+fn bench_fast_xml_normal(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = Reader::from_reader(src);
@@ -28,7 +28,7 @@ fn bench_quick_xml_normal(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_namespaced(b: &mut Bencher) {
+fn bench_fast_xml_namespaced(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = Reader::from_reader(src);
@@ -49,7 +49,7 @@ fn bench_quick_xml_namespaced(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_escaped(b: &mut Bencher) {
+fn bench_fast_xml_escaped(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut buf = Vec::new();
@@ -78,7 +78,7 @@ fn bench_quick_xml_escaped(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_normal_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_normal_trimmed(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = Reader::from_reader(src);
@@ -100,7 +100,7 @@ fn bench_quick_xml_normal_trimmed(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_namespaced_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_namespaced_trimmed(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut r = Reader::from_reader(src);
@@ -123,7 +123,7 @@ fn bench_quick_xml_namespaced_trimmed(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_escaped_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_escaped_trimmed(b: &mut Bencher) {
     let src: &[u8] = include_bytes!("../tests/sample_rss.xml");
     b.iter(|| {
         let mut buf = Vec::new();
@@ -154,7 +154,7 @@ fn bench_quick_xml_escaped_trimmed(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_one_text_event(b: &mut Bencher) {
+fn bench_fast_xml_one_text_event(b: &mut Bencher) {
     let src = "Hello world!".repeat(512 / 12).into_bytes();
     let mut buf = Vec::with_capacity(1024);
     b.iter(|| {
@@ -173,7 +173,7 @@ fn bench_quick_xml_one_text_event(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_one_start_event_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_one_start_event_trimmed(b: &mut Bencher) {
     let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5)).into_bytes();
     let mut buf = Vec::with_capacity(1024);
     b.iter(|| {
@@ -194,7 +194,7 @@ fn bench_quick_xml_one_start_event_trimmed(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_one_comment_event_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_one_comment_event_trimmed(b: &mut Bencher) {
     let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5)).into_bytes();
     let mut buf = Vec::with_capacity(1024);
     b.iter(|| {
@@ -215,7 +215,7 @@ fn bench_quick_xml_one_comment_event_trimmed(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_quick_xml_one_cdata_event_trimmed(b: &mut Bencher) {
+fn bench_fast_xml_one_cdata_event_trimmed(b: &mut Bencher) {
     let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5)).into_bytes();
     let mut buf = Vec::with_capacity(1024);
     b.iter(|| {

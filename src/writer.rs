@@ -12,8 +12,8 @@ use std::io::Write;
 ///
 /// ```rust
 /// # fn main() {
-/// use quick_xml::{Reader, Writer};
-/// use quick_xml::events::{Event, BytesEnd, BytesStart};
+/// use fast_xml::{Reader, Writer};
+/// use fast_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
@@ -176,10 +176,10 @@ impl<W: Write> Writer<W> {
     /// # Example
     ///
     /// ```rust
-    /// # use quick_xml::Result;
+    /// # use fast_xml::Result;
     /// # fn main() -> Result<()> {
-    /// use quick_xml::{Error, Writer};
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// use fast_xml::{Error, Writer};
+    /// use fast_xml::events::{BytesStart, BytesText, Event};
     /// use std::io::Cursor;
     ///
     /// let mut writer = Writer::new(Cursor::new(Vec::new()));

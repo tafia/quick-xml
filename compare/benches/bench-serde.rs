@@ -1,6 +1,6 @@
 #![feature(test)]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate serde;
 extern crate serde_xml_rs;
 extern crate test;
@@ -40,9 +40,9 @@ struct Enclosure {
 }
 
 #[bench]
-fn bench_serde_quick_xml(b: &mut Bencher) {
+fn bench_serde_fast_xml(b: &mut Bencher) {
     b.iter(|| {
-        let rss: Rss = quick_xml::de::from_str(SOURCE).unwrap();
+        let rss: Rss = fast_xml::de::from_str(SOURCE).unwrap();
         assert_eq!(rss.channel.items.len(), 99);
     });
 }

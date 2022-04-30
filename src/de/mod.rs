@@ -8,12 +8,12 @@
 //! // Cargo.toml
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
-//! // quick-xml = { version = "0.21", features = [ "serialize" ] }
+//! // fast-xml = { version = "0.22", features = [ "serialize" ] }
 //! extern crate serde;
-//! extern crate quick_xml;
+//! extern crate fast_xml;
 //!
 //! use serde::Deserialize;
-//! use quick_xml::de::{from_str, DeError};
+//! use fast_xml::de::{from_str, DeError};
 //!
 //! #[derive(Debug, Deserialize, PartialEq)]
 //! struct Link {

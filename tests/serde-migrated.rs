@@ -1,11 +1,11 @@
 #![cfg(feature = "serialize")]
 
-extern crate quick_xml;
+extern crate fast_xml;
 extern crate serde;
 
 use std::fmt::Debug;
 
-use quick_xml::de::from_str;
+use fast_xml::de::from_str;
 use serde::{de, ser};
 use serde::{Deserialize, Serialize};
 
@@ -143,7 +143,7 @@ fn test_doctype() {
     ]);
 }
 
-// pass in quick-xml because there is no proper doctype support
+// pass in fast-xml because there is no proper doctype support
 //
 //
 // #[test]

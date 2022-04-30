@@ -1,19 +1,15 @@
 [package]
-name = "quick-xml"
+name = "fast-xml"
 version = "0.23.0-alpha3"
-authors = ["Johann Tuffe <tafia973@gmail.com>"]
 description = "High performance xml reader and writer"
 edition = "2018"
 
-documentation = "https://docs.rs/quick-xml"
-repository = "https://github.com/tafia/quick-xml"
+documentation = "https://docs.rs/fast-xml"
+repository = "https://github.com/Mingun/fast-xml"
 
-keywords = ["xml", "reader", "parser", "writer", "html"]
-categories = ["encoding", "parsing", "text-processing"]
+keywords = ["xml", "serde", "parser", "writer", "html"]
+categories = ["encoding", "parsing", "parser-implementations"]
 license = "MIT"
-
-[badges]
-travis-ci = { repository = "tafia/quick-xml" }
 
 [dependencies]
 encoding_rs = { version = "0.8.26", optional = true }

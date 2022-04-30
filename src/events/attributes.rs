@@ -298,7 +298,7 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::events::attributes::Attribute;
+    /// use fast_xml::events::attributes::Attribute;
     ///
     /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
@@ -318,7 +318,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::events::attributes::Attribute;
+    /// use fast_xml::events::attributes::Attribute;
     ///
     /// let features = Attribute::from(("features", "Bells & whistles"));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
