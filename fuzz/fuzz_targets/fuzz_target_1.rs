@@ -1,6 +1,5 @@
 #![no_main]
 #[macro_use] extern crate libfuzzer_sys;
-extern crate fast_xml;
 
 use fast_xml::Reader;
 use fast_xml::events::Event;

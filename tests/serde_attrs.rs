@@ -1,9 +1,5 @@
 #![cfg(feature = "serialize")]
 
-extern crate fast_xml;
-extern crate regex;
-extern crate serde;
-
 use fast_xml::se::to_string;
 use regex::Regex;
 use serde::Serialize;

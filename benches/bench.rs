@@ -1,8 +1,5 @@
 #![feature(test)]
 
-extern crate fast_xml;
-extern crate test;
-
 use fast_xml::events::Event;
 use fast_xml::Reader;
 use test::Bencher;

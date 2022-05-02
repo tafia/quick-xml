@@ -1,5 +1,3 @@
-extern crate fast_xml;
-
 use fast_xml::events::{BytesStart, Event};
 use fast_xml::{Reader, Result};
 use std::borrow::Cow;

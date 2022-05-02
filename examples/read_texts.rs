@@ -1,5 +1,3 @@
-extern crate fast_xml;
-
 fn main() {
     use fast_xml::events::Event;
     use fast_xml::Reader;

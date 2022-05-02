@@ -1,8 +1,5 @@
 #![cfg(feature = "serialize")]
 
-extern crate fast_xml;
-extern crate serde;
-
 use fast_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
 

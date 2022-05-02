@@ -1,8 +1,5 @@
 #![cfg(feature = "serialize")]
 
-extern crate fast_xml;
-extern crate serde;
-
 use std::fmt::Debug;
 
 use fast_xml::de::from_str;

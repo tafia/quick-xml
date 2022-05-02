@@ -1,7 +1,5 @@
 #![allow(unused)]
 
-extern crate fast_xml;
-
 use fast_xml::events::Event;
 use fast_xml::Reader;
 use std::io::Read;

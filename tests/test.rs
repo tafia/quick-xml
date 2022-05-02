@@ -1,7 +1,3 @@
-extern crate fast_xml;
-#[cfg(feature = "serialize")]
-extern crate serde;
-
 use fast_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
 use std::{borrow::Cow, io::Cursor};
 

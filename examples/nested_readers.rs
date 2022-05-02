@@ -1,4 +1,3 @@
-extern crate fast_xml;
 use fast_xml::events::Event;
 use fast_xml::Reader;
 // a structure to capture the rows we've extracted

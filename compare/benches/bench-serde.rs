@@ -1,10 +1,5 @@
 #![feature(test)]
 
-extern crate fast_xml;
-extern crate serde;
-extern crate serde_xml_rs;
-extern crate test;
-
 use serde::Deserialize;
 use test::Bencher;
 

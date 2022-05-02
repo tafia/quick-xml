@@ -9,9 +9,6 @@
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
 //! // fast-xml = { version = "0.22", features = [ "serialize" ] }
-//! extern crate serde;
-//! extern crate fast_xml;
-//!
 //! use serde::Deserialize;
 //! use fast_xml::de::{from_str, DeError};
 //!
