@@ -226,7 +226,7 @@ impl<R: BufRead> Reader<R> {
     /// return a `Text` event
     fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>,
+        R: XmlSource<'i, B>,
     {
         self.tag_state = TagState::Opened;
 
@@ -259,7 +259,7 @@ impl<R: BufRead> Reader<R> {
     /// it was called just after encounter a `<` symbol.
     fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>,
+        R: XmlSource<'i, B>,
     {
         self.tag_state = TagState::Closed;
 
@@ -509,7 +509,7 @@ impl<R: BufRead> Reader<R> {
     /// reader.
     fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, B>,
+        R: XmlSource<'i, B>,
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -939,7 +939,7 @@ impl<'a> Reader<&'a [u8]> {
 /// - `'r`: lifetime of a buffer from which events will borrow
 /// - `B`: a type of a buffer that can be used to store data read from `Self` and
 ///   from which events can borrow
-trait BufferedInput<'r, B> {
+trait XmlSource<'r, B> {
     /// Read input until `byte` is found or end of input is reached.
     ///
     /// Returns a slice of data read up to `byte`, which does not include into result.
@@ -1025,9 +1025,9 @@ trait BufferedInput<'r, B> {
     fn peek_one(&mut self) -> Result<Option<u8>>;
 }
 
-/// Implementation of `BufferedInput` for any `BufRead` reader using a user-given
+/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
 /// `Vec<u8>` as buffer that will be borrowed by events.
-impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
+impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     #[inline]
     fn read_bytes_until(
         &mut self,
@@ -1218,9 +1218,9 @@ impl<'b, R: BufRead> BufferedInput<'b, &'b mut Vec<u8>> for R {
     }
 }
 
-/// Implementation of `BufferedInput` for `&[u8]` reader using a `Self` as buffer
+/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
 /// that will be borrowed by events. This implementation provides a zero-copy deserialization
-impl<'a> BufferedInput<'a, ()> for &'a [u8] {
+impl<'a> XmlSource<'a, ()> for &'a [u8] {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -1380,7 +1380,7 @@ impl BangType {
     }
 }
 
-/// State machine for the [`BufferedInput::read_element`]
+/// State machine for the [`XmlSource::read_element`]
 #[derive(Clone, Copy)]
 enum ReadElementState {
     /// The initial state (inside element, but outside of attribute value)
@@ -1628,7 +1628,7 @@ mod test {
     macro_rules! check {
         ($buf:expr) => {
             mod read_bytes_until {
-                use crate::reader::BufferedInput;
+                use crate::reader::XmlSource;
                 // Use Bytes for printing bytes as strings for ASCII range
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
@@ -1735,7 +1735,7 @@ mod test {
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
                     use crate::errors::Error;
-                    use crate::reader::{BangType, BufferedInput};
+                    use crate::reader::{BangType, XmlSource};
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1837,7 +1837,7 @@ mod test {
                 /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
                 mod comment {
                     use crate::errors::Error;
-                    use crate::reader::{BangType, BufferedInput};
+                    use crate::reader::{BangType, XmlSource};
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1971,7 +1971,7 @@ mod test {
                 mod doctype {
                     mod uppercase {
                         use crate::errors::Error;
-                        use crate::reader::{BangType, BufferedInput};
+                        use crate::reader::{BangType, XmlSource};
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2049,7 +2049,7 @@ mod test {
 
                     mod lowercase {
                         use crate::errors::Error;
-                        use crate::reader::{BangType, BufferedInput};
+                        use crate::reader::{BangType, XmlSource};
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2128,7 +2128,7 @@ mod test {
             }
 
             mod read_element {
-                use crate::reader::BufferedInput;
+                use crate::reader::XmlSource;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -2145,7 +2145,7 @@ mod test {
                 }
 
                 mod open {
-                    use crate::reader::BufferedInput;
+                    use crate::reader::XmlSource;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -2221,7 +2221,7 @@ mod test {
                 }
 
                 mod self_closed {
-                    use crate::reader::BufferedInput;
+                    use crate::reader::XmlSource;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
