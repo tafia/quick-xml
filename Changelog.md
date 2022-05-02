@@ -25,6 +25,12 @@
 - fix: `ElementWriter`, introduced in [#274](https://github.com/tafia/quick-xml/pull/274)
   (0.23.0-alpha2) now available to end users
 - fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
+- test: add tests for consistence behavior of buffered and borrowed readers
+- fix: produce consistent error positions in buffered and borrowed readers
+- feat: `Error::UnexpectedBang` now provide the byte found
+- refactor: unify code for buffered and borrowed readers
+- fix: fix internal panic message when parse malformed XML
+  ([#344](https://github.com/tafia/quick-xml/issues/344))
 
 ## 0.23.0-alpha3
 
