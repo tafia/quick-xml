@@ -1,11 +1,8 @@
-#![cfg(feature = "serialize")]
-
 use fast_xml::se::to_string;
 use regex::Regex;
 use serde::Serialize;
 use std::borrow::Cow;
 
-#[cfg(test)]
 use pretty_assertions::assert_eq;
 
 #[derive(Serialize)]

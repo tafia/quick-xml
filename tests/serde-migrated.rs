@@ -1,12 +1,9 @@
-#![cfg(feature = "serialize")]
-
 use std::fmt::Debug;
 
 use fast_xml::de::from_str;
 use serde::{de, ser};
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
 use pretty_assertions::assert_eq;
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]

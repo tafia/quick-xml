@@ -33,3 +33,23 @@ escape-html = []
 
 [package.metadata.docs.rs]
 features = ["serialize"]
+
+[[test]]
+name = "aws_test"
+required-features = ["serialize"]
+
+[[test]]
+name = "serde_attrs"
+required-features = ["serialize"]
+
+[[test]]
+name = "serde_roundtrip"
+required-features = ["serialize"]
+
+[[test]]
+name = "serde-de"
+required-features = ["serialize"]
+
+[[test]]
+name = "serde-migrated"
+required-features = ["serialize"]
