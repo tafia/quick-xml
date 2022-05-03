@@ -22,6 +22,8 @@ configuration is serializable.
   direct access to fields of config using `reader.config_mut().<...>`.
 - [#684]: Added a method `Config::enable_all_checks` to turn on or off all
   well-formedness checks.
+- [#362]: Added `escape::minimal_escape()` which escapes only `&` and `<`.
+- [#362]: Added `BytesCData::minimal_escape()` which escapes only `&` and `<`.
 
 ### Bug Fixes
 
