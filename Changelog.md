@@ -31,6 +31,11 @@
 - refactor: unify code for buffered and borrowed readers
 - fix: fix internal panic message when parse malformed XML
   ([#344](https://github.com/tafia/quick-xml/issues/344))
+- test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
+- fix: CDATA was not handled in many cases where it should
+- fix: do not unescape CDATA content because it never escaped by design.
+  CDATA event data now represented by its own `BytesCData` type
+  ([quick-xml#311](https://github.com/tafia/quick-xml/issues/311))
 
 ## 0.23.0-alpha3
 

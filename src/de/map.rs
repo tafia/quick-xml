@@ -109,7 +109,7 @@ where
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
-                DeEvent::Text(_) => {
+                DeEvent::Text(_) | DeEvent::CData(_) => {
                     self.state = State::InnerValue;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
