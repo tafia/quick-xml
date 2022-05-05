@@ -11,3 +11,9 @@ fast-xml = { path = "..", features = ["serialize"] }
 xml-rs = "0.8"
 serde-xml-rs = "0.5"
 serde = { version = "1.0", features = [ "derive" ] }
+criterion = "0.3.5"
+pretty_assertions = "1.2"
+
+[[bench]]
+name = "bench"
+harness = false
