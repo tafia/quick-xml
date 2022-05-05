@@ -37,10 +37,6 @@ escape-html = []
 features = ["serialize"]
 
 [[test]]
-name = "aws_test"
-required-features = ["serialize"]
-
-[[test]]
 name = "serde_attrs"
 required-features = ["serialize"]
 
