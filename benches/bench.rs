@@ -6,9 +6,11 @@ use pretty_assertions::assert_eq;
 static SAMPLE: &[u8] = include_bytes!("../tests/sample_rss.xml");
 static PLAYERS: &[u8] = include_bytes!("../tests/players.xml");
 
-fn fast_xml_normal(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fast_xml_normal");
-    group.bench_function("untrimmed", |b| {
+/// Benchmarks the `Reader::read_event` function with all XML well-formless
+/// checks disabled (with and without trimming content of #text nodes)
+fn read_event(c: &mut Criterion) {
+    let mut group = c.benchmark_group("read_event");
+    group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SAMPLE);
             r.check_end_names(false).check_comments(false);
@@ -22,11 +24,11 @@ fn fast_xml_normal(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         })
     });
 
-    group.bench_function("trimmed", |b| {
+    group.bench_function("trim_text = true", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SAMPLE);
             r.check_end_names(false)
@@ -42,15 +44,17 @@ fn fast_xml_normal(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         });
     });
     group.finish();
 }
 
-fn fast_xml_namespaced(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fast_xml_namespaced");
-    group.bench_function("untrimmed", |b| {
+/// Benchmarks the `Reader::read_namespaced_event` function with all XML well-formless
+/// checks disabled (with and without trimming content of #text nodes)
+fn read_namespaced_event(c: &mut Criterion) {
+    let mut group = c.benchmark_group("read_namespaced_event");
+    group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SAMPLE);
             r.check_end_names(false).check_comments(false);
@@ -65,11 +69,11 @@ fn fast_xml_namespaced(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         });
     });
 
-    group.bench_function("trimmed", |b| {
+    group.bench_function("trim_text = true", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SAMPLE);
             r.check_end_names(false)
@@ -86,15 +90,17 @@ fn fast_xml_namespaced(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         });
     });
     group.finish();
 }
 
-fn fast_xml_escaped(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fast_xml_escaped");
-    group.bench_function("untrimmed", |b| {
+/// Benchmarks the `BytesText::unescaped()` method (includes time of `read_event`
+/// benchmark)
+fn bytes_text_unescaped(c: &mut Criterion) {
+    let mut group = c.benchmark_group("BytesText::unescaped");
+    group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut buf = Vec::new();
             let mut r = Reader::from_reader(SAMPLE);
@@ -110,18 +116,24 @@ fn fast_xml_escaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
-            assert_eq!(nbtxt, 67661);
+            assert_eq!(
+                nbtxt, 67661,
+                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+            );
 
             #[cfg(not(windows))]
-            assert_eq!(nbtxt, 66277);
+            assert_eq!(
+                nbtxt, 66277,
+                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+            );
         });
     });
 
-    group.bench_function("trimmed", |b| {
+    group.bench_function("trim_text = true", |b| {
         b.iter(|| {
             let mut buf = Vec::new();
             let mut r = Reader::from_reader(SAMPLE);
@@ -139,22 +151,29 @@ fn fast_xml_escaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
-            assert_eq!(nbtxt, 50334);
+            assert_eq!(
+                nbtxt, 50334,
+                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+            );
 
             #[cfg(not(windows))]
-            assert_eq!(nbtxt, 50261);
+            assert_eq!(
+                nbtxt, 50261,
+                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+            );
         });
     });
     group.finish();
 }
 
-fn fast_xml_one_event(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fast_xml_one_event");
-    group.bench_function("text_event", |b| {
+/// Benchmarks, how fast individual event parsed
+fn one_event(c: &mut Criterion) {
+    let mut group = c.benchmark_group("One event");
+    group.bench_function("Text", |b| {
         let src = "Hello world!".repeat(512 / 12).into_bytes();
         let mut buf = Vec::with_capacity(1024);
         b.iter(|| {
@@ -172,7 +191,7 @@ fn fast_xml_one_event(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("start_event_trimmed", |b| {
+    group.bench_function("Start", |b| {
         let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5)).into_bytes();
         let mut buf = Vec::with_capacity(1024);
         b.iter(|| {
@@ -192,7 +211,7 @@ fn fast_xml_one_event(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("comment_event_trimmed", |b| {
+    group.bench_function("Comment", |b| {
         let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5)).into_bytes();
         let mut buf = Vec::with_capacity(1024);
         b.iter(|| {
@@ -212,7 +231,7 @@ fn fast_xml_one_event(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("cdata_event_trimmed", |b| {
+    group.bench_function("CData", |b| {
         let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5)).into_bytes();
         let mut buf = Vec::with_capacity(1024);
         b.iter(|| {
@@ -234,9 +253,10 @@ fn fast_xml_one_event(c: &mut Criterion) {
     group.finish();
 }
 
-fn fast_xml_attributes(c: &mut Criterion) {
-    let mut group = c.benchmark_group("fast_xml_attributes");
-    group.bench_function("iter_attributes", |b| {
+/// Benchmarks parsing attributes from events
+fn attributes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attributes");
+    group.bench_function("with_checks = true", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(PLAYERS);
             r.check_end_names(false).check_comments(false);
@@ -259,7 +279,7 @@ fn fast_xml_attributes(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("iter_attributes_no_checks", |b| {
+    group.bench_function("with_checks = false", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(PLAYERS);
             r.check_end_names(false).check_comments(false);
@@ -314,10 +334,10 @@ fn fast_xml_attributes(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    fast_xml_normal,
-    fast_xml_escaped,
-    fast_xml_namespaced,
-    fast_xml_one_event,
-    fast_xml_attributes
+    read_event,
+    bytes_text_unescaped,
+    read_namespaced_event,
+    one_event,
+    attributes
 );
 criterion_main!(benches);

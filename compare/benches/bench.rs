@@ -7,10 +7,11 @@ use xml::reader::{EventReader, XmlEvent};
 
 static SOURCE: &str = include_str!("../../tests/sample_rss.xml");
 
-fn raw_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("raw_parse_comparison");
+/// Runs benchmarks for several XML libraries using low-level API
+fn low_level_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("low-level API");
 
-    group.bench_function("fast_xml_normal", |b| {
+    group.bench_function("fast_xml", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SOURCE.as_bytes());
             r.check_end_names(false).check_comments(false);
@@ -24,11 +25,11 @@ fn raw_comparison(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         })
     });
 
-    group.bench_function("xml_rs_normal", |b| {
+    group.bench_function("xml_rs", |b| {
         b.iter(|| {
             let r = EventReader::new(SOURCE.as_bytes());
             let mut count = criterion::black_box(0);
@@ -37,14 +38,16 @@ fn raw_comparison(c: &mut Criterion) {
                     count += 1;
                 }
             }
-            assert_eq!(count, 1550);
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
         })
     });
     group.finish();
 }
 
+/// Runs benchmarks for several XML libraries using serde deserialization
+#[allow(dead_code)] // We do not use structs
 fn serde_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("serde_parse_comparison");
+    let mut group = c.benchmark_group("serde");
     #[derive(Debug, Deserialize)]
     struct Rss {
         channel: Channel,
@@ -74,14 +77,14 @@ fn serde_comparison(c: &mut Criterion) {
         typ: String,
     }
 
-    group.bench_function("fast_xml_serde", |b| {
+    group.bench_function("fast_xml", |b| {
         b.iter(|| {
             let rss: Rss = fast_xml::de::from_str(SOURCE).unwrap();
             assert_eq!(rss.channel.items.len(), 99);
         })
     });
 
-    group.bench_function("xml_rs_serde", |b| {
+    group.bench_function("xml_rs", |b| {
         b.iter(|| {
             let rss: Rss = serde_xml_rs::from_str(SOURCE).unwrap();
             assert_eq!(rss.channel.items.len(), 99);
@@ -90,5 +93,5 @@ fn serde_comparison(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, raw_comparison, serde_comparison);
+criterion_group!(benches, low_level_comparison, serde_comparison);
 criterion_main!(benches);
