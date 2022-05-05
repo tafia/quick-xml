@@ -264,22 +264,15 @@ impl<R: BufRead> Reader<R> {
     {
         self.tag_state = TagState::Closed;
 
-        // need to read 1 character to decide whether pay special attention to attribute values
-        let start = match self.reader.peek_one() {
-            Ok(None) => return Ok(Event::Eof),
-            Ok(Some(byte)) => byte,
-            Err(e) => return Err(e),
-        };
-
-        match start {
+        match self.reader.peek_one() {
             // `<!` - comment, CDATA or DOCTYPE declaration
-            b'!' => match self.reader.read_bang_element(buf, &mut self.buf_position) {
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
-            b'/' => match self
+            Ok(Some(b'/')) => match self
                 .reader
                 .read_bytes_until(b'>', buf, &mut self.buf_position)
             {
@@ -288,7 +281,7 @@ impl<R: BufRead> Reader<R> {
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
-            b'?' => match self
+            Ok(Some(b'?')) => match self
                 .reader
                 .read_bytes_until(b'>', buf, &mut self.buf_position)
             {
@@ -297,11 +290,13 @@ impl<R: BufRead> Reader<R> {
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
-            _ => match self.reader.read_element(buf, &mut self.buf_position) {
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_start(bytes),
                 Err(e) => Err(e),
             },
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
         }
     }
 
