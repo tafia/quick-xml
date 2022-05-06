@@ -96,10 +96,10 @@ pub struct Reader<R: BufRead> {
     /// ^   ^
     /// ```
     ///
-    /// The `^` symbols shows which positions stored in the [`opened_starts`]
+    /// The `^` symbols shows which positions stored in the [`Self::opened_starts`]
     /// (0 and 4 in that case).
     opened_buffer: Vec<u8>,
-    /// Opened name start indexes into [`opened_buffer`]. See documentation
+    /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
     /// for that field for details
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
@@ -143,7 +143,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Note, that setting this to `true` will lead to additional allocates that
     /// needed to store tag name for an [`End`] event. There is no additional
-    /// allocation, however, if [`check_end_names()`] is also set.
+    /// allocation, however, if [`Self::check_end_names()`] is also set.
     ///
     /// (`false` by default)
     ///
@@ -209,7 +209,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// Note, that setting this to `true` will lead to additional allocates that
     /// needed to store tag name for an [`End`] event. There is no additional
-    /// allocation, however, if [`expand_empty_elements()`] is also set.
+    /// allocation, however, if [`Self::expand_empty_elements()`] is also set.
     ///
     /// (`true` by default)
     ///
