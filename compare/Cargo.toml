@@ -10,6 +10,7 @@ edition = "2018"
 criterion = "0.3"
 quick-xml = { path = "..", features = ["serialize"] }
 xml-rs = "0.8"
+xml5ever = "0.17"
 serde-xml-rs = "0.5"
 serde = { version = "1.0", features = [ "derive" ] }
 pretty_assertions = "1.2"
