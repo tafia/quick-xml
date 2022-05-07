@@ -36,6 +36,8 @@
 - fix: do not unescape CDATA content because it never escaped by design.
   CDATA event data now represented by its own `BytesCData` type
   ([quick-xml#311](https://github.com/tafia/quick-xml/issues/311))
+- feat: add `Reader::get_ref()` and `Reader::get_mut()`, rename
+  `Reader::into_underlying_reader()` to `Reader::into_inner()`
 
 ## 0.23.0-alpha3
 

@@ -836,7 +836,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
     ///     let end_pos = reader.buffer_position();
-    ///     let mut cursor = reader.into_underlying_reader();
+    ///     let mut cursor = reader.into_inner();
     ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
     ///         .expect("can't make a string");
     ///     let mut line = 1;
@@ -868,8 +868,18 @@ impl<R: BufRead> Reader<R> {
     ///     buf.clear();
     /// }
     /// ```
-    pub fn into_underlying_reader(self) -> R {
+    pub fn into_inner(self) -> R {
         self.reader
+    }
+
+    /// Gets a reference to the underlying reader.
+    pub fn get_ref(&self) -> &R {
+        &self.reader
+    }
+
+    /// Gets a mutable reference to the underlying reader.
+    pub fn get_mut(&mut self) -> &mut R {
+        &mut self.reader
     }
 }
 
