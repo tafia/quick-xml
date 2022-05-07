@@ -29,6 +29,21 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("xmlparser", |b| {
+        use xmlparser::{Token, Tokenizer};
+
+        b.iter(|| {
+            let mut count = criterion::black_box(0);
+            for token in Tokenizer::from(SOURCE) {
+                match token {
+                    Ok(Token::ElementStart { .. }) => count += 1,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
     group.bench_function("xml5ever", |b| {
         use xml5ever::buffer_queue::BufferQueue;
         use xml5ever::tokenizer::{TagKind, Token, TokenSink, XmlTokenizer};
