@@ -354,6 +354,7 @@ mod issue537 {
     }
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/540.
 #[test]
 fn issue540() {
     #[derive(Serialize)]
@@ -376,6 +377,28 @@ fn issue540() {
         )
         .unwrap(),
         "<root><Variant/></root>"
+    );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/567.
+#[test]
+fn issue567() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Root {
+        #[serde(rename = "$value")]
+        items: Vec<Enum>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    enum Enum {
+        List(Vec<()>),
+    }
+
+    assert_eq!(
+        from_str::<Root>("<root><List/></root>").unwrap(),
+        Root {
+            items: vec![Enum::List(vec![])],
+        }
     );
 }
 
