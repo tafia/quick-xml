@@ -145,6 +145,7 @@ where
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
+                    self.source = ValueSource::Nested;
                     let key = if let Some(p) = self
                         .unflatten_fields
                         .iter()
@@ -161,11 +162,9 @@ where
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.source = ValueSource::Text;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name());
-                        self.source = ValueSource::Nested;
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
                     key.map(Some)
