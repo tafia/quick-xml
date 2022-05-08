@@ -173,7 +173,7 @@ where
                 ))
             }
             State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
-            State::Empty => Err(DeError::EndOfAttributes),
+            State::Empty => Err(DeError::KeyNotRead),
         }
     }
 }
