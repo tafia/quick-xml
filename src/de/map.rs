@@ -28,14 +28,21 @@ enum ValueSource {
     /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
     /// Next call to the `next_value_seed` will deserialize type from the attribute value
     Attribute(Range<usize>),
-    /// The same as `InnerValue`
+    /// The same as `Text`
     Nested,
-    /// Value should be deserialized from the text content of the XML node:
+    /// Value should be deserialized from the text content of the XML node, which
+    /// represented or by an ordinary text node, or by a CDATA node:
     ///
     /// ```xml
     /// <...>text content for field value<...>
     /// ```
-    InnerValue,
+    /// ```xml
+    /// <any-tag>
+    ///     <key><![CDATA[cdata content]]></key>
+    /// <!--              ^^^^^^^^^^^^^ - this will be used to deserialize a map value -->
+    /// </any-tag>
+    /// ```
+    Text,
 }
 
 /// A deserializer for `Attributes`
@@ -111,7 +118,7 @@ where
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 DeEvent::Text(_) | DeEvent::CData(_) => {
-                    self.source = ValueSource::InnerValue;
+                    self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
@@ -134,7 +141,7 @@ where
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
-                    self.source = ValueSource::InnerValue;
+                    self.source = ValueSource::Text;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
@@ -154,7 +161,7 @@ where
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.source = ValueSource::InnerValue;
+                        self.source = ValueSource::Text;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name());
@@ -183,7 +190,7 @@ where
                     true,
                 ))
             }
-            ValueSource::Nested | ValueSource::InnerValue => seed.deserialize(&mut *self.de),
+            ValueSource::Nested | ValueSource::Text => seed.deserialize(&mut *self.de),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
     }
