@@ -32,25 +32,22 @@ fn test_attributes_empty() {
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
-            let mut atts = e.attributes();
-            match atts.next() {
+            let mut attrs = e.attributes();
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att1",
                     value: Cow::Borrowed(b"a"),
-                })) => (),
-                e => panic!("Expecting att1='a' attribute, found {:?}", e),
-            }
-            match atts.next() {
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att2",
                     value: Cow::Borrowed(b"b"),
-                })) => (),
-                e => panic!("Expecting att2='b' attribute, found {:?}", e),
-            }
-            match atts.next() {
-                None => (),
-                e => panic!("Expecting None, found {:?}", e),
-            }
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         e => panic!("Expecting Empty event, got {:?}", e),
     }
@@ -64,18 +61,15 @@ fn test_attribute_equal() {
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
-            let mut atts = e.attributes();
-            match atts.next() {
+            let mut attrs = e.attributes();
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att1",
                     value: Cow::Borrowed(b"a=b"),
-                })) => (),
-                e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
-            }
-            match atts.next() {
-                None => (),
-                e => panic!("Expecting None, found {:?}", e),
-            }
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         e => panic!("Expecting Empty event, got {:?}", e),
     }

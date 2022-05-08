@@ -1,7 +1,7 @@
 DocType(html)
 Characters(
 )
-StartElement(a, attr-error: error while parsing attribute at position 7: Attribute value must start with a quote.)
+StartElement(a, attr-error: position 7: attribute value must be enclosed in `"` or `'`)
 Characters(Hey)
 EndElement(a)
 Characters(

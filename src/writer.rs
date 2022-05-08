@@ -240,8 +240,6 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Add additional attributes to this element using an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
     pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,

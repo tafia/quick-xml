@@ -151,7 +151,7 @@ fn attributes_empty_ns() {
         e => panic!("Expecting Empty event, got {:?}", e),
     };
 
-    let mut atts = e
+    let mut attrs = e
         .attributes()
         .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
         // we don't care about xmlns attributes for this test
@@ -160,23 +160,19 @@ fn attributes_empty_ns() {
             let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
             (opt_ns, local_name, value)
         });
-    match atts.next() {
-        Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-        e => panic!("Expecting att1='a' attribute, found {:?}", e),
-    }
-    match atts.next() {
-        Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
-            assert_eq!(&ns[..], b"urn:example:r");
-        }
-        e => panic!(
-            "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-            e
-        ),
-    }
-    match atts.next() {
-        None => (),
-        e => panic!("Expecting None, found {:?}", e),
-    }
+    assert_eq!(
+        attrs.next(),
+        Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+    );
+    assert_eq!(
+        attrs.next(),
+        Some((
+            Some(&b"urn:example:r"[..]),
+            &b"att2"[..],
+            Cow::Borrowed(&b"b"[..])
+        ))
+    );
+    assert_eq!(attrs.next(), None);
 }
 
 /// Single empty element with qualified attributes.
@@ -196,7 +192,7 @@ fn attributes_empty_ns_expanded() {
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
-        let mut atts = e
+        let mut attrs = e
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
@@ -205,23 +201,19 @@ fn attributes_empty_ns_expanded() {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
                 (opt_ns, local_name, value)
             });
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
-                assert_eq!(&ns[..], b"urn:example:r");
-            }
-            e => panic!(
-                "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-                e
-            ),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
+        assert_eq!(
+            attrs.next(),
+            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        );
+        assert_eq!(
+            attrs.next(),
+            Some((
+                Some(&b"urn:example:r"[..]),
+                &b"att2"[..],
+                Cow::Borrowed(&b"b"[..])
+            ))
+        );
+        assert_eq!(attrs.next(), None);
     }
 
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
@@ -261,7 +253,7 @@ fn default_ns_shadowing_empty() {
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
-        let mut atts = e
+        let mut attrs = e
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
@@ -272,14 +264,11 @@ fn default_ns_shadowing_empty() {
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
+        assert_eq!(
+            attrs.next(),
+            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        );
+        assert_eq!(attrs.next(), None);
     }
 
     // </outer>
@@ -323,7 +312,7 @@ fn default_ns_shadowing_expanded() {
             }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
         };
-        let mut atts = e
+        let mut attrs = e
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
@@ -334,14 +323,11 @@ fn default_ns_shadowing_expanded() {
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
+        assert_eq!(
+            attrs.next(),
+            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        );
+        assert_eq!(attrs.next(), None);
     }
 
     // virtual </inner>

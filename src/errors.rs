@@ -1,6 +1,7 @@
 //! Error management module
 
 use crate::escape::EscapeError;
+use crate::events::attributes::AttrError;
 use std::str::Utf8Error;
 
 /// The error type used by this crate.
@@ -27,14 +28,8 @@ pub enum Error {
     TextNotFound,
     /// `Event::XmlDecl` must start with *version* attribute
     XmlDeclWithoutVersion(Option<String>),
-    /// Attribute Name contains quote
-    NameWithQuote(usize),
-    /// Attribute key not followed by with `=`
-    NoEqAfterName(usize),
-    /// Attribute value not quoted
-    UnquotedValue(usize),
-    /// Duplicate attribute
-    DuplicatedAttribute(usize, usize),
+    /// Attribute parsing error
+    InvalidAttr(AttrError),
     /// Escape error
     EscapeError(EscapeError),
 }
@@ -63,6 +58,13 @@ impl From<EscapeError> for Error {
     }
 }
 
+impl From<AttrError> for Error {
+    #[inline]
+    fn from(error: AttrError) -> Self {
+        Error::InvalidAttr(error)
+    }
+}
+
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 ///
 /// [`Error`]: enum.Error.html
@@ -73,7 +75,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Utf8(e) => write!(f, "UTF8 error: {}", e),
-            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}.", e),
+            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
             Error::EndEventMismatch { expected, found } => {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
             }
@@ -89,30 +91,7 @@ impl std::fmt::Display for Error {
                 "XmlDecl must start with 'version' attribute, found {:?}",
                 e
             ),
-            Error::NameWithQuote(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute key cannot contain quote.",
-                e
-            ),
-            Error::NoEqAfterName(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute key must be directly followed by = or space",
-                e
-            ),
-            Error::UnquotedValue(e) => write!(
-                f,
-                "error while parsing attribute at position {}: \
-                 Attribute value must start with a quote.",
-                e
-            ),
-            Error::DuplicatedAttribute(pos1, pos2) => write!(
-                f,
-                "error while parsing attribute at position {0}: \
-                 Duplicate attribute at position {1} and {0}",
-                pos1, pos2
-            ),
+            Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
         }
     }
@@ -123,6 +102,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(e) => Some(e),
             Error::Utf8(e) => Some(e),
+            Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
             _ => None,
         }
@@ -237,6 +217,13 @@ pub mod serialize {
     impl From<ParseFloatError> for DeError {
         fn from(e: ParseFloatError) -> Self {
             DeError::Float(e)
+        }
+    }
+
+    impl From<AttrError> for DeError {
+        #[inline]
+        fn from(e: AttrError) -> Self {
+            DeError::Xml(e.into())
         }
     }
 }
