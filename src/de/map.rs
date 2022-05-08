@@ -37,11 +37,8 @@ where
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
     de: &'a mut Deserializer<'de, R>,
-    /// Position in flat byte slice of all attributes from which next
-    /// attribute should be parsed. This field is required because we
-    /// do not store reference to `Attributes` itself but instead create
-    /// a new object on each advance of `Attributes` iterator, so we need
-    /// to restore last position before advance.
+    /// State of the iterator over attributes. Contains the next position in the
+    /// inner `start` slice, from which next attribute should be parsed.
     iter: IterState,
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
