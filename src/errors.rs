@@ -114,6 +114,7 @@ pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
     use super::*;
+    use crate::utils::write_byte_string;
     use std::fmt;
     use std::num::{ParseFloatError, ParseIntError};
 
@@ -122,29 +123,40 @@ pub mod serialize {
     pub enum DeError {
         /// Serde custom error
         Custom(String),
-        /// Cannot parse to integer
-        Int(ParseIntError),
-        /// Cannot parse to float
-        Float(ParseFloatError),
         /// Xml parsing error
-        Xml(Error),
-        /// Unexpected end of attributes.
-        ///
-        /// Usually this indicates an error in the `Deserialize` implementation when read map:
-        /// `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`
-        EndOfAttributes,
-        /// Unexpected end of file
-        Eof,
-        /// Invalid value for a boolean
+        InvalidXml(Error),
+        /// Cannot parse to integer
+        InvalidInt(ParseIntError),
+        /// Cannot parse to float
+        InvalidFloat(ParseFloatError),
+        /// Cannot parse specified value to boolean
         InvalidBoolean(String),
-        /// Invalid event for Enum
-        InvalidEnum(crate::events::Event<'static>),
-        /// Expecting Text event
-        Text,
-        /// Expecting Start event
-        Start,
-        /// Expecting End event
-        End,
+        /// This error indicates an error in the [`Deserialize`](serde::Deserialize)
+        /// implementation when read a map or a struct: `MapAccess::next_value[_seed]`
+        /// was called before `MapAccess::next_key[_seed]`.
+        ///
+        /// You should check your types, that implements corresponding trait.
+        KeyNotRead,
+        /// Deserializer encounter a start tag with a specified name when it is
+        /// not expecting. This happens when you try to deserialize a primitive
+        /// value (numbers, strings, booleans) from an XML element.
+        UnexpectedStart(Vec<u8>),
+        /// Deserializer encounter an end tag with a specified name when it is
+        /// not expecting. Usually that should not be possible, because XML reader
+        /// is not able to produce such stream of events that lead to this error.
+        ///
+        /// If you get this error this likely indicates and error in the `fast_xml`.
+        /// Please open an issue at <https://github.com/Mingun/fast-xml>, provide
+        /// your Rust code and XML input.
+        UnexpectedEnd(Vec<u8>),
+        /// Unexpected end of file
+        UnexpectedEof,
+        /// This error indicates that [`deserialize_struct`] was called, but there
+        /// is no any XML element in the input. That means that you try to deserialize
+        /// a struct not from an XML element.
+        ///
+        /// [`deserialize_struct`]: serde::de::Deserializer::deserialize_struct
+        ExpectedStart,
         /// Unsupported operation
         Unsupported(&'static str),
     }
@@ -153,20 +165,23 @@ pub mod serialize {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 DeError::Custom(s) => write!(f, "{}", s),
-                DeError::Xml(e) => write!(f, "{}", e),
-                DeError::Int(e) => write!(f, "{}", e),
-                DeError::Float(e) => write!(f, "{}", e),
-                DeError::EndOfAttributes => write!(f, "Unexpected end of attributes"),
-                DeError::Eof => write!(f, "Unexpected `Event::Eof`"),
+                DeError::InvalidXml(e) => write!(f, "{}", e),
+                DeError::InvalidInt(e) => write!(f, "{}", e),
+                DeError::InvalidFloat(e) => write!(f, "{}", e),
                 DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
-                DeError::InvalidEnum(e) => write!(
-                    f,
-                    "Invalid event for Enum, expecting Text or Start, got: {:?}",
-                    e
-                ),
-                DeError::Text => write!(f, "Expecting Text event"),
-                DeError::Start => write!(f, "Expecting Start event"),
-                DeError::End => write!(f, "Expecting End event"),
+                DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
+                DeError::UnexpectedStart(e) => {
+                    f.write_str("Unexpected `Event::Start(")?;
+                    write_byte_string(f, &e)?;
+                    f.write_str(")`")
+                }
+                DeError::UnexpectedEnd(e) => {
+                    f.write_str("Unexpected `Event::End(")?;
+                    write_byte_string(f, &e)?;
+                    f.write_str(")`")
+                }
+                DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
+                DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
             }
         }
@@ -175,9 +190,9 @@ pub mod serialize {
     impl ::std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                DeError::Int(e) => Some(e),
-                DeError::Float(e) => Some(e),
-                DeError::Xml(e) => Some(e),
+                DeError::InvalidXml(e) => Some(e),
+                DeError::InvalidInt(e) => Some(e),
+                DeError::InvalidFloat(e) => Some(e),
                 _ => None,
             }
         }
@@ -197,33 +212,33 @@ pub mod serialize {
 
     impl From<Error> for DeError {
         fn from(e: Error) -> Self {
-            DeError::Xml(e)
+            Self::InvalidXml(e)
         }
     }
 
     impl From<EscapeError> for DeError {
         #[inline]
         fn from(e: EscapeError) -> Self {
-            Self::Xml(e.into())
+            Self::InvalidXml(e.into())
         }
     }
 
     impl From<ParseIntError> for DeError {
         fn from(e: ParseIntError) -> Self {
-            DeError::Int(e)
+            Self::InvalidInt(e)
         }
     }
 
     impl From<ParseFloatError> for DeError {
         fn from(e: ParseFloatError) -> Self {
-            DeError::Float(e)
+            Self::InvalidFloat(e)
         }
     }
 
     impl From<AttrError> for DeError {
         #[inline]
         fn from(e: AttrError) -> Self {
-            DeError::Xml(e.into())
+            Self::InvalidXml(e.into())
         }
     }
 }

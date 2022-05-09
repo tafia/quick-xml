@@ -32,7 +32,7 @@ impl<'a> EscapedDeserializer<'a> {
     }
     fn unescaped(&self) -> Result<Cow<[u8]>, DeError> {
         if self.escaped {
-            unescape(&self.escaped_value).map_err(|e| DeError::Xml(Error::EscapeError(e)))
+            unescape(&self.escaped_value).map_err(|e| DeError::InvalidXml(Error::EscapeError(e)))
         } else {
             Ok(Cow::Borrowed(&self.escaped_value))
         }

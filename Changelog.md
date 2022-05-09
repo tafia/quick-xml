@@ -10,6 +10,24 @@
 
 ## Unreleased
 
+### Misc Changes
+
+- [#8]: Changes in the error type `DeError`:
+  |Variant|Change
+  |-------|---------------------------------------------------------------------
+  |~~`DeError::Text`~~|Removed because never raised
+  |~~`DeError::InvalidEnum`~~|Removed because never raised
+  |`DeError::Xml`|Renamed to `DeError::InvalidXml` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Int`|Renamed to `DeError::InvalidInt` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Float`|Renamed to `DeError::InvalidFloat` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Start`|Renamed to `DeError::UnexpectedStart` and tag name added to an error
+  |`DeError::End`|Renamed to `DeError::UnexpectedEnd` and tag name added to an error
+  |`DeEvent::Eof`|Renamed to `DeError::UnexpectedEof`
+  |`DeError::EndOfAttributes`|Renamed to `DeError::KeyNotFound`
+  |`DeError::ExpectedStart`|Added
+
+[#8]: https://github.com/Mingun/fast-xml/pull/8
+
 ## 0.23.0 -- 2022-05-08
 
 - feat: add support for `i128` / `u128` in attributes or text/CDATA content

@@ -11,22 +11,38 @@ use serde::de::{self, DeserializeSeed, IntoDeserializer};
 use std::borrow::Cow;
 use std::ops::Range;
 
-/// Representing state of the `MapAccess` accessor.
-enum State {
-    /// `next_key_seed` not yet called. This is initial state and state after deserializing
-    /// value (calling `next_value_seed`).
-    Empty,
+/// Defines a source that should be used to deserialize a value in the next call
+/// to [`next_value_seed()`](de::MapAccess::next_value_seed)
+#[derive(Debug, PartialEq)]
+enum ValueSource {
+    /// Source are not specified, because [`next_key_seed()`] not yet called.
+    /// This is an initial state and state after deserializing value
+    /// (after call of [`next_value_seed()`]).
+    ///
+    /// Attempt to call [`next_value_seed()`] while accessor in this state would
+    /// return a [`DeError::KeyNotRead`] error.
+    ///
+    /// [`next_key_seed()`]: de::MapAccess::next_key_seed
+    /// [`next_value_seed()`]: de::MapAccess::next_value_seed
+    Unknown,
     /// `next_key_seed` checked the attributes list and find it is not exhausted yet.
     /// Next call to the `next_value_seed` will deserialize type from the attribute value
     Attribute(Range<usize>),
-    /// The same as `InnerValue`
+    /// The same as `Text`
     Nested,
-    /// Value should be deserialized from the text content of the XML node:
+    /// Value should be deserialized from the text content of the XML node, which
+    /// represented or by an ordinary text node, or by a CDATA node:
     ///
     /// ```xml
     /// <...>text content for field value<...>
     /// ```
-    InnerValue,
+    /// ```xml
+    /// <any-tag>
+    ///     <key><![CDATA[cdata content]]></key>
+    /// <!--              ^^^^^^^^^^^^^ - this will be used to deserialize a map value -->
+    /// </any-tag>
+    /// ```
+    Text,
 }
 
 /// A deserializer for `Attributes`
@@ -42,7 +58,7 @@ where
     iter: IterState,
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
-    state: State,
+    source: ValueSource,
     /// list of fields yet to unflatten (defined as starting with $unflatten=)
     unflatten_fields: Vec<&'static [u8]>,
 }
@@ -61,7 +77,7 @@ where
             de,
             start,
             iter: IterState::new(0, false),
-            state: State::Empty,
+            source: ValueSource::Unknown,
             unflatten_fields: fields
                 .iter()
                 .filter(|f| f.starts_with(UNFLATTEN_PREFIX))
@@ -81,6 +97,8 @@ where
         &mut self,
         seed: K,
     ) -> Result<Option<K::Value>, Self::Error> {
+        debug_assert_eq!(self.source, ValueSource::Unknown);
+
         // FIXME: There error positions counted from end of tag name - need global position
         let slice = self.start.attributes_raw();
         let decoder = self.de.reader.decoder();
@@ -89,7 +107,7 @@ where
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
-            self.state = State::Attribute(value.unwrap_or_default());
+            self.source = ValueSource::Attribute(value.unwrap_or_default());
             seed.deserialize(EscapedDeserializer::new(
                 Cow::Borrowed(&slice[key]),
                 decoder,
@@ -100,7 +118,7 @@ where
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 DeEvent::Text(_) | DeEvent::CData(_) => {
-                    self.state = State::InnerValue;
+                    self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
@@ -123,10 +141,11 @@ where
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(_) if has_value_field => {
-                    self.state = State::InnerValue;
+                    self.source = ValueSource::Text;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
+                    self.source = ValueSource::Nested;
                     let key = if let Some(p) = self
                         .unflatten_fields
                         .iter()
@@ -143,11 +162,9 @@ where
                         //     #[serde(rename = "$unflatten=xxx")]
                         //     xxx: String,
                         // }
-                        self.state = State::InnerValue;
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name());
-                        self.state = State::Nested;
                         seed.deserialize(EscapedDeserializer::new(name, decoder, false))
                     };
                     key.map(Some)
@@ -161,8 +178,8 @@ where
         &mut self,
         seed: K,
     ) -> Result<K::Value, Self::Error> {
-        match std::mem::replace(&mut self.state, State::Empty) {
-            State::Attribute(value) => {
+        match std::mem::replace(&mut self.source, ValueSource::Unknown) {
+            ValueSource::Attribute(value) => {
                 let slice = self.start.attributes_raw();
                 let decoder = self.de.reader.decoder();
 
@@ -172,8 +189,8 @@ where
                     true,
                 ))
             }
-            State::Nested | State::InnerValue => seed.deserialize(&mut *self.de),
-            State::Empty => Err(DeError::EndOfAttributes),
+            ValueSource::Nested | ValueSource::Text => seed.deserialize(&mut *self.de),
+            ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
     }
 }
