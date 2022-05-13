@@ -78,8 +78,14 @@ encoding = ["encoding_rs"]
 ## to quadratic parsing time, because the deserializer must check the list of
 ## events as many times as the number of sequence fields present in the schema.
 ##
+## To reduce negative consequences, always [limit] the maximum number of events
+## that [`Deserializer`] will buffer.
+##
 ## This feature works only with `serialize` feature and has no effect if `serialize`
 ## is not enabled.
+##
+## [limit]: crate::de::Deserializer::event_buffer_size
+## [`Deserializer`]: crate::de::Deserializer
 overlapped-lists = []
 
 ## Enables support for [`serde`] serialization and deserialization

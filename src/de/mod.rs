@@ -229,6 +229,8 @@ use std::borrow::Cow;
 #[cfg(feature = "overlapped-lists")]
 use std::collections::VecDeque;
 use std::io::BufRead;
+#[cfg(feature = "overlapped-lists")]
+use std::num::NonZeroUsize;
 
 pub(crate) const INNER_VALUE: &str = "$value";
 pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
@@ -277,6 +279,12 @@ where
     /// moved from this to [`Self::read`].
     #[cfg(feature = "overlapped-lists")]
     write: VecDeque<DeEvent<'de>>,
+    /// Maximum number of events that can be skipped when processing sequences
+    /// that occur out-of-order. This field is used to prevent potential
+    /// denial-of-service (DoS) attacks which could cause infinite memory
+    /// consumption when parsing a very large amount of XML into a sequence field.
+    #[cfg(feature = "overlapped-lists")]
+    limit: Option<NonZeroUsize>,
 
     #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
@@ -375,6 +383,8 @@ where
             read: VecDeque::new(),
             #[cfg(feature = "overlapped-lists")]
             write: VecDeque::new(),
+            #[cfg(feature = "overlapped-lists")]
+            limit: None,
 
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
@@ -385,6 +395,71 @@ where
     #[deprecated = "Use `Deserializer::new` instead"]
     pub fn from_borrowing_reader(reader: R) -> Self {
         Self::new(reader)
+    }
+
+    /// Set the maximum number of events that could be skipped during deserialization
+    /// of sequences.
+    ///
+    /// If `<element>` contains more than specified nested elements, `#text` or
+    /// CDATA nodes, then [`DeError::TooManyEvents`] will be returned during
+    /// deserialization of sequence field (any type that uses [`deserialize_seq`]
+    /// for the deserialization, for example, `Vec<T>`).
+    ///
+    /// This method can be used to prevent a [DoS] attack and infinite memory
+    /// consumption when parsing a very large XML to a sequence field.
+    ///
+    /// It is strongly recommended to set limit to some value when you parse data
+    /// from untrusted sources. You should choose a value that your typical XMLs
+    /// can have _between_ different elements that corresponds to the same sequence.
+    ///
+    /// # Examples
+    ///
+    /// Let's imagine, that we deserialize such structure:
+    /// ```
+    /// struct List {
+    ///   item: Vec<()>,
+    /// }
+    /// ```
+    ///
+    /// The XML that we try to parse look like this:
+    /// ```xml
+    /// <any-name>
+    ///   <item/>
+    ///   <!-- Bufferization starts at this point -->
+    ///   <another-item>
+    ///     <some-element>with text</some-element>
+    ///     <yet-another-element/>
+    ///   </another-item>
+    ///   <!-- Buffer will be emptied at this point; 7 events were buffered -->
+    ///   <item/>
+    ///   <!-- There is nothing to buffer, because elements follows each other -->
+    ///   <item/>
+    /// </any-name>
+    /// ```
+    ///
+    /// There, when we deserialize the `item` field, we need to buffer 7 events,
+    /// before we can deserialize the second `<item/>`:
+    ///
+    /// - `<another-item>`
+    /// - `<some-element>`
+    /// - `#text(with text)`
+    /// - `</some-element>`
+    /// - `<yet-another-element/>` (virtual start event)
+    /// - `<yet-another-element/>` (vitrual end event)
+    /// - `</another-item>`
+    ///
+    /// Note, that `<yet-another-element/>` internally represented as 2 events:
+    /// one for the start tag and one for the end tag. In the future this can be
+    /// eliminated, but for now we use [auto-expanding feature] of a reader,
+    /// because this simplifies deserializer code.
+    ///
+    /// [`deserialize_seq`]: serde::Deserializer::deserialize_seq
+    /// [DoS]: https://en.wikipedia.org/wiki/Denial-of-service_attack
+    /// [auto-expanding feature]: Reader::expand_empty_elements
+    #[cfg(feature = "overlapped-lists")]
+    pub fn event_buffer_size(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
+        self.limit = limit;
+        self
     }
 
     #[cfg(feature = "overlapped-lists")]
@@ -435,7 +510,7 @@ where
     #[cfg(feature = "overlapped-lists")]
     fn skip(&mut self) -> Result<(), DeError> {
         let event = self.next()?;
-        self.write.push_back(event);
+        self.skip_event(event)?;
         match self.write.back() {
             // Skip all subtree, if we skip a start event
             Some(DeEvent::Start(e)) => {
@@ -445,22 +520,34 @@ where
                     let event = self.next()?;
                     match event {
                         DeEvent::Start(ref e) if e.name() == end => {
-                            self.write.push_back(event);
+                            self.skip_event(event)?;
                             depth += 1;
                         }
                         DeEvent::End(ref e) if e.name() == end => {
-                            self.write.push_back(event);
+                            self.skip_event(event)?;
                             if depth == 0 {
                                 return Ok(());
                             }
                             depth -= 1;
                         }
-                        _ => self.write.push_back(event),
+                        _ => self.skip_event(event)?,
                     }
                 }
             }
             _ => Ok(()),
         }
+    }
+
+    #[cfg(feature = "overlapped-lists")]
+    #[inline]
+    fn skip_event(&mut self, event: DeEvent<'de>) -> Result<(), DeError> {
+        if let Some(max) = self.limit {
+            if self.write.len() >= max.get() {
+                return Err(DeError::TooManyEvents(max));
+            }
+        }
+        self.write.push_back(event);
+        Ok(())
     }
 
     /// Moves all buffered events to the end of [`Self::write`] buffer and swaps
@@ -1168,6 +1255,38 @@ mod tests {
             de.read_to_end(b"skip").unwrap();
 
             assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        }
+
+        /// Checks that limiting buffer size works correctly
+        #[test]
+        fn limit() {
+            use serde::Deserialize;
+
+            #[derive(Debug, Deserialize)]
+            #[allow(unused)]
+            struct List {
+                item: Vec<()>,
+            }
+
+            let mut de = Deserializer::from_slice(
+                br#"
+                <any-name>
+                    <item/>
+                    <another-item>
+                        <some-element>with text</some-element>
+                        <yet-another-element/>
+                    </another-item>
+                    <item/>
+                    <item/>
+                </any-name>
+                "#,
+            );
+            de.event_buffer_size(NonZeroUsize::new(3));
+
+            match List::deserialize(&mut de) {
+                Err(DeError::TooManyEvents(count)) => assert_eq!(count.get(), 3),
+                e => panic!("Expected `Err(TooManyEvents(3))`, but found {:?}", e),
+            }
         }
     }
 
