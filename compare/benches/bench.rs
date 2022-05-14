@@ -87,6 +87,24 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("RustyXML", |b| {
+        use rusty_xml::{Event, Parser};
+
+        b.iter(|| {
+            let mut r = Parser::new();
+            r.feed_str(SOURCE);
+
+            let mut count = criterion::black_box(0);
+            for event in r {
+                match event.unwrap() {
+                    Event::ElementStart(_) => count += 1,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
     group.bench_function("xml_oxide", |b| {
         use xml_oxide::sax::parser::Parser;
         use xml_oxide::sax::Event;
