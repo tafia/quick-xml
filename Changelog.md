@@ -10,6 +10,11 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- [#9]: Deserialization erroneously was successful in some cases where error is expected.
+  This broke deserialization of untagged enums which rely on error if variant cannot be parsed
+
 ### Misc Changes
 
 - [#8]: Changes in the error type `DeError`:
@@ -26,7 +31,12 @@
   |`DeError::EndOfAttributes`|Renamed to `DeError::KeyNotFound`
   |`DeError::ExpectedStart`|Added
 
+### New Tests
+
+- [#9]: Added tests for incorrect nested tags in input
+
 [#8]: https://github.com/Mingun/fast-xml/pull/8
+[#9]: https://github.com/Mingun/fast-xml/pull/9
 
 ## 0.23.0 -- 2022-05-08
 

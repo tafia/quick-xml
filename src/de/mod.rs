@@ -105,6 +105,113 @@
 //! }
 //! ```
 
+// Macros should be defined before the modules that using them
+// Also, macros should be imported before using them
+use serde::serde_if_integer128;
+
+macro_rules! deserialize_type {
+    ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
+        fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because valid integer representations cannot be escaped
+            let text = self.next_text(false)?;
+            let string = text.decode(self.decoder())?;
+            visitor.$visit(string.parse()?)
+        }
+    };
+}
+
+/// Implement deserialization methods for scalar types, such as numbers, strings,
+/// byte arrays, booleans and identifiers.
+macro_rules! deserialize_primitives {
+    ($($mut:tt)?) => {
+        deserialize_type!(deserialize_i8 => visit_i8, $($mut)?);
+        deserialize_type!(deserialize_i16 => visit_i16, $($mut)?);
+        deserialize_type!(deserialize_i32 => visit_i32, $($mut)?);
+        deserialize_type!(deserialize_i64 => visit_i64, $($mut)?);
+
+        deserialize_type!(deserialize_u8 => visit_u8, $($mut)?);
+        deserialize_type!(deserialize_u16 => visit_u16, $($mut)?);
+        deserialize_type!(deserialize_u32 => visit_u32, $($mut)?);
+        deserialize_type!(deserialize_u64 => visit_u64, $($mut)?);
+
+        serde_if_integer128! {
+            deserialize_type!(deserialize_i128 => visit_i128, $($mut)?);
+            deserialize_type!(deserialize_u128 => visit_u128, $($mut)?);
+        }
+
+        deserialize_type!(deserialize_f32 => visit_f32, $($mut)?);
+        deserialize_type!(deserialize_f64 => visit_f64, $($mut)?);
+
+        fn deserialize_bool<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because valid boolean representations cannot be escaped
+            let text = self.next_text(false)?;
+
+            deserialize_bool(text.as_ref(), self.decoder(), visitor)
+        }
+
+        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
+        /// Character represented as [strings](#method.deserialize_str).
+        fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
+        fn deserialize_str<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            let text = self.next_text(true)?;
+            let string = text.decode(self.decoder())?;
+            match string {
+                Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
+                Cow::Owned(string) => visitor.visit_string(string),
+            }
+        }
+
+        fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because bytes gives access to the raw XML input
+            let text = self.next_text(false)?;
+            visitor.visit_bytes(&text)
+        }
+
+        fn deserialize_byte_buf<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because bytes gives access to the raw XML input
+            let text = self.next_text(false)?;
+            let value = text.into_inner().into_owned();
+            visitor.visit_byte_buf(value)
+        }
+
+        /// Identifiers represented as [strings](#method.deserialize_str).
+        fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+    };
+}
+
 mod escape;
 mod map;
 mod seq;
@@ -118,7 +225,6 @@ use crate::{
     Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::io::BufRead;
 
@@ -291,8 +397,20 @@ where
         }
     }
 
+    #[inline]
+    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+        self.next_text_impl(unescape, true)
+    }
+
     /// Consumes a one XML element or an XML tree, returns associated text or
     /// an empty string.
+    ///
+    /// If `allow_start` is `false`, then only one event is consumed. If that
+    /// event is [`DeEvent::Start`], then [`DeError::UnexpectedStart`] is returned.
+    ///
+    /// If `allow_start` is `true`, then first text of CDATA event inside it is
+    /// returned and all other content is skipped until corresponding end tag
+    /// will be consumed.
     ///
     /// # Handling events
     ///
@@ -300,28 +418,32 @@ where
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------
-    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Result determined by the second table
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::UnexpectedEnd`]
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::UnexpectedEof`]
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     ///
-    /// Second event, consumed if [`DeEvent::Start`] was received:
+    /// Second event, consumed if [`DeEvent::Start`] was received and `allow_start == true`:
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------------------------------------------------
-    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`DeError::UnexpectedStart`]
+    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`DeError::UnexpectedEnd`]
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::UnexpectedEof`]
-    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    fn next_text_impl(
+        &mut self,
+        unescape: bool,
+        allow_start: bool,
+    ) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
             DeEvent::Text(e) if unescape => e.unescape().map_err(|e| DeError::InvalidXml(e.into())),
             DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
             DeEvent::CData(e) => Ok(e),
-            DeEvent::Start(e) => {
+            DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
@@ -340,9 +462,16 @@ where
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().to_owned())),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
+    }
+
+    /// Returns a decoder, used inside `deserialize_primitives!()`
+    #[inline]
+    fn decoder(&self) -> Decoder {
+        self.reader.decoder()
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
@@ -395,25 +524,13 @@ where
     }
 }
 
-macro_rules! deserialize_type {
-    ($deserialize:ident => $visit:ident) => {
-        fn $deserialize<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            // No need to unescape because valid integer representations cannot be escaped
-            let text = self.next_text(false)?;
-            let string = text.decode(self.reader.decoder())?;
-            visitor.$visit(string.parse()?)
-        }
-    };
-}
-
 impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
 where
     R: XmlRead<'de>,
 {
     type Error = DeError;
+
+    deserialize_primitives!();
 
     fn deserialize_struct<V>(
         self,
@@ -436,62 +553,6 @@ where
         } else {
             Err(DeError::ExpectedStart)
         }
-    }
-
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        // No need to unescape because valid integer representations cannot be escaped
-        let text = self.next_text(false)?;
-
-        deserialize_bool(text.as_ref(), self.reader.decoder(), visitor)
-    }
-
-    /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_str(visitor)
-    }
-
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let text = self.next_text(true)?;
-        let string = text.decode(self.reader.decoder())?;
-        match string {
-            Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
-            Cow::Owned(string) => visitor.visit_string(string),
-        }
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        // No need to unescape because bytes gives access to the raw XML input
-        let text = self.next_text(false)?;
-        visitor.visit_bytes(&text)
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        // No need to unescape because bytes gives access to the raw XML input
-        let text = self.next_text(false)?;
-        let value = text.into_inner().into_owned();
-        visitor.visit_byte_buf(value)
     }
 
     /// Unit represented in XML as a `xs:element` or text/CDATA content.
@@ -610,13 +671,6 @@ where
         }
     }
 
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
-    }
-
     /// Always call `visitor.visit_unit()` because returned value ignored in any case.
     ///
     /// This method consumes any single [event][DeEvent] except the [`Start`][DeEvent::Start]
@@ -647,22 +701,6 @@ where
             DeEvent::End(_) | DeEvent::Eof => self.deserialize_unit(visitor),
             _ => self.deserialize_string(visitor),
         }
-    }
-
-    deserialize_type!(deserialize_i8 => visit_i8);
-    deserialize_type!(deserialize_i16 => visit_i16);
-    deserialize_type!(deserialize_i32 => visit_i32);
-    deserialize_type!(deserialize_i64 => visit_i64);
-    deserialize_type!(deserialize_u8 => visit_u8);
-    deserialize_type!(deserialize_u16 => visit_u16);
-    deserialize_type!(deserialize_u32 => visit_u32);
-    deserialize_type!(deserialize_u64 => visit_u64);
-    deserialize_type!(deserialize_f32 => visit_f32);
-    deserialize_type!(deserialize_f64 => visit_f64);
-
-    serde_if_integer128! {
-        deserialize_type!(deserialize_i128 => visit_i128);
-        deserialize_type!(deserialize_u128 => visit_u128);
     }
 }
 
