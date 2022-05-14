@@ -121,12 +121,14 @@
 //!
 //! # Features
 //!
-//! fast-xml supports 2 additional features, non activated by default:
-//! - `encoding`: support non utf8 XMLs
-//! - `serialize`: support serde `Serialize`/`Deserialize`
+//! `fast-xml` supports the following features:
 //!
 //! [StAX]: https://en.wikipedia.org/wiki/StAX
 //! [Serde]: https://serde.rs/
+#![cfg_attr(
+    feature = "document-features",
+    cfg_attr(doc, doc = ::document_features::document_features!())
+)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
