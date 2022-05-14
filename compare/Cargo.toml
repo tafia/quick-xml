@@ -17,6 +17,7 @@ maybe_xml = "0.11"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
 rusty_xml = { version = "0.3", package = "RustyXML" }
+rxml = "0.13"
 serde-xml-rs = "0.8"
 xml_oxide = "0.3"
 xml-rs = "1.0"
