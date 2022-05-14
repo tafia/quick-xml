@@ -29,6 +29,30 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("maybe_xml", |b| {
+        use maybe_xml::eval::recv::RecvEvaluator;
+        use maybe_xml::token::borrowed::Token;
+
+        b.iter(|| {
+            let mut input = SOURCE.as_bytes();
+            let mut eval = RecvEvaluator::new();
+
+            let mut count = criterion::black_box(0);
+            loop {
+                let consumed = eval.recv(input);
+                match eval.next_token() {
+                    Ok(Some(Token::StartTag(_))) => count += 1,
+                    Ok(Some(Token::EmptyElementTag(_))) => count += 1,
+                    Ok(Some(Token::Eof)) => break,
+                    Ok(Some(Token::EofWithBytesNotEvaluated(_))) => break,
+                    _ => (),
+                }
+                input = &input[consumed..];
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
     group.bench_function("rapid-xml", |b| {
         use rapid_xml::parser::{EventCode, Parser};
 

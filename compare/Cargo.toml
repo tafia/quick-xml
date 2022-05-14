@@ -8,6 +8,7 @@ edition = "2018"
 
 [dev-dependencies]
 criterion = "0.3"
+maybe_xml = "0.2"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
 xml_oxide = "0.3"
