@@ -44,6 +44,26 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("xml_oxide", |b| {
+        use xml_oxide::sax::parser::Parser;
+        use xml_oxide::sax::Event;
+
+        b.iter(|| {
+            let mut r = Parser::from_reader(SOURCE.as_bytes());
+
+            let mut count = criterion::black_box(0);
+            loop {
+                // Makes no progress if error is returned, so need unwrap()
+                match r.read_event().unwrap() {
+                    Event::StartElement(_) => count += 1,
+                    Event::EndDocument => break,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
     group.bench_function("xml5ever", |b| {
         use xml5ever::buffer_queue::BufferQueue;
         use xml5ever::tokenizer::{TagKind, Token, TokenSink, XmlTokenizer};
