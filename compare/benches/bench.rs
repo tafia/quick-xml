@@ -29,6 +29,25 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("rapid-xml", |b| {
+        use rapid_xml::parser::{EventCode, Parser};
+
+        b.iter(|| {
+            let mut r = Parser::new(SOURCE.as_bytes());
+
+            let mut count = criterion::black_box(0);
+            loop {
+                // Makes no progress if error is returned, so need unwrap()
+                match r.next().unwrap().code() {
+                    EventCode::StartTag => count += 1,
+                    EventCode::Eof => break,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
     group.bench_function("xmlparser", |b| {
         use xmlparser::{Token, Tokenizer};
 
@@ -150,6 +169,19 @@ fn serde_comparison(c: &mut Criterion) {
             assert_eq!(rss.channel.items.len(), 99);
         })
     });
+
+    /* NOTE: Most parts of deserializer are not implemented yet, so benchmark failed
+    group.bench_function("rapid-xml", |b| {
+        use rapid_xml::de::Deserializer;
+        use rapid_xml::parser::Parser;
+
+        b.iter(|| {
+            let mut r = Parser::new(SOURCE.as_bytes());
+            let mut de = Deserializer::new(&mut r).unwrap();
+            let rss = Rss::deserialize(&mut de).unwrap();
+            assert_eq!(rss.channel.items.len(), 99);
+        });
+    });*/
 
     group.bench_function("xml_rs", |b| {
         b.iter(|| {
