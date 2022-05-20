@@ -1,6 +1,6 @@
-use fast_xml::de::Deserializer;
-use fast_xml::utils::ByteBuf;
-use fast_xml::DeError;
+use quick_xml::de::Deserializer;
+use quick_xml::utils::ByteBuf;
+use quick_xml::DeError;
 
 use pretty_assertions::assert_eq;
 
@@ -550,7 +550,7 @@ macro_rules! maplike_errors {
 
         mod mismatched_end {
             use super::*;
-            use fast_xml::Error::EndEventMismatch;
+            use quick_xml::Error::EndEventMismatch;
 
             #[test]
             fn attributes() {

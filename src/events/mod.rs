@@ -131,8 +131,8 @@ impl<'a> BytesStart<'a> {
     /// # Example
     ///
     /// ```rust
-    /// # use fast_xml::{Error, Writer};
-    /// use fast_xml::events::{BytesStart, Event};
+    /// # use quick_xml::{Error, Writer};
+    /// use quick_xml::events::{BytesStart, Event};
     ///
     /// struct SomeStruct<'a> {
     ///     attrs: BytesStart<'a>,
@@ -406,8 +406,8 @@ impl<'a> BytesDecl<'a> {
     ///
     /// ```
     /// use std::borrow::Cow;
-    /// use fast_xml::Error;
-    /// use fast_xml::events::{BytesDecl, BytesStart};
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
@@ -474,8 +474,8 @@ impl<'a> BytesDecl<'a> {
     ///
     /// ```
     /// use std::borrow::Cow;
-    /// use fast_xml::Error;
-    /// use fast_xml::events::{BytesDecl, BytesStart};
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
@@ -516,8 +516,8 @@ impl<'a> BytesDecl<'a> {
     ///
     /// ```
     /// use std::borrow::Cow;
-    /// use fast_xml::Error;
-    /// use fast_xml::events::{BytesDecl, BytesStart};
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));

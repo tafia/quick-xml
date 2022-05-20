@@ -53,8 +53,8 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// ```edition2018
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
-    /// use fast_xml::Writer;
-    /// # use fast_xml::se::Serializer;
+    /// use quick_xml::Writer;
+    /// # use quick_xml::se::Serializer;
     ///
     /// let mut buffer = Vec::new();
     /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
@@ -70,8 +70,8 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// ```edition2018
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
-    /// use fast_xml::Writer;
-    /// use fast_xml::se::Serializer;
+    /// use quick_xml::Writer;
+    /// use quick_xml::se::Serializer;
     ///
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct Struct {

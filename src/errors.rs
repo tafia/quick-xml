@@ -145,8 +145,8 @@ pub mod serialize {
         /// not expecting. Usually that should not be possible, because XML reader
         /// is not able to produce such stream of events that lead to this error.
         ///
-        /// If you get this error this likely indicates and error in the `fast_xml`.
-        /// Please open an issue at <https://github.com/Mingun/fast-xml>, provide
+        /// If you get this error this likely indicates and error in the `quick_xml`.
+        /// Please open an issue at <https://github.com/tafia/quick-xml>, provide
         /// your Rust code and XML input.
         UnexpectedEnd(Vec<u8>),
         /// Unexpected end of file

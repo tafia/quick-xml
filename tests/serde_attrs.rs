@@ -1,4 +1,4 @@
-use fast_xml::se::to_string;
+use quick_xml::se::to_string;
 use regex::Regex;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -50,7 +50,7 @@ fn test_nested() {
         number: "3-1".to_string(),
         adviser: t,
     };
-    let xml = fast_xml::se::to_string(&doc).unwrap();
+    let xml = quick_xml::se::to_string(&doc).unwrap();
 
     let str = r#"<classroom number="3-1">
                    <students>

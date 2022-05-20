@@ -2,9 +2,9 @@ use std::borrow::Cow;
 use std::io::Cursor;
 use std::str::from_utf8;
 
-use fast_xml::events::attributes::{AttrError, Attribute};
-use fast_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use fast_xml::{events::Event::*, Reader, Result, Writer};
+use quick_xml::events::attributes::{AttrError, Attribute};
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::{events::Event::*, Reader, Result, Writer};
 
 use pretty_assertions::assert_eq;
 

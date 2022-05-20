@@ -1,6 +1,6 @@
 fn main() {
-    use fast_xml::events::Event;
-    use fast_xml::Reader;
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
 
     let xml = "<tag1>text1</tag1><tag1>text2</tag1>\
                <tag1>text3</tag1><tag1><tag2>text4</tag2></tag1>";

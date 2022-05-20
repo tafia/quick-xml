@@ -1,11 +1,11 @@
 [package]
-name = "fast-xml"
+name = "quick-xml"
 version = "0.23.0"
 description = "High performance xml reader and writer"
 edition = "2018"
 
-documentation = "https://docs.rs/fast-xml"
-repository = "https://github.com/Mingun/fast-xml"
+documentation = "https://docs.rs/quick-xml"
+repository = "https://github.com/tafia/quick-xml"
 
 keywords = ["xml", "serde", "parser", "writer", "html"]
 categories = ["encoding", "parsing", "parser-implementations"]
@@ -34,7 +34,7 @@ default = []
 ## the XML declaration if it will be found, otherwise UTF-8 is assumed.
 ##
 ## Currently, only ASCII-compatible encodings are supported, so, for example,
-## UTF-16 will not work (therefore, `fast-xml` is not [standard compliant]).
+## UTF-16 will not work (therefore, `quick-xml` is not [standard compliant]).
 ##
 ## List of supported encodings includes all encodings supported by [`encoding_rs`]
 ## crate, that satisfied the restriction above.
