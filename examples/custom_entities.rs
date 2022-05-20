@@ -7,8 +7,8 @@
 //! * the regex in this example is simple but brittle;
 //! * it does not support the use of entities in entity declaration.
 
-use fast_xml::events::Event;
-use fast_xml::Reader;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 use regex::bytes::Regex;
 use std::collections::HashMap;
 

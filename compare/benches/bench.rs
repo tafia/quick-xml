@@ -1,6 +1,6 @@
 use criterion::{self, criterion_group, criterion_main, Criterion};
 use pretty_assertions::assert_eq;
-use fast_xml::{self, events::Event, Reader};
+use quick_xml::{self, events::Event, Reader};
 use serde::Deserialize;
 use serde_xml_rs;
 use xml::reader::{EventReader, XmlEvent};
@@ -11,7 +11,7 @@ static SOURCE: &str = include_str!("../../tests/sample_rss.xml");
 fn low_level_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("low-level API");
 
-    group.bench_function("fast_xml", |b| {
+    group.bench_function("quick_xml", |b| {
         b.iter(|| {
             let mut r = Reader::from_reader(SOURCE.as_bytes());
             r.check_end_names(false).check_comments(false);
@@ -77,9 +77,9 @@ fn serde_comparison(c: &mut Criterion) {
         typ: String,
     }
 
-    group.bench_function("fast_xml", |b| {
+    group.bench_function("quick_xml", |b| {
         b.iter(|| {
-            let rss: Rss = fast_xml::de::from_str(SOURCE).unwrap();
+            let rss: Rss = quick_xml::de::from_str(SOURCE).unwrap();
             assert_eq!(rss.channel.items.len(), 99);
         })
     });

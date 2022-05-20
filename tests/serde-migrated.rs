@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use fast_xml::de::from_str;
+use quick_xml::de::from_str;
 use serde::{de, ser};
 use serde::{Deserialize, Serialize};
 
@@ -140,7 +140,7 @@ fn test_doctype() {
     ]);
 }
 
-// pass in fast-xml because there is no proper doctype support
+// pass in quick-xml because there is no proper doctype support
 //
 //
 // #[test]

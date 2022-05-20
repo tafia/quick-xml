@@ -1,7 +1,7 @@
 use criterion::{self, criterion_group, criterion_main, Criterion};
-use fast_xml::events::Event;
-use fast_xml::Reader;
 use pretty_assertions::assert_eq;
+use quick_xml::events::Event;
+use quick_xml::Reader;
 
 static SAMPLE: &[u8] = include_bytes!("../tests/sample_rss.xml");
 static PLAYERS: &[u8] = include_bytes!("../tests/players.xml");

@@ -8,7 +8,7 @@ edition = "2018"
 
 [dev-dependencies]
 criterion = "0.3"
-fast-xml = { path = "..", features = ["serialize"] }
+quick-xml = { path = "..", features = ["serialize"] }
 xml-rs = "0.8"
 serde-xml-rs = "0.5"
 serde = { version = "1.0", features = [ "derive" ] }

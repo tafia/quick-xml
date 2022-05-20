@@ -8,10 +8,10 @@
 //! // Cargo.toml
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
-//! // fast-xml = { version = "0.22", features = [ "serialize" ] }
+//! // quick-xml = { version = "0.22", features = [ "serialize" ] }
 //! # use pretty_assertions::assert_eq;
 //! use serde::Deserialize;
-//! use fast_xml::de::{from_str, DeError};
+//! use quick_xml::de::{from_str, DeError};
 //!
 //! #[derive(Debug, Deserialize, PartialEq)]
 //! struct Link {

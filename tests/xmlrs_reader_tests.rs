@@ -1,5 +1,5 @@
-use fast_xml::events::{BytesStart, Event};
-use fast_xml::{Reader, Result};
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::{Reader, Result};
 use std::borrow::Cow;
 use std::str::from_utf8;
 

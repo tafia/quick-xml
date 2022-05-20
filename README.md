@@ -1,7 +1,7 @@
-# fast-xml -- successor of [quick-xml]
+# quick-xml
 
-![status](https://github.com/Mingun/fast-xml/actions/workflows/rust.yml/badge.svg)
-[![Crate](https://img.shields.io/crates/v/fast-xml.svg)](https://crates.io/crates/fast-xml)
+![status](https://github.com/tafia/quick-xml/actions/workflows/rust.yml/badge.svg)
+[![Crate](https://img.shields.io/crates/v/quick-xml.svg)](https://crates.io/crates/quick-xml)
 
 High performance xml pull reader/writer.
 
@@ -10,27 +10,17 @@ The reader:
 - is easy on memory allocation (the API provides a way to reuse buffers)
 - support various encoding (with `encoding` feature), namespaces resolution, special characters.
 
-[docs.rs](https://docs.rs/fast-xml)
+[docs.rs](https://docs.rs/quick-xml)
 
 Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
-
-## Migration from [quick-xml]
-
-If you using quick-xml 0.22.0 or 0.23.0-alpha3, you can just replace `quick-xml`
-in your `Cargo.toml` with `fast-xml`. Replace each occurrence of `quick_xml`
-crate name to `fast_xml` in your code base.
-
-That two releases of fast-xml was specifically made for migration and contains
-the same code as original quick-xml, except updated cargo metadata and extern
-crate names in tests, benches and examples.
 
 ## Example
 
 ### Reader
 
 ```rust
-use fast_xml::Reader;
-use fast_xml::events::Event;
+use quick_xml::Reader;
+use quick_xml::events::Event;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -74,9 +64,9 @@ loop {
 ### Writer
 
 ```rust
-use fast_xml::Writer;
-use fast_xml::Reader;
-use fast_xml::events::{Event, BytesEnd, BytesStart};
+use quick_xml::Writer;
+use quick_xml::Reader;
+use quick_xml::events::{Event, BytesEnd, BytesStart};
 use std::io::Cursor;
 use std::iter;
 
@@ -120,7 +110,7 @@ assert_eq!(result, expected.as_bytes());
 
 ## Serde
 
-When using the `serialize` feature, fast-xml can be used with serde's `Serialize`/`Deserialize` traits.
+When using the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
 
 Here is an example deserializing crates.io source:
 
@@ -128,9 +118,9 @@ Here is an example deserializing crates.io source:
 // Cargo.toml
 // [dependencies]
 // serde = { version = "1.0", features = [ "derive" ] }
-// fast-xml = { version = "0.22", features = [ "serialize" ] }
+// quick-xml = { version = "0.22", features = [ "serialize" ] }
 use serde::Deserialize;
-use fast_xml::de::{from_str, DeError};
+use quick_xml::de::{from_str, DeError};
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Link {
@@ -221,7 +211,7 @@ fn crates_io() -> Result<Html, DeError> {
 ### Credits
 
 This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs).
-fast-xml follows its convention for deserialization, including the
+quick-xml follows its convention for deserialization, including the
 [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
 
 Original [quick-xml] was developed by @tafia and abandoned around end of 2021.
@@ -282,7 +272,7 @@ Note that despite not focusing on performance (there are several unnecessary cop
 
 Benchmarking is hard and the results depend on your input file and your machine.
 
-Here on my particular file, fast-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
+Here on my particular file, quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
 _(measurements was done while this crate named quick-xml)_
 
 ```

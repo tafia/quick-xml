@@ -1,4 +1,4 @@
-use fast_xml::{de::from_str, se::to_string};
+use quick_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
 
 use pretty_assertions::assert_eq;
@@ -98,7 +98,7 @@ fn no_contiguous_fields() {
 </Xml>
 "#;
 
-    let xml: Xml = ::fast_xml::de::from_str(source).unwrap();
+    let xml: Xml = ::quick_xml::de::from_str(source).unwrap();
     assert_eq!(
         xml,
         Xml {
@@ -134,7 +134,7 @@ fn test_parse_unflatten_field() {
         field: "Foo".to_string(),
     };
 
-    let parsed: Unflatten = ::fast_xml::de::from_str(source).unwrap();
+    let parsed: Unflatten = ::quick_xml::de::from_str(source).unwrap();
     assert_eq!(&parsed, &expected);
 
     let stringified = to_string(&parsed).unwrap();

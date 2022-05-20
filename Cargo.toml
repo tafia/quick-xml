@@ -1,11 +1,11 @@
 [package]
-name = "fast-xml"
+name = "quick-xml"
 version = "0.23.0"
 description = "High performance xml reader and writer"
 edition = "2018"
 
-documentation = "https://docs.rs/fast-xml"
-repository = "https://github.com/Mingun/fast-xml"
+documentation = "https://docs.rs/quick-xml"
+repository = "https://github.com/tafia/quick-xml"
 
 keywords = ["xml", "serde", "parser", "writer", "html"]
 categories = ["encoding", "parsing", "parser-implementations"]
