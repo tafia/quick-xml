@@ -1,7 +1,7 @@
+use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::Reader;
-use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
