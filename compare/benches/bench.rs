@@ -29,6 +29,134 @@ fn low_level_comparison(c: &mut Criterion) {
         })
     });
 
+    group.bench_function("maybe_xml", |b| {
+        use maybe_xml::eval::recv::RecvEvaluator;
+        use maybe_xml::token::borrowed::Token;
+
+        b.iter(|| {
+            let mut input = SOURCE.as_bytes();
+            let mut eval = RecvEvaluator::new();
+
+            let mut count = criterion::black_box(0);
+            loop {
+                let consumed = eval.recv(input);
+                match eval.next_token() {
+                    Ok(Some(Token::StartTag(_))) => count += 1,
+                    Ok(Some(Token::EmptyElementTag(_))) => count += 1,
+                    Ok(Some(Token::Eof)) => break,
+                    Ok(Some(Token::EofWithBytesNotEvaluated(_))) => break,
+                    _ => (),
+                }
+                input = &input[consumed..];
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
+    group.bench_function("rapid-xml", |b| {
+        use rapid_xml::parser::{EventCode, Parser};
+
+        b.iter(|| {
+            let mut r = Parser::new(SOURCE.as_bytes());
+
+            let mut count = criterion::black_box(0);
+            loop {
+                // Makes no progress if error is returned, so need unwrap()
+                match r.next().unwrap().code() {
+                    EventCode::StartTag => count += 1,
+                    EventCode::Eof => break,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
+    group.bench_function("xmlparser", |b| {
+        use xmlparser::{Token, Tokenizer};
+
+        b.iter(|| {
+            let mut count = criterion::black_box(0);
+            for token in Tokenizer::from(SOURCE) {
+                match token {
+                    Ok(Token::ElementStart { .. }) => count += 1,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
+    group.bench_function("RustyXML", |b| {
+        use rusty_xml::{Event, Parser};
+
+        b.iter(|| {
+            let mut r = Parser::new();
+            r.feed_str(SOURCE);
+
+            let mut count = criterion::black_box(0);
+            for event in r {
+                match event.unwrap() {
+                    Event::ElementStart(_) => count += 1,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
+    group.bench_function("xml_oxide", |b| {
+        use xml_oxide::sax::parser::Parser;
+        use xml_oxide::sax::Event;
+
+        b.iter(|| {
+            let mut r = Parser::from_reader(SOURCE.as_bytes());
+
+            let mut count = criterion::black_box(0);
+            loop {
+                // Makes no progress if error is returned, so need unwrap()
+                match r.read_event().unwrap() {
+                    Event::StartElement(_) => count += 1,
+                    Event::EndDocument => break,
+                    _ => (),
+                }
+            }
+            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+        })
+    });
+
+    group.bench_function("xml5ever", |b| {
+        use xml5ever::buffer_queue::BufferQueue;
+        use xml5ever::tokenizer::{TagKind, Token, TokenSink, XmlTokenizer};
+
+        struct Sink(usize);
+        impl TokenSink for Sink {
+            fn process_token(&mut self, token: Token) {
+                match token {
+                    Token::TagToken(tag) if tag.kind == TagKind::StartTag => self.0 += 1,
+                    Token::TagToken(tag) if tag.kind == TagKind::EmptyTag => self.0 += 1,
+                    _ => (),
+                }
+            }
+        }
+
+        // Copied from xml5ever benchmarks
+        // https://github.com/servo/html5ever/blob/429f23943b24f739b78f4d703620d7b1b526475b/xml5ever/benches/xml5ever.rs
+        b.iter(|| {
+            let sink = criterion::black_box(Sink(0));
+            let mut tok = XmlTokenizer::new(sink, Default::default());
+            let mut buffer = BufferQueue::new();
+            buffer.push_back(SOURCE.into());
+            let _ = tok.feed(&mut buffer);
+            tok.end();
+
+            assert_eq!(
+                tok.sink.0, 1550,
+                "Overall tag count in ./tests/sample_rss.xml"
+            );
+        })
+    });
+
     group.bench_function("xml_rs", |b| {
         b.iter(|| {
             let r = EventReader::new(SOURCE.as_bytes());
@@ -83,6 +211,19 @@ fn serde_comparison(c: &mut Criterion) {
             assert_eq!(rss.channel.items.len(), 99);
         })
     });
+
+    /* NOTE: Most parts of deserializer are not implemented yet, so benchmark failed
+    group.bench_function("rapid-xml", |b| {
+        use rapid_xml::de::Deserializer;
+        use rapid_xml::parser::Parser;
+
+        b.iter(|| {
+            let mut r = Parser::new(SOURCE.as_bytes());
+            let mut de = Deserializer::new(&mut r).unwrap();
+            let rss = Rss::deserialize(&mut de).unwrap();
+            assert_eq!(rss.channel.items.len(), 99);
+        });
+    });*/
 
     group.bench_function("xml_rs", |b| {
         b.iter(|| {
