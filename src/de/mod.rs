@@ -8,10 +8,8 @@
 //! // Cargo.toml
 //! // [dependencies]
 //! // serde = { version = "1.0", features = [ "derive" ] }
-//! // quick-xml = { version = "0.21", features = [ "serialize" ] }
-//! extern crate serde;
-//! extern crate quick_xml;
-//!
+//! // quick-xml = { version = "0.22", features = [ "serialize" ] }
+//! # use pretty_assertions::assert_eq;
 //! use serde::Deserialize;
 //! use quick_xml::de::{from_str, DeError};
 //!
@@ -107,8 +105,113 @@
 //! }
 //! ```
 
-#[cfg(test)]
-mod byte_buf;
+// Macros should be defined before the modules that using them
+// Also, macros should be imported before using them
+use serde::serde_if_integer128;
+
+macro_rules! deserialize_type {
+    ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
+        fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because valid integer representations cannot be escaped
+            let text = self.next_text(false)?;
+            let string = text.decode(self.decoder())?;
+            visitor.$visit(string.parse()?)
+        }
+    };
+}
+
+/// Implement deserialization methods for scalar types, such as numbers, strings,
+/// byte arrays, booleans and identifiers.
+macro_rules! deserialize_primitives {
+    ($($mut:tt)?) => {
+        deserialize_type!(deserialize_i8 => visit_i8, $($mut)?);
+        deserialize_type!(deserialize_i16 => visit_i16, $($mut)?);
+        deserialize_type!(deserialize_i32 => visit_i32, $($mut)?);
+        deserialize_type!(deserialize_i64 => visit_i64, $($mut)?);
+
+        deserialize_type!(deserialize_u8 => visit_u8, $($mut)?);
+        deserialize_type!(deserialize_u16 => visit_u16, $($mut)?);
+        deserialize_type!(deserialize_u32 => visit_u32, $($mut)?);
+        deserialize_type!(deserialize_u64 => visit_u64, $($mut)?);
+
+        serde_if_integer128! {
+            deserialize_type!(deserialize_i128 => visit_i128, $($mut)?);
+            deserialize_type!(deserialize_u128 => visit_u128, $($mut)?);
+        }
+
+        deserialize_type!(deserialize_f32 => visit_f32, $($mut)?);
+        deserialize_type!(deserialize_f64 => visit_f64, $($mut)?);
+
+        fn deserialize_bool<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because valid boolean representations cannot be escaped
+            let text = self.next_text(false)?;
+
+            deserialize_bool(text.as_ref(), self.decoder(), visitor)
+        }
+
+        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
+        /// Character represented as [strings](#method.deserialize_str).
+        fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
+        fn deserialize_str<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            let text = self.next_text(true)?;
+            let string = text.decode(self.decoder())?;
+            match string {
+                Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
+                Cow::Owned(string) => visitor.visit_string(string),
+            }
+        }
+
+        fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because bytes gives access to the raw XML input
+            let text = self.next_text(false)?;
+            visitor.visit_bytes(&text)
+        }
+
+        fn deserialize_byte_buf<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            // No need to unescape because bytes gives access to the raw XML input
+            let text = self.next_text(false)?;
+            let value = text.into_inner().into_owned();
+            visitor.visit_byte_buf(value)
+        }
+
+        /// Identifiers represented as [strings](#method.deserialize_str).
+        fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+    };
+}
+
 mod escape;
 mod map;
 mod seq;
@@ -117,12 +220,11 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
-    events::{BytesEnd, BytesStart, BytesText, Event},
+    events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     reader::Decoder,
     Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
-use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::io::BufRead;
 
@@ -141,7 +243,7 @@ pub enum DeEvent<'a> {
     Text(BytesText<'a>),
     /// Unescaped character data between `Start` and `End` element,
     /// stored in `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesCData<'a>),
     /// End of XML document.
     Eof,
 }
@@ -149,7 +251,7 @@ pub enum DeEvent<'a> {
 /// An xml deserializer
 pub struct Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     reader: R,
     peek: Option<DeEvent<'de>>,
@@ -163,46 +265,41 @@ where
     has_value_field: bool,
 }
 
-/// Deserialize an instance of type T from a string of XML text.
+/// Deserialize an instance of type `T` from a string of XML text.
 pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
-    from_bytes(s.as_bytes())
+    from_slice(s.as_bytes())
 }
 
-/// Deserialize a xml slice of bytes
+/// Deserialize an instance of type `T` from bytes of XML text.
+#[deprecated = "Use `from_slice` instead"]
 pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
-    let mut de = Deserializer::from_bytes(s);
+    from_slice(s)
+}
+
+/// Deserialize an instance of type `T` from bytes of XML text.
+pub fn from_slice<'de, T>(s: &'de [u8]) -> Result<T, DeError>
+where
+    T: Deserialize<'de>,
+{
+    let mut de = Deserializer::from_slice(s);
     T::deserialize(&mut de)
 }
 
-/// Deserialize an instance of type T from bytes of XML text.
-pub fn from_slice<T>(b: &[u8]) -> Result<T, DeError>
-where
-    T: DeserializeOwned,
-{
-    from_reader(b)
-}
-
-/// Deserialize from a reader
+/// Deserialize from a reader. This method will do internal copies of data
+/// readed from `reader`. If you want have a `&[u8]` or `&str` input and want
+/// to borrow as much as possible, use [`from_slice`] or [`from_str`]
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
     R: BufRead,
     T: DeserializeOwned,
 {
-    let mut reader = Reader::from_reader(reader);
-    reader
-        .expand_empty_elements(true)
-        .check_end_names(true)
-        .trim_text(true);
-    let mut de = Deserializer::from_borrowing_reader(IoReader {
-        reader,
-        buf: Vec::new(),
-    });
+    let mut de = Deserializer::from_reader(reader);
     T::deserialize(&mut de)
 }
 
@@ -244,9 +341,15 @@ where
 
 impl<'de, R> Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
-    /// Get a new deserializer
+    /// Create an XML deserializer from one of the possible quick_xml input sources.
+    ///
+    /// Typically it is more convenient to use one of these methods instead:
+    ///
+    ///  - [`Deserializer::from_str`]
+    ///  - [`Deserializer::from_slice`]
+    ///  - [`Deserializer::from_reader`]
     pub fn new(reader: R) -> Self {
         Deserializer {
             reader,
@@ -256,13 +359,14 @@ where
     }
 
     /// Get a new deserializer from a regular BufRead
+    #[deprecated = "Use `Deserializer::new` instead"]
     pub fn from_borrowing_reader(reader: R) -> Self {
         Self::new(reader)
     }
 
     fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
         if self.peek.is_none() {
-            self.peek = Some(self.next()?);
+            self.peek = Some(self.reader.next()?);
         }
         match self.peek.as_ref() {
             Some(v) => Ok(v),
@@ -286,44 +390,88 @@ where
             let e = self.next()?;
             match e {
                 DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(_) => return Err(DeError::End),
+                DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
                 DeEvent::Eof => return Ok(None),
                 _ => (), // ignore texts
             }
         }
     }
 
-    /// Consumes an one XML element, returns associated text or empty string:
+    #[inline]
+    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+        self.next_text_impl(unescape, true)
+    }
+
+    /// Consumes a one XML element or an XML tree, returns associated text or
+    /// an empty string.
     ///
-    /// |XML                  |Result     |Comments                    |
-    /// |---------------------|-----------|----------------------------|
-    /// |`<tag ...>text</tag>`|`text`     |Complete tag consumed       |
-    /// |`<tag/>`             |empty slice|Virtual end tag not consumed|
-    /// |`</tag>`             |empty slice|Not consumed                |
-    fn next_text(&mut self) -> Result<BytesText<'de>, DeError> {
+    /// If `allow_start` is `false`, then only one event is consumed. If that
+    /// event is [`DeEvent::Start`], then [`DeError::UnexpectedStart`] is returned.
+    ///
+    /// If `allow_start` is `true`, then first text of CDATA event inside it is
+    /// returned and all other content is skipped until corresponding end tag
+    /// will be consumed.
+    ///
+    /// # Handling events
+    ///
+    /// The table below shows how events is handled by this method:
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|----------------------------------------
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    ///
+    /// Second event, consumed if [`DeEvent::Start`] was received and `allow_start == true`:
+    ///
+    /// |Event             |XML                        |Handling
+    /// |------------------|---------------------------|----------------------------------------------------------------------------------
+    /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
+    /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
+    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
+    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    fn next_text_impl(
+        &mut self,
+        unescape: bool,
+        allow_start: bool,
+    ) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) | DeEvent::CData(e) => Ok(e),
-            DeEvent::Eof => Err(DeError::Eof),
-            DeEvent::Start(e) => {
+            DeEvent::Text(e) if unescape => e.unescape().map_err(|e| DeError::InvalidXml(e.into())),
+            DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
+            DeEvent::CData(e) => Ok(e),
+            DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) | DeEvent::CData(t) => t,
-                    DeEvent::Start(_) => return Err(DeError::Start),
+                    DeEvent::Text(t) if unescape => t.unescape()?,
+                    DeEvent::Text(t) => BytesCData::new(t.into_inner()),
+                    DeEvent::CData(t) => t,
+                    DeEvent::Start(s) => return Err(DeError::UnexpectedStart(s.name().to_owned())),
+                    // We can get End event in case of `<tag></tag>` or `<tag/>` input
+                    // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
-                        return Ok(BytesText::from_escaped(&[] as &[u8]));
+                        return Ok(BytesCData::new(&[] as &[u8]));
                     }
-                    DeEvent::End(_) => return Err(DeError::End),
-                    DeEvent::Eof => return Err(DeError::Eof),
+                    DeEvent::End(end) => return Err(DeError::UnexpectedEnd(end.name().to_owned())),
+                    DeEvent::Eof => return Err(DeError::UnexpectedEof),
                 };
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            DeEvent::End(e) => {
-                self.peek = Some(DeEvent::End(e));
-                Ok(BytesText::from_escaped(&[] as &[u8]))
-            }
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
+    }
+
+    /// Returns a decoder, used inside `deserialize_primitives!()`
+    #[inline]
+    fn decoder(&self) -> Decoder {
+        self.reader.decoder()
     }
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
@@ -340,39 +488,49 @@ where
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
     pub fn from_str(s: &'de str) -> Self {
-        Self::from_bytes(s.as_bytes())
+        Self::from_slice(s.as_bytes())
     }
 
     /// Create new deserializer that will borrow data from the specified byte array
-    pub fn from_bytes(bytes: &'de [u8]) -> Self {
+    pub fn from_slice(bytes: &'de [u8]) -> Self {
         let mut reader = Reader::from_bytes(bytes);
         reader
             .expand_empty_elements(true)
             .check_end_names(true)
             .trim_text(true);
-        Self::from_borrowing_reader(SliceReader { reader })
+        Self::new(SliceReader { reader })
     }
 }
 
-macro_rules! deserialize_type {
-    ($deserialize:ident => $visit:ident) => {
-        fn $deserialize<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            let txt = self.next_text()?;
-            // No need to unescape because valid integer representations cannot be escaped
-            let string = txt.decode(self.reader.decoder())?;
-            visitor.$visit(string.parse()?)
-        }
-    };
+impl<'de, R> Deserializer<'de, IoReader<R>>
+where
+    R: BufRead,
+{
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer. If you already have a string or a byte array, use
+    /// [`Self::from_str`] or [`Self::from_slice`] instead, because they will
+    /// borrow instead of copy, whenever possible
+    pub fn from_reader(reader: R) -> Self {
+        let mut reader = Reader::from_reader(reader);
+        reader
+            .expand_empty_elements(true)
+            .check_end_names(true)
+            .trim_text(true);
+
+        Self::new(IoReader {
+            reader,
+            buf: Vec::new(),
+        })
+    }
 }
 
 impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
+
+    deserialize_primitives!();
 
     fn deserialize_struct<V>(
         self,
@@ -393,63 +551,8 @@ where
             self.read_to_end(&name)?;
             Ok(value)
         } else {
-            Err(DeError::Start)
+            Err(DeError::ExpectedStart)
         }
-    }
-
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let txt = self.next_text()?;
-
-        deserialize_bool(txt.as_ref(), self.reader.decoder(), visitor)
-    }
-
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let text = self.next_text()?;
-        let string = text.decode_and_escape(self.reader.decoder())?;
-        visitor.visit_string(string.into_owned())
-    }
-
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let text = self.next_text()?;
-        let string = text.decode_and_escape(self.reader.decoder())?;
-        match string {
-            Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
-            Cow::Owned(string) => visitor.visit_string(string),
-        }
-    }
-
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let text = self.next_text()?;
-        let value = text.escaped();
-        visitor.visit_bytes(value)
-    }
-
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        let text = self.next_text()?;
-        let value = text.into_inner().into_owned();
-        visitor.visit_byte_buf(value)
     }
 
     /// Unit represented in XML as a `xs:element` or text/CDATA content.
@@ -466,10 +569,10 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|-------------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to corresponding `End` event
-    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`DeError::End`]
+    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`UnexpectedEnd("tag")`](DeError::UnexpectedEnd)
     /// |[`DeEvent::Text`] |`text content`             |Calls `visitor.visit_unit()`. Text content is ignored
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Calls `visitor.visit_unit()`. CDATA content is ignored
-    /// |[`DeEvent::Eof`]  |                           |Emits [`DeError::Eof`]
+    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -480,8 +583,8 @@ where
                 visitor.visit_unit()
             }
             DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
-            DeEvent::End(_) => Err(DeError::End),
-            DeEvent::Eof => Err(DeError::Eof),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
 
@@ -562,16 +665,10 @@ where
     {
         match self.peek()? {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
-    }
-
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_string(visitor)
     }
 
     /// Always call `visitor.visit_unit()` because returned value ignored in any case.
@@ -587,8 +684,8 @@ where
     {
         match self.next()? {
             DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(_) => return Err(DeError::End),
-            DeEvent::Eof => return Err(DeError::Eof),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Eof => return Err(DeError::UnexpectedEof),
             _ => (),
         }
         visitor.visit_unit()
@@ -605,31 +702,15 @@ where
             _ => self.deserialize_string(visitor),
         }
     }
-
-    deserialize_type!(deserialize_i8 => visit_i8);
-    deserialize_type!(deserialize_i16 => visit_i16);
-    deserialize_type!(deserialize_i32 => visit_i32);
-    deserialize_type!(deserialize_i64 => visit_i64);
-    deserialize_type!(deserialize_u8 => visit_u8);
-    deserialize_type!(deserialize_u16 => visit_u16);
-    deserialize_type!(deserialize_u32 => visit_u32);
-    deserialize_type!(deserialize_u64 => visit_u64);
-    deserialize_type!(deserialize_f32 => visit_f32);
-    deserialize_type!(deserialize_f64 => visit_f64);
-
-    serde_if_integer128! {
-        deserialize_type!(deserialize_i128 => visit_i128);
-        deserialize_type!(deserialize_u128 => visit_u128);
-    }
 }
 
-/// A trait that borrows an XML reader that borrows from the input. For a &[u8]
-/// input the events will borrow from that input, whereas with a BufRead input
-/// all events will be converted to 'static, allocating whenever necessary.
-pub trait BorrowingReader<'i>
-where
-    Self: 'i,
-{
+/// Trait used by the deserializer for iterating over input. This is manually
+/// "specialized" for iterating over `&[u8]`.
+///
+/// You do not need to implement this trait, it is needed to abstract from
+/// [borrowing](SliceReader) and [copying](IoReader) data sources and reuse code in
+/// deserializer
+pub trait XmlRead<'i> {
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<DeEvent<'i>, DeError>;
 
@@ -641,12 +722,16 @@ where
     fn decoder(&self) -> Decoder;
 }
 
-struct IoReader<R: BufRead> {
+/// XML input source that reads from a std::io input stream.
+///
+/// You cannot create it, it is created automatically when you call
+/// [`Deserializer::from_reader`]
+pub struct IoReader<R: BufRead> {
     reader: Reader<R>,
     buf: Vec<u8>,
 }
 
-impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
+impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
         let event = loop {
             let e = self.reader.read_event(&mut self.buf)?;
@@ -668,7 +753,7 @@ impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         match self.reader.read_to_end(name, &mut self.buf) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
     }
@@ -678,11 +763,15 @@ impl<'i, R: BufRead + 'i> BorrowingReader<'i> for IoReader<R> {
     }
 }
 
-struct SliceReader<'de> {
+/// XML input source that reads from a slice of bytes and can borrow from it.
+///
+/// You cannot create it, it is created automatically when you call
+/// [`Deserializer::from_str`] or [`Deserializer::from_slice`]
+pub struct SliceReader<'de> {
     reader: Reader<&'de [u8]>,
 }
 
-impl<'de> BorrowingReader<'de> for SliceReader<'de> {
+impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         loop {
             let e = self.reader.read_event_unbuffered()?;
@@ -700,7 +789,7 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
         match self.reader.read_to_end_unbuffered(name) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::Eof),
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
     }
@@ -713,46 +802,21 @@ impl<'de> BorrowingReader<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::de::byte_buf::ByteBuf;
-    use serde::de::IgnoredAny;
-    use serde::Deserialize;
-
-    /// Deserialize an instance of type T from a string of XML text.
-    /// If deserialization was succeeded checks that all XML events was consumed
-    fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
-    where
-        T: Deserialize<'de>,
-    {
-        let mut de = Deserializer::from_str(s);
-        let result = T::deserialize(&mut de);
-
-        // If type was deserialized, the whole XML document should be consumed
-        if let Ok(_) = result {
-            assert_eq!(de.next().unwrap(), DeEvent::Eof);
-        }
-
-        result
-    }
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn read_to_end() {
         use crate::de::DeEvent::*;
 
-        let mut reader = Reader::from_bytes(
-            r#"
+        let mut de = Deserializer::from_slice(
+            br#"
             <root>
                 <tag a="1"><tag>text</tag>content</tag>
                 <tag a="2"><![CDATA[cdata content]]></tag>
                 <self-closed/>
             </root>
-            "#
-            .as_bytes(),
+            "#,
         );
-        reader
-            .expand_empty_elements(true)
-            .check_end_names(true)
-            .trim_text(true);
-        let mut de = Deserializer::from_borrowing_reader(SliceReader { reader });
 
         assert_eq!(
             de.next().unwrap(),
@@ -771,7 +835,7 @@ mod tests {
         );
         assert_eq!(
             de.next().unwrap(),
-            CData(BytesText::from_plain_str("cdata content"))
+            CData(BytesCData::from_str("cdata content"))
         );
         assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
 
@@ -886,1282 +950,33 @@ mod tests {
         assert_eq!(reader.next().unwrap(), DeEvent::Eof);
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct BorrowedText<'a> {
-        #[serde(rename = "$value")]
-        text: &'a str,
-    }
-
+    /// Ensures, that [`Deserializer::next_text()`] never can get an `End` event,
+    /// because parser reports error early
     #[test]
-    fn string_borrow() {
-        let s = "<text>Hello world</text>";
-
-        let borrowed_item: BorrowedText = from_str(s).unwrap();
-
-        assert_eq!(borrowed_item.text, "Hello world");
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Item {
-        name: String,
-        source: String,
-    }
-
-    #[test]
-    fn multiple_roots_attributes() {
-        let s = r##"
-	    <item name="hello" source="world.rs" />
-	    <item name="hello" source="world.rs" />
-	"##;
-
-        let item: Vec<Item> = from_str(s).unwrap();
-
-        assert_eq!(
-            item,
-            vec![
-                Item {
-                    name: "hello".to_string(),
-                    source: "world.rs".to_string(),
-                },
-                Item {
-                    name: "hello".to_string(),
-                    source: "world.rs".to_string(),
-                },
-            ]
-        );
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Project {
-        name: String,
-
-        #[serde(rename = "item", default)]
-        items: Vec<Item>,
-    }
-
-    #[test]
-    fn nested_collection() {
-        let s = r##"
-	    <project name="my_project">
-		<item name="hello1" source="world1.rs" />
-		<item name="hello2" source="world2.rs" />
-	    </project>
-	"##;
-
-        let project: Project = from_str(s).unwrap();
-
-        assert_eq!(
-            project,
-            Project {
-                name: "my_project".to_string(),
-                items: vec![
-                    Item {
-                        name: "hello1".to_string(),
-                        source: "world1.rs".to_string(),
-                    },
-                    Item {
-                        name: "hello2".to_string(),
-                        source: "world2.rs".to_string(),
-                    },
-                ],
+    fn next_text() {
+        match from_str::<String>(r#"</root>"#) {
+            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
+                assert_eq!(expected, "");
+                assert_eq!(found, "root");
             }
-        );
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    enum MyEnum {
-        A(String),
-        B { name: String, flag: bool },
-        C,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct MyEnums {
-        // TODO: This should be #[serde(flatten)], but right now serde don't support flattening of sequences
-        // See https://github.com/serde-rs/serde/issues/1905
-        #[serde(rename = "$value")]
-        items: Vec<MyEnum>,
-    }
-
-    #[test]
-    fn collection_of_enums() {
-        let s = r##"
-        <enums>
-            <A>test</A>
-            <B name="hello" flag="t" />
-            <C />
-        </enums>
-        "##;
-
-        let project: MyEnums = from_str(s).unwrap();
-
-        assert_eq!(
-            project,
-            MyEnums {
-                items: vec![
-                    MyEnum::A("test".to_string()),
-                    MyEnum::B {
-                        name: "hello".to_string(),
-                        flag: true,
-                    },
-                    MyEnum::C,
-                ],
-            }
-        );
-    }
-
-    #[test]
-    fn deserialize_bytes() {
-        let s = r#"<item>bytes</item>"#;
-        let item: ByteBuf = from_reader(s.as_bytes()).unwrap();
-
-        assert_eq!(item, ByteBuf(b"bytes".to_vec()));
-    }
-
-    /// Test for https://github.com/tafia/quick-xml/issues/231
-    #[test]
-    fn implicit_value() {
-        use serde_value::Value;
-
-        let s = r#"<root>content</root>"#;
-        let item: Value = from_str(s).unwrap();
-
-        assert_eq!(
-            item,
-            Value::Map(
-                vec![(
-                    Value::String("$value".into()),
-                    Value::String("content".into())
-                )]
-                .into_iter()
-                .collect()
-            )
-        );
-    }
-
-    #[test]
-    fn explicit_value() {
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Item {
-            #[serde(rename = "$value")]
-            content: String,
+            x => panic!(
+                r#"Expected `Err(InvalidXml(EndEventMismatch("", "root")))`, but found {:?}"#,
+                x
+            ),
         }
 
-        let s = r#"<root>content</root>"#;
-        let item: Item = from_str(s).unwrap();
+        let s: String = from_str(r#"<root></root>"#).unwrap();
+        assert_eq!(s, "");
 
-        assert_eq!(
-            item,
-            Item {
-                content: "content".into()
+        match from_str::<String>(r#"<root></other>"#) {
+            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
+                assert_eq!(expected, "root");
+                assert_eq!(found, "other");
             }
-        );
-    }
-
-    #[test]
-    fn without_value() {
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Item;
-
-        let s = r#"<root>content</root>"#;
-        let item: Item = from_str(s).unwrap();
-
-        assert_eq!(item, Item);
-    }
-
-    /// Tests calling `deserialize_ignored_any`
-    #[test]
-    fn ignored_any() {
-        let err = from_str::<IgnoredAny>("");
-        match err {
-            Err(DeError::Eof) => {}
-            other => panic!("Expected `Eof`, found {:?}", other),
-        }
-
-        from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
-        from_str::<IgnoredAny>(r#"<with-attributes key="value"/>"#).unwrap();
-        from_str::<IgnoredAny>(r#"<nested>text</nested>"#).unwrap();
-        from_str::<IgnoredAny>(r#"<nested><![CDATA[cdata]]></nested>"#).unwrap();
-        from_str::<IgnoredAny>(r#"<nested><nested/></nested>"#).unwrap();
-    }
-
-    mod unit {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Unit;
-
-        #[test]
-        fn simple() {
-            let data: Unit = from_str("<root/>").unwrap();
-            assert_eq!(data, Unit);
-        }
-
-        #[test]
-        fn excess_attribute() {
-            let data: Unit = from_str(r#"<root excess="attribute"/>"#).unwrap();
-            assert_eq!(data, Unit);
-        }
-
-        #[test]
-        fn excess_element() {
-            let data: Unit = from_str(r#"<root><excess>element</excess></root>"#).unwrap();
-            assert_eq!(data, Unit);
-        }
-
-        #[test]
-        fn excess_text() {
-            let data: Unit = from_str(r#"<root>excess text</root>"#).unwrap();
-            assert_eq!(data, Unit);
-        }
-
-        #[test]
-        fn excess_cdata() {
-            let data: Unit = from_str(r#"<root><![CDATA[excess CDATA]]></root>"#).unwrap();
-            assert_eq!(data, Unit);
-        }
-    }
-
-    mod newtype {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Newtype(bool);
-
-        #[test]
-        fn simple() {
-            let data: Newtype = from_str("<root>true</root>").unwrap();
-            assert_eq!(data, Newtype(true));
-        }
-
-        #[test]
-        fn excess_attribute() {
-            let data: Newtype = from_str(r#"<root excess="attribute">true</root>"#).unwrap();
-            assert_eq!(data, Newtype(true));
-        }
-    }
-
-    mod tuple {
-        use super::*;
-
-        #[test]
-        fn simple() {
-            let data: (f32, String) = from_str("<root>42</root><root>answer</root>").unwrap();
-            assert_eq!(data, (42.0, "answer".into()));
-        }
-
-        #[test]
-        fn excess_attribute() {
-            let data: (f32, String) =
-                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
-            assert_eq!(data, (42.0, "answer".into()));
-        }
-    }
-
-    mod tuple_struct {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Tuple(f32, String);
-
-        #[test]
-        fn simple() {
-            let data: Tuple = from_str("<root>42</root><root>answer</root>").unwrap();
-            assert_eq!(data, Tuple(42.0, "answer".into()));
-        }
-
-        #[test]
-        fn excess_attribute() {
-            let data: Tuple =
-                from_str(r#"<root excess="attribute">42</root><root>answer</root>"#).unwrap();
-            assert_eq!(data, Tuple(42.0, "answer".into()));
-        }
-    }
-
-    macro_rules! maplike_errors {
-        ($type:ty) => {
-            mod non_closed {
-                use super::*;
-
-                #[test]
-                fn attributes() {
-                    let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
-
-                    match data {
-                        Err(DeError::Eof) => (),
-                        _ => panic!("Expected `Eof`, found {:?}", data),
-                    }
-                }
-
-                #[test]
-                fn elements_root() {
-                    let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
-
-                    match data {
-                        Err(DeError::Eof) => (),
-                        _ => panic!("Expected `Eof`, found {:?}", data),
-                    }
-                }
-
-                #[test]
-                fn elements_child() {
-                    let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
-
-                    match data {
-                        Err(DeError::Eof) => (),
-                        _ => panic!("Expected `Eof`, found {:?}", data),
-                    }
-                }
-            }
-
-            mod mismatched_end {
-                use super::*;
-                use crate::errors::Error::EndEventMismatch;
-
-                #[test]
-                fn attributes() {
-                    let data =
-                        from_str::<$type>(r#"<root float="42" string="answer"></mismatched>"#);
-
-                    match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
-                    }
-                }
-
-                #[test]
-                fn elements_root() {
-                    let data = from_str::<$type>(
-                        r#"<root float="42"><string>answer</string></mismatched>"#,
-                    );
-
-                    match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
-                    }
-                }
-
-                #[test]
-                fn elements_child() {
-                    let data =
-                        from_str::<$type>(r#"<root float="42"><string>answer</mismatched></root>"#);
-
-                    match data {
-                        Err(DeError::Xml(EndEventMismatch { .. })) => (),
-                        _ => panic!("Expected `Xml(EndEventMismatch)`, found {:?}", data),
-                    }
-                }
-            }
-        };
-    }
-
-    mod map {
-        use super::*;
-        use std::collections::HashMap;
-        use std::iter::FromIterator;
-
-        #[test]
-        fn elements() {
-            let data: HashMap<(), ()> =
-                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
-            assert_eq!(
-                data,
-                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
-            );
-        }
-
-        #[test]
-        fn attributes() {
-            let data: HashMap<(), ()> = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
-            assert_eq!(
-                data,
-                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
-            );
-        }
-
-        #[test]
-        fn attribute_and_element() {
-            let data: HashMap<(), ()> = from_str(
-                r#"
-                <root float="42">
-                    <string>answer</string>
-                </root>
-            "#,
-            )
-            .unwrap();
-
-            assert_eq!(
-                data,
-                HashMap::from_iter([((), ()), ((), ()),].iter().cloned())
-            );
-        }
-
-        maplike_errors!(HashMap<(), ()>);
-    }
-
-    mod struct_ {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Struct {
-            float: f64,
-            string: String,
-        }
-
-        #[test]
-        fn elements() {
-            let data: Struct =
-                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    float: 42.0,
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn excess_elements() {
-            let data: Struct = from_str(
-                r#"
-                <root>
-                    <before/>
-                    <float>42</float>
-                    <in-the-middle/>
-                    <string>answer</string>
-                    <after/>
-                </root>"#,
-            )
-            .unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    float: 42.0,
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn attributes() {
-            let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    float: 42.0,
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn excess_attributes() {
-            let data: Struct = from_str(
-                r#"<root before="1" float="42" in-the-middle="2" string="answer" after="3"/>"#,
-            )
-            .unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    float: 42.0,
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn attribute_and_element() {
-            let data: Struct = from_str(
-                r#"
-                <root float="42">
-                    <string>answer</string>
-                </root>
-            "#,
-            )
-            .unwrap();
-
-            assert_eq!(
-                data,
-                Struct {
-                    float: 42.0,
-                    string: "answer".into()
-                }
-            );
-        }
-
-        maplike_errors!(Struct);
-    }
-
-    mod nested_struct {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Struct {
-            nested: Nested,
-            string: String,
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            float: f32,
-        }
-
-        #[test]
-        fn elements() {
-            let data: Struct = from_str(
-                r#"<root><string>answer</string><nested><float>42</float></nested></root>"#,
-            )
-            .unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    nested: Nested { float: 42.0 },
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn attributes() {
-            let data: Struct =
-                from_str(r#"<root string="answer"><nested float="42"/></root>"#).unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    nested: Nested { float: 42.0 },
-                    string: "answer".into()
-                }
-            );
-        }
-    }
-
-    mod flatten_struct {
-        use super::*;
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Struct {
-            #[serde(flatten)]
-            nested: Nested,
-            string: String,
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
-        }
-
-        #[test]
-        #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-        fn elements() {
-            let data: Struct =
-                from_str(r#"<root><float>42</float><string>answer</string></root>"#).unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    nested: Nested { float: "42".into() },
-                    string: "answer".into()
-                }
-            );
-        }
-
-        #[test]
-        fn attributes() {
-            let data: Struct = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
-            assert_eq!(
-                data,
-                Struct {
-                    nested: Nested { float: "42".into() },
-                    string: "answer".into()
-                }
-            );
-        }
-    }
-
-    mod enum_ {
-        use super::*;
-
-        mod externally_tagged {
-            use super::*;
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            enum Node {
-                Unit,
-                Newtype(bool),
-                //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-                // Tuple(f64, String),
-                Struct {
-                    float: f64,
-                    string: String,
-                },
-                Holder {
-                    nested: Nested,
-                    string: String,
-                },
-                Flatten {
-                    #[serde(flatten)]
-                    nested: Nested,
-                    string: String,
-                },
-            }
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct Nested {
-                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                float: String,
-            }
-
-            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-            #[derive(Debug, Deserialize, PartialEq)]
-            enum Workaround {
-                Tuple(f64, String),
-            }
-
-            #[test]
-            fn unit() {
-                let data: Node = from_str("<Unit/>").unwrap();
-                assert_eq!(data, Node::Unit);
-            }
-
-            #[test]
-            fn newtype() {
-                let data: Node = from_str("<Newtype>true</Newtype>").unwrap();
-                assert_eq!(data, Node::Newtype(true));
-            }
-
-            #[test]
-            fn tuple_struct() {
-                let data: Workaround = from_str("<Tuple>42</Tuple><Tuple>answer</Tuple>").unwrap();
-                assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
-            }
-
-            mod struct_ {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<Struct><float>42</float><string>answer</string></Struct>"#)
-                            .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<Struct float="42" string="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod nested_struct {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<Holder><string>answer</string><nested><float>42</float></nested></Holder>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node =
-                        from_str(r#"<Holder string="answer"><nested float="42"/></Holder>"#)
-                            .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod flatten_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<Flatten><float>42</float><string>answer</string></Flatten>"#)
-                            .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<Flatten float="42" string="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-        }
-
-        mod internally_tagged {
-            use super::*;
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            #[serde(tag = "tag")]
-            enum Node {
-                Unit,
-                /// Primitives (such as `bool`) are not supported by serde in the internally tagged mode
-                Newtype(NewtypeContent),
-                // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
-                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                Struct {
-                    float: String,
-                    string: String,
-                },
-                Holder {
-                    nested: Nested,
-                    string: String,
-                },
-                Flatten {
-                    #[serde(flatten)]
-                    nested: Nested,
-                    string: String,
-                },
-            }
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct NewtypeContent {
-                value: bool,
-            }
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct Nested {
-                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                float: String,
-            }
-
-            mod unit {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node = from_str(r#"<root><tag>Unit</tag></root>"#).unwrap();
-                    assert_eq!(data, Node::Unit);
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
-                    assert_eq!(data, Node::Unit);
-                }
-            }
-
-            mod newtype {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<root><tag>Newtype</tag><value>true</value></root>"#).unwrap();
-                    assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
-                }
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root tag="Newtype" value="true"/>"#).unwrap();
-                    assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
-                }
-            }
-
-            mod struct_ {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Struct</tag><float>42</float><string>answer</string></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: "42".into(),
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node =
-                        from_str(r#"<root tag="Struct" float="42" string="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: "42".into(),
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod nested_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Holder</tag><string>answer</string><nested><float>42</float></nested></root>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod flatten_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node =
-                        from_str(r#"<root tag="Flatten" float="42" string="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-        }
-
-        mod adjacently_tagged {
-            use super::*;
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            #[serde(tag = "tag", content = "content")]
-            enum Node {
-                Unit,
-                Newtype(bool),
-                //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
-                // Tuple(f64, String),
-                Struct {
-                    float: f64,
-                    string: String,
-                },
-                Holder {
-                    nested: Nested,
-                    string: String,
-                },
-                Flatten {
-                    #[serde(flatten)]
-                    nested: Nested,
-                    string: String,
-                },
-            }
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct Nested {
-                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                float: String,
-            }
-
-            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-            #[derive(Debug, Deserialize, PartialEq)]
-            #[serde(tag = "tag", content = "content")]
-            enum Workaround {
-                Tuple(f64, String),
-            }
-
-            mod unit {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node = from_str(r#"<root><tag>Unit</tag></root>"#).unwrap();
-                    assert_eq!(data, Node::Unit);
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
-                    assert_eq!(data, Node::Unit);
-                }
-            }
-
-            mod newtype {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<root><tag>Newtype</tag><content>true</content></root>"#)
-                            .unwrap();
-                    assert_eq!(data, Node::Newtype(true));
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root tag="Newtype" content="true"/>"#).unwrap();
-                    assert_eq!(data, Node::Newtype(true));
-                }
-            }
-
-            mod tuple_struct {
-                use super::*;
-                #[test]
-                fn elements() {
-                    let data: Workaround = from_str(
-                        r#"<root><tag>Tuple</tag><content>42</content><content>answer</content></root>"#
-                    ).unwrap();
-                    assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
-                }
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn attributes() {
-                    let data: Workaround = from_str(
-                        r#"<root tag="Tuple" content="42"><content>answer</content></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
-                }
-            }
-
-            mod struct_ {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Struct</tag><content><float>42</float><string>answer</string></content></root>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Struct"><content float="42" string="answer"/></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod nested_struct {
-                use super::*;
-
-                #[test]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root>
-                            <tag>Holder</tag>
-                            <content>
-                                <string>answer</string>
-                                <nested>
-                                    <float>42</float>
-                                </nested>
-                            </content>
-                        </root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Holder"><content string="answer"><nested float="42"/></content></root>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod flatten_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><tag>Flatten</tag><content><float>42</float><string>answer</string></content></root>"#
-                    ).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(
-                        r#"<root tag="Flatten"><content float="42" string="answer"/></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-        }
-
-        mod untagged {
-            use super::*;
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            #[serde(untagged)]
-            enum Node {
-                Unit,
-                Newtype(bool),
-                // serde bug https://github.com/serde-rs/serde/issues/1904
-                // Tuple(f64, String),
-                Struct {
-                    float: f64,
-                    string: String,
-                },
-                Holder {
-                    nested: Nested,
-                    string: String,
-                },
-                Flatten {
-                    #[serde(flatten)]
-                    nested: Nested,
-                    // Can't use "string" as name because in that case this variant
-                    // will have no difference from `Struct` variant
-                    string2: String,
-                },
-            }
-
-            #[derive(Debug, Deserialize, PartialEq)]
-            struct Nested {
-                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-                float: String,
-            }
-
-            /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
-            #[derive(Debug, Deserialize, PartialEq)]
-            #[serde(untagged)]
-            enum Workaround {
-                Tuple(f64, String),
-            }
-
-            #[test]
-            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-            fn unit() {
-                // Unit variant consists just from the tag, and because tags
-                // are not written, nothing is written
-                let data: Node = from_str("").unwrap();
-                assert_eq!(data, Node::Unit);
-            }
-
-            #[test]
-            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-            fn newtype() {
-                let data: Node = from_str("true").unwrap();
-                assert_eq!(data, Node::Newtype(true));
-            }
-
-            #[test]
-            #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-            fn tuple_struct() {
-                let data: Workaround = from_str("<root>42</root><root>answer</root>").unwrap();
-                assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
-            }
-
-            mod struct_ {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<root><float>42</float><string>answer</string></root>"#)
-                            .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root float="42" string="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Struct {
-                            float: 42.0,
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod nested_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node = from_str(
-                        r#"<root><string>answer</string><nested><float>42</float></nested></root>"#,
-                    )
-                    .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node =
-                        from_str(r#"<root string="answer"><nested float="42"/></root>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Holder {
-                            nested: Nested { float: "42".into() },
-                            string: "answer".into()
-                        }
-                    );
-                }
-            }
-
-            mod flatten_struct {
-                use super::*;
-
-                #[test]
-                #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
-                fn elements() {
-                    let data: Node =
-                        from_str(r#"<root><float>42</float><string2>answer</string2></root>"#)
-                            .unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string2: "answer".into()
-                        }
-                    );
-                }
-
-                #[test]
-                fn attributes() {
-                    let data: Node = from_str(r#"<root float="42" string2="answer"/>"#).unwrap();
-                    assert_eq!(
-                        data,
-                        Node::Flatten {
-                            nested: Nested { float: "42".into() },
-                            string2: "answer".into()
-                        }
-                    );
-                }
-            }
+            x => panic!(
+                r#"Expected `Err(InvalidXml(EndEventMismatch("root", "other")))`, but found {:?}"#,
+                x
+            ),
         }
     }
 }

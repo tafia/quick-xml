@@ -40,9 +40,13 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
-use crate::escape::{do_unescape, escape};
+use crate::escape::{do_unescape, escape, partial_escape};
+use crate::utils::write_cow_string;
 use crate::{errors::Error, errors::Result, reader::Reader};
 use attributes::{Attribute, Attributes};
+
+#[cfg(feature = "serialize")]
+use crate::escape::EscapeError;
 
 use memchr;
 
@@ -155,20 +159,6 @@ impl<'a> BytesStart<'a> {
         BytesEnd::borrowed(self.name())
     }
 
-    /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
-    ///
-    /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
-    where
-        I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
-    {
-        self.extend_attributes(attributes);
-        self
-    }
-
     /// Gets the undecoded raw tag name as a `&[u8]`.
     #[inline]
     pub fn name(&self) -> &[u8] {
@@ -220,39 +210,6 @@ impl<'a> BytesStart<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(&*self.buf, custom_entities).map_err(Error::EscapeError)
-    }
-
-    /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self.buf, self.name_len)
-    }
-
-    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
-    pub fn html_attributes(&self) -> Attributes {
-        Attributes::html(self, self.name_len)
-    }
-
-    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
-    /// including the whitespace after the tag name if there is any.
-    #[inline]
-    pub fn attributes_raw(&self) -> &[u8] {
-        &self.buf[self.name_len..]
-    }
-
-    /// Add additional attributes to this tag using an iterator.
-    ///
-    /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
-    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
-    where
-        I: IntoIterator,
-        I::Item: Into<Attribute<'b>>,
-    {
-        for attr in attributes {
-            self.push_attribute(attr);
-        }
-        self
     }
 
     /// Returns the unescaped and decoded string value.
@@ -319,17 +276,6 @@ impl<'a> BytesStart<'a> {
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
     }
 
-    /// Adds an attribute to this element.
-    pub fn push_attribute<'b, A: Into<Attribute<'b>>>(&mut self, attr: A) {
-        let a = attr.into();
-        let bytes = self.buf.to_mut();
-        bytes.push(b' ');
-        bytes.extend_from_slice(a.key);
-        bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(&*a.value);
-        bytes.push(b'"');
-    }
-
     /// Edit the name of the BytesStart in-place
     ///
     /// # Warning
@@ -341,11 +287,71 @@ impl<'a> BytesStart<'a> {
         self.name_len = name.len();
         self
     }
+}
+
+/// Attribute-related methods
+impl<'a> BytesStart<'a> {
+    /// Consumes `self` and yield a new `BytesStart` with additional attributes from an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        self.extend_attributes(attributes);
+        self
+    }
+
+    /// Add additional attributes to this tag using an iterator.
+    ///
+    /// The yielded items must be convertible to [`Attribute`] using `Into`.
+    pub fn extend_attributes<'b, I>(&mut self, attributes: I) -> &mut BytesStart<'a>
+    where
+        I: IntoIterator,
+        I::Item: Into<Attribute<'b>>,
+    {
+        for attr in attributes {
+            self.push_attribute(attr);
+        }
+        self
+    }
+
+    /// Adds an attribute to this element.
+    pub fn push_attribute<'b, A>(&mut self, attr: A)
+    where
+        A: Into<Attribute<'b>>,
+    {
+        let a = attr.into();
+        let bytes = self.buf.to_mut();
+        bytes.push(b' ');
+        bytes.extend_from_slice(a.key);
+        bytes.extend_from_slice(b"=\"");
+        bytes.extend_from_slice(&*a.value);
+        bytes.push(b'"');
+    }
 
     /// Remove all attributes from the ByteStart
     pub fn clear_attributes(&mut self) -> &mut BytesStart<'a> {
         self.buf.to_mut().truncate(self.name_len);
         self
+    }
+
+    /// Returns an iterator over the attributes of this tag.
+    pub fn attributes(&self) -> Attributes {
+        Attributes::new(&self.buf, self.name_len)
+    }
+
+    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
+    pub fn html_attributes(&self) -> Attributes {
+        Attributes::html(self, self.name_len)
+    }
+
+    /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
+    /// including the whitespace after the tag name if there is any.
+    #[inline]
+    pub fn attributes_raw(&self) -> &[u8] {
+        &self.buf[self.name_len..]
     }
 
     /// Try to get an attribute
@@ -365,13 +371,13 @@ impl<'a> BytesStart<'a> {
 
 impl<'a> std::fmt::Debug for BytesStart<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_cow_string;
-
         write!(f, "BytesStart {{ buf: ")?;
         write_cow_string(f, &self.buf)?;
         write!(f, ", name_len: {} }}", self.name_len)
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An XML declaration (`Event::Decl`).
 ///
@@ -387,51 +393,157 @@ impl<'a> BytesDecl<'a> {
         BytesDecl { element: start }
     }
 
-    /// Gets xml version, including quotes (' or ")
+    /// Gets xml version, excluding quotes (`'` or `"`).
+    ///
+    /// According to the [grammar], the version *must* be the first thing in the declaration.
+    /// This method tries to extract the first thing in the declaration and return it.
+    /// In case of multiple attributes value of the first one is returned.
+    ///
+    /// If version is missed in the declaration, or the first thing is not a version,
+    /// [`Error::XmlDeclWithoutVersion`] will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.1".as_ref())
+    /// );
+    ///
+    /// // <?xml version='1.0' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.0' version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.0".as_ref())
+    /// );
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='utf-8' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8' version='1.1'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b"", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
-        match self.element.attributes().next() {
-            Some(Err(e)) => Err(e),
-            Some(Ok(Attribute {
-                key: b"version",
-                value: v,
-            })) => Ok(v),
+        match self.element.attributes().with_checks(false).next() {
+            Some(Ok(a)) if a.key == b"version" => Ok(a.value),
+            // first attribute was not "version"
             Some(Ok(a)) => {
                 let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
+            // error parsing attributes
+            Some(Err(e)) => Err(e.into()),
+            // no attributes
             None => Err(Error::XmlDeclWithoutVersion(None)),
         }
     }
 
-    /// Gets xml encoding, including quotes (' or ")
+    /// Gets xml encoding, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] encoding must appear before `"standalone"`
+    /// and after `"version"`, this method does not check that. The first occurrence
+    /// of the attribute will be returned even if there are several. Also, method does
+    /// not restrict symbols that can forming the encoding, so the returned encoding
+    /// name may not correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert!(decl.encoding().is_none());
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        for a in self.element.attributes() {
-            match a {
-                Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"encoding",
-                    value: v,
-                }) => return Some(Ok(v)),
-                _ => (),
-            }
-        }
-        None
+        self.element
+            .try_get_attribute("encoding")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
     }
 
-    /// Gets xml standalone, including quotes (' or ")
+    /// Gets xml standalone, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] standalone flag must appear after `"version"`
+    /// and `"encoding"`, this method does not check that. The first occurrence of the
+    /// attribute will be returned even if there are several. Also, method does not
+    /// restrict symbols that can forming the value, so the returned flag name may not
+    /// correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// assert!(decl.standalone().is_none());
+    ///
+    /// // <?xml standalone='yes'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='yes'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        for a in self.element.attributes() {
-            match a {
-                Err(e) => return Some(Err(e)),
-                Ok(Attribute {
-                    key: b"standalone",
-                    value: v,
-                }) => return Some(Ok(v)),
-                _ => (),
-            }
-        }
-        None
+        self.element
+            .try_get_attribute("standalone")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
     }
 
     /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
@@ -497,6 +609,8 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A struct to manage `Event::End` events
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
@@ -548,15 +662,16 @@ impl<'a> BytesEnd<'a> {
 
 impl<'a> std::fmt::Debug for BytesEnd<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_cow_string;
-
         write!(f, "BytesEnd {{ name: ")?;
         write_cow_string(f, &self.name)?;
         write!(f, " }}")
     }
 }
 
-/// Data from various events (most notably, `Event::Text`).
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Data from various events (most notably, `Event::Text`) that stored in XML
+/// in escaped form. Internally data is stored in escaped form
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     // Invariant: The content is always escaped.
@@ -566,8 +681,8 @@ pub struct BytesText<'a> {
 impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from an escaped byte sequence.
     #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> BytesText<'a> {
-        BytesText {
+    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+        Self {
             content: content.into(),
         }
     }
@@ -575,15 +690,15 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from a byte sequence. The byte sequence is
     /// expected not to be escaped.
     #[inline]
-    pub fn from_plain(content: &'a [u8]) -> BytesText<'a> {
-        BytesText {
+    pub fn from_plain(content: &'a [u8]) -> Self {
+        Self {
             content: escape(content),
         }
     }
 
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
-    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> BytesText<'a> {
+    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
         Self::from_escaped(match content.into() {
             Cow::Owned(o) => Cow::Owned(o.into_bytes()),
             Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
@@ -593,7 +708,7 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from a string. The string is expected not to
     /// be escaped.
     #[inline]
-    pub fn from_plain_str(content: &'a str) -> BytesText<'a> {
+    pub fn from_plain_str(content: &'a str) -> Self {
         Self::from_plain(content.as_bytes())
     }
 
@@ -607,10 +722,22 @@ impl<'a> BytesText<'a> {
     }
 
     /// Extracts the inner `Cow` from the `BytesText` event container.
-    #[cfg(feature = "serialize")]
     #[inline]
-    pub(crate) fn into_inner(self) -> Cow<'a, [u8]> {
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
         self.content
+    }
+
+    /// Returns unescaped version of the text content, that can be written
+    /// as CDATA in XML
+    #[cfg(feature = "serialize")]
+    pub(crate) fn unescape(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
+        //TODO: need to think about better API instead of dozens similar functions
+        // Maybe use builder pattern. After that expose function as public API
+        //FIXME: need to take into account entities defined in the document
+        Ok(BytesCData::new(match do_unescape(&self.content, None)? {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(unescaped) => Cow::Owned(unescaped),
+        }))
     }
 
     /// gets escaped content
@@ -646,60 +773,6 @@ impl<'a> BytesText<'a> {
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<Cow<'s, [u8]>> {
         do_unescape(self, custom_entities).map_err(Error::EscapeError)
-    }
-
-    /// Gets content of this text buffer in the specified encoding
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
-        Ok(match &self.content {
-            Cow::Borrowed(bytes) => {
-                #[cfg(feature = "encoding")]
-                {
-                    decoder.decode(bytes)
-                }
-                #[cfg(not(feature = "encoding"))]
-                {
-                    decoder.decode(bytes)?.into()
-                }
-            }
-            Cow::Owned(bytes) => {
-                #[cfg(feature = "encoding")]
-                let decoded = decoder.decode(bytes).into_owned();
-
-                #[cfg(not(feature = "encoding"))]
-                let decoded = decoder.decode(bytes)?.to_string();
-
-                decoded.into()
-            }
-        })
-    }
-
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode_and_escape(
-        &self,
-        decoder: crate::reader::Decoder,
-    ) -> Result<Cow<'a, str>> {
-        match self.decode(decoder)? {
-            Cow::Borrowed(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
-                match unescaped {
-                    Cow::Borrowed(unescaped) => {
-                        from_utf8(unescaped).map(|s| s.into()).map_err(Error::Utf8)
-                    }
-                    Cow::Owned(unescaped) => String::from_utf8(unescaped)
-                        .map(|s| s.into())
-                        .map_err(|e| Error::Utf8(e.utf8_error())),
-                }
-            }
-            Cow::Owned(decoded) => {
-                let unescaped =
-                    do_unescape(decoded.as_bytes(), None).map_err(Error::EscapeError)?;
-                String::from_utf8(unescaped.into_owned())
-                    .map(|s| s.into())
-                    .map_err(|e| Error::Utf8(e.utf8_error()))
-            }
-        }
     }
 
     /// helper method to unescape then decode self using the reader encoding
@@ -856,13 +929,126 @@ impl<'a> BytesText<'a> {
 
 impl<'a> std::fmt::Debug for BytesText<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        use crate::utils::write_cow_string;
-
         write!(f, "BytesText {{ content: ")?;
         write_cow_string(f, &self.content)?;
         write!(f, " }}")
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// CDATA content contains unescaped data from the reader. If you want to write them as a text,
+/// [convert](Self::escape) it to [`BytesText`]
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesCData<'a> {
+    content: Cow<'a, [u8]>,
+}
+
+impl<'a> BytesCData<'a> {
+    /// Creates a new `BytesCData` from a byte sequence.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+
+    /// Creates a new `BytesCData` from a string
+    #[inline]
+    pub fn from_str(content: &'a str) -> Self {
+        Self::new(content.as_bytes())
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesCData<'static> {
+        BytesCData {
+            content: self.content.into_owned().into(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesCData` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    /// | `'`       | `&apos;`
+    /// | `"`       | `&quot;`
+    pub fn escape(self) -> BytesText<'a> {
+        BytesText::from_escaped(match escape(&self.content) {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
+        })
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// In XML text content, it is allowed (though not recommended) to leave
+    /// the quote special characters `"` and `'` unescaped.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    pub fn partial_escape(self) -> BytesText<'a> {
+        BytesText::from_escaped(match partial_escape(&self.content) {
+            Cow::Borrowed(_) => self.content,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
+        })
+    }
+
+    /// Gets content of this text buffer in the specified encoding
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+        Ok(match &self.content {
+            Cow::Borrowed(bytes) => {
+                #[cfg(feature = "encoding")]
+                {
+                    decoder.decode(bytes)
+                }
+                #[cfg(not(feature = "encoding"))]
+                {
+                    decoder.decode(bytes)?.into()
+                }
+            }
+            Cow::Owned(bytes) => {
+                #[cfg(feature = "encoding")]
+                let decoded = decoder.decode(bytes).into_owned();
+
+                #[cfg(not(feature = "encoding"))]
+                let decoded = decoder.decode(bytes)?.to_string();
+
+                decoded.into()
+            }
+        })
+    }
+}
+
+impl<'a> std::fmt::Debug for BytesCData<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "BytesCData {{ content: ")?;
+        write_cow_string(f, &self.content)?;
+        write!(f, " }}")
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Event emitted by [`Reader::read_event`].
 ///
@@ -880,7 +1066,7 @@ pub enum Event<'a> {
     /// Comment `<!-- ... -->`.
     Comment(BytesText<'a>),
     /// CData `<![CDATA[...]]>`.
-    CData(BytesText<'a>),
+    CData(BytesCData<'a>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
@@ -910,6 +1096,8 @@ impl<'a> Event<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 impl<'a> Deref for BytesStart<'a> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
@@ -938,6 +1126,14 @@ impl<'a> Deref for BytesText<'a> {
     }
 }
 
+impl<'a> Deref for BytesCData<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
 impl<'a> Deref for Event<'a> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
@@ -961,9 +1157,12 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn local_name() {

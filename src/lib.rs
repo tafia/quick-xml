@@ -73,6 +73,7 @@
 //! ### Writer
 //!
 //! ```rust
+//! # use pretty_assertions::assert_eq;
 //! use quick_xml::Writer;
 //! use quick_xml::events::{Event, BytesEnd, BytesStart};
 //! use quick_xml::Reader;
@@ -120,23 +121,17 @@
 //!
 //! # Features
 //!
-//! quick-xml supports 2 additional features, non activated by default:
-//! - `encoding`: support non utf8 XMLs
-//! - `serialize`: support serde `Serialize`/`Deserialize`
+//! `quick-xml` supports the following features:
 //!
 //! [StAX]: https://en.wikipedia.org/wiki/StAX
 //! [Serde]: https://serde.rs/
+#![cfg_attr(
+    feature = "document-features",
+    cfg_attr(doc, doc = ::document_features::document_features!())
+)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
-
-#[cfg(feature = "encoding_rs")]
-extern crate encoding_rs;
-extern crate memchr;
-#[cfg(feature = "serialize")]
-extern crate serde;
-#[cfg(all(test, feature = "serialize"))]
-extern crate serde_value;
 
 #[cfg(feature = "serialize")]
 pub mod de;
@@ -151,11 +146,14 @@ pub mod events;
 mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
-mod utils;
+/// Not an official API, public for integration tests
+#[doc(hidden)]
+pub mod utils;
 mod writer;
 
 // reexports
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};
-pub use crate::{reader::Reader, writer::Writer};
+pub use crate::reader::Reader;
+pub use crate::writer::{ElementWriter, Writer};

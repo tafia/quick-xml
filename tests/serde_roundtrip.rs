@@ -1,10 +1,7 @@
-#![cfg(feature = "serialize")]
-
-extern crate quick_xml;
-extern crate serde;
-
 use quick_xml::{de::from_str, se::to_string};
 use serde::{Deserialize, Serialize};
+
+use pretty_assertions::assert_eq;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Item {

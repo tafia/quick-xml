@@ -1,5 +1,5 @@
 use crate::{
-    de::{escape::EscapedDeserializer, BorrowingReader, DeEvent, Deserializer},
+    de::{escape::EscapedDeserializer, DeEvent, Deserializer, XmlRead},
     errors::serialize::DeError,
 };
 use serde::de::{self, DeserializeSeed, Deserializer as SerdeDeserializer, Visitor};
@@ -8,14 +8,14 @@ use std::borrow::Cow;
 /// An enum access
 pub struct EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
 }
 
 impl<'de, 'a, R> EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Self {
         EnumAccess { de }
@@ -24,7 +24,7 @@ where
 
 impl<'de, 'a, R> de::EnumAccess<'de> for EnumAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
     type Variant = VariantAccess<'de, 'a, R>;
@@ -36,6 +36,8 @@ where
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
             DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, true),
+            // Escape sequences does not processed inside CDATA section
+            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, false),
             DeEvent::Start(e) => EscapedDeserializer::new(Cow::Borrowed(e.name()), decoder, false),
             _ => {
                 return Err(DeError::Unsupported(
@@ -50,21 +52,21 @@ where
 
 pub struct VariantAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
 }
 
 impl<'de, 'a, R> de::VariantAccess<'de> for VariantAccess<'de, 'a, R>
 where
-    R: BorrowingReader<'de>,
+    R: XmlRead<'de>,
 {
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), DeError> {
         match self.de.next()? {
             DeEvent::Start(e) => self.de.read_to_end(e.name()),
-            DeEvent::Text(_) => Ok(()),
+            DeEvent::Text(_) | DeEvent::CData(_) => Ok(()),
             _ => unreachable!(),
         }
     }

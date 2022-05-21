@@ -9,7 +9,8 @@ use std::{fs::File, path::Path, str::from_utf8};
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE};
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::events::attributes::Attribute;
+use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 
 use memchr;
 
@@ -64,7 +65,7 @@ enum TagState {
 pub struct Reader<R: BufRead> {
     /// reader
     pub(crate) reader: R,
-    /// current buffer position, useful for debuging errors
+    /// current buffer position, useful for debugging errors
     buf_position: usize,
     /// current state Open/Close
     tag_state: TagState,
@@ -80,13 +81,29 @@ pub struct Reader<R: BufRead> {
     check_end_names: bool,
     /// check if comments contains `--` (false per default)
     check_comments: bool,
-    /// all currently Started elements which didn't have a matching
-    /// End element yet
+    /// All currently Started elements which didn't have a matching
+    /// End element yet.
+    ///
+    /// For an XML
+    ///
+    /// ```xml
+    /// <root><one/><inner attr="value">|<tag></inner></root>
+    /// ```
+    /// when cursor at the `|` position buffer contains:
+    ///
+    /// ```text
+    /// rootinner
+    /// ^   ^
+    /// ```
+    ///
+    /// The `^` symbols shows which positions stored in the [`Self::opened_starts`]
+    /// (0 and 4 in that case).
     opened_buffer: Vec<u8>,
-    /// opened name start indexes
+    /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
+    /// for that field for details
     opened_starts: Vec<usize>,
     /// a buffer to manage namespaces
-    ns_buffer: NamespaceBufferIndex,
+    ns_resolver: NamespaceResolver,
     #[cfg(feature = "encoding")]
     /// the encoding specified in the xml, defaults to utf8
     encoding: &'static Encoding,
@@ -110,7 +127,7 @@ impl<R: BufRead> Reader<R> {
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
-            ns_buffer: NamespaceBufferIndex::default(),
+            ns_resolver: NamespaceResolver::default(),
             #[cfg(feature = "encoding")]
             encoding: ::encoding_rs::UTF_8,
             #[cfg(feature = "encoding")]
@@ -121,8 +138,12 @@ impl<R: BufRead> Reader<R> {
     /// Changes whether empty elements should be split into an `Open` and a `Close` event.
     ///
     /// When set to `true`, all [`Empty`] events produced by a self-closing tag like `<tag/>` are
-    /// expanded into a [`Start`] event followed by a [`End`] event. When set to `false` (the
+    /// expanded into a [`Start`] event followed by an [`End`] event. When set to `false` (the
     /// default), those tags are represented by an [`Empty`] event instead.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event. There is no additional
+    /// allocation, however, if [`Self::check_end_names()`] is also set.
     ///
     /// (`false` by default)
     ///
@@ -186,6 +207,10 @@ impl<R: BufRead> Reader<R> {
     /// Note that the emitted [`End`] event will not be modified if this is disabled, ie. it will
     /// contain the data of the mismatched end tag.
     ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event. There is no additional
+    /// allocation, however, if [`Self::expand_empty_elements()`] is also set.
+    ///
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
@@ -224,9 +249,9 @@ impl<R: BufRead> Reader<R> {
 
     /// private function to read until '<' is found
     /// return a `Text` event
-    fn read_until_open<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: XmlSource<'i, B>,
     {
         self.tag_state = TagState::Opened;
 
@@ -255,52 +280,47 @@ impl<R: BufRead> Reader<R> {
         }
     }
 
-    /// private function to read until '>' is found
-    fn read_until_close<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    /// Private function to read until `>` is found. This function expects that
+    /// it was called just after encounter a `<` symbol.
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: XmlSource<'i, B>,
     {
         self.tag_state = TagState::Closed;
 
-        // need to read 1 character to decide whether pay special attention to attribute values
-        let start = match self.reader.peek_one() {
-            Ok(None) => return Ok(Event::Eof),
-            Ok(Some(byte)) => byte,
-            Err(e) => return Err(e),
-        };
-
-        if start != b'/' && start != b'!' && start != b'?' {
-            match self.reader.read_element(buf, &mut self.buf_position) {
+        match self.reader.peek_one() {
+            // `<!` - comment, CDATA or DOCTYPE declaration
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => {
-                    // we already *know* that we are in this case
-                    self.read_start(bytes)
-                }
+                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
-            }
-        } else if start == b'!' {
-            match self.reader.read_bang_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_bang(bytes),
-                Err(e) => Err(e),
-            }
-        } else {
-            match self
+            },
+            // `</` - closing tag
+            Ok(Some(b'/')) => match self
                 .reader
                 .read_bytes_until(b'>', buf, &mut self.buf_position)
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => match start {
-                    b'/' => self.read_end(bytes),
-                    b'?' => self.read_question_mark(bytes),
-                    _ => unreachable!(
-                        "We checked that `start` must be one of [/?], was {:?} \
-                         instead.",
-                        start
-                    ),
-                },
+                Ok(Some(bytes)) => self.read_end(bytes),
                 Err(e) => Err(e),
-            }
+            },
+            // `<?` - processing instruction
+            Ok(Some(b'?')) => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
+            // `<...` - opening or self-closed tag
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_start(bytes),
+                Err(e) => Err(e),
+            },
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
         }
     }
 
@@ -330,8 +350,8 @@ impl<R: BufRead> Reader<R> {
             };
             match self.opened_starts.pop() {
                 Some(start) => {
-                    if name != &self.opened_buffer[start..] {
-                        let expected = &self.opened_buffer[start..];
+                    let expected = &self.opened_buffer[start..];
+                    if name != expected {
                         mismatch_err(expected, name, &mut self.buf_position)
                     } else {
                         self.opened_buffer.truncate(start);
@@ -347,72 +367,55 @@ impl<R: BufRead> Reader<R> {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    fn read_bang<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+    fn read_bang<'a, 'b>(&'a mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
         };
 
         let len = buf.len();
-        if buf.starts_with(b"!--") {
-            // FIXME: actually, isn't, it misses <!-->
-            debug_assert!(len >= 5, "Minimum length guaranteed by read_bang_elem");
-            if self.check_comments {
-                // search if '--' not in comments
-                if let Some(p) =
-                    memchr::memchr_iter(b'-', &buf[3..len - 2]).position(|p| buf[3 + p + 1] == b'-')
-                {
-                    self.buf_position += buf.len() - p;
-                    return Err(Error::UnexpectedToken("--".to_string()));
+        match bang_type {
+            BangType::Comment if buf.starts_with(b"!--") => {
+                if self.check_comments {
+                    // search if '--' not in comments
+                    if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
+                        .position(|p| buf[3 + p + 1] == b'-')
+                    {
+                        self.buf_position += len - p;
+                        return Err(Error::UnexpectedToken("--".to_string()));
+                    }
                 }
+                Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
             }
-            Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
-        } else if uncased_starts_with(buf, b"![CDATA[") {
-            debug_assert!(len >= 10, "Minimum length guaranteed by read_bang_elem");
-            Ok(Event::CData(BytesText::from_plain(&buf[8..buf.len() - 2])))
-        } else if uncased_starts_with(buf, b"!DOCTYPE") {
-            debug_assert!(len >= 8, "Minimum length guaranteed by read_bang_elem");
-            let start = buf[8..]
-                .iter()
-                .position(|b| !is_whitespace(*b))
-                .unwrap_or_else(|| buf.len() - 8);
-            debug_assert!(start < buf.len() - 8, "DocType must have a name");
-            Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
-        } else {
-            unreachable!("Proper bang start guaranteed by read_bang_elem");
+            BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
+                Ok(Event::CData(BytesCData::new(&buf[8..])))
+            }
+            BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
+                let start = buf[8..]
+                    .iter()
+                    .position(|b| !is_whitespace(*b))
+                    .unwrap_or_else(|| len - 8);
+                debug_assert!(start < len - 8, "DocType must have a name");
+                Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
+            }
+            _ => Err(bang_type.to_err()),
         }
     }
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    #[cfg(feature = "encoding")]
     fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
                 let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+
                 // Try getting encoding from the declaration event
+                #[cfg(feature = "encoding")]
                 if let Some(enc) = event.encoder() {
                     self.encoding = enc;
                     self.is_encoding_set = true;
                 }
-                Ok(Event::Decl(event))
-            } else {
-                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
-            }
-        } else {
-            self.buf_position -= len;
-            Err(Error::UnexpectedEof("XmlDecl".to_string()))
-        }
-    }
 
-    /// reads `BytesElement` starting with a `?`,
-    /// return `Decl` or `PI` event
-    #[cfg(not(feature = "encoding"))]
-    fn read_question_mark<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let len = buf.len();
-        if len > 2 && buf[len - 1] == b'?' {
-            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
                 Ok(Event::Decl(event))
             } else {
                 Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
@@ -508,9 +511,9 @@ impl<R: BufRead> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, 'r, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
-        R: BufferedInput<'i, 'r, B>,
+        R: XmlSource<'i, B>,
     {
         let event = match self.tag_state {
             TagState::Opened => self.read_until_close(buf),
@@ -538,8 +541,7 @@ impl<R: BufRead> Reader<R> {
         qname: &'b [u8],
         namespace_buffer: &'c [u8],
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.ns_buffer
-            .resolve_namespace(qname, namespace_buffer, true)
+        self.ns_resolver.resolve(qname, namespace_buffer, true)
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
@@ -555,8 +557,7 @@ impl<R: BufRead> Reader<R> {
         qname: &'b [u8],
         namespace_buffer: &'c [u8],
     ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.ns_buffer
-            .resolve_namespace(qname, namespace_buffer, false)
+        self.ns_resolver.resolve(qname, namespace_buffer, false)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -606,14 +607,13 @@ impl<R: BufRead> Reader<R> {
         buf: &'b mut Vec<u8>,
         namespace_buffer: &'c mut Vec<u8>,
     ) -> Result<(Option<&'c [u8]>, Event<'b>)> {
-        self.ns_buffer.pop_empty_namespaces(namespace_buffer);
+        self.ns_resolver.pop(namespace_buffer);
         match self.read_event(buf) {
             Ok(Event::Eof) => Ok((None, Event::Eof)),
             Ok(Event::Start(e)) => {
-                self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
+                self.ns_resolver.push(&e, namespace_buffer);
                 Ok((
-                    self.ns_buffer
-                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), &**namespace_buffer),
                     Event::Start(e),
                 ))
             }
@@ -623,23 +623,21 @@ impl<R: BufRead> Reader<R> {
                 // Otherwise the caller has no chance to use `resolve` in the context of the
                 // namespace declarations that are 'in scope' for the empty element alone.
                 // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
-                self.ns_buffer.push_new_namespaces(&e, namespace_buffer);
+                self.ns_resolver.push(&e, namespace_buffer);
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_buffer.pending_pop = true;
+                self.ns_resolver.pending_pop = true;
                 Ok((
-                    self.ns_buffer
-                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), &**namespace_buffer),
                     Event::Empty(e),
                 ))
             }
             Ok(Event::End(e)) => {
                 // notify next `read_namespaced_event()` invocation that it needs to pop this
                 // namespace scope
-                self.ns_buffer.pending_pop = true;
+                self.ns_resolver.pending_pop = true;
                 Ok((
-                    self.ns_buffer
-                        .find_namespace_value(e.name(), &**namespace_buffer),
+                    self.ns_resolver.find(e.name(), &**namespace_buffer),
                     Event::End(e),
                 ))
             }
@@ -782,6 +780,7 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
     ///
@@ -823,6 +822,7 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use std::{str, io::Cursor};
     /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
@@ -836,7 +836,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
     ///     let end_pos = reader.buffer_position();
-    ///     let mut cursor = reader.into_underlying_reader();
+    ///     let mut cursor = reader.into_inner();
     ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
     ///         .expect("can't make a string");
     ///     let mut line = 1;
@@ -868,8 +868,18 @@ impl<R: BufRead> Reader<R> {
     ///     buf.clear();
     /// }
     /// ```
-    pub fn into_underlying_reader(self) -> R {
+    pub fn into_inner(self) -> R {
         self.reader
+    }
+
+    /// Gets a reference to the underlying reader.
+    pub fn get_ref(&self) -> &R {
+        &self.reader
+    }
+
+    /// Gets a mutable reference to the underlying reader.
+    pub fn get_mut(&mut self) -> &mut R {
+        &mut self.reader
     }
 }
 
@@ -924,10 +934,47 @@ impl<'a> Reader<&'a [u8]> {
     }
 }
 
-trait BufferedInput<'r, 'i, B>
-where
-    Self: 'i,
-{
+/// Represents an input for a reader that can return borrowed data.
+///
+/// There are two implementors of this trait: generic one that read data from
+/// `Self`, copies some part of it into a provided buffer of type `B` and then
+/// returns data that borrow from that buffer.
+///
+/// The other implementor is for `&[u8]` and instead of copying data returns
+/// borrowed data from `Self` instead. This implementation allows zero-copy
+/// deserialization.
+///
+/// # Parameters
+/// - `'r`: lifetime of a buffer from which events will borrow
+/// - `B`: a type of a buffer that can be used to store data read from `Self` and
+///   from which events can borrow
+trait XmlSource<'r, B> {
+    /// Read input until `byte` is found or end of input is reached.
+    ///
+    /// Returns a slice of data read up to `byte`, which does not include into result.
+    /// If input (`Self`) is exhausted, returns `None`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut position = 0;
+    /// let mut input = b"abc*def".as_ref();
+    /// //                    ^= 4
+    ///
+    /// assert_eq!(
+    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
+    ///     Some(b"abc".as_ref())
+    /// );
+    /// assert_eq!(position, 4); // position after the symbol matched
+    /// ```
+    ///
+    /// # Parameters
+    /// - `byte`: Byte for search
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -935,8 +982,49 @@ where
         position: &mut usize,
     ) -> Result<Option<&'r [u8]>>;
 
-    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
+    /// Read input until comment, CDATA or processing instruction is finished.
+    ///
+    /// This method expect that `<` already was read.
+    ///
+    /// Returns a slice of data read up to end of comment, CDATA or processing
+    /// instruction (`>`), which does not include into result.
+    ///
+    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
+    fn read_bang_element(
+        &mut self,
+        buf: B,
+        position: &mut usize,
+    ) -> Result<Option<(BangType, &'r [u8])>>;
 
+    /// Read input until XML element is closed by approaching a `>` symbol.
+    /// Returns `Some(buffer)` that contains a data between `<` and `>` or
+    /// `None` if end-of-input was reached and nothing was read.
+    ///
+    /// Derived from `read_until`, but modified to handle XML attributes
+    /// using a minimal state machine.
+    ///
+    /// Attribute values are [defined] as follows:
+    /// ```plain
+    /// AttValue := '"' (([^<&"]) | Reference)* '"'
+    ///           | "'" (([^<&']) | Reference)* "'"
+    /// ```
+    /// (`Reference` is something like `&quot;`, but we don't care about
+    /// escaped characters at this level)
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
+    /// [events]: crate::events::Event
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
@@ -944,15 +1032,11 @@ where
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
     fn peek_one(&mut self) -> Result<Option<u8>>;
-
-    fn input_borrowed(event: Event<'r>) -> Event<'i>;
 }
 
-/// Implementation of BufferedInput for any BufRead reader using a user-given
-/// Vec<u8> as buffer that will be borrowed by events.
-impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
-    /// read until `byte` is found or end of file
-    /// return the position of byte
+/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
+/// `Vec<u8>` as buffer that will be borrowed by events.
+impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     #[inline]
     fn read_bytes_until(
         &mut self,
@@ -1003,7 +1087,7 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         &mut self,
         buf: &'b mut Vec<u8>,
         position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
+    ) -> Result<Option<(BangType, &'b [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         let start = buf.len();
@@ -1011,169 +1095,82 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
         buf.push(b'!');
         self.consume(1);
 
-        enum BangType {
-            // <![CDATA[...]]>
-            CData,
-            // <!--...-->
-            Comment,
-            // <!DOCTYPE...>
-            DocType,
-        }
-
-        let bang_type = match self.peek_one()? {
-            Some(b'[') => BangType::CData,
-            Some(b'-') => BangType::Comment,
-            Some(b'D') | Some(b'd') => BangType::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
-        };
+        let bang_type = BangType::new(self.peek_one()?)?;
 
         loop {
-            let available = match self.fill_buf() {
-                Ok(n) if n.is_empty() => {
-                    // Note: Do not update position, so the error points to
-                    // somewhere sane rather than at the EOF
-                    let bang_str = match bang_type {
-                        BangType::CData => "CData",
-                        BangType::Comment => "Comment",
-                        BangType::DocType => "DOCTYPE",
-                    };
-                    return Err(Error::UnexpectedEof(bang_str.to_string()));
+            match self.fill_buf() {
+                // Note: Do not update position, so the error points to
+                // somewhere sane rather than at the EOF
+                Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
+                Ok(available) => {
+                    if let Some((consumed, used)) = bang_type.parse(available, read) {
+                        buf.extend_from_slice(consumed);
+
+                        self.consume(used);
+                        read += used;
+
+                        *position += read;
+                        break;
+                    } else {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self.consume(used);
+                        read += used;
+                    }
                 }
-                Ok(n) => n,
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => {
                     *position += read;
                     return Err(Error::Io(e));
                 }
-            };
-
-            match memchr::memchr(b'>', available) {
-                Some(i) => {
-                    buf.extend_from_slice(&available[..i]);
-                    let used = i + 1;
-                    self.consume(used);
-                    read += used;
-
-                    let finished = match bang_type {
-                        BangType::Comment => read >= 5 && buf.ends_with(b"--"),
-                        BangType::CData => buf.ends_with(b"]]"),
-                        BangType::DocType => {
-                            memchr::memchr2_iter(b'<', b'>', buf)
-                                .map(|p| if buf[p] == b'<' { 1i32 } else { -1 })
-                                .sum::<i32>()
-                                == 0
-                        }
-                    };
-
-                    if finished {
-                        break;
-                    } else {
-                        // '>' was omitted in the extend_from_slice above
-                        buf.push(b'>');
-                    }
-                }
-                None => {
-                    buf.extend_from_slice(available);
-                    let used = available.len();
-                    self.consume(used);
-                    read += used;
-                }
             }
         }
-        *position += read;
 
         if read == 0 {
             Ok(None)
         } else {
-            Ok(Some(&buf[start..]))
+            Ok(Some((bang_type, &buf[start..])))
         }
     }
 
-    /// Derived from `read_until`, but modified to handle XML attributes using a minimal state machine.
-    /// [W3C Extensible Markup Language (XML) 1.1 (2006)](https://www.w3.org/TR/xml11)
-    ///
-    /// Attribute values are defined as follows:
-    /// ```plain
-    /// AttValue := '"' (([^<&"]) | Reference)* '"'
-    ///           | "'" (([^<&']) | Reference)* "'"
-    /// ```
-    /// (`Reference` is something like `&quot;`, but we don't care about escaped characters at this
-    /// level)
     #[inline]
     fn read_element(
         &mut self,
         buf: &'b mut Vec<u8>,
         position: &mut usize,
     ) -> Result<Option<&'b [u8]>> {
-        #[derive(Clone, Copy)]
-        enum State {
-            /// The initial state (inside element, but outside of attribute value)
-            Elem,
-            /// Inside a single-quoted attribute value
-            SingleQ,
-            /// Inside a double-quoted attribute value
-            DoubleQ,
-        }
-        let mut state = State::Elem;
+        let mut state = ReadElementState::Elem;
         let mut read = 0;
-        let mut done = false;
-        let end_byte = b'>';
+
         let start = buf.len();
-        while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => {
-                        if read == 0 {
-                            return Ok(None);
-                        } else {
-                            return Ok(Some(&buf[start..]));
-                        }
-                    }
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
+        loop {
+            match self.fill_buf() {
+                Ok(n) if n.is_empty() => break,
+                Ok(available) => {
+                    if let Some((consumed, used)) = state.change(available) {
+                        buf.extend_from_slice(consumed);
+
+                        self.consume(used);
+                        read += used;
+
                         *position += read;
-                        return Err(Error::Io(e));
-                    }
-                };
+                        break;
+                    } else {
+                        buf.extend_from_slice(available);
 
-                let mut memiter = memchr::memchr3_iter(end_byte, b'\'', b'"', available);
-                let used: usize;
-                loop {
-                    match memiter.next() {
-                        Some(i) => {
-                            state = match (state, available[i]) {
-                                (State::Elem, b) if b == end_byte => {
-                                    // only allowed to match `end_byte` while we are in state `Elem`
-                                    buf.extend_from_slice(&available[..i]);
-                                    done = true;
-                                    used = i + 1;
-                                    break;
-                                }
-                                (State::Elem, b'\'') => State::SingleQ,
-                                (State::Elem, b'\"') => State::DoubleQ,
-
-                                // the only end_byte that gets us out if the same character
-                                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
-
-                                // all other bytes: no state change
-                                _ => state,
-                            };
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            used = available.len();
-                            break;
-                        }
+                        let used = available.len();
+                        self.consume(used);
+                        read += used;
                     }
                 }
-                used
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    *position += read;
+                    return Err(Error::Io(e));
+                }
             };
-            self.consume(used);
-            read += used;
         }
-        *position += read;
 
         if read == 0 {
             Ok(None)
@@ -1228,15 +1225,11 @@ impl<'b, 'i, R: BufRead + 'i> BufferedInput<'b, 'i, &'b mut Vec<u8>> for R {
             };
         }
     }
-
-    fn input_borrowed(event: Event<'b>) -> Event<'i> {
-        event.into_owned()
-    }
 }
 
-/// Implementation of BufferedInput for any BufRead reader using a user-given
-/// Vec<u8> as buffer that will be borrowed by events.
-impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
+/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
+/// that will be borrowed by events. This implementation provides a zero-copy deserialization
+impl<'a> XmlSource<'a, ()> for &'a [u8] {
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -1247,73 +1240,39 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             return Ok(None);
         }
 
-        let i = memchr::memchr(byte, self).unwrap_or(self.len());
-
-        *position += i;
-        let bytes = &self[..i];
-        let i = if i < self.len() {
-            // Skip the matched byte too.
-            i + 1
+        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
+            *position += i + 1;
+            let bytes = &self[..i];
+            *self = &self[i + 1..];
+            bytes
         } else {
-            // Unless we're at the end of the string
-            i
-        };
-        *self = &self[i..];
-
-        return Ok(Some(bytes));
+            *position += self.len();
+            let bytes = &self[..];
+            *self = &[];
+            bytes
+        }))
     }
 
-    fn read_bang_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
+    fn read_bang_element(
+        &mut self,
+        _buf: (),
+        position: &mut usize,
+    ) -> Result<Option<(BangType, &'a [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         debug_assert_eq!(self[0], b'!');
 
-        enum BangType {
-            // <![CDATA[...]]>
-            CData,
-            // <!--...-->
-            Comment,
-            // <!DOCTYPE...>
-            DocType,
-        }
+        let bang_type = BangType::new(self[1..].first().copied())?;
 
-        let bang_type = match &self[1..].first() {
-            Some(b'[') => BangType::CData,
-            Some(b'-') => BangType::Comment,
-            Some(b'D') => BangType::DocType,
-            Some(_) => return Err(Error::UnexpectedBang),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
-        };
-
-        for i in memchr::memchr_iter(b'>', self) {
-            let finished = match bang_type {
-                BangType::Comment => i >= 5 && self[..i].ends_with(b"--"),
-                BangType::CData => self[..i].ends_with(b"]]"),
-                BangType::DocType => {
-                    // Inefficient, but unlikely to happen often
-                    let open = self[..i].iter().filter(|b| **b == b'<').count();
-                    let closed = self[..i].iter().filter(|b| **b == b'>').count();
-                    open == closed
-                }
-            };
-
-            if finished {
-                *position += i;
-                let bytes = &self[..i];
-                // Skip the '>' too.
-                *self = &self[i + 1..];
-                return Ok(Some(bytes));
-            }
+        if let Some((bytes, i)) = bang_type.parse(self, 0) {
+            *position += i;
+            *self = &self[i..];
+            return Ok(Some((bang_type, bytes)));
         }
 
         // Note: Do not update position, so the error points to
         // somewhere sane rather than at the EOF
-        let bang_str = match bang_type {
-            BangType::CData => "CData",
-            BangType::Comment => "Comment",
-            BangType::DocType => "DOCTYPE",
-        };
-        Err(Error::UnexpectedEof(bang_str.to_string()))
+        Err(bang_type.to_err())
     }
 
     fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
@@ -1321,38 +1280,12 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
             return Ok(None);
         }
 
-        #[derive(Clone, Copy)]
-        enum State {
-            /// The initial state (inside element, but outside of attribute value)
-            Elem,
-            /// Inside a single-quoted attribute value
-            SingleQ,
-            /// Inside a double-quoted attribute value
-            DoubleQ,
-        }
-        let mut state = State::Elem;
+        let mut state = ReadElementState::Elem;
 
-        let end_byte = b'>';
-
-        for i in memchr::memchr3_iter(end_byte, b'\'', b'"', self) {
-            state = match (state, self[i]) {
-                (State::Elem, b) if b == end_byte => {
-                    // only allowed to match `end_byte` while we are in state `Elem`
-                    *position += i;
-                    let bytes = &self[..i];
-                    // Skip the '>' too.
-                    *self = &self[i + 1..];
-                    return Ok(Some(bytes));
-                }
-                (State::Elem, b'\'') => State::SingleQ,
-                (State::Elem, b'\"') => State::DoubleQ,
-
-                // the only end_byte that gets us out if the same character
-                (State::SingleQ, b'\'') | (State::DoubleQ, b'\"') => State::Elem,
-
-                // all other bytes: no state change
-                _ => state,
-            };
+        if let Some((bytes, i)) = state.change(self) {
+            *position += i;
+            *self = &self[i..];
+            return Ok(Some(bytes));
         }
 
         // Note: Do not update position, so the error points to a sane place
@@ -1385,9 +1318,108 @@ impl<'a> BufferedInput<'a, 'a, ()> for &'a [u8] {
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
     }
+}
 
-    fn input_borrowed(event: Event<'a>) -> Event<'a> {
-        return event;
+/// Possible elements started with `<!`
+#[derive(Debug, PartialEq)]
+enum BangType {
+    /// <![CDATA[...]]>
+    CData,
+    /// <!--...-->
+    Comment,
+    /// <!DOCTYPE...>
+    DocType,
+}
+impl BangType {
+    #[inline(always)]
+    fn new(byte: Option<u8>) -> Result<Self> {
+        Ok(match byte {
+            Some(b'[') => Self::CData,
+            Some(b'-') => Self::Comment,
+            Some(b'D') | Some(b'd') => Self::DocType,
+            Some(b) => return Err(Error::UnexpectedBang(b)),
+            None => return Err(Error::UnexpectedEof("Bang".to_string())),
+        })
+    }
+
+    /// If element is finished, returns its content up to `>` symbol and
+    /// an index of this symbol, otherwise returns `None`
+    #[inline(always)]
+    fn parse<'b>(&self, chunk: &'b [u8], offset: usize) -> Option<(&'b [u8], usize)> {
+        for i in memchr::memchr_iter(b'>', chunk) {
+            match self {
+                // Need to read at least 6 symbols (`!---->`) for properly finished comment
+                // <!----> - XML comment
+                //  012345 - i
+                Self::Comment => {
+                    if offset + i > 4 && chunk[..i].ends_with(b"--") {
+                        // We cannot strip last `--` from the buffer because we need it in case of
+                        // check_comments enabled option. XML standard requires that comment
+                        // will not end with `--->` sequence because this is a special case of
+                        // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
+                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                    }
+                }
+                Self::CData => {
+                    if chunk[..i].ends_with(b"]]") {
+                        return Some((&chunk[..i - 2], i + 1)); // +1 for `>`
+                    }
+                }
+                Self::DocType => {
+                    let content = &chunk[..i];
+                    let balance = memchr::memchr2_iter(b'<', b'>', content)
+                        .map(|p| if content[p] == b'<' { 1i32 } else { -1 })
+                        .sum::<i32>();
+                    if balance == 0 {
+                        return Some((content, i + 1)); // +1 for `>`
+                    }
+                }
+            }
+        }
+        None
+    }
+    #[inline]
+    fn to_err(self) -> Error {
+        let bang_str = match self {
+            Self::CData => "CData",
+            Self::Comment => "Comment",
+            Self::DocType => "DOCTYPE",
+        };
+        Error::UnexpectedEof(bang_str.to_string())
+    }
+}
+
+/// State machine for the [`XmlSource::read_element`]
+#[derive(Clone, Copy)]
+enum ReadElementState {
+    /// The initial state (inside element, but outside of attribute value)
+    Elem,
+    /// Inside a single-quoted attribute value
+    SingleQ,
+    /// Inside a double-quoted attribute value
+    DoubleQ,
+}
+impl ReadElementState {
+    /// Changes state by analyzing part of input.
+    /// Returns a tuple with part of chunk up to element closing symbol `>`
+    /// and a position after that symbol or `None` if such symbol was not found
+    #[inline(always)]
+    fn change<'b>(&mut self, chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
+        for i in memchr::memchr3_iter(b'>', b'\'', b'"', chunk) {
+            *self = match (*self, chunk[i]) {
+                // only allowed to match `>` while we are in state `Elem`
+                (Self::Elem, b'>') => return Some((&chunk[..i], i + 1)),
+                (Self::Elem, b'\'') => Self::SingleQ,
+                (Self::Elem, b'\"') => Self::DoubleQ,
+
+                // the only end_byte that gets us out if the same character
+                (Self::SingleQ, b'\'') | (Self::DoubleQ, b'"') => Self::Elem,
+
+                // all other bytes: no state change
+                _ => *self,
+            };
+        }
+        None
     }
 }
 
@@ -1400,22 +1432,34 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
     }
 }
 
-/// A namespace declaration. Can either bind a namespace to a prefix or define the current default
-/// namespace.
+/// An entry that contains index into the buffer with namespace bindings.
+///
+/// Defines a mapping from *[namespace prefix]* to *[namespace name]*.
+/// If prefix is empty, defines a *default namespace* binding that applies to
+/// unprefixed element names (unprefixed attribute names do not bind to any
+/// namespace and they processing is dependent on the element in which their
+/// defined).
+///
+/// [namespace prefix]: https://www.w3.org/TR/xml-names11/#dt-prefix
+/// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
 #[derive(Debug, Clone)]
-struct Namespace {
+struct NamespaceEntry {
     /// Index of the namespace in the buffer
     start: usize,
     /// Length of the prefix
-    /// * if bigger than start, then binds this namespace to the corresponding slice.
+    /// * if greater than zero, then binds this namespace to the slice
+    ///   `[start..start + prefix_len]` in the buffer.
     /// * else defines the current default namespace.
     prefix_len: usize,
-    /// The namespace name (the URI) of this namespace declaration.
+    /// The length of a namespace name (the URI) of this namespace declaration.
+    /// Name started just after prefix and extend for `value_len` bytes.
     ///
-    /// The XML standard specifies that an empty namespace value 'removes' a namespace declaration
+    /// The XML standard [specifies] that an empty namespace value 'removes' a namespace declaration
     /// for the extent of its scope. For prefix declarations that's not very interesting, but it is
     /// vital for default namespace declarations. With `xmlns=""` you can revert back to the default
     /// behaviour of leaving unqualified element names unqualified.
+    ///
+    /// [specifies]: https://www.w3.org/TR/xml-names11/#scoping
     value_len: usize,
     /// Level of nesting at which this namespace was declared. The declaring element is included,
     /// i.e., a declaration on the document root has `level = 1`.
@@ -1423,28 +1467,29 @@ struct Namespace {
     level: i32,
 }
 
-impl Namespace {
-    /// Gets the value slice out of namespace buffer
+impl NamespaceEntry {
+    /// Gets the namespace name (the URI) slice out of namespace buffer
     ///
-    /// Returns `None` if `value_len == 0`
+    /// Returns `None` if namespace for this prefix was explicitly removed from
+    /// scope, using `xmlns[:prefix]=""`
     #[inline]
-    fn opt_value<'a, 'b>(&'a self, ns_buffer: &'b [u8]) -> Option<&'b [u8]> {
+    fn namespace<'b>(&self, buffer: &'b [u8]) -> Option<&'b [u8]> {
         if self.value_len == 0 {
             None
         } else {
             let start = self.start + self.prefix_len;
-            Some(&ns_buffer[start..start + self.value_len])
+            Some(&buffer[start..start + self.value_len])
         }
     }
 
     /// Check if the namespace matches the potentially qualified name
     #[inline]
-    fn is_match(&self, ns_buffer: &[u8], qname: &[u8]) -> bool {
+    fn is_match(&self, buffer: &[u8], qname: &[u8]) -> bool {
         if self.prefix_len == 0 {
             !qname.contains(&b':')
         } else {
             qname.get(self.prefix_len).map_or(false, |n| *n == b':')
-                && qname.starts_with(&ns_buffer[self.start..self.start + self.prefix_len])
+                && qname.starts_with(&buffer[self.start..self.start + self.prefix_len])
         }
     }
 }
@@ -1453,9 +1498,9 @@ impl Namespace {
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Default, Clone)]
-struct NamespaceBufferIndex {
-    /// a buffer of namespace ranges
-    slices: Vec<Namespace>,
+struct NamespaceResolver {
+    /// A stack of namespace bindings to prefixes that currently in scope
+    bindings: Vec<NamespaceEntry>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: i32,
@@ -1465,20 +1510,35 @@ struct NamespaceBufferIndex {
     pending_pop: bool,
 }
 
-impl NamespaceBufferIndex {
+impl NamespaceResolver {
+    /// Finds a [namespace name] for a given qualified name of element, borrow it
+    /// from the specified buffer.
+    ///
+    /// Returns `None`, if:
+    /// - name is unqualified
+    /// - prefix not found in the current scope
+    /// - prefix was [unbound] using `xmlns:prefix=""`
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'n`: lifetime of an element name
+    /// - `'b`: lifetime of a namespaces buffer, where all found namespaces are stored
+    ///
+    /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
+    /// [unbound]: https://www.w3.org/TR/xml-names11/#scoping
     #[inline]
-    fn find_namespace_value<'a, 'b, 'c>(
-        &'a self,
-        element_name: &'b [u8],
-        buffer: &'c [u8],
-    ) -> Option<&'c [u8]> {
-        self.slices
+    fn find<'n, 'b>(&self, element_name: &'n [u8], buffer: &'b [u8]) -> Option<&'b [u8]> {
+        self.bindings
             .iter()
             .rfind(|n| n.is_match(buffer, element_name))
-            .and_then(|n| n.opt_value(buffer))
+            .and_then(|n| n.namespace(buffer))
     }
 
-    fn pop_empty_namespaces(&mut self, buffer: &mut Vec<u8>) {
+    /// Ends a top-most scope by popping all [namespace binding], that was added by
+    /// last call to [`Self::push()`].
+    ///
+    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    fn pop(&mut self, buffer: &mut Vec<u8>) {
         if !self.pending_pop {
             return;
         }
@@ -1486,35 +1546,39 @@ impl NamespaceBufferIndex {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
         // from the back (most deeply nested scope), look for the first scope that is still valid
-        match self.slices.iter().rposition(|n| n.level <= current_level) {
+        match self.bindings.iter().rposition(|n| n.level <= current_level) {
             // none of the namespaces are valid, remove all of them
             None => {
                 buffer.clear();
-                self.slices.clear();
+                self.bindings.clear();
             }
             // drop all namespaces past the last valid namespace
             Some(last_valid_pos) => {
-                if let Some(len) = self.slices.get(last_valid_pos + 1).map(|n| n.start) {
+                if let Some(len) = self.bindings.get(last_valid_pos + 1).map(|n| n.start) {
                     buffer.truncate(len);
-                    self.slices.truncate(last_valid_pos + 1);
+                    self.bindings.truncate(last_valid_pos + 1);
                 }
             }
         }
     }
 
-    fn push_new_namespaces(&mut self, e: &BytesStart, buffer: &mut Vec<u8>) {
+    /// Begins a new scope and add to it all [namespace bindings] that found in
+    /// the specified start element.
+    ///
+    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    fn push(&mut self, start: &BytesStart, buffer: &mut Vec<u8>) {
         self.nesting_level += 1;
         let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
-        for a in e.attributes().with_checks(false) {
+        for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
                 if k.starts_with(b"xmlns") {
                     match k.get(5) {
                         None => {
                             let start = buffer.len();
                             buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
+                            self.bindings.push(NamespaceEntry {
                                 start,
                                 prefix_len: 0,
                                 value_len: v.len(),
@@ -1525,7 +1589,7 @@ impl NamespaceBufferIndex {
                             let start = buffer.len();
                             buffer.extend_from_slice(&k[6..]);
                             buffer.extend_from_slice(&*v);
-                            self.slices.push(Namespace {
+                            self.bindings.push(NamespaceEntry {
                                 start,
                                 prefix_len: k.len() - 6,
                                 value_len: v.len(),
@@ -1543,27 +1607,32 @@ impl NamespaceBufferIndex {
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
     ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
+    /// *Qualified* attribute names have the form `prefix:local-name` where the `prefix` is defined
     /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
     /// can be defined on the same element as the attribute in question.
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'n`: lifetime of an attribute or an element name
+    /// - `'b`: lifetime of a namespaces buffer, where all found namespaces are stored
     #[inline]
-    fn resolve_namespace<'a, 'b, 'c>(
-        &'a self,
-        qname: &'b [u8],
-        buffer: &'c [u8],
+    fn resolve<'n, 'b>(
+        &self,
+        qname: &'n [u8],
+        buffer: &'b [u8],
         use_default: bool,
-    ) -> (Option<&'c [u8]>, &'b [u8]) {
-        self.slices
+    ) -> (Option<&'b [u8]>, &'n [u8]) {
+        self.bindings
             .iter()
             .rfind(|n| n.is_match(buffer, qname))
             .map_or((None, qname), |n| {
                 let len = n.prefix_len;
                 if len > 0 {
-                    (n.opt_value(buffer), &qname[len + 1..])
+                    (n.namespace(buffer), &qname[len + 1..])
                 } else if use_default {
-                    (n.opt_value(buffer), qname)
+                    (n.namespace(buffer), qname)
                 } else {
                     (None, qname)
                 }
@@ -1597,5 +1666,756 @@ impl Decoder {
     #[cfg(feature = "encoding")]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    macro_rules! check {
+        ($buf:expr) => {
+            mod read_bytes_until {
+                use crate::reader::XmlSource;
+                // Use Bytes for printing bytes as strings for ASCII range
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                /// Checks that search in the empty buffer returns `None`
+                #[test]
+                fn empty() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"".as_ref();
+                    //                ^= 0
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        None
+                    );
+                    assert_eq!(position, 0);
+                }
+
+                /// Checks that search in the buffer non-existent value returns entire buffer
+                /// as a result and set `position` to `len()`
+                #[test]
+                fn non_existent() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abcdef".as_ref();
+                    //                      ^= 6
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abcdef"))
+                    );
+                    assert_eq!(position, 6);
+                }
+
+                /// Checks that search in the buffer an element that is located in the front of
+                /// buffer returns empty slice as a result and set `position` to one symbol
+                /// after match (`1`)
+                #[test]
+                fn at_the_start() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"*abcdef".as_ref();
+                    //                 ^= 1
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b""))
+                    );
+                    assert_eq!(position, 1); // position after the symbol matched
+                }
+
+                /// Checks that search in the buffer an element that is located in the middle of
+                /// buffer returns slice before that symbol as a result and set `position` to one
+                /// symbol after match
+                #[test]
+                fn inside() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abc*def".as_ref();
+                    //                    ^= 4
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abc"))
+                    );
+                    assert_eq!(position, 4); // position after the symbol matched
+                }
+
+                /// Checks that search in the buffer an element that is located in the end of
+                /// buffer returns slice before that symbol as a result and set `position` to one
+                /// symbol after match (`len()`)
+                #[test]
+                fn in_the_end() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"abcdef*".as_ref();
+                    //                       ^= 7
+
+                    assert_eq!(
+                        input
+                            .read_bytes_until(b'*', buf, &mut position)
+                            .unwrap()
+                            .map(Bytes),
+                        Some(Bytes(b"abcdef"))
+                    );
+                    assert_eq!(position, 7); // position after the symbol matched
+                }
+            }
+
+            mod read_bang_element {
+                /// Checks that reading CDATA content works correctly
+                mod cdata {
+                    use crate::errors::Error;
+                    use crate::reader::{BangType, XmlSource};
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    /// Checks that if input begins like CDATA element, but CDATA start sequence
+                    /// is not finished, parsing ends with an error
+                    #[test]
+                    #[ignore = "start CDATA sequence fully checked outside of `read_bang_element`"]
+                    fn not_properly_start() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![]]>other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    /// Checks that if CDATA startup sequence was matched, but an end sequence
+                    /// is not found, parsing ends with an error
+                    #[test]
+                    fn not_closed() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    /// Checks that CDATA element without content inside parsed successfully
+                    #[test]
+                    fn empty() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[]]>other content".as_ref();
+                        //                           ^= 11
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::CData, Bytes(b"![CDATA[")))
+                        );
+                        assert_eq!(position, 11);
+                    }
+
+                    /// Checks that CDATA element with content parsed successfully.
+                    /// Additionally checks that sequences inside CDATA that may look like
+                    /// a CDATA end sequence do not interrupt CDATA parsing
+                    #[test]
+                    fn with_content() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref();
+                        //                                            ^= 28
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content")))
+                        );
+                        assert_eq!(position, 28);
+                    }
+                }
+
+                /// Checks that reading XML comments works correctly. According to the [specification],
+                /// comment data can contain any sequence except `--`:
+                ///
+                /// ```peg
+                /// comment = '<--' (!'--' char)* '-->';
+                /// char = [#x1-#x2C]
+                ///      / [#x2E-#xD7FF]
+                ///      / [#xE000-#xFFFD]
+                ///      / [#x10000-#x10FFFF]
+                /// ```
+                ///
+                /// The presence of this limitation, however, is simply a poorly designed specification
+                /// (maybe for purpose of building of LL(1) XML parser) and quick-xml does not check for
+                /// presence of these sequences by default. This tests allow such content.
+                ///
+                /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
+                mod comment {
+                    use crate::errors::Error;
+                    use crate::reader::{BangType, XmlSource};
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    #[test]
+                    #[ignore = "start comment sequence fully checked outside of `read_bang_element`"]
+                    fn not_properly_start() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!- -->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_properly_end() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed1() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed2() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!-->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn not_closed3() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--->other content".as_ref();
+                        //                ^= 0
+
+                        match input.read_bang_element(buf, &mut position) {
+                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                            x => assert!(
+                                false,
+                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                                x
+                            ),
+                        }
+                        assert_eq!(position, 0);
+                    }
+
+                    #[test]
+                    fn empty() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!---->other content".as_ref();
+                        //                      ^= 6
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::Comment, Bytes(b"!----")))
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[test]
+                    fn with_content() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"!--->comment<--->other content".as_ref();
+                        //                                 ^= 17
+
+                        assert_eq!(
+                            input
+                                .read_bang_element(buf, &mut position)
+                                .unwrap()
+                                .map(|(ty, data)| (ty, Bytes(data))),
+                            Some((BangType::Comment, Bytes(b"!--->comment<---")))
+                        );
+                        assert_eq!(position, 17);
+                    }
+                }
+
+                /// Checks that reading DOCTYPE definition works correctly
+                mod doctype {
+                    mod uppercase {
+                        use crate::errors::Error;
+                        use crate::reader::{BangType, XmlSource};
+                        use crate::utils::Bytes;
+                        use pretty_assertions::assert_eq;
+
+                        #[test]
+                        fn not_properly_start() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!D other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn without_space() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPEother content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn empty() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPE>other content".as_ref();
+                            //                         ^= 9
+
+                            assert_eq!(
+                                input
+                                    .read_bang_element(buf, &mut position)
+                                    .unwrap()
+                                    .map(|(ty, data)| (ty, Bytes(data))),
+                                Some((BangType::DocType, Bytes(b"!DOCTYPE")))
+                            );
+                            assert_eq!(position, 9);
+                        }
+
+                        #[test]
+                        fn not_closed() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!DOCTYPE other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+                    }
+
+                    mod lowercase {
+                        use crate::errors::Error;
+                        use crate::reader::{BangType, XmlSource};
+                        use crate::utils::Bytes;
+                        use pretty_assertions::assert_eq;
+
+                        #[test]
+                        fn not_properly_start() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!d other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn without_space() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctypeother content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+
+                        #[test]
+                        fn empty() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctype>other content".as_ref();
+                            //                         ^= 9
+
+                            assert_eq!(
+                                input
+                                    .read_bang_element(buf, &mut position)
+                                    .unwrap()
+                                    .map(|(ty, data)| (ty, Bytes(data))),
+                                Some((BangType::DocType, Bytes(b"!doctype")))
+                            );
+                            assert_eq!(position, 9);
+                        }
+
+                        #[test]
+                        fn not_closed() {
+                            let buf = $buf;
+                            let mut position = 0;
+                            let mut input = b"!doctype other content".as_ref();
+                            //                ^= 0
+
+                            match input.read_bang_element(buf, &mut position) {
+                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                                x => assert!(
+                                    false,
+                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                    x
+                                ),
+                            }
+                            assert_eq!(position, 0);
+                        }
+                    }
+                }
+            }
+
+            mod read_element {
+                use crate::reader::XmlSource;
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                /// Checks that nothing was read from empty buffer
+                #[test]
+                fn empty() {
+                    let buf = $buf;
+                    let mut position = 0;
+                    let mut input = b"".as_ref();
+                    //                ^= 0
+
+                    assert_eq!(input.read_element(buf, &mut position).unwrap().map(Bytes), None);
+                    assert_eq!(position, 0);
+                }
+
+                mod open {
+                    use crate::reader::XmlSource;
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    #[test]
+                    fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b">".as_ref();
+                        //                 ^= 1
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b""))
+                        );
+                        assert_eq!(position, 1);
+                    }
+
+                    #[test]
+                    fn normal() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"tag>".as_ref();
+                        //                    ^= 4
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b"tag"))
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[test]
+                    fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":>".as_ref();
+                        //                  ^= 2
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b":"))
+                        );
+                        assert_eq!(position, 2);
+                    }
+
+                    #[test]
+                    fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":tag>".as_ref();
+                        //                     ^= 5
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b":tag"))
+                        );
+                        assert_eq!(position, 5);
+                    }
+
+                    #[test]
+                    fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref();
+                        //                                                        ^= 38
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#))
+                        );
+                        assert_eq!(position, 38);
+                    }
+                }
+
+                mod self_closed {
+                    use crate::reader::XmlSource;
+                    use crate::utils::Bytes;
+                    use pretty_assertions::assert_eq;
+
+                    #[test]
+                    fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"/>".as_ref();
+                        //                  ^= 2
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b"/"))
+                        );
+                        assert_eq!(position, 2);
+                    }
+
+                    #[test]
+                    fn normal() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b"tag/>".as_ref();
+                        //                     ^= 5
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b"tag/"))
+                        );
+                        assert_eq!(position, 5);
+                    }
+
+                    #[test]
+                    fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":/>".as_ref();
+                        //                   ^= 3
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b":/"))
+                        );
+                        assert_eq!(position, 3);
+                    }
+
+                    #[test]
+                    fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = b":tag/>".as_ref();
+                        //                      ^= 6
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(b":tag/"))
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[test]
+                    fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 0;
+                        let mut input = br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref();
+                        //                                                           ^= 41
+
+                        assert_eq!(
+                            input.read_element(buf, &mut position).unwrap().map(Bytes),
+                            Some(Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#))
+                        );
+                        assert_eq!(position, 41);
+                    }
+                }
+            }
+
+            mod issue_344 {
+                use crate::errors::Error;
+
+                #[test]
+                fn cdata() {
+                    let doc = "![]]>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "CData" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn comment() {
+                    let doc = "!- -->";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn doctype_uppercase() {
+                    let doc = "!D>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn doctype_lowercase() {
+                    let doc = "!d>";
+                    let mut reader = crate::Reader::from_str(doc);
+
+                    match reader.read_until_close($buf) {
+                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
+                        x => assert!(
+                            false,
+                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                            x
+                        ),
+                    }
+                }
+            }
+        };
+    }
+
+    /// Tests for reader that generates events that borrow from the provided buffer
+    mod buffered {
+        check!(&mut Vec::new());
+    }
+
+    /// Tests for reader that generates events that borrow from the input
+    mod borrowed {
+        check!(());
     }
 }

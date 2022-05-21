@@ -10,15 +10,70 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- [#9]: Deserialization erroneously was successful in some cases where error is expected.
+  This broke deserialization of untagged enums which rely on error if variant cannot be parsed
+
+### Misc Changes
+
+- [#8]: Changes in the error type `DeError`:
+  |Variant|Change
+  |-------|---------------------------------------------------------------------
+  |~~`DeError::Text`~~|Removed because never raised
+  |~~`DeError::InvalidEnum`~~|Removed because never raised
+  |`DeError::Xml`|Renamed to `DeError::InvalidXml` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Int`|Renamed to `DeError::InvalidInt` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Float`|Renamed to `DeError::InvalidFloat` for consistency with `DeError::InvalidBoolean`
+  |`DeError::Start`|Renamed to `DeError::UnexpectedStart` and tag name added to an error
+  |`DeError::End`|Renamed to `DeError::UnexpectedEnd` and tag name added to an error
+  |`DeEvent::Eof`|Renamed to `DeError::UnexpectedEof`
+  |`DeError::EndOfAttributes`|Renamed to `DeError::KeyNotFound`
+  |`DeError::ExpectedStart`|Added
+
+### New Tests
+
+- [#9]: Added tests for incorrect nested tags in input
+
+[#8]: https://github.com/Mingun/fast-xml/pull/8
+[#9]: https://github.com/Mingun/fast-xml/pull/9
+
+## 0.23.0 -- 2022-05-08
+
+- feat: add support for `i128` / `u128` in attributes or text/CDATA content
 - test: add tests for malformed inputs for serde deserializer
 - fix: allow to deserialize `unit`s from any data in attribute values and text nodes
 - refactor: unify errors when EOF encountered during serde deserialization
 - test: ensure that after deserializing all XML was consumed
-- feat: add `Deserializer::from_str` and `Deserializer::from_bytes`
+- feat: add `Deserializer::from_str`, `Deserializer::from_slice` and `Deserializer::from_reader`
+- refactor: deprecate `from_bytes` and `Deserializer::from_borrowing_reader` because
+  they are fully equivalent to `from_slice` and `Deserializer::new`
 - refactor: reduce number of unnecessary copies when deserialize numbers/booleans/identifiers
   from the attribute and element names and attribute values
 - fix: allow to deserialize `unit`s from text and CDATA content.
   `DeError::InvalidUnit` variant is removed, because after fix it is no longer used
+- fix: `ElementWriter`, introduced in [#274](https://github.com/tafia/quick-xml/pull/274)
+  (0.23.0-alpha2) now available to end users
+- fix: allow lowercase `<!doctype >` definition (used in HTML 5) when parse document from `&[u8]`
+- test: add tests for consistence behavior of buffered and borrowed readers
+- fix: produce consistent error positions in buffered and borrowed readers
+- feat: `Error::UnexpectedBang` now provide the byte found
+- refactor: unify code for buffered and borrowed readers
+- fix: fix internal panic message when parse malformed XML
+  ([#344](https://github.com/tafia/quick-xml/issues/344))
+- test: add tests for trivial documents (empty / only comment / `<root>...</root>` -- one tag with content)
+- fix: CDATA was not handled in many cases where it should
+- fix: do not unescape CDATA content because it never escaped by design.
+  CDATA event data now represented by its own `BytesCData` type
+  ([quick-xml#311](https://github.com/tafia/quick-xml/issues/311))
+- feat: add `Reader::get_ref()` and `Reader::get_mut()`, rename
+  `Reader::into_underlying_reader()` to `Reader::into_inner()`
+- refactor: now `Attributes::next()` returns a new type `AttrError` when attribute parsing failed
+  ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- test: properly test all paths of attributes parsing ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- feat: attribute iterator now implements `FusedIterator` ([#4](https://github.com/Mingun/fast-xml/pull/4))
+- fix: fixed many errors in attribute parsing using iterator, returned from `attributes()`
+  or `html_attributes()` ([#4](https://github.com/Mingun/fast-xml/pull/4))
 
 ## 0.23.0-alpha3
 

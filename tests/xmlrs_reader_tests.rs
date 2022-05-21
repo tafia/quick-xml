@@ -1,5 +1,3 @@
-extern crate quick_xml;
-
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Result};
 use std::borrow::Cow;
@@ -163,7 +161,7 @@ fn sample_ns_short() {
 fn eof_1() {
     test(
         r#"<?xml"#,
-        r#"Error: Unexpected EOF during reading XmlDecl."#,
+        r#"Error: Unexpected EOF during reading XmlDecl"#,
         true,
     );
 }
@@ -172,7 +170,7 @@ fn eof_1() {
 fn bad_1() {
     test(
         r#"<?xml&.,"#,
-        r#"1:6 Error: Unexpected EOF during reading XmlDecl."#,
+        r#"1:6 Error: Unexpected EOF during reading XmlDecl"#,
         true,
     );
 }
@@ -191,6 +189,17 @@ fn dashes_in_comments() {
         r#"<!-- comment ---><hello/>"#,
         r#"
         |Error: Unexpected token '--'
+        "#,
+        true,
+    );
+
+    // Canary test for correct comments
+    test(
+        r#"<!-- comment --><hello/>"#,
+        r#"
+        |Comment( comment )
+        |EmptyElement(hello)
+        |EndDocument
         "#,
         true,
     );
@@ -218,8 +227,8 @@ fn issue_83_duplicate_attributes() {
         r#"<hello><some-tag a='10' a="20"/></hello>"#,
         "
             |StartElement(hello)
-            |1:30 EmptyElement(some-tag, attr-error: error while parsing \
-                  attribute at position 16: Duplicate attribute at position 9 and 16)
+            |1:30 EmptyElement(some-tag, attr-error: \
+                  position 16: duplicated attribute, previous declaration at position 9)
             |EndElement(hello)
             |EndDocument
         ",

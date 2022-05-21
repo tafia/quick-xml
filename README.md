@@ -118,10 +118,7 @@ Here is an example deserializing crates.io source:
 // Cargo.toml
 // [dependencies]
 // serde = { version = "1.0", features = [ "derive" ] }
-// quick-xml = { version = "0.21", features = [ "serialize" ] }
-extern crate serde;
-extern crate quick_xml;
-
+// quick-xml = { version = "0.22", features = [ "serialize" ] }
 use serde::Deserialize;
 use quick_xml::de::{from_str, DeError};
 
@@ -213,9 +210,11 @@ fn crates_io() -> Result<Html, DeError> {
 
 ### Credits
 
-This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs). 
-quick-xml follows its convention for deserialization, including the 
+This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/serde-xml-rs).
+quick-xml follows its convention for deserialization, including the
 [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
+
+Original [quick-xml] was developed by @tafia and abandoned around end of 2021.
 
 ### Parsing the "value" of a tag
 
@@ -262,7 +261,7 @@ Serializing `Root { foo: Foo::Bar }` will then yield `<Root foo="Bar"/>` instead
 
 ### Performance
 
-Note that despite not focusing on performance (there are several unecessary copies), it remains about 10x faster than serde-xml-rs.
+Note that despite not focusing on performance (there are several unnecessary copies), it remains about 10x faster than serde-xml-rs.
 
 # Features
 
@@ -274,6 +273,7 @@ Note that despite not focusing on performance (there are several unecessary copi
 Benchmarking is hard and the results depend on your input file and your machine.
 
 Here on my particular file, quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
+_(measurements was done while this crate named quick-xml)_
 
 ```
 // quick-xml benches
@@ -298,3 +298,5 @@ Any PR is welcomed!
 ## License
 
 MIT
+
+[quick-xml]: https://github.com/tafia/quick-xml

@@ -1,7 +1,7 @@
 //! A module to handle `Writer`
 
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesStart, BytesText, Event};
+use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 use std::io::Write;
 
 /// XML writer.
@@ -11,7 +11,7 @@ use std::io::Write;
 /// # Examples
 ///
 /// ```rust
-/// # fn main() {
+/// # use pretty_assertions::assert_eq;
 /// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
 /// use std::io::Cursor;
@@ -52,7 +52,6 @@ use std::io::Write;
 /// let result = writer.into_inner().into_inner();
 /// let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
 /// assert_eq!(result, expected.as_bytes());
-/// # }
 /// ```
 #[derive(Clone)]
 pub struct Writer<W: Write> {
@@ -221,6 +220,8 @@ impl<W: Write> Writer<W> {
     }
 }
 
+/// A struct to write an element. Contains methods to add attributes and inner
+/// elements to the element
 pub struct ElementWriter<'a, W: Write> {
     writer: &'a mut Writer<W>,
     start_tag: BytesStart<'a>,
@@ -239,8 +240,6 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Add additional attributes to this element using an iterator.
     ///
     /// The yielded items must be convertible to [`Attribute`] using `Into`.
-    ///
-    /// [`Attribute`]: attributes/struct.Attributes.html
     pub fn with_attributes<'b, I>(mut self, attributes: I) -> Self
     where
         I: IntoIterator,
@@ -261,7 +260,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write a CData event `<![CDATA[...]]>` inside the current element.
-    pub fn write_cdata_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+    pub fn write_cdata_content(self, text: BytesCData) -> Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.to_borrowed()))?;
         self.writer.write_event(Event::CData(text))?;
@@ -339,6 +338,7 @@ impl Indentation {
 mod indentation {
     use super::*;
     use crate::events::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn self_closed() {

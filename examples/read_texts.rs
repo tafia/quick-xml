@@ -1,5 +1,3 @@
-extern crate quick_xml;
-
 fn main() {
     use quick_xml::events::Event;
     use quick_xml::Reader;

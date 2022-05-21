@@ -1,12 +1,10 @@
-extern crate quick_xml;
-#[cfg(feature = "serialize")]
-extern crate serde;
-
 use quick_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
 use std::{borrow::Cow, io::Cursor};
 
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
+
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_sample() {
@@ -34,25 +32,22 @@ fn test_attributes_empty() {
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
-            let mut atts = e.attributes();
-            match atts.next() {
+            let mut attrs = e.attributes();
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att1",
                     value: Cow::Borrowed(b"a"),
-                })) => (),
-                e => panic!("Expecting att1='a' attribute, found {:?}", e),
-            }
-            match atts.next() {
+                }))
+            );
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att2",
                     value: Cow::Borrowed(b"b"),
-                })) => (),
-                e => panic!("Expecting att2='b' attribute, found {:?}", e),
-            }
-            match atts.next() {
-                None => (),
-                e => panic!("Expecting None, found {:?}", e),
-            }
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         e => panic!("Expecting Empty event, got {:?}", e),
     }
@@ -66,18 +61,15 @@ fn test_attribute_equal() {
     let mut buf = Vec::new();
     match r.read_event(&mut buf) {
         Ok(Empty(e)) => {
-            let mut atts = e.attributes();
-            match atts.next() {
+            let mut attrs = e.attributes();
+            assert_eq!(
+                attrs.next(),
                 Some(Ok(Attribute {
                     key: b"att1",
                     value: Cow::Borrowed(b"a=b"),
-                })) => (),
-                e => panic!("Expecting att1=\"a=b\" attribute, found {:?}", e),
-            }
-            match atts.next() {
-                None => (),
-                e => panic!("Expecting None, found {:?}", e),
-            }
+                }))
+            );
+            assert_eq!(attrs.next(), None);
         }
         e => panic!("Expecting Empty event, got {:?}", e),
     }
@@ -91,238 +83,13 @@ fn test_comment_starting_with_gt() {
     let mut buf = Vec::new();
     loop {
         match r.read_event(&mut buf) {
-            Ok(Comment(ref e)) if &**e == b">" => break,
+            Ok(Comment(e)) => {
+                assert_eq!(e.as_ref(), b">");
+                break;
+            }
             Ok(Eof) => panic!("Expecting Comment"),
             _ => (),
         }
-    }
-}
-
-/// Single empty element with qualified attributes.
-/// Empty element expansion: disabled
-/// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.
-#[test]
-fn test_attributes_empty_ns() {
-    let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
-
-    let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
-
-    let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, Empty(e))) => e,
-        e => panic!("Expecting Empty event, got {:?}", e),
-    };
-
-    let mut atts = e
-        .attributes()
-        .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-        // we don't care about xmlns attributes for this test
-        .filter(|kv| !kv.key.starts_with(b"xmlns"))
-        .map(|Attribute { key: name, value }| {
-            let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-            (opt_ns, local_name, value)
-        });
-    match atts.next() {
-        Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-        e => panic!("Expecting att1='a' attribute, found {:?}", e),
-    }
-    match atts.next() {
-        Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
-            assert_eq!(&ns[..], b"urn:example:r");
-        }
-        e => panic!(
-            "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-            e
-        ),
-    }
-    match atts.next() {
-        None => (),
-        e => panic!("Expecting None, found {:?}", e),
-    }
-}
-
-/// Single empty element with qualified attributes.
-/// Empty element expansion: enabled
-/// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.
-#[test]
-fn test_attributes_empty_ns_expanded() {
-    let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
-
-    let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(true);
-    let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
-    {
-        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((None, Start(e))) => e,
-            e => panic!("Expecting Empty event, got {:?}", e),
-        };
-
-        let mut atts = e
-            .attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
-            });
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            Some((Some(ns), b"att2", Cow::Borrowed(b"b"))) => {
-                assert_eq!(&ns[..], b"urn:example:r");
-            }
-            e => panic!(
-                "Expecting {{urn:example:r}}att2='b' attribute, found {:?}",
-                e
-            ),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
-    }
-
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, End(e))) => assert_eq!(b"a", e.name()),
-        e => panic!("Expecting End event, got {:?}", e),
-    }
-}
-
-#[test]
-fn test_default_ns_shadowing_empty() {
-    let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
-
-    let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
-
-    // <outer xmlns='urn:example:o'>
-    {
-        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:o");
-                assert_eq!(e.name(), b"e");
-            }
-            e => panic!("Expected Start event (<outer>), got {:?}", e),
-        }
-    }
-
-    // <inner att1='a' xmlns='urn:example:i' />
-    {
-        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Empty(e))) => {
-                assert_eq!(::std::str::from_utf8(ns).unwrap(), "urn:example:i");
-                assert_eq!(e.name(), b"e");
-                e
-            }
-            e => panic!("Expecting Empty event, got {:?}", e),
-        };
-
-        let mut atts = e
-            .attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
-            });
-        // the attribute should _not_ have a namespace name. The default namespace does not
-        // apply to attributes.
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
-    }
-
-    // </outer>
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:o");
-            assert_eq!(e.name(), b"e");
-        }
-        e => panic!("Expected End event (<outer>), got {:?}", e),
-    }
-}
-
-#[test]
-fn test_default_ns_shadowing_expanded() {
-    let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
-
-    let mut r = Reader::from_reader(src as &[u8]);
-    r.trim_text(true).expand_empty_elements(true);
-    let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
-
-    // <outer xmlns='urn:example:o'>
-    {
-        match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:o");
-                assert_eq!(e.name(), b"e");
-            }
-            e => panic!("Expected Start event (<outer>), got {:?}", e),
-        }
-    }
-    buf.clear();
-
-    // <inner att1='a' xmlns='urn:example:i' />
-    {
-        let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:i");
-                assert_eq!(e.name(), b"e");
-                e
-            }
-            e => panic!("Expecting Start event (<inner>), got {:?}", e),
-        };
-        let mut atts = e
-            .attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
-            });
-        // the attribute should _not_ have a namespace name. The default namespace does not
-        // apply to attributes.
-        match atts.next() {
-            Some((None, b"att1", Cow::Borrowed(b"a"))) => (),
-            e => panic!("Expecting att1='a' attribute, found {:?}", e),
-        }
-        match atts.next() {
-            None => (),
-            e => panic!("Expecting None, found {:?}", e),
-        }
-    }
-
-    // virtual </inner>
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:i");
-            assert_eq!(e.name(), b"e");
-        }
-        e => panic!("Expected End event (</inner>), got {:?}", e),
-    }
-    // </outer>
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:o");
-            assert_eq!(e.name(), b"e");
-        }
-        e => panic!("Expected End event (</outer>), got {:?}", e),
     }
 }
 
@@ -406,53 +173,6 @@ fn fuzz_101() {
             _ => (),
         }
         buf.clear();
-    }
-}
-
-#[test]
-fn test_default_namespace() {
-    let mut r = Reader::from_str("<a ><b xmlns=\"www1\"></b></a>");
-    r.trim_text(true);
-
-    // <a>
-    let mut buf = Vec::new();
-    let mut ns_buf = Vec::new();
-    if let Ok((None, Start(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
-    } else {
-        panic!("expecting outer start element with no namespace");
-    }
-
-    // <b>
-    {
-        let event = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(b"www1"), Start(event))) => event,
-            Ok((Some(_), Start(_))) => panic!("expecting namespace to resolve to 'www1'"),
-            _ => panic!("expecting namespace resolution"),
-        };
-
-        //We check if the resolve_namespace method also work properly
-        match r.event_namespace(event.name(), &mut ns_buf) {
-            (Some(b"www1"), _) => (),
-            (Some(_), _) => panic!("expecting namespace to resolve to 'www1'"),
-            ns => panic!(
-                "expecting namespace resolution by the resolve_nemespace method {:?}",
-                ns
-            ),
-        }
-    }
-
-    // </b>
-    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(b"www1"), End(_))) => (),
-        Ok((Some(_), End(_))) => panic!("expecting namespace to resolve to 'www1'"),
-        _ => panic!("expecting namespace resolution"),
-    }
-
-    // </a> very important: a should not be in any namespace. The default namespace only applies to
-    // the sub-document it is defined on.
-    if let Ok((None, End(_))) = r.read_namespaced_event(&mut buf, &mut ns_buf) {
-    } else {
-        panic!("expecting outer end element with no namespace");
     }
 }
 
@@ -1227,19 +947,26 @@ fn test_issue299() -> Result<(), Error> {
 fn test_issue305_unflatten_namespace() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct NamespaceBug {
         #[serde(rename = "$unflatten=d:test2")]
         test2: String,
     }
 
-    let _namespace_bug: NamespaceBug = from_str(
+    let namespace_bug: NamespaceBug = from_str(
         r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <d:test xmlns:d="works">
         <d:test2>doesntwork</d:test2>
     </d:test>"#,
     )?;
+
+    assert_eq!(
+        namespace_bug,
+        NamespaceBug {
+            test2: "doesntwork".into(),
+        }
+    );
 
     Ok(())
 }
@@ -1249,10 +976,10 @@ fn test_issue305_unflatten_namespace() -> Result<(), quick_xml::DeError> {
 fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
     use quick_xml::de::from_str;
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct InnerNestingBug {}
 
-    #[derive(Deserialize, Debug)]
+    #[derive(Deserialize, Debug, PartialEq)]
     struct NestingBug {
         // comment out one of these fields and it works
         #[serde(rename = "$unflatten=outer1")]
@@ -1262,7 +989,7 @@ fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
         outer2: String,
     }
 
-    let _nesting_bug: NestingBug = from_str::<NestingBug>(
+    let nesting_bug: NestingBug = from_str::<NestingBug>(
         r#"
     <?xml version="1.0" encoding="UTF-8"?>
     <root>
@@ -1270,6 +997,14 @@ fn test_issue305_unflatten_nesting() -> Result<(), quick_xml::DeError> {
         <outer2></outer2>
     </root>"#,
     )?;
+
+    assert_eq!(
+        nesting_bug,
+        NestingBug {
+            outer1: InnerNestingBug {},
+            outer2: "".into(),
+        }
+    );
 
     Ok(())
 }
