@@ -7,14 +7,6 @@ use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
-enum Animal {
-    Dog,
-    Frog(String),
-    Ant(Simple),
-    Cat { age: usize, name: String },
-}
-
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
 struct Simple {
     a: (),
     b: usize,
@@ -126,7 +118,15 @@ fn test_parse_string_not_trim() {
 #[test]
 #[ignore] // FIXME
 fn test_parse_enum() {
-    use self::Animal::*;
+    use Animal::*;
+
+    #[derive(PartialEq, Debug, Serialize, Deserialize)]
+    enum Animal {
+        Dog,
+        Frog(String),
+        Ant(Simple),
+        Cat { age: usize, name: String },
+    }
 
     test_parse_ok(&[
         ("<Animal xsi:type=\"Dog\"/>", Dog),
