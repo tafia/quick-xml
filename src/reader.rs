@@ -110,6 +110,8 @@ pub struct Reader<R: BufRead> {
     #[cfg(feature = "encoding")]
     /// check if quick-rs could find out the encoding
     is_encoding_set: bool,
+
+    empty_tags: Vec<u8>,
 }
 
 impl<R: BufRead> Reader<R> {
@@ -132,6 +134,7 @@ impl<R: BufRead> Reader<R> {
             encoding: ::encoding_rs::UTF_8,
             #[cfg(feature = "encoding")]
             is_encoding_set: false,
+            empty_tags: "".to_string().into_bytes(),
         }
     }
 
@@ -435,6 +438,19 @@ impl<R: BufRead> Reader<R> {
         Ok(Event::End(BytesEnd::owned(name)))
     }
 
+    /// Treat tag as empty even if it's a start tag
+    /// s is a space separated list of tags
+    pub fn treat_tag_as_empty(&mut self, s: &str) {
+        self.empty_tags = s.to_string().into_bytes();
+    }
+
+    fn is_empty_tag(&self, tag: &[u8]) -> bool {
+        self.empty_tags
+            .windows(tag.len())
+            .position(|w| w == tag)
+            .is_some()
+    }
+
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
     fn read_start<'a, 'b>(&'a mut self, buf: &'b [u8]) -> Result<Event<'b>> {
@@ -452,11 +468,15 @@ impl<R: BufRead> Reader<R> {
                 Ok(Event::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
             }
         } else {
-            if self.check_end_names {
-                self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&buf[..name_end]);
+            if self.is_empty_tag(&buf[..name_end]) {
+                Ok(Event::Empty(BytesStart::borrowed(buf, name_end)))
+            } else {
+                if self.check_end_names {
+                    self.opened_starts.push(self.opened_buffer.len());
+                    self.opened_buffer.extend(&buf[..name_end]);
+                }
+                Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
             }
-            Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
         }
     }
 
