@@ -445,6 +445,9 @@ impl<R: BufRead> Reader<R> {
     }
 
     fn is_empty_tag(&self, tag: &[u8]) -> bool {
+        if tag.len() == 0 {
+            return false;
+        }
         self.empty_tags
             .windows(tag.len())
             .position(|w| w == tag)
