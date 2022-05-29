@@ -10,18 +10,58 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
 
+    # Set variable to enable coverage
+    env:
+      RUSTFLAGS: -C instrument-coverage
+
     steps:
+    - name: Install coverage reporter (llvm-tools-preview)
+      if: runner.os == 'Linux'
+      run: rustup component add llvm-tools-preview
+    - name: Install coverage reporter (grcov)
+      if: runner.os == 'Linux'
+      run: cargo install grcov
     - uses: actions/checkout@v1
     - name: Build
       run: cargo build
     - name: Run tests (no features)
+      env:
+        LLVM_PROFILE_FILE: coverage/no-features-%p-%m.profraw
       run: cargo test --no-default-features
     - name: Run tests (serialize)
+      env:
+        LLVM_PROFILE_FILE: coverage/serialize-%p-%m.profraw
       run: cargo test --features serialize
-    - name: Run tests (encoding+serialize)
-      run: cargo test --features encoding,serialize
-    - name: Run tests (escape-html+serialize)
-      run: cargo test --features escape-html,serialize
+    - name: Run tests (serialize+encoding)
+      env:
+        LLVM_PROFILE_FILE: coverage/serialize-encoding-%p-%m.profraw
+      run: cargo test --features serialize,encoding
+    - name: Run tests (serialize+escape-html)
+      env:
+        LLVM_PROFILE_FILE: coverage/serialize-escape-html-%p-%m.profraw
+      run: cargo test --features serialize,escape-html
+    - name: Prepare coverage information for upload
+      if: runner.os == 'Linux'
+      # --token is required by grcov, but not required by coveralls.io, so pass
+      # something to get it work. See https://github.com/mozilla/grcov/issues/833
+      run: |
+        grcov ./coverage \
+              -s . \
+              --binary-path ./target/debug/ \
+              --branch \
+              --ignore-not-existing \
+              --ignore 'tests/*' \
+              -t coveralls+ \
+              --token ? \
+              -o ./coveralls.json
+    - name: Upload coverage to codecov.io
+      if: runner.os == 'Linux'
+      uses: codecov/codecov-action@v2
+      with:
+        files: ./coveralls.json
+        flags: unittests
+        verbose: true
+      continue-on-error: true
     - name: Check fmt
       run: cargo fmt -- --check
 

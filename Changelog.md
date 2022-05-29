@@ -31,12 +31,15 @@
   |`DeError::EndOfAttributes`|Renamed to `DeError::KeyNotFound`
   |`DeError::ExpectedStart`|Added
 
+- [#391]: Added code coverage
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#391]: https://github.com/tafia/quick-xml/pull/391
 
 ## 0.23.0 -- 2022-05-08
 
