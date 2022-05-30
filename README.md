@@ -2,6 +2,7 @@
 
 ![status](https://github.com/tafia/quick-xml/actions/workflows/rust.yml/badge.svg)
 [![Crate](https://img.shields.io/crates/v/quick-xml.svg)](https://crates.io/crates/quick-xml)
+[![codecov](https://img.shields.io/codecov/c/github/tafia/quick-xml)](https://codecov.io/gh/tafia/quick-xml)
 
 High performance xml pull reader/writer.
 
