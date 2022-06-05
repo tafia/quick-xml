@@ -42,6 +42,52 @@ default = []
 ## [standard compliant]: https://www.w3.org/TR/xml11/#charencoding
 encoding = ["encoding_rs"]
 
+## This feature enables support for deserializing lists where tags are overlapped
+## with tags that do not correspond to the list.
+##
+## When this feature is enabled, the XML:
+## ```xml
+## <any-name>
+##   <item/>
+##   <another-item/>
+##   <item/>
+##   <item/>
+## </any-name>
+## ```
+## could be deserialized to a struct:
+## ```ignore
+## #[derive(Deserialize)]
+## #[serde(rename_all = "kebab-case")]
+## struct AnyName {
+##   item: Vec<()>,
+##   another_item: (),
+## }
+## ```
+##
+## When this feature is not enabled (default), only the first element will be
+## associated with the field, and the deserialized type will report an error
+## (duplicated field) when the deserializer encounters a second `<item/>`.
+##
+## Note, that enabling this feature can lead to high and even unlimited memory
+## consumption, because deserializer should check all events up to the end of a
+## container tag (`</any-name>` in that example) to figure out that there are no
+## more items for a field. If `</any-name>` or even EOF is not encountered, the
+## parsing will never end which can lead to a denial-of-service (DoS) scenario.
+##
+## Having several lists and overlapped elements for them in XML could also lead
+## to quadratic parsing time, because the deserializer must check the list of
+## events as many times as the number of sequence fields present in the schema.
+##
+## To reduce negative consequences, always [limit] the maximum number of events
+## that [`Deserializer`] will buffer.
+##
+## This feature works only with `serialize` feature and has no effect if `serialize`
+## is not enabled.
+##
+## [limit]: crate::de::Deserializer::event_buffer_size
+## [`Deserializer`]: crate::de::Deserializer
+overlapped-lists = []
+
 ## Enables support for [`serde`] serialization and deserialization
 serialize = ["serde"]
 

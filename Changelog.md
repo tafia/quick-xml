@@ -10,10 +10,19 @@
 
 ## Unreleased
 
+### New Features
+
+- [#387]: Allow overlapping between elements of sequence and other elements
+  (using new feature `overlapped-lists`)
+
 ### Bug Fixes
 
 - [#9]: Deserialization erroneously was successful in some cases where error is expected.
   This broke deserialization of untagged enums which rely on error if variant cannot be parsed
+- [#387]: Allow to have an ordinary elements together with a `$value` field
+- [#387]: Internal deserializer state can be broken when deserializing a map with
+  a sequence field (such as `Vec<T>`), where elements of this sequence contains
+  another sequence. This error affects only users with the `serialize` feature enabled
 
 ### Misc Changes
 
@@ -36,9 +45,11 @@
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
+- [#387]: Added a bunch of tests for sequences deserialization
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
 
 ## 0.23.0 -- 2022-05-08

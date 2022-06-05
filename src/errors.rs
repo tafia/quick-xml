@@ -116,6 +116,8 @@ pub mod serialize {
     use super::*;
     use crate::utils::write_byte_string;
     use std::fmt;
+    #[cfg(feature = "overlapped-lists")]
+    use std::num::NonZeroUsize;
     use std::num::{ParseFloatError, ParseIntError};
 
     /// (De)serialization error
@@ -159,6 +161,10 @@ pub mod serialize {
         ExpectedStart,
         /// Unsupported operation
         Unsupported(&'static str),
+        /// Too many events were skipped while deserializing a sequence, event limit
+        /// exceeded. The limit was provided as an argument
+        #[cfg(feature = "overlapped-lists")]
+        TooManyEvents(NonZeroUsize),
     }
 
     impl fmt::Display for DeError {
@@ -183,6 +189,8 @@ pub mod serialize {
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
                 DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
+                #[cfg(feature = "overlapped-lists")]
+                DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),
             }
         }
     }

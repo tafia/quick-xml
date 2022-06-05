@@ -40,6 +40,10 @@ jobs:
       env:
         LLVM_PROFILE_FILE: coverage/serialize-escape-html-%p-%m.profraw
       run: cargo test --features serialize,escape-html
+    - name: Run tests (all features)
+      env:
+        LLVM_PROFILE_FILE: coverage/all-features-%p-%m.profraw
+      run: cargo test --all-features
     - name: Prepare coverage information for upload
       if: runner.os == 'Linux'
       run: |
