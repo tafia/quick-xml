@@ -42,8 +42,6 @@ jobs:
       run: cargo test --features serialize,escape-html
     - name: Prepare coverage information for upload
       if: runner.os == 'Linux'
-      # --token is required by grcov, but not required by coveralls.io, so pass
-      # something to get it work. See https://github.com/mozilla/grcov/issues/833
       run: |
         grcov ./coverage \
               -s . \
@@ -51,14 +49,12 @@ jobs:
               --branch \
               --ignore-not-existing \
               --ignore 'tests/*' \
-              -t coveralls+ \
-              --token ? \
-              -o ./coveralls.json
+              -o ./coverage.lcov
     - name: Upload coverage to codecov.io
       if: runner.os == 'Linux'
       uses: codecov/codecov-action@v2
       with:
-        files: ./coveralls.json
+        files: ./coverage.lcov
         flags: unittests
         verbose: true
       continue-on-error: true
