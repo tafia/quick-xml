@@ -574,6 +574,14 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         self
     }
 
+    /// Set the level of quoting used when writing texts
+    ///
+    /// Default: [`QuoteLevel::Minimal`]
+    pub fn set_quote_level(&mut self, level: QuoteLevel) -> &mut Self {
+        self.ser.level = level;
+        self
+    }
+
     /// Set the indent object for a serializer
     pub(crate) fn set_indent(&mut self, indent: Indent<'r>) -> &mut Self {
         self.ser.indent = indent;
@@ -777,5 +785,101 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
             };
             ser.serialize_struct(name, len)
         }
+    }
+}
+
+#[cfg(test)]
+mod quote_level {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use serde::Serialize;
+
+    #[derive(Debug, PartialEq, Serialize)]
+    struct Element(&'static str);
+
+    #[derive(Debug, PartialEq, Serialize)]
+    struct Example {
+        #[serde(rename = "@attribute")]
+        attribute: &'static str,
+        element: Element,
+    }
+
+    #[test]
+    fn default_() {
+        let example = Example {
+            attribute: "special chars: &, <, >, \", '",
+            element: Element("special chars: &, <, >, \", '"),
+        };
+
+        let mut buffer = String::new();
+        let ser = Serializer::new(&mut buffer);
+
+        example.serialize(ser).unwrap();
+        assert_eq!(
+            buffer,
+            "<Example attribute=\"special chars: &amp;, &lt;, &gt;, &quot;, '\">\
+                <element>special chars: &amp;, &lt;, &gt;, \", '</element>\
+            </Example>"
+        );
+    }
+
+    #[test]
+    fn minimal() {
+        let example = Example {
+            attribute: "special chars: &, <, >, \", '",
+            element: Element("special chars: &, <, >, \", '"),
+        };
+
+        let mut buffer = String::new();
+        let mut ser = Serializer::new(&mut buffer);
+        ser.set_quote_level(QuoteLevel::Minimal);
+
+        example.serialize(ser).unwrap();
+        assert_eq!(
+            buffer,
+            "<Example attribute=\"special chars: &amp;, &lt;, >, &quot;, '\">\
+                <element>special chars: &amp;, &lt;, >, \", '</element>\
+            </Example>"
+        );
+    }
+
+    #[test]
+    fn partial() {
+        let example = Example {
+            attribute: "special chars: &, <, >, \", '",
+            element: Element("special chars: &, <, >, \", '"),
+        };
+
+        let mut buffer = String::new();
+        let mut ser = Serializer::new(&mut buffer);
+        ser.set_quote_level(QuoteLevel::Partial);
+
+        example.serialize(ser).unwrap();
+        assert_eq!(
+            buffer,
+            "<Example attribute=\"special chars: &amp;, &lt;, &gt;, &quot;, '\">\
+                <element>special chars: &amp;, &lt;, &gt;, \", '</element>\
+            </Example>"
+        );
+    }
+
+    #[test]
+    fn full() {
+        let example = Example {
+            attribute: "special chars: &, <, >, \", '",
+            element: Element("special chars: &, <, >, \", '"),
+        };
+
+        let mut buffer = String::new();
+        let mut ser = Serializer::new(&mut buffer);
+        ser.set_quote_level(QuoteLevel::Full);
+
+        example.serialize(ser).unwrap();
+        assert_eq!(
+            buffer,
+            "<Example attribute=\"special chars: &amp;, &lt;, &gt;, &quot;, &apos;\">\
+                <element>special chars: &amp;, &lt;, &gt;, &quot;, &apos;</element>\
+            </Example>"
+        );
     }
 }

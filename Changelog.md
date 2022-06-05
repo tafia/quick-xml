@@ -24,6 +24,7 @@ configuration is serializable.
   well-formedness checks.
 - [#362]: Added `escape::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `BytesCData::minimal_escape()` which escapes only `&` and `<`.
+- [#362]: Added `Serializer::set_quote_level()` which allow to set desired level of escaping.
 
 ### Bug Fixes
 
