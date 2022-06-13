@@ -41,14 +41,13 @@ use encoding_rs::Encoding;
 use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
 
 use crate::escape::{do_unescape, escape, partial_escape};
+use crate::name::{LocalName, QName};
 use crate::utils::write_cow_string;
 use crate::{errors::Error, errors::Result, reader::Reader};
 use attributes::{Attribute, Attributes};
 
 #[cfg(feature = "serialize")]
 use crate::escape::EscapeError;
-
-use memchr;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -156,22 +155,22 @@ impl<'a> BytesStart<'a> {
 
     /// Creates new paired close tag
     pub fn to_end(&self) -> BytesEnd {
-        BytesEnd::borrowed(self.name())
+        BytesEnd::borrowed(self.name().into_inner())
     }
 
-    /// Gets the undecoded raw tag name as a `&[u8]`.
+    /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
-    pub fn name(&self) -> &[u8] {
-        &self.buf[..self.name_len]
+    pub fn name(&self) -> QName {
+        QName(&self.buf[..self.name_len])
     }
 
-    /// Gets the undecoded raw local tag name (excluding namespace) as a `&[u8]`.
+    /// Gets the undecoded raw local tag name (excluding namespace) as present
+    /// in the input stream.
     ///
     /// All content up to and including the first `:` character is removed from the tag name.
     #[inline]
-    pub fn local_name(&self) -> &[u8] {
-        let name = self.name();
-        memchr::memchr(b':', name).map_or(name, |i| &name[i + 1..])
+    pub fn local_name(&self) -> LocalName {
+        self.name().into()
     }
 
     /// Gets the unescaped tag name.
@@ -325,7 +324,7 @@ impl<'a> BytesStart<'a> {
         let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
-        bytes.extend_from_slice(a.key);
+        bytes.extend_from_slice(a.key.as_ref());
         bytes.extend_from_slice(b"=\"");
         bytes.extend_from_slice(&*a.value);
         bytes.push(b'"');
@@ -361,7 +360,7 @@ impl<'a> BytesStart<'a> {
     ) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes() {
             let a = a?;
-            if a.key == attr_name.as_ref() {
+            if a.key.as_ref() == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
@@ -449,10 +448,10 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
         match self.element.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key == b"version" => Ok(a.value),
+            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key).map_err(Error::Utf8)?.to_string();
+                let found = from_utf8(a.key.as_ref()).map_err(Error::Utf8)?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes
@@ -641,22 +640,19 @@ impl<'a> BytesEnd<'a> {
         }
     }
 
-    /// Gets `BytesEnd` event name
+    /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
-    pub fn name(&self) -> &[u8] {
-        &*self.name
+    pub fn name(&self) -> QName {
+        QName(&*self.name)
     }
 
-    /// local name (excluding namespace) as &[u8] (without eventual attributes)
-    /// returns the name() with any leading namespace removed (all content up to
-    /// and including the first ':' character)
+    /// Gets the undecoded raw local tag name (excluding namespace) as present
+    /// in the input stream.
+    ///
+    /// All content up to and including the first `:` character is removed from the tag name.
     #[inline]
-    pub fn local_name(&self) -> &[u8] {
-        if let Some(i) = self.name().iter().position(|b| *b == b':') {
-            &self.name()[i + 1..]
-        } else {
-            self.name()
-        }
+    pub fn local_name(&self) -> LocalName {
+        self.name().into()
     }
 }
 
@@ -1179,12 +1175,12 @@ mod test {
         loop {
             match rdr.read_event(&mut buf).expect("unable to read xml event") {
                 Event::Start(ref e) => parsed_local_names.push(
-                    from_utf8(e.local_name())
+                    from_utf8(e.local_name().as_ref())
                         .expect("unable to build str from local_name")
                         .to_string(),
                 ),
                 Event::End(ref e) => parsed_local_names.push(
-                    from_utf8(e.local_name())
+                    from_utf8(e.local_name().as_ref())
                         .expect("unable to build str from local_name")
                         .to_string(),
                 ),
@@ -1206,21 +1202,21 @@ mod test {
     fn bytestart_create() {
         let b = BytesStart::owned_name("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), b"test");
+        assert_eq!(b.name(), QName(b"test"));
     }
 
     #[test]
     fn bytestart_set_name() {
         let mut b = BytesStart::owned_name("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), b"test");
+        assert_eq!(b.name(), QName(b"test"));
         assert_eq!(b.attributes_raw(), b"");
         b.push_attribute(("x", "a"));
         assert_eq!(b.len(), 10);
         assert_eq!(b.attributes_raw(), b" x=\"a\"");
         b.set_name(b"g");
         assert_eq!(b.len(), 7);
-        assert_eq!(b.name(), b"g");
+        assert_eq!(b.name(), QName(b"g"));
     }
 
     #[test]
@@ -1231,6 +1227,6 @@ mod test {
         b.clear_attributes();
         assert!(b.attributes().next().is_none());
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), b"test");
+        assert_eq!(b.name(), QName(b"test"));
     }
 }

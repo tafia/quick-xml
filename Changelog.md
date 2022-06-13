@@ -14,6 +14,9 @@
 
 - [#387]: Allow overlapping between elements of sequence and other elements
   (using new feature `overlapped-lists`)
+- [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
+  and `PrefixDeclaration` wrappers around byte arrays and `ResolveResult` with
+  the result of namespace resolution
 
 ### Bug Fixes
 
@@ -23,6 +26,9 @@
 - [#387]: Internal deserializer state can be broken when deserializing a map with
   a sequence field (such as `Vec<T>`), where elements of this sequence contains
   another sequence. This error affects only users with the `serialize` feature enabled
+- [#393]: Now `event_namespace`, `attribute_namespace` and `read_event_namespaced`
+  returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
+- [#393]: Fix breaking processing after encounter an attribute with a reserved name (started with "xmlns")
 
 ### Misc Changes
 
@@ -42,15 +48,25 @@
 
 - [#391]: Added code coverage
 
+- [#393]: `event_namespace` and `attribute_namespace` now accept `QName`
+  and returns `ResolveResult` and `LocalName`, `read_event_namespaced` now
+  returns `ResolveResult` instead of `Option<[u8]>`
+- [#393]: Types of `Attribute::key` and `Attr::key()` changed to `QName`
+- [#393]: Now `BytesStart::name()` and `BytesEnd::name()` returns `QName`, and
+  `BytesStart::local_name()` and `BytesEnd::local_name()` returns `LocalName`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
 - [#387]: Added a bunch of tests for sequences deserialization
+- [#393]: Added more tests for namespace resolver
+- [#393]: Added tests for reserved names (started with "xml"i) -- see <https://www.w3.org/TR/xml-names11/#xmlReserved>
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
+[#393]: https://github.com/tafia/quick-xml/pull/393
 
 ## 0.23.0 -- 2022-05-08
 

@@ -1,3 +1,4 @@
+use quick_xml::name::QName;
 use quick_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
 use std::{borrow::Cow, io::Cursor};
 
@@ -36,14 +37,14 @@ fn test_attributes_empty() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: QName(b"att1"),
                     value: Cow::Borrowed(b"a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att2",
+                    key: QName(b"att2"),
                     value: Cow::Borrowed(b"b"),
                 }))
             );
@@ -65,7 +66,7 @@ fn test_attribute_equal() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: b"att1",
+                    key: QName(b"att1"),
                     value: Cow::Borrowed(b"a=b"),
                 }))
             );
@@ -922,7 +923,7 @@ fn test_issue299() -> Result<(), Error> {
     loop {
         match reader.read_event_unbuffered()? {
             Start(e) | Empty(e) => {
-                let attr_count = match e.name() {
+                let attr_count = match e.name().as_ref() {
                     b"MICEX_DOC" => 1,
                     b"SECURITY" => 4,
                     b"RECORDS" => 26,
@@ -932,7 +933,7 @@ fn test_issue299() -> Result<(), Error> {
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
                     "mismatch att count on '{:?}'",
-                    reader.decoder().decode(e.name())
+                    reader.decoder().decode(e.name().as_ref())
                 );
             }
             Eof => break,

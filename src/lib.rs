@@ -50,7 +50,7 @@
 //!         Ok(Event::Start(ref e)) => {
 //!         // for namespaced:
 //!         // Ok((ref namespace_value, Event::Start(ref e)))
-//!             match e.name() {
+//!             match e.name().as_ref() {
 //!                 b"tag1" => println!("attributes values: {:?}",
 //!                                     e.attributes().map(|a| a.unwrap().value)
 //!                                     .collect::<Vec<_>>()),
@@ -87,7 +87,7 @@
 //! let mut buf = Vec::new();
 //! loop {
 //!     match reader.read_event(&mut buf) {
-//!         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+//!         Ok(Event::Start(ref e)) if e.name().as_ref() == b"this_tag" => {
 //!
 //!             // crates a new element ... alternatively we could reuse `e` by calling
 //!             // `e.into_owned()`
@@ -102,7 +102,7 @@
 //!             // writes the event to the writer
 //!             assert!(writer.write_event(Event::Start(elem)).is_ok());
 //!         },
-//!         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+//!         Ok(Event::End(ref e)) if e.name().as_ref() == b"this_tag" => {
 //!             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 //!         },
 //!         Ok(Event::Eof) => break,
@@ -143,6 +143,7 @@ pub mod escape {
     pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
 }
 pub mod events;
+pub mod name;
 mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;

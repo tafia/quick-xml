@@ -21,7 +21,7 @@ fn main() -> Result<(), quick_xml::Error> {
     let mut found_tables = Vec::new();
     loop {
         match reader.read_event(&mut buf)? {
-            Event::Start(element) => match element.name() {
+            Event::Start(element) => match element.name().as_ref() {
                 b"w:tbl" => {
                     count += 1;
                     let mut stats = TableStat {
@@ -34,19 +34,21 @@ fn main() -> Result<(), quick_xml::Error> {
                     loop {
                         skip_buf.clear();
                         match reader.read_event(&mut skip_buf)? {
-                            Event::Start(element) => match element.name() {
+                            Event::Start(element) => match element.name().as_ref() {
                                 b"w:tr" => {
                                     stats.rows.push(vec![]);
                                     row_index = stats.rows.len() - 1;
                                 }
                                 b"w:tc" => {
-                                    stats.rows[row_index]
-                                        .push(String::from_utf8(element.name().to_vec()).unwrap());
+                                    stats.rows[row_index].push(
+                                        String::from_utf8(element.name().as_ref().to_vec())
+                                            .unwrap(),
+                                    );
                                 }
                                 _ => {}
                             },
                             Event::End(element) => {
-                                if element.name() == b"w:tbl" {
+                                if element.name().as_ref() == b"w:tbl" {
                                     found_tables.push(stats);
                                     break;
                                 }

@@ -2,6 +2,7 @@
 
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
+use crate::utils::write_byte_string;
 use std::str::Utf8Error;
 
 /// The error type used by this crate.
@@ -32,6 +33,8 @@ pub enum Error {
     InvalidAttr(AttrError),
     /// Escape error
     EscapeError(EscapeError),
+    /// Specified namespace prefix is unknown, cannot resolve namespace for it
+    UnknownPrefix(Vec<u8>),
 }
 
 impl From<::std::io::Error> for Error {
@@ -93,6 +96,11 @@ impl std::fmt::Display for Error {
             ),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
+            Error::UnknownPrefix(prefix) => {
+                f.write_str("Unknown namespace prefix '")?;
+                write_byte_string(f, &prefix)?;
+                f.write_str("'")
+            }
         }
     }
 }

@@ -1,6 +1,8 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
+use quick_xml::name::ResolveResult::*;
+use quick_xml::name::{Namespace, QName};
 use quick_xml::Reader;
 use std::borrow::Cow;
 
@@ -14,7 +16,7 @@ fn namespace() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
             e
@@ -23,7 +25,7 @@ fn namespace() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -32,12 +34,12 @@ fn namespace() {
     // "in namespace!"
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
         //TODO: Check in specification, it is true that namespace should be empty?
-        Ok((ns, Text(_))) => assert_eq!(ns, None),
+        Ok((ns, Text(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting text content with no namespace, got {:?}", e),
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -46,7 +48,7 @@ fn namespace() {
 
     // </a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
 }
@@ -61,7 +63,7 @@ fn default_namespace() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting outer start element with no namespace, got {:?}",
             e
@@ -70,7 +72,7 @@ fn default_namespace() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -78,7 +80,7 @@ fn default_namespace() {
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -88,7 +90,7 @@ fn default_namespace() {
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
 }
@@ -103,7 +105,7 @@ fn default_namespace_reset() {
 
     // <a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer start element with to resolve to 'www1', got {:?}",
             e
@@ -112,7 +114,7 @@ fn default_namespace_reset() {
 
     // <b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, Start(_))) => assert_eq!(ns, None),
+        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
         e => panic!(
             "expecting inner start element with no namespace, got {:?}",
             e
@@ -120,13 +122,13 @@ fn default_namespace_reset() {
     }
     // </b>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, None),
+        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting inner end element with no namespace, got {:?}", e),
     }
 
     // </a>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((ns, End(_))) => assert_eq!(ns, Some(b"www1".as_ref())),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
         e => panic!(
             "expecting outer end element with to resolve to 'www1', got {:?}",
             e
@@ -147,7 +149,7 @@ fn attributes_empty_ns() {
     let mut ns_buf = Vec::new();
 
     let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, Empty(e))) => e,
+        Ok((Unbound, Empty(e))) => e,
         e => panic!("Expecting Empty event, got {:?}", e),
     };
 
@@ -155,19 +157,19 @@ fn attributes_empty_ns() {
         .attributes()
         .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
         // we don't care about xmlns attributes for this test
-        .filter(|kv| !kv.key.starts_with(b"xmlns"))
+        .filter(|kv| kv.key.as_namespace_binding().is_none())
         .map(|Attribute { key: name, value }| {
             let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-            (opt_ns, local_name, value)
+            (opt_ns, local_name.into_inner(), value)
         });
     assert_eq!(
         attrs.next(),
-        Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
     );
     assert_eq!(
         attrs.next(),
         Some((
-            Some(&b"urn:example:r"[..]),
+            Bound(Namespace(b"urn:example:r")),
             &b"att2"[..],
             Cow::Borrowed(&b"b"[..])
         ))
@@ -188,7 +190,7 @@ fn attributes_empty_ns_expanded() {
     let mut ns_buf = Vec::new();
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((None, Start(e))) => e,
+            Ok((Unbound, Start(e))) => e,
             e => panic!("Expecting Empty event, got {:?}", e),
         };
 
@@ -196,19 +198,19 @@ fn attributes_empty_ns_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
+                (opt_ns, local_name.into_inner(), value)
             });
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(
             attrs.next(),
             Some((
-                Some(&b"urn:example:r"[..]),
+                Bound(Namespace(b"urn:example:r")),
                 &b"att2"[..],
                 Cow::Borrowed(&b"b"[..])
             ))
@@ -217,7 +219,7 @@ fn attributes_empty_ns_expanded() {
     }
 
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((None, End(e))) => assert_eq!(b"a", e.name()),
+        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
         e => panic!("Expecting End event, got {:?}", e),
     }
 }
@@ -234,9 +236,9 @@ fn default_ns_shadowing_empty() {
     // <outer xmlns='urn:example:o'>
     {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:o");
-                assert_eq!(e.name(), b"e");
+            Ok((ns, Start(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                assert_eq!(e.name(), QName(b"e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -245,9 +247,9 @@ fn default_ns_shadowing_empty() {
     // <inner att1='a' xmlns='urn:example:i' />
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Empty(e))) => {
-                assert_eq!(::std::str::from_utf8(ns).unwrap(), "urn:example:i");
-                assert_eq!(e.name(), b"e");
+            Ok((ns, Empty(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+                assert_eq!(e.name(), QName(b"e"));
                 e
             }
             e => panic!("Expecting Empty event, got {:?}", e),
@@ -257,25 +259,25 @@ fn default_ns_shadowing_empty() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
+                (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
 
     // </outer>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:o");
-            assert_eq!(e.name(), b"e");
+        Ok((ns, End(e))) => {
+            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (<outer>), got {:?}", e),
     }
@@ -293,9 +295,9 @@ fn default_ns_shadowing_expanded() {
     // <outer xmlns='urn:example:o'>
     {
         match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:o");
-                assert_eq!(e.name(), b"e");
+            Ok((ns, Start(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                assert_eq!(e.name(), QName(b"e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -305,9 +307,9 @@ fn default_ns_shadowing_expanded() {
     // <inner att1='a' xmlns='urn:example:i' />
     {
         let e = match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-            Ok((Some(ns), Start(e))) => {
-                assert_eq!(&ns[..], b"urn:example:i");
-                assert_eq!(e.name(), b"e");
+            Ok((ns, Start(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+                assert_eq!(e.name(), QName(b"e"));
                 e
             }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
@@ -316,34 +318,60 @@ fn default_ns_shadowing_expanded() {
             .attributes()
             .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
             // we don't care about xmlns attributes for this test
-            .filter(|kv| !kv.key.starts_with(b"xmlns"))
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
                 let (opt_ns, local_name) = r.attribute_namespace(name, &ns_buf);
-                (opt_ns, local_name, value)
+                (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((None, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
 
     // virtual </inner>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:i");
-            assert_eq!(e.name(), b"e");
+        Ok((ns, End(e))) => {
+            assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
     // </outer>
     match r.read_namespaced_event(&mut buf, &mut ns_buf) {
-        Ok((Some(ns), End(e))) => {
-            assert_eq!(&ns[..], b"urn:example:o");
-            assert_eq!(e.name(), b"e");
+        Ok((ns, End(e))) => {
+            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+            assert_eq!(e.name(), QName(b"e"));
         }
         e => panic!("Expected End event (</outer>), got {:?}", e),
+    }
+}
+
+/// Although the XML specification [recommends against] the use of names where
+/// the local name portion begins with the letters "xml" (case insensitive),
+/// it also specifies, that processors *MUST NOT* treat them as fatal errors.
+/// That means, that processing should continue -- in our case we should read
+/// an XML event and user should be able to check constraints later if he/she wish.
+///
+/// [recommends against]: https://www.w3.org/TR/xml-names11/#xmlReserved
+#[test]
+fn reserved_name() {
+    // Name "xmlns-something" is reserved according to spec, because started with "xml"
+    let mut r = Reader::from_str(r#"<a xmlns-something="reserved attribute name" xmlns="www1"/>"#);
+    r.trim_text(true);
+
+    let mut buf = Vec::new();
+    let mut ns_buf = Vec::new();
+
+    // <a />
+    match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        e => panic!(
+            "Expected empty element bound to namespace 'www1', got {:?}",
+            e
+        ),
     }
 }

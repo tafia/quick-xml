@@ -221,6 +221,7 @@ pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
+    name::QName,
     reader::Decoder,
     Reader,
 };
@@ -514,16 +515,16 @@ where
         match self.write.back() {
             // Skip all subtree, if we skip a start event
             Some(DeEvent::Start(e)) => {
-                let end = e.name().to_owned();
+                let end = e.name().as_ref().to_owned();
                 let mut depth = 0;
                 loop {
                     let event = self.next()?;
                     match event {
-                        DeEvent::Start(ref e) if e.name() == end => {
+                        DeEvent::Start(ref e) if e.name().as_ref() == end => {
                             self.skip_event(event)?;
                             depth += 1;
                         }
-                        DeEvent::End(ref e) if e.name() == end => {
+                        DeEvent::End(ref e) if e.name().as_ref() == end => {
                             self.skip_event(event)?;
                             if depth == 0 {
                                 return Ok(());
@@ -571,7 +572,9 @@ where
             let e = self.next()?;
             match e {
                 DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+                DeEvent::End(e) => {
+                    return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned()))
+                }
                 DeEvent::Eof => return Ok(None),
                 _ => (), // ignore texts
             }
@@ -631,20 +634,24 @@ where
                     DeEvent::Text(t) if unescape => t.unescape()?,
                     DeEvent::Text(t) => BytesCData::new(t.into_inner()),
                     DeEvent::CData(t) => t,
-                    DeEvent::Start(s) => return Err(DeError::UnexpectedStart(s.name().to_owned())),
+                    DeEvent::Start(s) => {
+                        return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
+                    }
                     // We can get End event in case of `<tag></tag>` or `<tag/>` input
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
                         return Ok(BytesCData::new(&[] as &[u8]));
                     }
-                    DeEvent::End(end) => return Err(DeError::UnexpectedEnd(end.name().to_owned())),
+                    DeEvent::End(end) => {
+                        return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
+                    }
                     DeEvent::Eof => return Err(DeError::UnexpectedEof),
                 };
                 self.read_to_end(e.name())?;
                 Ok(t)
             }
-            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().to_owned())),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -658,7 +665,7 @@ where
     /// Drops all events until event with [name](BytesEnd::name()) `name` won't be
     /// dropped. This method should be called after [`Self::next()`]
     #[cfg(feature = "overlapped-lists")]
-    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         let mut depth = 0;
         loop {
             match self.read.pop_front() {
@@ -682,7 +689,7 @@ where
         }
     }
     #[cfg(not(feature = "overlapped-lists"))]
-    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         // First one might be in self.peek
         match self.next()? {
             DeEvent::Start(e) => self.reader.read_to_end(e.name())?,
@@ -751,10 +758,10 @@ where
     {
         // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
         if let Some(e) = self.next_start()? {
-            let name = e.name().to_vec();
+            let name = e.name().as_ref().to_vec();
             let map = map::MapAccess::new(self, e, fields)?;
             let value = visitor.visit_map(map)?;
-            self.read_to_end(&name)?;
+            self.read_to_end(QName(&name))?;
             Ok(value)
         } else {
             Err(DeError::ExpectedStart)
@@ -789,7 +796,7 @@ where
                 visitor.visit_unit()
             }
             DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -893,7 +900,7 @@ where
     {
         match self.next()? {
             DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().to_owned())),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
             _ => (),
         }
@@ -925,7 +932,7 @@ pub trait XmlRead<'i> {
 
     /// Skips until end element is found. Unlike `next()` it will not allocate
     /// when it cannot satisfy the lifetime.
-    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError>;
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError>;
 
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
@@ -960,7 +967,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         event
     }
 
-    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end(name, &mut self.buf) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
@@ -996,7 +1003,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
         }
     }
 
-    fn read_to_end(&mut self, name: &[u8]) -> Result<(), DeError> {
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end_unbuffered(name) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
@@ -1212,7 +1219,7 @@ mod tests {
                 de.next().unwrap(),
                 Start(BytesStart::borrowed_name(b"target"))
             );
-            de.read_to_end(b"target").unwrap();
+            de.read_to_end(QName(b"target")).unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
@@ -1252,7 +1259,7 @@ mod tests {
                 de.next().unwrap(),
                 Start(BytesStart::borrowed_name(b"skip"))
             );
-            de.read_to_end(b"skip").unwrap();
+            de.read_to_end(QName(b"skip")).unwrap();
 
             assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
         }
@@ -1313,7 +1320,7 @@ mod tests {
             de.next().unwrap(),
             Start(BytesStart::borrowed(br#"tag a="1""#, 3))
         );
-        assert_eq!(de.read_to_end(b"tag").unwrap(), ());
+        assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
         assert_eq!(
             de.next().unwrap(),
@@ -1329,7 +1336,7 @@ mod tests {
             de.next().unwrap(),
             Start(BytesStart::borrowed(b"self-closed", 11))
         );
-        assert_eq!(de.read_to_end(b"self-closed").unwrap(), ());
+        assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
         assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
         assert_eq!(de.next().unwrap(), Eof);
@@ -1432,7 +1439,7 @@ mod tests {
             reader.next().unwrap(),
             DeEvent::Start(BytesStart::borrowed(b"item ", 4))
         );
-        reader.read_to_end(b"item").unwrap();
+        reader.read_to_end(QName(b"item")).unwrap();
         assert_eq!(reader.next().unwrap(), DeEvent::Eof);
     }
 

@@ -23,7 +23,7 @@ use std::io::Write;
 /// let mut buf = Vec::new();
 /// loop {
 ///     match reader.read_event(&mut buf) {
-///         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
+///         Ok(Event::Start(ref e)) if e.name().as_ref() == b"this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
@@ -38,7 +38,7 @@ use std::io::Write;
 ///             // writes the event to the writer
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
-///         Ok(Event::End(ref e)) if e.name() == b"this_tag" => {
+///         Ok(Event::End(ref e)) if e.name().as_ref() == b"this_tag" => {
 ///             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
