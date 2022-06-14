@@ -63,6 +63,9 @@
   use `String::from_utf8` instead (which that function did)
 - [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
   Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
+- [#191]: Remove `Reader::decode()`, it is replaced by `Decoder::decode()`.
+  Use `reader.decoder().decode(...)` instead of `reader.decode(...)` for now.
+  `Reader::encoding()` is replaced by `Decoder::encoding()` as well
 
 ### New Tests
 

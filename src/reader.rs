@@ -369,50 +369,18 @@ impl<R: BufRead> Reader<R> {
         self.ns_resolver.resolve(name, namespace_buffer, false)
     }
 
-    /// Returns the `Reader`s encoding.
-    ///
-    /// The used encoding may change after parsing the XML declaration.
-    ///
-    /// This encoding will be used by [`decode`].
-    ///
-    /// [`decode`]: #method.decode
-    #[cfg(feature = "encoding")]
-    pub fn encoding(&self) -> &'static Encoding {
-        self.encoding
-    }
-
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    ///
+    /// If `encoding` feature is enabled, the used encoding may change after
+    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
+    ///
+    /// If `encoding` feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
     pub fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: self.encoding,
         }
-    }
-
-    /// Decodes a slice using the encoding specified in the XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// If no encoding is specified, defaults to UTF-8.
-    #[inline]
-    #[cfg(feature = "encoding")]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
-        self.encoding.decode(bytes).0
-    }
-
-    /// Decodes a UTF8 slice regardless of XML declaration.
-    ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    ///
-    /// # Note
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
     }
 
     /// Decodes a slice using without BOM (Byte order mark) the encoding specified in the XML declaration.
@@ -1490,7 +1458,14 @@ pub struct Decoder {
 
 #[cfg(not(feature = "encoding"))]
 impl Decoder {
-    /// Decodes specified bytes using UTF-8 encoding
+    /// Decodes a UTF8 slice regardless of XML declaration.
+    ///
+    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
+    ///
+    /// # Note
+    ///
+    /// If you instead want to use XML declared encoding, use the `encoding` feature
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
         from_utf8(bytes).map_err(Error::Utf8)
     }
@@ -1498,8 +1473,20 @@ impl Decoder {
 
 #[cfg(feature = "encoding")]
 impl Decoder {
+    /// Returns the `Reader`s encoding.
+    ///
+    /// This encoding will be used by [`decode`].
+    ///
+    /// [`decode`]: Self::decode
+    pub fn encoding(&self) -> &'static Encoding {
+        self.encoding
+    }
+
     /// Decodes specified bytes using encoding, declared in the XML, if it was
     /// declared there, or UTF-8 otherwise
+    ///
+    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
+    /// `U+FFFD REPLACEMENT CHARACTER`.
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }

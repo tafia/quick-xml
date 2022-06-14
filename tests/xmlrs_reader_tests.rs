@@ -451,10 +451,10 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
 // FIXME: The public API differs based on the "encoding" feature
 fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
     #[cfg(feature = "encoding")]
-    let decoded = reader.decode(text);
+    let decoded = reader.decoder().decode(text);
 
     #[cfg(not(feature = "encoding"))]
-    let decoded = Cow::Borrowed(reader.decode(text).unwrap());
+    let decoded = Cow::Borrowed(reader.decoder().decode(text).unwrap());
 
     decoded
 }

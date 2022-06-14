@@ -114,7 +114,7 @@ impl<'a> Attribute<'a> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> XmlResult<String> {
-        let decoded = reader.decode(&*self.value);
+        let decoded = reader.decoder().decode(&*self.value);
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
@@ -126,7 +126,7 @@ impl<'a> Attribute<'a> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> XmlResult<String> {
-        let decoded = reader.decode(&*self.value)?;
+        let decoded = reader.decoder().decode(&*self.value)?;
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
