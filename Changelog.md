@@ -17,6 +17,9 @@
 - [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
   and `PrefixDeclaration` wrappers around byte arrays and `ResolveResult` with
   the result of namespace resolution
+- [#180]: Make `Decoder` struct public. You already had access to it via the
+  `Reader::decoder()` method, but could not name it in the code. Now the preferred
+  way to access decoding functionality is via this struct
 
 ### Bug Fixes
 
@@ -69,6 +72,7 @@
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387

@@ -381,18 +381,12 @@ impl<R: BufRead> Reader<R> {
         self.encoding
     }
 
-    /// Get utf8 decoder
-    #[cfg(feature = "encoding")]
+    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
     pub fn decoder(&self) -> Decoder {
         Decoder {
+            #[cfg(feature = "encoding")]
             encoding: self.encoding,
         }
-    }
-
-    /// Get utf8 decoder
-    #[cfg(not(feature = "encoding"))]
-    pub fn decoder(&self) -> Decoder {
-        Decoder
     }
 
     /// Decodes a slice using the encoding specified in the XML declaration.
@@ -1473,46 +1467,57 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
     }
 }
 
-/// Utf8 Decoder
-#[cfg(not(feature = "encoding"))]
-#[derive(Clone, Copy, Debug)]
-pub struct Decoder;
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Utf8 Decoder
-#[cfg(feature = "encoding")]
+/// Decoder of byte slices to the strings. This is lightweight object that can be copied.
+///
+/// If feature `encoding` is enabled, this encoding taken from the `"encoding"`
+/// XML declaration or assumes UTF-8, if XML has no <?xml ?> declaration, encoding
+/// key is not defined or contains unknown encoding.
+///
+/// The library supports any UTF-8 compatible encodings that crate `encoding_rs`
+/// is supported. [*UTF-16 is not supported at the present*][utf16].
+///
+/// If feature `encoding` is disabled, the decoder is always UTF-8 decoder:
+/// any XML declarations are ignored.
+///
+/// [utf16]: https://github.com/tafia/quick-xml/issues/158
 #[derive(Clone, Copy, Debug)]
 pub struct Decoder {
+    #[cfg(feature = "encoding")]
     encoding: &'static Encoding,
 }
 
+#[cfg(not(feature = "encoding"))]
 impl Decoder {
-    #[cfg(not(feature = "encoding"))]
+    /// Decodes specified bytes using UTF-8 encoding
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
         from_utf8(bytes).map_err(Error::Utf8)
     }
+}
 
-    #[cfg(feature = "encoding")]
+#[cfg(feature = "encoding")]
+impl Decoder {
+    /// Decodes specified bytes using encoding, declared in the XML, if it was
+    /// declared there, or UTF-8 otherwise
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
     }
 }
 
-/// This implementation is required for tests of other parts of the library
-#[cfg(test)]
-#[cfg(feature = "serialize")]
 impl Decoder {
-    #[cfg(not(feature = "encoding"))]
-    pub(crate) fn utf8() -> Self {
-        Decoder
-    }
-
-    #[cfg(feature = "encoding")]
+    /// This implementation is required for tests of other parts of the library
+    #[cfg(test)]
+    #[cfg(feature = "serialize")]
     pub(crate) fn utf8() -> Self {
         Decoder {
+            #[cfg(feature = "encoding")]
             encoding: encoding_rs::UTF_8,
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod test {
