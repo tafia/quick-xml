@@ -56,6 +56,9 @@
 - [#393]: Now `BytesStart::name()` and `BytesEnd::name()` returns `QName`, and
   `BytesStart::local_name()` and `BytesEnd::local_name()` returns `LocalName`
 
+- [#191]: Remove unused `reader.decoder().decode_owned()`. If you ever used it,
+  use `String::from_utf8` instead (which that function did)
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -66,6 +69,7 @@
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#191]: https://github.com/tafia/quick-xml/issues/191
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391

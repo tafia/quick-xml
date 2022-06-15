@@ -1491,11 +1491,6 @@ impl Decoder {
         from_utf8(bytes).map_err(Error::Utf8)
     }
 
-    #[cfg(not(feature = "encoding"))]
-    pub fn decode_owned<'c>(&self, bytes: Vec<u8>) -> Result<String> {
-        String::from_utf8(bytes).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
     #[cfg(feature = "encoding")]
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Cow<'c, str> {
         self.encoding.decode(bytes).0
