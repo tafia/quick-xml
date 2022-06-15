@@ -120,8 +120,8 @@ pub struct Reader<R: BufRead> {
 
 impl<R: BufRead> Reader<R> {
     /// Creates a `Reader` that reads from a reader implementing `BufRead`.
-    pub fn from_reader(reader: R) -> Reader<R> {
-        Reader {
+    pub fn from_reader(reader: R) -> Self {
+        Self {
             reader,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
@@ -159,7 +159,7 @@ impl<R: BufRead> Reader<R> {
     /// [`Empty`]: events/enum.Event.html#variant.Empty
     /// [`Start`]: events/enum.Event.html#variant.Start
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
         self.expand_empty_elements = val;
         self
     }
@@ -172,7 +172,7 @@ impl<R: BufRead> Reader<R> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn trim_text(&mut self, val: bool) -> &mut Self {
         self.trim_text_start = val;
         self.trim_text_end = val;
         self
@@ -185,7 +185,7 @@ impl<R: BufRead> Reader<R> {
     /// (`false` by default)
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
-    pub fn trim_text_end(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
         self.trim_text_end = val;
         self
     }
@@ -201,7 +201,7 @@ impl<R: BufRead> Reader<R> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
         self.trim_markup_names_in_closing_tags = val;
         self
     }
@@ -223,7 +223,7 @@ impl<R: BufRead> Reader<R> {
     /// (`true` by default)
     ///
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn check_end_names(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn check_end_names(&mut self, val: bool) -> &mut Self {
         self.check_end_names = val;
         self
     }
@@ -238,7 +238,7 @@ impl<R: BufRead> Reader<R> {
     /// (`false` by default)
     ///
     /// [`Comment`]: events/enum.Event.html#variant.Comment
-    pub fn check_comments(&mut self, val: bool) -> &mut Reader<R> {
+    pub fn check_comments(&mut self, val: bool) -> &mut Self {
         self.check_comments = val;
         self
     }
@@ -916,22 +916,22 @@ impl<R: BufRead> Reader<R> {
 
 impl Reader<BufReader<File>> {
     /// Creates an XML reader from a file path.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Reader<BufReader<File>>> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path).map_err(Error::Io)?;
         let reader = BufReader::new(file);
-        Ok(Reader::from_reader(reader))
+        Ok(Self::from_reader(reader))
     }
 }
 
 impl<'a> Reader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
-    pub fn from_str(s: &'a str) -> Reader<&'a [u8]> {
-        Reader::from_reader(s.as_bytes())
+    pub fn from_str(s: &'a str) -> Self {
+        Self::from_reader(s.as_bytes())
     }
 
     /// Creates an XML reader from a slice of bytes.
-    pub fn from_bytes(s: &'a [u8]) -> Reader<&'a [u8]> {
-        Reader::from_reader(s)
+    pub fn from_bytes(s: &'a [u8]) -> Self {
+        Self::from_reader(s)
     }
 
     /// Read an event that borrows from the input rather than a buffer.
