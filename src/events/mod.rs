@@ -39,7 +39,6 @@ use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
-use std::io::BufRead;
 use std::ops::Deref;
 use std::str::from_utf8;
 
@@ -755,7 +754,7 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    pub fn unescape_and_decode<B>(&self, reader: &Reader<B>) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
 
@@ -769,7 +768,7 @@ impl<'a> BytesText<'a> {
     /// # Pre-condition
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_with_custom_entities<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -777,7 +776,7 @@ impl<'a> BytesText<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,

@@ -107,7 +107,7 @@ impl EncodingRef {
 
 /// A low level encoding-agnostic XML event reader.
 ///
-/// Consumes a `BufRead` and streams XML `Event`s.
+/// Consumes bytes and streams XML [`Event`]s.
 ///
 /// # Examples
 ///
@@ -144,7 +144,7 @@ impl EncodingRef {
 /// }
 /// ```
 #[derive(Clone)]
-pub struct Reader<R: BufRead> {
+pub struct Reader<R> {
     /// reader
     pub(crate) reader: R,
     /// current buffer position, useful for debugging errors
@@ -198,8 +198,8 @@ pub struct Reader<R: BufRead> {
 }
 
 /// Builder methods
-impl<R: BufRead> Reader<R> {
-    /// Creates a `Reader` that reads from a reader implementing `BufRead`.
+impl<R> Reader<R> {
+    /// Creates a `Reader` that reads from a given reader.
     pub fn from_reader(reader: R) -> Self {
         Self {
             reader,
@@ -323,7 +323,7 @@ impl<R: BufRead> Reader<R> {
 }
 
 /// Getters
-impl<R: BufRead> Reader<R> {
+impl<R> Reader<R> {
     /// Consumes `Reader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
@@ -761,7 +761,7 @@ impl<R: BufRead> Reader<R> {
 }
 
 /// Private methods
-impl<R: BufRead> Reader<R> {
+impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
