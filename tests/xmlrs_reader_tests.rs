@@ -420,15 +420,11 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     }
 }
 
-fn namespace_name(n: ResolveResult, name: &[u8]) -> String {
+fn namespace_name(n: ResolveResult, name: Cow<str>) -> String {
     match n {
         // Produces string '{namespace}local_name'
-        ResolveResult::Bound(n) => format!(
-            "{{{}}}{}",
-            from_utf8(n.as_ref()).unwrap(),
-            from_utf8(name).unwrap()
-        ),
-        _ => from_utf8(name).unwrap().to_owned(),
+        ResolveResult::Bound(n) => format!("{{{}}}{}", from_utf8(n.as_ref()).unwrap(), name),
+        _ => name.to_string(),
     }
 }
 
@@ -465,7 +461,7 @@ fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
 fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8]>) -> String {
     match opt_event {
         Ok((n, Event::Start(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader).as_bytes());
+            let name = namespace_name(n, decode(e.name().as_ref(), reader));
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                 Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
@@ -473,7 +469,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::Empty(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader).as_bytes());
+            let name = namespace_name(n, decode(e.name().as_ref(), reader));
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                 Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
@@ -481,16 +477,13 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::End(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader).as_bytes());
+            let name = namespace_name(n, decode(e.name().as_ref(), reader));
             format!("EndElement({})", name)
         }
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
         Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
         Ok((_, Event::Text(ref e))) => match e.unescaped() {
-            Ok(c) => match from_utf8(decode(&*c, reader).as_bytes()) {
-                Ok(c) => format!("Characters({})", c),
-                Err(ref err) => format!("InvalidUtf8({:?}; {})", e.escaped(), err),
-            },
+            Ok(c) => format!("Characters({})", decode(c.as_ref(), reader).as_ref()),
             Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
         },
         Ok((_, Event::Decl(ref e))) => {
