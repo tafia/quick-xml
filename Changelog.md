@@ -20,6 +20,8 @@
 - [#180]: Make `Decoder` struct public. You already had access to it via the
   `Reader::decoder()` method, but could not name it in the code. Now the preferred
   way to access decoding functionality is via this struct
+- [#191]: New event variant `StartText` emitted for bytes before the XML declaration
+  or a start comment or a tag. For streams with BOM this event will contain a BOM
 
 ### Bug Fixes
 

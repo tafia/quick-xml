@@ -461,6 +461,7 @@ fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
 
 fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8]>) -> String {
     match opt_event {
+        Ok((_, Event::StartText(_))) => "StartText".to_string(),
         Ok((n, Event::Start(ref e))) => {
             let name = namespace_name(n, e.name(), reader);
             match make_attrs(e) {

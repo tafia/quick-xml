@@ -14,12 +14,46 @@ use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 
 use memchr;
 
+/// Possible reader states. The state transition diagram (`true` and `false` shows
+/// value of [`Reader::expand_empty_elements()`] option):
+///
+/// ```mermaid
+/// flowchart LR
+///   subgraph _
+///     direction LR
+///
+///     Init   -- "(no event)"\nStartText                              --> Opened
+///     Opened -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> Closed
+///     Closed -- "#lt;false#gt;\n(no event)"\nText                    --> Opened
+///   end
+///   Closed -- "#lt;true#gt;"\nStart --> Empty
+///   Empty  -- End                   --> Closed
+///   _ -. Eof .-> Exit
+/// ```
 #[derive(Clone)]
 enum TagState {
+    /// Initial state in which reader stay after creation. Transition from that
+    /// state could produce a `StartText`, `Decl`, `Comment` or `Start` event.
+    /// The next state is always `Opened`. The reader will never return to this
+    /// state. The event emitted during transition to `Opened` is a `StartEvent`
+    /// if the first symbol not `<`, otherwise no event are emitted.
+    Init,
+    /// State after seeing the `<` symbol. Depending on the next symbol all other
+    /// events (except `StartText`) could be generated.
+    ///
+    /// After generating ane event the reader moves to the `Closed` state.
     Opened,
+    /// State in which reader searches the `<` symbol of a markup. All bytes before
+    /// that symbol will be returned in the [`Event::Text`] event. After that
+    /// the reader moves to the `Opened` state.
     Closed,
+    /// This state is used only if option `expand_empty_elements` is set to `true`.
+    /// Reader enters to this state when it is in a `Closed` state and emits an
+    /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
+    /// after which reader returned to the `Closed` state.
     Empty,
-    /// Either Eof or Errored
+    /// Reader enters this state when `Eof` event generated or an error occurred.
+    /// This is the last state, the reader stay in it forever.
     Exit,
 }
 
@@ -126,7 +160,7 @@ impl<R: BufRead> Reader<R> {
             reader,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
-            tag_state: TagState::Closed,
+            tag_state: TagState::Init,
             expand_empty_elements: false,
             trim_text_start: false,
             trim_text_end: false,
@@ -658,7 +692,8 @@ impl<R: BufRead> Reader<R> {
         R: XmlSource<'i, B>,
     {
         let event = match self.tag_state {
-            TagState::Closed => self.read_until_open(buf),
+            TagState::Init => self.read_until_open(buf, true),
+            TagState::Closed => self.read_until_open(buf, false),
             TagState::Opened => self.read_until_close(buf),
             TagState::Empty => self.close_expanded_empty(),
             TagState::Exit => return Ok(Event::Eof),
@@ -670,9 +705,10 @@ impl<R: BufRead> Reader<R> {
         event
     }
 
-    /// private function to read until '<' is found
-    /// return a `Text` event
-    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    /// Read until '<' is found and moves reader to an `Opened` state.
+    ///
+    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
+    fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
@@ -691,15 +727,24 @@ impl<R: BufRead> Reader<R> {
             .reader
             .read_bytes_until(b'<', buf, &mut self.buf_position)
         {
-            Ok(Some(bytes)) if self.trim_text_end => {
-                // Skip the ending '<
-                let len = bytes
-                    .iter()
-                    .rposition(|&b| !is_whitespace(b))
-                    .map_or_else(|| bytes.len(), |p| p + 1);
-                Ok(Event::Text(BytesText::from_escaped(&bytes[..len])))
+            Ok(Some(bytes)) => {
+                let content = if self.trim_text_end {
+                    // Skip the ending '<
+                    let len = bytes
+                        .iter()
+                        .rposition(|&b| !is_whitespace(b))
+                        .map_or_else(|| bytes.len(), |p| p + 1);
+                    &bytes[..len]
+                } else {
+                    bytes
+                };
+
+                Ok(if first {
+                    Event::StartText(BytesText::from_escaped(content).into())
+                } else {
+                    Event::Text(BytesText::from_escaped(content))
+                })
             }
-            Ok(Some(bytes)) => Ok(Event::Text(BytesText::from_escaped(bytes))),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -2251,6 +2296,16 @@ mod test {
                 use pretty_assertions::assert_eq;
 
                 #[test]
+                fn start_text() {
+                    let mut reader = Reader::from_str("bom");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::StartText(BytesText::from_escaped(b"bom".as_ref()).into())
+                    );
+                }
+
+                #[test]
                 fn declaration() {
                     let mut reader = Reader::from_str("<?xml ?>");
 
@@ -2313,9 +2368,15 @@ mod test {
                     );
                 }
 
+                /// Text event cannot be generated without preceding event of another type
                 #[test]
                 fn text() {
-                    let mut reader = Reader::from_str("text");
+                    let mut reader = Reader::from_str("<tag/>text");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                    );
 
                     assert_eq!(
                         reader.read_event_buffered($buf).unwrap(),

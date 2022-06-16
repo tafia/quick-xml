@@ -1,6 +1,7 @@
 use criterion::{self, criterion_group, criterion_main, Criterion};
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
+use quick_xml::name::QName;
 use quick_xml::Reader;
 
 static SAMPLE: &[u8] = include_bytes!("../tests/sample_rss.xml");
@@ -173,7 +174,7 @@ fn bytes_text_unescaped(c: &mut Criterion) {
 /// Benchmarks, how fast individual event parsed
 fn one_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("One event");
-    group.bench_function("Text", |b| {
+    group.bench_function("StartText", |b| {
         let src = "Hello world!".repeat(512 / 12).into_bytes();
         let mut buf = Vec::with_capacity(1024);
         b.iter(|| {
@@ -181,7 +182,7 @@ fn one_event(c: &mut Criterion) {
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false).check_comments(false);
             match r.read_event(&mut buf) {
-                Ok(Event::Text(ref e)) => nbtxt += e.unescaped().unwrap().len(),
+                Ok(Event::StartText(e)) => nbtxt += e.unescaped().unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 
@@ -310,7 +311,7 @@ fn attributes(c: &mut Criterion) {
             let mut buf = Vec::new();
             loop {
                 match r.read_event(&mut buf) {
-                    Ok(Event::Empty(e)) if e.name() == b"player" => {
+                    Ok(Event::Empty(e)) if e.name() == QName(b"player") => {
                         for name in ["num", "status", "avg"] {
                             if let Some(_attr) = e.try_get_attribute(name).unwrap() {
                                 count += 1
