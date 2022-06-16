@@ -61,6 +61,8 @@
 
 - [#191]: Remove unused `reader.decoder().decode_owned()`. If you ever used it,
   use `String::from_utf8` instead (which that function did)
+- [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
+  Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
 
 ### New Tests
 
