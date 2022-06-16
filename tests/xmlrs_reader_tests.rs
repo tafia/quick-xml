@@ -1,5 +1,5 @@
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::name::ResolveResult;
+use quick_xml::name::{QName, ResolveResult};
 use quick_xml::{Reader, Result};
 use std::borrow::Cow;
 use std::str::from_utf8;
@@ -420,9 +420,10 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     }
 }
 
-fn namespace_name(n: ResolveResult, name: Cow<str>) -> String {
+fn namespace_name(n: ResolveResult, name: QName, reader: &Reader<&[u8]>) -> String {
+    let name = decode(name.as_ref(), reader);
     match n {
-        // Produces string '{namespace}local_name'
+        // Produces string '{namespace}prefixed_name'
         ResolveResult::Bound(n) => format!("{{{}}}{}", from_utf8(n.as_ref()).unwrap(), name),
         _ => name.to_string(),
     }
@@ -461,7 +462,7 @@ fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
 fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8]>) -> String {
     match opt_event {
         Ok((n, Event::Start(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader));
+            let name = namespace_name(n, e.name(), reader);
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                 Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
@@ -469,7 +470,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::Empty(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader));
+            let name = namespace_name(n, e.name(), reader);
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                 Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
@@ -477,7 +478,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::End(ref e))) => {
-            let name = namespace_name(n, decode(e.name().as_ref(), reader));
+            let name = namespace_name(n, e.name(), reader);
             format!("EndElement({})", name)
         }
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
