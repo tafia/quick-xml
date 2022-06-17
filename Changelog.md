@@ -65,9 +65,18 @@
   use `String::from_utf8` instead (which that function did)
 - [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
   Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
-- [#191]: Remove `Reader::decode()`, it is replaced by `Decoder::decode()`.
-  Use `reader.decoder().decode(...)` instead of `reader.decode(...)` for now.
+- [#191]: Remove `Reader::decode()` and `Reader::decode_without_bom()`, they are replaced by
+  `Decoder::decode()` and `Decoder::decode_with_bom_removal()`.
+  Use `reader.decoder().decode_*(...)` instead of `reader.decode_*(...)` for now.
   `Reader::encoding()` is replaced by `Decoder::encoding()` as well
+- [#191]: Remove poorly designed `BytesText::unescape_and_decode_without_bom()` and
+  `BytesText::unescape_and_decode_without_bom_with_custom_entities()`. Although these methods worked
+  as expected, this was only due to good luck. They was replaced by the
+  `BytesStartText::decode_with_bom_removal()`:
+  - conceptually, you should decode BOM only for the first `Text` event from the
+    reader (since now `StartText` event is emitted instead for this)
+  - text before the first tag is not an XML content at all, so it is meaningless
+    to try to unescape something in it
 
 ### New Tests
 
