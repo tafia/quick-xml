@@ -381,6 +381,14 @@ impl<'a> Debug for BytesStart<'a> {
     }
 }
 
+impl<'a> Deref for BytesStart<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.buf
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An XML declaration (`Event::Decl`).
@@ -613,6 +621,14 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
+impl<'a> Deref for BytesDecl<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.element
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A struct to manage `Event::End` events
@@ -666,6 +682,14 @@ impl<'a> Debug for BytesEnd<'a> {
         write!(f, "BytesEnd {{ name: ")?;
         write_cow_string(f, &self.name)?;
         write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesEnd<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.name
     }
 }
 
@@ -936,6 +960,14 @@ impl<'a> Debug for BytesText<'a> {
     }
 }
 
+impl<'a> Deref for BytesText<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// CDATA content contains unescaped data from the reader. If you want to write them as a text,
@@ -1049,6 +1081,14 @@ impl<'a> Debug for BytesCData<'a> {
     }
 }
 
+impl<'a> Deref for BytesCData<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Event emitted by [`Reader::read_event`].
@@ -1097,46 +1137,9 @@ impl<'a> Event<'a> {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-impl<'a> Deref for BytesStart<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.buf
-    }
-}
-
-impl<'a> Deref for BytesDecl<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.element
-    }
-}
-
-impl<'a> Deref for BytesEnd<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.name
-    }
-}
-
-impl<'a> Deref for BytesText<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.content
-    }
-}
-
-impl<'a> Deref for BytesCData<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &*self.content
-    }
-}
-
 impl<'a> Deref for Event<'a> {
     type Target = [u8];
+
     fn deref(&self) -> &[u8] {
         match *self {
             Event::Start(ref e) | Event::Empty(ref e) => &*e,
