@@ -38,7 +38,12 @@ pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
-use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt::{self, Debug, Formatter};
+use std::io::BufRead;
+use std::ops::Deref;
+use std::str::from_utf8;
 
 use crate::escape::{do_unescape, escape, partial_escape};
 use crate::name::{LocalName, QName};
@@ -368,8 +373,8 @@ impl<'a> BytesStart<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesStart<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesStart<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesStart {{ buf: ")?;
         write_cow_string(f, &self.buf)?;
         write!(f, ", name_len: {} }}", self.name_len)
@@ -656,8 +661,8 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesEnd<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesEnd<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesEnd {{ name: ")?;
         write_cow_string(f, &self.name)?;
         write!(f, " }}")
@@ -923,8 +928,8 @@ impl<'a> BytesText<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesText<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesText<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesText {{ content: ")?;
         write_cow_string(f, &self.content)?;
         write!(f, " }}")
@@ -1036,8 +1041,8 @@ impl<'a> BytesCData<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesCData<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesCData<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesCData {{ content: ")?;
         write_cow_string(f, &self.content)?;
         write!(f, " }}")
