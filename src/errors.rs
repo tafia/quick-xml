@@ -4,6 +4,7 @@ use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
 use crate::utils::write_byte_string;
 use std::str::Utf8Error;
+use std::string::FromUtf8Error;
 
 /// The error type used by this crate.
 #[derive(Debug)]
@@ -50,6 +51,14 @@ impl From<Utf8Error> for Error {
     #[inline]
     fn from(error: Utf8Error) -> Error {
         Error::Utf8(error)
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    /// Creates a new `Error::Utf8` from the given error
+    #[inline]
+    fn from(error: FromUtf8Error) -> Error {
+        error.utf8_error().into()
     }
 }
 
@@ -227,6 +236,7 @@ pub mod serialize {
     }
 
     impl From<Error> for DeError {
+        #[inline]
         fn from(e: Error) -> Self {
             Self::InvalidXml(e)
         }
@@ -239,15 +249,17 @@ pub mod serialize {
         }
     }
 
-    impl From<ParseIntError> for DeError {
-        fn from(e: ParseIntError) -> Self {
-            Self::InvalidInt(e)
+    impl From<Utf8Error> for DeError {
+        #[inline]
+        fn from(e: Utf8Error) -> Self {
+            Self::InvalidXml(e.into())
         }
     }
 
-    impl From<ParseFloatError> for DeError {
-        fn from(e: ParseFloatError) -> Self {
-            Self::InvalidFloat(e)
+    impl From<FromUtf8Error> for DeError {
+        #[inline]
+        fn from(e: FromUtf8Error) -> Self {
+            Self::InvalidXml(e.into())
         }
     }
 
@@ -255,6 +267,20 @@ pub mod serialize {
         #[inline]
         fn from(e: AttrError) -> Self {
             Self::InvalidXml(e.into())
+        }
+    }
+
+    impl From<ParseIntError> for DeError {
+        #[inline]
+        fn from(e: ParseIntError) -> Self {
+            Self::InvalidInt(e)
+        }
+    }
+
+    impl From<ParseFloatError> for DeError {
+        #[inline]
+        fn from(e: ParseFloatError) -> Self {
+            Self::InvalidFloat(e)
         }
     }
 }

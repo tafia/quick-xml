@@ -323,9 +323,8 @@ impl<'a> BytesStart<'a> {
         #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
 
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        Ok(String::from_utf8(unescaped.into_owned())?)
     }
 
     /// Edit the name of the BytesStart in-place
@@ -512,7 +511,7 @@ impl<'a> BytesDecl<'a> {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref()).map_err(Error::Utf8)?.to_string();
+                let found = from_utf8(a.key.as_ref())?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes
@@ -887,9 +886,8 @@ impl<'a> BytesText<'a> {
         #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
 
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        Ok(String::from_utf8(unescaped.into_owned())?)
     }
 
     /// Gets escaped content.

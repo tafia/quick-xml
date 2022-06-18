@@ -23,8 +23,7 @@ pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<(), DeE
 pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
     let mut writer = Vec::new();
     to_writer(&mut writer, value)?;
-    let s = String::from_utf8(writer).map_err(|e| crate::errors::Error::Utf8(e.utf8_error()))?;
-    Ok(s)
+    Ok(String::from_utf8(writer)?)
 }
 
 /// A Serializer

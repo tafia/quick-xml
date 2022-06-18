@@ -1473,7 +1473,7 @@ impl Decoder {
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
     pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        from_utf8(bytes).map_err(Error::Utf8)
+        Ok(from_utf8(bytes)?)
     }
 
     /// Decodes a slice regardless of XML declaration with BOM removal if
@@ -1483,11 +1483,12 @@ impl Decoder {
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
     pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<&'b str> {
-        if bytes.starts_with(b"\xEF\xBB\xBF") {
-            from_utf8(&bytes[3..]).map_err(Error::Utf8)
+        let bytes = if bytes.starts_with(b"\xEF\xBB\xBF") {
+            &bytes[3..]
         } else {
-            from_utf8(bytes).map_err(Error::Utf8)
-        }
+            bytes
+        };
+        self.decode(bytes)
     }
 }
 

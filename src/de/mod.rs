@@ -624,7 +624,7 @@ where
         allow_start: bool,
     ) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) if unescape => e.unescape().map_err(|e| DeError::InvalidXml(e.into())),
+            DeEvent::Text(e) if unescape => e.unescape().map_err(Into::into),
             DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
             DeEvent::CData(e) => Ok(e),
             DeEvent::Start(e) if allow_start => {
