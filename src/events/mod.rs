@@ -311,27 +311,18 @@ impl<'a> BytesStart<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    #[cfg(feature = "encoding")]
     #[inline]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
+        #[cfg(feature = "encoding")]
         let decoded = reader.decoder().decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
 
-    #[cfg(not(feature = "encoding"))]
-    #[inline]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
+
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
@@ -885,25 +876,17 @@ impl<'a> BytesText<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    #[cfg(feature = "encoding")]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
+        #[cfg(feature = "encoding")]
         let decoded = reader.decoder().decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
 
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
+        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
+
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))

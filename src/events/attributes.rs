@@ -108,25 +108,17 @@ impl<'a> Attribute<'a> {
     }
 
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(feature = "encoding")]
     fn do_unescape_and_decode_value<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> XmlResult<String> {
+        #[cfg(feature = "encoding")]
         let decoded = reader.decoder().decode(&*self.value);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
 
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_value<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> XmlResult<String> {
+        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self.value)?;
+
         let unescaped =
             do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
         String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
