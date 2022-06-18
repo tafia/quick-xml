@@ -2,8 +2,6 @@ use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
 use crate::events::BytesStart;
 use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, SeqAccess};
-#[cfg(not(feature = "encoding"))]
-use std::borrow::Cow;
 
 /// Check if tag `start` is included in the `fields` list. `decoder` is used to
 /// get a string representation of a tag.
@@ -14,11 +12,7 @@ pub fn not_in(
     start: &BytesStart,
     decoder: Decoder,
 ) -> Result<bool, DeError> {
-    #[cfg(not(feature = "encoding"))]
-    let tag = Cow::Borrowed(decoder.decode(start.name().into_inner())?);
-
-    #[cfg(feature = "encoding")]
-    let tag = decoder.decode(start.name().into_inner());
+    let tag = decoder.decode(start.name().into_inner())?;
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }

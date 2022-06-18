@@ -1,6 +1,5 @@
 //! A module to handle `Reader`
 
-#[cfg(feature = "encoding")]
 use std::borrow::Cow;
 use std::io::{self, BufRead, BufReader};
 use std::{fs::File, path::Path, str::from_utf8};
@@ -1472,8 +1471,9 @@ impl Decoder {
     /// Returns an error in case of malformed sequences in the `bytes`.
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
-    pub fn decode<'c>(&self, bytes: &'c [u8]) -> Result<&'c str> {
-        Ok(from_utf8(bytes)?)
+    #[inline]
+    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+        Ok(Cow::Borrowed(from_utf8(bytes)?))
     }
 
     /// Decodes a slice regardless of XML declaration with BOM removal if
@@ -1482,7 +1482,7 @@ impl Decoder {
     /// Returns an error in case of malformed sequences in the `bytes`.
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
-    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<&'b str> {
+    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
         let bytes = if bytes.starts_with(b"\xEF\xBB\xBF") {
             &bytes[3..]
         } else {
@@ -1504,12 +1504,18 @@ impl Decoder {
     }
 
     /// Decodes specified bytes using encoding, declared in the XML, if it was
-    /// declared there, or UTF-8 otherwise
+    /// declared there, or UTF-8 otherwise, and ignoring BOM if it is present
+    /// in the `bytes`.
     ///
-    /// Decode `bytes` with BOM sniffing and with malformed sequences replaced with the
-    /// `U+FFFD REPLACEMENT CHARACTER`.
-    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Cow<'b, str> {
-        self.encoding.decode(bytes).0
+    /// Returns an error in case of malformed sequences in the `bytes`.
+    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+        match self
+            .encoding
+            .decode_without_bom_handling_and_without_replacement(bytes)
+        {
+            None => Err(Error::NonDecodable(None)),
+            Some(s) => Ok(s),
+        }
     }
 
     /// Decodes a slice with BOM removal if it is present in the `bytes` using
@@ -1520,9 +1526,26 @@ impl Decoder {
     ///
     /// If XML declaration is absent in the XML, UTF-8 is used.
     ///
-    /// Any malformed sequences replaced with the `U+FFFD REPLACEMENT CHARACTER`.
-    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Cow<'b, str> {
-        self.encoding.decode_with_bom_removal(bytes).0
+    /// Returns an error in case of malformed sequences in the `bytes`.
+    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+        self.decode(self.remove_bom(bytes))
+    }
+    /// Copied from [`Encoding::decode_with_bom_removal`]
+    #[inline]
+    fn remove_bom<'b>(&self, bytes: &'b [u8]) -> &'b [u8] {
+        use encoding_rs::*;
+
+        if self.encoding == UTF_8 && bytes.starts_with(b"\xEF\xBB\xBF") {
+            return &bytes[3..];
+        }
+        if self.encoding == UTF_16LE && bytes.starts_with(b"\xFF\xFE") {
+            return &bytes[2..];
+        }
+        if self.encoding == UTF_16BE && bytes.starts_with(b"\xFE\xFF") {
+            return &bytes[2..];
+        }
+
+        bytes
     }
 }
 

@@ -85,10 +85,6 @@ impl<'a> BytesStartText<'a> {
     /// appeared in the BOM or in the text before the first tag.
     pub fn decode_with_bom_removal(&self, decoder: Decoder) -> Result<String> {
         //TODO: Fix lifetime issue - it should be possible to borrow string
-        #[cfg(feature = "encoding")]
-        let decoded = decoder.decode_with_bom_removal(&*self);
-
-        #[cfg(not(feature = "encoding"))]
         let decoded = decoder.decode_with_bom_removal(&*self)?;
 
         Ok(decoded.to_string())
@@ -317,10 +313,6 @@ impl<'a> BytesStart<'a> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        #[cfg(feature = "encoding")]
-        let decoded = reader.decoder().decode(&*self);
-
-        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
 
         let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
@@ -880,10 +872,6 @@ impl<'a> BytesText<'a> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        #[cfg(feature = "encoding")]
-        let decoded = reader.decoder().decode(&*self);
-
-        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self)?;
 
         let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
@@ -1000,21 +988,8 @@ impl<'a> BytesCData<'a> {
     #[cfg(feature = "serialize")]
     pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
         Ok(match &self.content {
-            Cow::Borrowed(bytes) => {
-                #[cfg(feature = "encoding")]
-                {
-                    decoder.decode(bytes)
-                }
-                #[cfg(not(feature = "encoding"))]
-                {
-                    decoder.decode(bytes)?.into()
-                }
-            }
+            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
             Cow::Owned(bytes) => {
-                #[cfg(feature = "encoding")]
-                let decoded = decoder.decode(bytes).into_owned();
-
-                #[cfg(not(feature = "encoding"))]
                 let decoded = decoder.decode(bytes)?.to_string();
 
                 decoded.into()

@@ -1,7 +1,6 @@
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
-use quick_xml::{Reader, Result};
-use std::borrow::Cow;
+use quick_xml::{Decoder, Reader, Result};
 use std::str::from_utf8;
 
 #[test]
@@ -381,7 +380,7 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     loop {
         buf.clear();
         let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
-        let line = xmlrs_display(event, &reader);
+        let line = xmlrs_display(event, reader.decoder());
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
                 break;
@@ -420,8 +419,8 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     }
 }
 
-fn namespace_name(n: ResolveResult, name: QName, reader: &Reader<&[u8]>) -> String {
-    let name = decode(name.as_ref(), reader);
+fn namespace_name(n: ResolveResult, name: QName, decoder: Decoder) -> String {
+    let name = decoder.decode(name.as_ref()).unwrap();
     match n {
         // Produces string '{namespace}prefixed_name'
         ResolveResult::Bound(n) => format!("{{{}}}{}", from_utf8(n.as_ref()).unwrap(), name),
@@ -448,22 +447,11 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     Ok(atts.join(", "))
 }
 
-// FIXME: The public API differs based on the "encoding" feature
-fn decode<'a>(text: &'a [u8], reader: &Reader<&[u8]>) -> Cow<'a, str> {
-    #[cfg(feature = "encoding")]
-    let decoded = reader.decoder().decode(text);
-
-    #[cfg(not(feature = "encoding"))]
-    let decoded = Cow::Borrowed(reader.decoder().decode(text).unwrap());
-
-    decoded
-}
-
-fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8]>) -> String {
+fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) -> String {
     match opt_event {
         Ok((_, Event::StartText(_))) => "StartText".to_string(),
         Ok((n, Event::Start(ref e))) => {
-            let name = namespace_name(n, e.name(), reader);
+            let name = namespace_name(n, e.name(), decoder);
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                 Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
@@ -471,7 +459,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::Empty(ref e))) => {
-            let name = namespace_name(n, e.name(), reader);
+            let name = namespace_name(n, e.name(), decoder);
             match make_attrs(e) {
                 Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                 Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
@@ -479,13 +467,13 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, reader: &Reader<&[u8
             }
         }
         Ok((n, Event::End(ref e))) => {
-            let name = namespace_name(n, e.name(), reader);
+            let name = namespace_name(n, e.name(), decoder);
             format!("EndElement({})", name)
         }
         Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
         Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
         Ok((_, Event::Text(ref e))) => match e.unescaped() {
-            Ok(c) => format!("Characters({})", decode(c.as_ref(), reader).as_ref()),
+            Ok(c) => format!("Characters({})", decoder.decode(c.as_ref()).unwrap()),
             Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
         },
         Ok((_, Event::Decl(ref e))) => {

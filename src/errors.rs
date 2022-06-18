@@ -11,8 +11,9 @@ use std::string::FromUtf8Error;
 pub enum Error {
     /// IO error
     Io(::std::io::Error),
-    /// Utf8 error
-    Utf8(Utf8Error),
+    /// Input decoding error. If `encoding` feature is disabled, contains `None`,
+    /// otherwise contains the UTF-8 decoding error
+    NonDecodable(Option<Utf8Error>),
     /// Unexpected End of File
     UnexpectedEof(String),
     /// End event mismatch
@@ -47,10 +48,10 @@ impl From<::std::io::Error> for Error {
 }
 
 impl From<Utf8Error> for Error {
-    /// Creates a new `Error::Utf8` from the given error
+    /// Creates a new `Error::NonDecodable` from the given error
     #[inline]
     fn from(error: Utf8Error) -> Error {
-        Error::Utf8(error)
+        Error::NonDecodable(Some(error))
     }
 }
 
@@ -86,7 +87,8 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::Utf8(e) => write!(f, "UTF8 error: {}", e),
+            Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
+            Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
             Error::EndEventMismatch { expected, found } => {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
@@ -118,7 +120,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(e) => Some(e),
-            Error::Utf8(e) => Some(e),
+            Error::NonDecodable(Some(e)) => Some(e),
             Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
             _ => None,

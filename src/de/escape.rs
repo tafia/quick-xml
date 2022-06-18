@@ -45,11 +45,7 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            #[cfg(not(feature = "encoding"))]
             let value = self.decoder.decode(self.escaped_value.as_ref())?.parse()?;
-
-            #[cfg(feature = "encoding")]
-            let value = self.decoder.decode(self.escaped_value.as_ref()).parse()?;
 
             visitor.$visit(value)
         }
@@ -71,11 +67,8 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
         V: Visitor<'de>,
     {
         let unescaped = self.unescaped()?;
-        #[cfg(not(feature = "encoding"))]
         let value = self.decoder.decode(&unescaped)?;
 
-        #[cfg(feature = "encoding")]
-        let value = self.decoder.decode(&unescaped);
         visitor.visit_str(&value)
     }
 

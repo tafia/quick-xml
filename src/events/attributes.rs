@@ -113,10 +113,6 @@ impl<'a> Attribute<'a> {
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> XmlResult<String> {
-        #[cfg(feature = "encoding")]
-        let decoded = reader.decoder().decode(&*self.value);
-
-        #[cfg(not(feature = "encoding"))]
         let decoded = reader.decoder().decode(&*self.value)?;
 
         let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;

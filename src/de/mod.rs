@@ -337,7 +337,7 @@ where
 {
     #[cfg(feature = "encoding")]
     {
-        let value = decoder.decode(value);
+        let value = decoder.decode(value)?;
         // No need to unescape because valid boolean representations cannot be escaped
         match value.as_ref() {
             "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {

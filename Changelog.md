@@ -78,6 +78,16 @@
   - text before the first tag is not an XML content at all, so it is meaningless
     to try to unescape something in it
 
+- [#180]: Eliminated the differences in the decoding API when feature `encoding` enabled and when it is
+  disabled. Signatures of functions are now the same regardless of whether or not the feature is
+  enabled, and an error will be returned instead of performing replacements for invalid characters
+  in both cases.
+
+  Previously, if the `encoding` feature was enabled, decoding functions would return `Result<Cow<&str>>`
+  while without this feature they would return `Result<&str>`. With this change, only `Result<Cow<&str>>`
+  is returned regardless of the status of the feature.
+- [#180]: Error variant `Error::Utf8` replaced by `Error::NonDecodable`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
