@@ -76,6 +76,7 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
 
     let mut responses = Vec::<Response>::new();
     let mut current_response = Response::new();
+    let mut reading_href = false;
     let mut current_prop = Prop::new();
 
     let mut depth = 0;
@@ -94,13 +95,15 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
                         current_response = Response::new();
                     }
                     (2, State::Response, b"DAV:", b"href") => {
-                        current_response.href = e.unescape_and_decode(&reader).unwrap();
+                        current_response.href.clear();
+                        reading_href = true;
                     }
                     _ => {}
                 }
                 depth += 1;
             }
             Ok((ns, Event::End(e))) => {
+                reading_href = false;
                 let ns = Option::<Namespace>::try_from(ns)
                     .unwrap_or_default() // Treat unknown prefixes as not bound to any namespace
                     .unwrap_or(Namespace(b""));
@@ -110,6 +113,9 @@ fn parse_report(xml_data: &str) -> Vec<Resource> {
                     _ => {}
                 }
                 depth -= 1;
+            }
+            Ok((_, Event::Text(e))) if reading_href => {
+                current_response.href.push_str(&e.unescape_and_decode(&reader).unwrap());
             }
             Ok((_, Event::Eof)) => break,
             Err(e) => break,
