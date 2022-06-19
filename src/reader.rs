@@ -266,9 +266,11 @@ impl<R: BufRead> Reader<R> {
 
         if self.trim_text_start {
             self.reader.skip_whitespace(&mut self.buf_position)?;
-            if self.reader.skip_one(b'<', &mut self.buf_position)? {
-                return self.read_event_buffered(buf);
-            }
+        }
+
+        // If we already at the `<` symbol, do not try to return an empty Text event
+        if self.reader.skip_one(b'<', &mut self.buf_position)? {
+            return self.read_event_buffered(buf);
         }
 
         match self

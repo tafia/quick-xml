@@ -29,6 +29,7 @@
 - [#393]: Now `event_namespace`, `attribute_namespace` and `read_event_namespaced`
   returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
 - [#393]: Fix breaking processing after encounter an attribute with a reserved name (started with "xmlns")
+- [#363]: Do not generate empty `Event::Text` events
 
 ### Misc Changes
 

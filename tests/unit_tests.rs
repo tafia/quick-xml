@@ -168,10 +168,7 @@ fn test_trim_test() {
 
     let mut r = Reader::from_str(txt);
     r.trim_text(false);
-    next_eq!(
-        r, Text, b"", Start, b"a", Text, b"", Start, b"b", Text, b"  ", End, b"b", Text, b"", End,
-        b"a"
-    );
+    next_eq!(r, Start, b"a", Start, b"b", Text, b"  ", End, b"b", End, b"a");
 }
 
 #[test]
