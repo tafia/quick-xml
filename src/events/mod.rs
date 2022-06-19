@@ -179,7 +179,10 @@ impl<'a> BytesStart<'a> {
     /// "`<`".
     ///
     /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
+    #[doc(hidden)]
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         self.make_unescaped(None)
     }
@@ -195,7 +198,10 @@ impl<'a> BytesStart<'a> {
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     ///
     /// See also [`unescaped()`](#method.unescaped)
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
+    #[doc(hidden)]
     pub fn unescaped_with_custom_entities<'s>(
         &'s self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -203,7 +209,8 @@ impl<'a> BytesStart<'a> {
         self.make_unescaped(Some(custom_entities))
     }
 
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
     fn make_unescaped<'s>(
         &'s self,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
@@ -221,7 +228,10 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`unescaped()`]: #method.unescaped
     /// [`Reader::decode()`]: ../reader/struct.Reader.html#method.decode
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
+    #[doc(hidden)]
     pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
@@ -240,7 +250,10 @@ impl<'a> BytesStart<'a> {
     /// # Pre-condition
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
+    #[doc(hidden)]
     pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
@@ -250,7 +263,9 @@ impl<'a> BytesStart<'a> {
     }
 
     #[cfg(feature = "encoding")]
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
@@ -263,7 +278,9 @@ impl<'a> BytesStart<'a> {
     }
 
     #[cfg(not(feature = "encoding"))]
-    #[inline]
+    #[cold]
+    #[deprecated(note = "Tag names are never escaped. Attributes must be unescaped individually")]
+    #[allow(deprecated)]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,

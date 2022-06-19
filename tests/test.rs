@@ -156,6 +156,7 @@ fn fuzz_101() {
     loop {
         match reader.read_event(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
+                #[allow(deprecated)]
                 if e.unescaped().is_err() {
                     break;
                 }
