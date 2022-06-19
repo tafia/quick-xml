@@ -29,6 +29,7 @@
 - [#393]: Now `event_namespace`, `attribute_namespace` and `read_event_namespaced`
   returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
 - [#393]: Fix breaking processing after encounter an attribute with a reserved name (started with "xmlns")
+- [#363]: Do not generate empty `Event::Text` events
 
 ### Misc Changes
 
@@ -61,9 +62,11 @@
 - [#387]: Added a bunch of tests for sequences deserialization
 - [#393]: Added more tests for namespace resolver
 - [#393]: Added tests for reserved names (started with "xml"i) -- see <https://www.w3.org/TR/xml-names11/#xmlReserved>
+- [#363]: Add tests for `Reader::read_event_buffered` to ensure that proper events generated for corresponding inputs
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
 [#393]: https://github.com/tafia/quick-xml/pull/393

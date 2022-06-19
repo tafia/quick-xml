@@ -266,9 +266,11 @@ impl<R: BufRead> Reader<R> {
 
         if self.trim_text_start {
             self.reader.skip_whitespace(&mut self.buf_position)?;
-            if self.reader.skip_one(b'<', &mut self.buf_position)? {
-                return self.read_event_buffered(buf);
-            }
+        }
+
+        // If we already at the `<` symbol, do not try to return an empty Text event
+        if self.reader.skip_one(b'<', &mut self.buf_position)? {
+            return self.read_event_buffered(buf);
         }
 
         match self
@@ -2242,6 +2244,116 @@ mod test {
                             x
                         ),
                     }
+                }
+            }
+
+            /// Ensures, that no empty `Text` events are generated
+            mod read_event_buffered {
+                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+                use crate::reader::Reader;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn declaration() {
+                    let mut reader = Reader::from_str("<?xml ?>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
+                    );
+                }
+
+                #[test]
+                fn doctype() {
+                    let mut reader = Reader::from_str("<!DOCTYPE x>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::DocType(BytesText::from_escaped(b"x".as_ref()))
+                    );
+                }
+
+                #[test]
+                fn processing_instruction() {
+                    let mut reader = Reader::from_str("<?xml-stylesheet?>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::PI(BytesText::from_escaped(b"xml-stylesheet".as_ref()))
+                    );
+                }
+
+                #[test]
+                fn start() {
+                    let mut reader = Reader::from_str("<tag>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Start(BytesStart::borrowed_name(b"tag"))
+                    );
+                }
+
+                #[test]
+                fn end() {
+                    let mut reader = Reader::from_str("</tag>");
+                    // Because we expect invalid XML, do not check that
+                    // the end name paired with the start name
+                    reader.check_end_names(false);
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::End(BytesEnd::borrowed(b"tag"))
+                    );
+                }
+
+                #[test]
+                fn empty() {
+                    let mut reader = Reader::from_str("<tag/>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                    );
+                }
+
+                #[test]
+                fn text() {
+                    let mut reader = Reader::from_str("text");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Text(BytesText::from_escaped(b"text".as_ref()))
+                    );
+                }
+
+                #[test]
+                fn cdata() {
+                    let mut reader = Reader::from_str("<![CDATA[]]>");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::CData(BytesCData::from_str(""))
+                    );
+                }
+
+                #[test]
+                fn comment() {
+                    let mut reader = Reader::from_str("<!---->");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Comment(BytesText::from_escaped(b"".as_ref()))
+                    );
+                }
+
+                #[test]
+                fn eof() {
+                    let mut reader = Reader::from_str("");
+
+                    assert_eq!(
+                        reader.read_event_buffered($buf).unwrap(),
+                        Event::Eof
+                    );
                 }
             }
         };

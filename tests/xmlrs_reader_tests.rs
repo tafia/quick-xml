@@ -257,9 +257,7 @@ fn issue_98_cdata_ending_with_right_bracket() {
         r#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
         r#"
             |StartElement(hello)
-            |Characters()
             |CData(Foo [Bar])
-            |Characters()
             |EndElement(hello)
             |EndDocument
         "#,
@@ -306,9 +304,7 @@ fn issue_105_unexpected_double_dash() {
         r#"<hello><![CDATA[--]]></hello>"#,
         r#"
             |StartElement(hello)
-            |Characters()
             |CData(--)
-            |Characters()
             |EndElement(hello)
             |EndDocument
         "#,
@@ -359,10 +355,12 @@ fn default_namespace_applies_to_end_elem() {
     );
 }
 
+#[track_caller]
 fn test(input: &str, output: &str, is_short: bool) {
     test_bytes(input.as_bytes(), output.as_bytes(), is_short);
 }
 
+#[track_caller]
 fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     // Normalize newlines on Windows to just \n, which is what the reader and
     // writer use.
@@ -379,11 +377,6 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
     let mut spec_lines = SpecIter(output).enumerate();
     let mut buf = Vec::new();
     let mut ns_buffer = Vec::new();
-
-    if !is_short {
-        // discard first whitespace
-        reader.read_event(&mut buf).unwrap();
-    }
 
     loop {
         buf.clear();
