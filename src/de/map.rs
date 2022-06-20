@@ -3,6 +3,7 @@
 use crate::{
     de::escape::EscapedDeserializer,
     de::seq::{not_in, TagFilter},
+    de::simple_type::SimpleTypeDeserializer,
     de::{deserialize_bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::IterState,
@@ -35,7 +36,10 @@ enum ValueSource {
     /// represented or by an ordinary text node, or by a CDATA node:
     ///
     /// ```xml
-    /// <...>text content for field value<...>
+    /// <any-tag>
+    ///     <key>text content</key>
+    /// <!--     ^^^^^^^^^^^^ - this will be used to deserialize map value -->
+    /// </any-tag>
     /// ```
     /// ```xml
     /// <any-tag>
@@ -200,8 +204,8 @@ where
     ) -> Result<Self, DeError> {
         Ok(MapAccess {
             de,
+            iter: IterState::new(start.name().as_ref().len(), false),
             start,
-            iter: IterState::new(0, false),
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&INNER_VALUE),
@@ -226,8 +230,8 @@ where
     ) -> Result<Option<K::Value>, Self::Error> {
         debug_assert_eq!(self.source, ValueSource::Unknown);
 
-        // FIXME: There error positions counted from end of tag name - need global position
-        let slice = self.start.attributes_raw();
+        // FIXME: There error positions counted from the start of tag name - need global position
+        let slice = &self.start.buf;
         let decoder = self.de.reader.decoder();
 
         if let Some(a) = self.iter.next(slice).transpose()? {
@@ -305,16 +309,12 @@ where
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.source, ValueSource::Unknown) {
-            ValueSource::Attribute(value) => {
-                let slice = self.start.attributes_raw();
-                let decoder = self.de.reader.decoder();
-
-                seed.deserialize(EscapedDeserializer::new(
-                    Cow::Borrowed(&slice[value]),
-                    decoder,
-                    true,
-                ))
-            }
+            ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_part(
+                &self.start.buf,
+                value,
+                true,
+                self.de.reader.decoder(),
+            )),
             // This arm processes the following XML shape:
             // <any-tag>
             //   text value
@@ -323,10 +323,21 @@ where
             // is implicit and equals to the `INNER_VALUE` constant, and the value
             // is a `Text` or a `CData` event (the value deserializer will see one
             // of that events)
-            ValueSource::Text => seed.deserialize(MapValueDeserializer {
-                map: self,
-                allow_start: false,
-            }),
+            // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
+            ValueSource::Text => match self.de.next()? {
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
+                    e.into_inner(),
+                    true,
+                    self.de.reader.decoder(),
+                )),
+                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
+                    e.into_inner(),
+                    false,
+                    self.de.reader.decoder(),
+                )),
+                // SAFETY: We set `Text` only when we seen `Text` or `CData`
+                _ => unreachable!(),
+            },
             // This arm processes the following XML shape:
             // <any-tag>
             //   <any>...</any>
@@ -612,8 +623,140 @@ where
                 DeEvent::Eof => Err(DeError::UnexpectedEof),
 
                 // Start(tag), Text, CData
-                _ => seed.deserialize(&mut *self.map.de).map(Some),
+                _ => seed
+                    .deserialize(SeqValueDeserializer { map: self.map })
+                    .map(Some),
             };
         }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A deserializer for a value of sequence.
+struct SeqValueDeserializer<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    /// Access to the map that created this deserializer. Gives access to the
+    /// context, such as list of fields, that current map known about.
+    map: &'m mut MapAccess<'de, 'a, R>,
+}
+
+impl<'de, 'a, 'm, R> SeqValueDeserializer<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    /// Returns a text event, used inside [`deserialize_primitives!()`]
+    #[inline]
+    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+        self.map.de.next_text_impl(unescape, true)
+    }
+
+    /// Returns a decoder, used inside [`deserialize_primitives!()`]
+    #[inline]
+    fn decoder(&self) -> Decoder {
+        self.map.de.reader.decoder()
+    }
+}
+
+impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqValueDeserializer<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    type Error = DeError;
+
+    deserialize_primitives!(mut);
+
+    forward!(deserialize_option);
+    forward!(deserialize_unit);
+    forward!(deserialize_unit_struct(name: &'static str));
+    forward!(deserialize_newtype_struct(name: &'static str));
+
+    forward!(deserialize_map);
+    forward!(deserialize_struct(
+        name: &'static str,
+        fields: &'static [&'static str]
+    ));
+
+    forward!(deserialize_enum(
+        name: &'static str,
+        variants: &'static [&'static str]
+    ));
+
+    forward!(deserialize_any);
+    forward!(deserialize_ignored_any);
+
+    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.next()? {
+            DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
+                // Comment to prevent auto-formatting and keep Text and Cdata similar
+                e.into_inner(),
+                true,
+                self.map.de.reader.decoder(),
+            )
+            .deserialize_seq(visitor),
+            DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
+                e.into_inner(),
+                false,
+                self.map.de.reader.decoder(),
+            )
+            .deserialize_seq(visitor),
+            // This is a sequence element. We cannot treat it as another flatten
+            // sequence if type will require `deserialize_seq` We instead forward
+            // it to `xs:simpleType` implementation
+            DeEvent::Start(e) => {
+                let value = match self.map.de.next()? {
+                    DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
+                        e.into_inner(),
+                        true,
+                        self.map.de.reader.decoder(),
+                    )
+                    .deserialize_seq(visitor),
+                    DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
+                        e.into_inner(),
+                        false,
+                        self.map.de.reader.decoder(),
+                    )
+                    .deserialize_seq(visitor),
+                    e => Err(DeError::Custom(format!("Unsupported event {:?}", e))),
+                };
+                // TODO: May be assert that here we expect only matching closing tag?
+                self.map.de.read_to_end(e.name())?;
+                value
+            }
+            // SAFETY: we use that deserializer only when Start(element), Text,
+            // or CData event Start(tag), Text, CData was peeked already
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn is_human_readable(&self) -> bool {
+        self.map.de.is_human_readable()
     }
 }

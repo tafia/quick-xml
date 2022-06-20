@@ -1039,6 +1039,134 @@ mod seq {
                 )
                 .unwrap_err();
             }
+
+            /// Checks that sequences represented by elements can contain sequences,
+            /// represented by [`xs:list`s](https://www.w3schools.com/xml/el_list.asp)
+            mod xs_list {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                /// Special case: zero elements
+                #[test]
+                fn zero() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is required to correctly deserialize
+                        /// empty sequence, because without elements the field
+                        /// also is missing and derived `Deserialize` implementation
+                        /// would complain about that unless field is marked as
+                        /// `default`.
+                        #[serde(default)]
+                        item: [Vec<String>; 0],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(data, List { item: [] });
+                }
+
+                /// Special case: one element
+                #[test]
+                fn one() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        item: [Vec<String>; 1],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: [vec!["first".to_string(), "list".to_string()]]
+                        }
+                    );
+                }
+
+                /// Special case: outer list is always mapped to an elements sequence,
+                /// not to an `xs:list`
+                #[test]
+                fn element() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        item: [String; 1],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first item</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: ["first item".to_string()]
+                        }
+                    );
+                }
+
+                /// This tests demonstrates, that for `$value` field (`list`) actual
+                /// name of XML element (`item`) does not matter. That allows list
+                /// item to be an enum, where tag name determines enum variant
+                #[test]
+                fn many() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        item: [Vec<String>; 2],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                            <item>second list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: [
+                                vec!["first".to_string(), "list".to_string()],
+                                vec!["second".to_string(), "list".to_string()],
+                            ]
+                        }
+                    );
+                }
+            }
         }
 
         /// This module contains tests where size of the list have an unspecified size
@@ -1504,6 +1632,115 @@ mod seq {
                     "#,
                 )
                 .unwrap_err();
+            }
+
+            /// Checks that sequences represented by elements can contain sequences,
+            /// represented by `xs:list`s
+            mod xs_list {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct List {
+                    /// Outer list mapped to elements, inner -- to `xs:list`.
+                    /// `#[serde(default)]` is required to correctly deserialize
+                    /// empty sequence, because without elements the field
+                    /// also is missing and derived `Deserialize` implementation
+                    /// would complain about that unless field is marked as
+                    /// `default`.
+                    #[serde(default)]
+                    item: Vec<Vec<String>>,
+                }
+
+                /// Special case: zero elements
+                #[test]
+                fn zero() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(data, List { item: vec![] });
+                }
+
+                /// Special case: one element
+                #[test]
+                fn one() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: vec![vec!["first".to_string(), "list".to_string()]]
+                        }
+                    );
+                }
+
+                /// Special case: outer list is always mapped to an elements sequence,
+                /// not to an `xs:list`
+                #[test]
+                fn element() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        item: Vec<String>,
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first item</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: vec!["first item".to_string()]
+                        }
+                    );
+                }
+
+                /// This tests demonstrates, that for `$value` field (`list`) actual
+                /// name of XML element (`item`) does not matter. That allows list
+                /// item to be an enum, where tag name determines enum variant
+                #[test]
+                fn many() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                            <item>second list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            item: vec![
+                                vec!["first".to_string(), "list".to_string()],
+                                vec!["second".to_string(), "list".to_string()],
+                            ]
+                        }
+                    );
+                }
             }
         }
     }
@@ -2349,6 +2586,132 @@ mod seq {
                 )
                 .unwrap_err();
             }
+
+            /// Checks that sequences represented by elements can contain sequences,
+            /// represented by `xs:list`s
+            mod xs_list {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                /// Special case: zero elements
+                #[test]
+                fn zero() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is required to correctly deserialize
+                        /// empty sequence, because without elements the field
+                        /// also is missing and derived `Deserialize` implementation
+                        /// would complain about that unless field is marked as
+                        /// `default`.
+                        #[serde(default)]
+                        #[serde(rename = "$value")]
+                        element: [Vec<String>; 0],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(data, List { element: [] });
+                }
+
+                /// Special case: one element
+                #[test]
+                fn one() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        #[serde(rename = "$value")]
+                        element: [Vec<String>; 1],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: [vec!["first".to_string(), "list".to_string()]]
+                        }
+                    );
+                }
+
+                /// Special case: outer list is always mapped to an elements sequence,
+                /// not to an `xs:list`
+                #[test]
+                fn element() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        ///
+                        /// `#[serde(default)]` is not required, because correct
+                        /// XML will always contains at least 1 element.
+                        #[serde(rename = "$value")]
+                        element: [String; 1],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first item</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: ["first item".to_string()]
+                        }
+                    );
+                }
+
+                #[test]
+                fn many() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements, inner -- to `xs:list`
+                        #[serde(rename = "$value")]
+                        element: [Vec<String>; 2],
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                            <item>second list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: [
+                                vec!["first".to_string(), "list".to_string()],
+                                vec!["second".to_string(), "list".to_string()],
+                            ]
+                        }
+                    );
+                }
+            }
         }
 
         /// This module contains tests where size of the list have an unspecified size
@@ -3031,6 +3394,115 @@ mod seq {
                     "#,
                 )
                 .unwrap_err();
+            }
+
+            /// Checks that sequences represented by elements can contain sequences,
+            /// represented by `xs:list`s
+            mod xs_list {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                struct List {
+                    /// Outer list mapped to elements, inner -- to `xs:list`.
+                    ///
+                    /// `#[serde(default)]` is required to correctly deserialize
+                    /// empty sequence, because without elements the field
+                    /// also is missing and derived `Deserialize` implementation
+                    /// would complain about that unless field is marked as
+                    /// `default`.
+                    #[serde(default)]
+                    #[serde(rename = "$value")]
+                    element: Vec<Vec<String>>,
+                }
+
+                /// Special case: zero elements
+                #[test]
+                fn zero() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(data, List { element: vec![] });
+                }
+
+                /// Special case: one element
+                #[test]
+                fn one() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: vec![vec!["first".to_string(), "list".to_string()]]
+                        }
+                    );
+                }
+
+                /// Special case: outer list is always mapped to an elements sequence,
+                /// not to an `xs:list`
+                #[test]
+                fn element() {
+                    #[derive(Debug, Deserialize, PartialEq)]
+                    struct List {
+                        /// Outer list mapped to elements.
+                        #[serde(rename = "$value")]
+                        element: Vec<String>,
+                    }
+
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first item</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: vec!["first item".to_string()]
+                        }
+                    );
+                }
+
+                /// This tests demonstrates, that for `$value` field (`list`) actual
+                /// name of XML element (`item`) does not matter. That allows list
+                /// item to be an enum, where tag name determines enum variant
+                #[test]
+                fn many() {
+                    let data: List = from_str(
+                        r#"
+                        <root>
+                            <item>first list</item>
+                            <item>second list</item>
+                        </root>
+                        "#,
+                    )
+                    .unwrap();
+
+                    assert_eq!(
+                        data,
+                        List {
+                            element: vec![
+                                vec!["first".to_string(), "list".to_string()],
+                                vec!["second".to_string(), "list".to_string()],
+                            ]
+                        }
+                    );
+                }
             }
         }
     }
@@ -4124,6 +4596,172 @@ mod enum_ {
                     }
                 );
             }
+        }
+    }
+}
+
+/// https://www.w3schools.com/xml/el_list.asp
+mod xml_schema_lists {
+    use super::*;
+
+    macro_rules! list {
+        ($name:ident: $type:ty = $xml:literal => $result:expr) => {
+            #[test]
+            fn $name() {
+                let data: List<$type> = from_str($xml).unwrap();
+
+                assert_eq!(data, List { list: $result });
+            }
+        };
+    }
+
+    macro_rules! err {
+        ($name:ident: $type:ty = $xml:literal => $kind:ident($err:literal)) => {
+            #[test]
+            fn $name() {
+                let err = from_str::<List<$type>>($xml).unwrap_err();
+
+                match err {
+                    DeError::$kind(e) => assert_eq!(e, $err),
+                    _ => panic!(
+                        "Expected `{}({})`, found `{:?}`",
+                        stringify!($kind),
+                        $err,
+                        err
+                    ),
+                }
+            }
+        };
+    }
+
+    /// Checks that sequences can be deserialized from an XML attribute content
+    /// according to the `xs:list` XML Schema type
+    mod attribute {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct List<T> {
+            list: Vec<T>,
+        }
+
+        list!(i8_:  i8  = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+        list!(i16_: i16 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+        list!(i32_: i32 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+        list!(i64_: i64 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+
+        list!(u8_:  u8  = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
+        list!(u16_: u16 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
+        list!(u32_: u32 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
+        list!(u64_: u64 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
+
+        serde_if_integer128! {
+            list!(i128_: i128 = r#"<root list="1 -2  3"/>"# => vec![1, -2, 3]);
+            list!(u128_: u128 = r#"<root list="1 2  3"/>"# => vec![1, 2, 3]);
+        }
+
+        list!(f32_: f32 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
+        list!(f64_: f64 = r#"<root list="1.23 -4.56  7.89"/>"# => vec![1.23, -4.56, 7.89]);
+
+        list!(bool_: bool = r#"<root list="true false  true"/>"# => vec![true, false, true]);
+        list!(char_: char = r#"<root list="4 2  j"/>"# => vec!['4', '2', 'j']);
+
+        list!(string: String = r#"<root list="first second  third&#x20;3"/>"# => vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third 3".to_string(),
+        ]);
+        err!(byte_buf: ByteBuf = r#"<root list="first second  third&#x20;3"/>"#
+                => Unsupported("byte arrays are not supported as `xs:list` items"));
+
+        list!(unit: () = r#"<root list="1 second  false"/>"# => vec![(), (), ()]);
+    }
+
+    /// Checks that sequences can be deserialized from an XML text content
+    /// according to the `xs:list` XML Schema type
+    mod element {
+        use super::*;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct List<T> {
+            // Give it a special name that means text content of the XML node
+            #[serde(rename = "$value")]
+            list: Vec<T>,
+        }
+
+        mod text {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            list!(i8_:  i8  = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+            list!(i16_: i16 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+            list!(i32_: i32 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+            list!(i64_: i64 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+
+            list!(u8_:  u8  = "<root>1 2  3</root>" => vec![1, 2, 3]);
+            list!(u16_: u16 = "<root>1 2  3</root>" => vec![1, 2, 3]);
+            list!(u32_: u32 = "<root>1 2  3</root>" => vec![1, 2, 3]);
+            list!(u64_: u64 = "<root>1 2  3</root>" => vec![1, 2, 3]);
+
+            serde_if_integer128! {
+                list!(i128_: i128 = "<root>1 -2  3</root>" => vec![1, -2, 3]);
+                list!(u128_: u128 = "<root>1 2  3</root>" => vec![1, 2, 3]);
+            }
+
+            list!(f32_: f32 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
+            list!(f64_: f64 = "<root>1.23 -4.56  7.89</root>" => vec![1.23, -4.56, 7.89]);
+
+            list!(bool_: bool = "<root>true false  true</root>" => vec![true, false, true]);
+            list!(char_: char = "<root>4 2  j</root>" => vec!['4', '2', 'j']);
+
+            list!(string: String = "<root>first second  third&#x20;3</root>" => vec![
+                "first".to_string(),
+                "second".to_string(),
+                "third 3".to_string(),
+            ]);
+            err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
+                => Unsupported("byte arrays are not supported as `xs:list` items"));
+
+            list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
+        }
+
+        mod cdata {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            list!(i8_:  i8  = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+            list!(i16_: i16 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+            list!(i32_: i32 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+            list!(i64_: i64 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+
+            list!(u8_:  u8  = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
+            list!(u16_: u16 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
+            list!(u32_: u32 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
+            list!(u64_: u64 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
+
+            serde_if_integer128! {
+                list!(i128_: i128 = "<root><![CDATA[1 -2  3]]></root>" => vec![1, -2, 3]);
+                list!(u128_: u128 = "<root><![CDATA[1 2  3]]></root>" => vec![1, 2, 3]);
+            }
+
+            list!(f32_: f32 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);
+            list!(f64_: f64 = "<root><![CDATA[1.23 -4.56  7.89]]></root>" => vec![1.23, -4.56, 7.89]);
+
+            list!(bool_: bool = "<root><![CDATA[true false  true]]></root>" => vec![true, false, true]);
+            list!(char_: char = "<root><![CDATA[4 2  j]]></root>" => vec!['4', '2', 'j']);
+
+            // Cannot get whitespace in the value in any way if CDATA used:
+            // - literal spaces means list item delimiters
+            // - escaped sequences are not decoded in CDATA
+            list!(string: String = "<root><![CDATA[first second  third&#x20;3]]></root>" => vec![
+                "first".to_string(),
+                "second".to_string(),
+                "third&#x20;3".to_string(),
+            ]);
+            err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
+                => Unsupported("byte arrays are not supported as `xs:list` items"));
+
+            list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
         }
     }
 }

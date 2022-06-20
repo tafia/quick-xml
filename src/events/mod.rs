@@ -121,9 +121,9 @@ impl<'a> From<BytesText<'a>> for BytesStartText<'a> {
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
-    buf: Cow<'a, [u8]>,
+    pub(crate) buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
-    name_len: usize,
+    pub(crate) name_len: usize,
 }
 
 impl<'a> BytesStart<'a> {
