@@ -108,122 +108,15 @@ impl<'a> Attribute<'a> {
     }
 
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(feature = "encoding")]
     fn do_unescape_and_decode_value<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> XmlResult<String> {
-        let decoded = reader.decode(&*self.value);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
+        let decoded = reader.decoder().decode(&*self.value)?;
 
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_value<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> XmlResult<String> {
-        let decoded = reader.decode(&*self.value)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
-    /// helper method to unescape then decode self using the reader encoding
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-    ) -> XmlResult<String> {
-        self.do_unescape_and_decode_without_bom(reader, None)
-    }
-
-    /// helper method to unescape then decode self using the reader encoding
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-    ) -> XmlResult<String> {
-        self.do_unescape_and_decode_without_bom(reader, None)
-    }
-
-    /// helper method to unescape then decode self using the reader encoding with custom entities
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    ///
-    /// # Pre-condition
-    ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> XmlResult<String> {
-        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
-    }
-
-    /// helper method to unescape then decode self using the reader encoding with custom entities
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    ///
-    /// # Pre-condition
-    ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> XmlResult<String> {
-        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
-    }
-
-    #[cfg(feature = "encoding")]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> XmlResult<String> {
-        let decoded = reader.decode_without_bom(&*self.value);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> XmlResult<String> {
-        let decoded = reader.decode_without_bom(&*self.value)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        Ok(String::from_utf8(unescaped.into_owned())?)
     }
 }
 

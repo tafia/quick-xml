@@ -181,7 +181,10 @@ fn fuzz_101() {
 fn test_no_trim() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
 
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
+    assert!(matches!(
+        reader.read_event_unbuffered().unwrap(),
+        StartText(_)
+    ));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), Start(_)));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), End(_)));
@@ -193,7 +196,10 @@ fn test_trim_end() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
     reader.trim_text_end(true);
 
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
+    assert!(matches!(
+        reader.read_event_unbuffered().unwrap(),
+        StartText(_)
+    ));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), Start(_)));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
     assert!(matches!(reader.read_event_unbuffered().unwrap(), End(_)));

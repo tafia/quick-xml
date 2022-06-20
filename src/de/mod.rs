@@ -337,7 +337,7 @@ where
 {
     #[cfg(feature = "encoding")]
     {
-        let value = decoder.decode(value);
+        let value = decoder.decode(value)?;
         // No need to unescape because valid boolean representations cannot be escaped
         match value.as_ref() {
             "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
@@ -624,7 +624,7 @@ where
         allow_start: bool,
     ) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) if unescape => e.unescape().map_err(|e| DeError::InvalidXml(e.into())),
+            DeEvent::Text(e) if unescape => e.unescape().map_err(Into::into),
             DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
             DeEvent::CData(e) => Ok(e),
             DeEvent::Start(e) if allow_start => {
@@ -952,6 +952,10 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         let event = loop {
             let e = self.reader.read_event(&mut self.buf)?;
             match e {
+                //TODO: Probably not the best idea treat StartText as usual text
+                // Usually this event will represent a BOM
+                // Changing this requires review of the serde-de::top_level::one_element test
+                Event::StartText(e) => break Ok(DeEvent::Text(e.into_owned().into())),
                 Event::Start(e) => break Ok(DeEvent::Start(e.into_owned())),
                 Event::End(e) => break Ok(DeEvent::End(e.into_owned())),
                 Event::Text(e) => break Ok(DeEvent::Text(e.into_owned())),
@@ -992,6 +996,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
         loop {
             let e = self.reader.read_event_unbuffered()?;
             match e {
+                //TODO: Probably not the best idea treat StartText as usual text
+                // Usually this event will represent a BOM
+                // Changing this requires review of the serde-de::top_level::one_element test
+                Event::StartText(e) => break Ok(DeEvent::Text(e.into())),
                 Event::Start(e) => break Ok(DeEvent::Start(e)),
                 Event::End(e) => break Ok(DeEvent::End(e)),
                 Event::Text(e) => break Ok(DeEvent::Text(e)),

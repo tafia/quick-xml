@@ -4,14 +4,16 @@ use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
 use crate::utils::write_byte_string;
 use std::str::Utf8Error;
+use std::string::FromUtf8Error;
 
 /// The error type used by this crate.
 #[derive(Debug)]
 pub enum Error {
     /// IO error
     Io(::std::io::Error),
-    /// Utf8 error
-    Utf8(Utf8Error),
+    /// Input decoding error. If `encoding` feature is disabled, contains `None`,
+    /// otherwise contains the UTF-8 decoding error
+    NonDecodable(Option<Utf8Error>),
     /// Unexpected End of File
     UnexpectedEof(String),
     /// End event mismatch
@@ -46,10 +48,18 @@ impl From<::std::io::Error> for Error {
 }
 
 impl From<Utf8Error> for Error {
-    /// Creates a new `Error::Utf8` from the given error
+    /// Creates a new `Error::NonDecodable` from the given error
     #[inline]
     fn from(error: Utf8Error) -> Error {
-        Error::Utf8(error)
+        Error::NonDecodable(Some(error))
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    /// Creates a new `Error::Utf8` from the given error
+    #[inline]
+    fn from(error: FromUtf8Error) -> Error {
+        error.utf8_error().into()
     }
 }
 
@@ -77,7 +87,8 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::Utf8(e) => write!(f, "UTF8 error: {}", e),
+            Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
+            Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
             Error::EndEventMismatch { expected, found } => {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
@@ -109,7 +120,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(e) => Some(e),
-            Error::Utf8(e) => Some(e),
+            Error::NonDecodable(Some(e)) => Some(e),
             Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
             _ => None,
@@ -227,6 +238,7 @@ pub mod serialize {
     }
 
     impl From<Error> for DeError {
+        #[inline]
         fn from(e: Error) -> Self {
             Self::InvalidXml(e)
         }
@@ -239,15 +251,17 @@ pub mod serialize {
         }
     }
 
-    impl From<ParseIntError> for DeError {
-        fn from(e: ParseIntError) -> Self {
-            Self::InvalidInt(e)
+    impl From<Utf8Error> for DeError {
+        #[inline]
+        fn from(e: Utf8Error) -> Self {
+            Self::InvalidXml(e.into())
         }
     }
 
-    impl From<ParseFloatError> for DeError {
-        fn from(e: ParseFloatError) -> Self {
-            Self::InvalidFloat(e)
+    impl From<FromUtf8Error> for DeError {
+        #[inline]
+        fn from(e: FromUtf8Error) -> Self {
+            Self::InvalidXml(e.into())
         }
     }
 
@@ -255,6 +269,20 @@ pub mod serialize {
         #[inline]
         fn from(e: AttrError) -> Self {
             Self::InvalidXml(e.into())
+        }
+    }
+
+    impl From<ParseIntError> for DeError {
+        #[inline]
+        fn from(e: ParseIntError) -> Self {
+            Self::InvalidInt(e)
+        }
+    }
+
+    impl From<ParseFloatError> for DeError {
+        #[inline]
+        fn from(e: ParseFloatError) -> Self {
+            Self::InvalidFloat(e)
         }
     }
 }

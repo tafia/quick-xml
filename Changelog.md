@@ -17,6 +17,11 @@
 - [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
   and `PrefixDeclaration` wrappers around byte arrays and `ResolveResult` with
   the result of namespace resolution
+- [#180]: Make `Decoder` struct public. You already had access to it via the
+  `Reader::decoder()` method, but could not name it in the code. Now the preferred
+  way to access decoding functionality is via this struct
+- [#191]: New event variant `StartText` emitted for bytes before the XML declaration
+  or a start comment or a tag. For streams with BOM this event will contain a BOM
 
 ### Bug Fixes
 
@@ -56,6 +61,33 @@
 - [#393]: Now `BytesStart::name()` and `BytesEnd::name()` returns `QName`, and
   `BytesStart::local_name()` and `BytesEnd::local_name()` returns `LocalName`
 
+- [#191]: Remove unused `reader.decoder().decode_owned()`. If you ever used it,
+  use `String::from_utf8` instead (which that function did)
+- [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
+  Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
+- [#191]: Remove `Reader::decode()` and `Reader::decode_without_bom()`, they are replaced by
+  `Decoder::decode()` and `Decoder::decode_with_bom_removal()`.
+  Use `reader.decoder().decode_*(...)` instead of `reader.decode_*(...)` for now.
+  `Reader::encoding()` is replaced by `Decoder::encoding()` as well
+- [#191]: Remove poorly designed `BytesText::unescape_and_decode_without_bom()` and
+  `BytesText::unescape_and_decode_without_bom_with_custom_entities()`. Although these methods worked
+  as expected, this was only due to good luck. They was replaced by the
+  `BytesStartText::decode_with_bom_removal()`:
+  - conceptually, you should decode BOM only for the first `Text` event from the
+    reader (since now `StartText` event is emitted instead for this)
+  - text before the first tag is not an XML content at all, so it is meaningless
+    to try to unescape something in it
+
+- [#180]: Eliminated the differences in the decoding API when feature `encoding` enabled and when it is
+  disabled. Signatures of functions are now the same regardless of whether or not the feature is
+  enabled, and an error will be returned instead of performing replacements for invalid characters
+  in both cases.
+
+  Previously, if the `encoding` feature was enabled, decoding functions would return `Result<Cow<&str>>`
+  while without this feature they would return `Result<&str>`. With this change, only `Result<Cow<&str>>`
+  is returned regardless of the status of the feature.
+- [#180]: Error variant `Error::Utf8` replaced by `Error::NonDecodable`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -66,6 +98,8 @@
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#180]: https://github.com/tafia/quick-xml/issues/180
+[#191]: https://github.com/tafia/quick-xml/issues/191
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391

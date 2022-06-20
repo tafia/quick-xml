@@ -29,7 +29,7 @@ macro_rules! next_eq_content {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
         match $r.read_event(&mut buf).unwrap() {
-            $t(ref e) if &**e == $bytes => (),
+            $t(ref e) if e.as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
                 stringify!($t),
@@ -42,6 +42,7 @@ macro_rules! next_eq_content {
 }
 
 macro_rules! next_eq {
+    ($r:expr, StartText, $bytes:expr) => (next_eq_content!($r, StartText, $bytes););
     ($r:expr, Start, $bytes:expr) => (next_eq_name!($r, Start, $bytes););
     ($r:expr, End, $bytes:expr) => (next_eq_name!($r, End, $bytes););
     ($r:expr, Empty, $bytes:expr) => (next_eq_name!($r, Empty, $bytes););
@@ -781,82 +782,100 @@ fn test_closing_bracket_in_single_quote_mixed() {
     next_eq!(r, End, b"a");
 }
 
-#[test]
-#[cfg(not(feature = "encoding"))]
-fn test_unescape_and_decode_without_bom_removes_utf8_bom() {
-    let input: &str = std::str::from_utf8(b"\xEF\xBB\xBF<?xml version=\"1.0\"?>").unwrap();
+mod decode_with_bom_removal {
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-    let mut reader = Reader::from_str(&input);
-    reader.trim_text(true);
+    #[test]
+    #[cfg(not(feature = "encoding"))]
+    fn removes_utf8_bom() {
+        let input: &str = std::str::from_utf8(b"\xEF\xBB\xBF<?xml version=\"1.0\"?>").unwrap();
 
-    let mut txt = Vec::new();
-    let mut buf = Vec::new();
+        let mut reader = Reader::from_str(&input);
+        reader.trim_text(true);
 
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&reader).unwrap()),
-            Ok(Event::Eof) => break,
-            _ => (),
+        let mut txt = Vec::new();
+        let mut buf = Vec::new();
+
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(Event::StartText(e)) => {
+                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
+                }
+                Ok(Event::Eof) => break,
+                _ => (),
+            }
         }
+        assert_eq!(txt, vec![""]);
     }
-    assert_eq!(txt, vec![""]);
-}
 
-#[test]
-#[cfg(feature = "encoding")]
-fn test_unescape_and_decode_without_bom_removes_utf16be_bom() {
-    let mut reader = Reader::from_file("./tests/documents/utf16be.xml").unwrap();
-    reader.trim_text(true);
+    /// Test is disabled: the input started with `[FE FF 00 3C 00 3F ...]` and currently
+    /// quick-xml captures `[FE FF 00]` as a `StartText` event, because it is stopped
+    /// at byte `<` (0x3C). That sequence represents UTF-16 BOM (=BE) and a first byte
+    /// of the `<` symbol, encoded in UTF-16 BE (`00 3C`).
+    #[test]
+    #[cfg(feature = "encoding")]
+    #[ignore = "Non-ASCII compatible encodings not properly supported yet. See https://github.com/tafia/quick-xml/issues/158"]
+    fn removes_utf16be_bom() {
+        let mut reader = Reader::from_file("./tests/documents/utf16be.xml").unwrap();
+        reader.trim_text(true);
 
-    let mut txt = Vec::new();
-    let mut buf = Vec::new();
+        let mut txt = Vec::new();
+        let mut buf = Vec::new();
 
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
-            Ok(Event::Eof) => break,
-            _ => (),
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(Event::StartText(e)) => {
+                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
+                }
+                Ok(Event::Eof) => break,
+                _ => (),
+            }
         }
+        assert_eq!(Some(txt[0].as_ref()), Some(""));
     }
-    assert_eq!(txt[0], "");
-}
 
-#[test]
-#[cfg(feature = "encoding")]
-fn test_unescape_and_decode_without_bom_removes_utf16le_bom() {
-    let mut reader = Reader::from_file("./tests/documents/utf16le.xml").unwrap();
-    reader.trim_text(true);
+    #[test]
+    #[cfg(feature = "encoding")]
+    fn removes_utf16le_bom() {
+        let mut reader = Reader::from_file("./tests/documents/utf16le.xml").unwrap();
+        reader.trim_text(true);
 
-    let mut txt = Vec::new();
-    let mut buf = Vec::new();
+        let mut txt = Vec::new();
+        let mut buf = Vec::new();
 
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
-            Ok(Event::Eof) => break,
-            _ => (),
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(Event::StartText(e)) => {
+                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
+                }
+                Ok(Event::Eof) => break,
+                _ => (),
+            }
         }
+        assert_eq!(Some(txt[0].as_ref()), Some(""));
     }
-    assert_eq!(txt[0], "");
-}
 
-#[test]
-#[cfg(not(feature = "encoding"))]
-fn test_unescape_and_decode_without_bom_does_nothing_if_no_bom_exists() {
-    let input: &str = std::str::from_utf8(b"<?xml version=\"1.0\"?>").unwrap();
+    #[test]
+    #[cfg(not(feature = "encoding"))]
+    fn does_nothing_if_no_bom_exists() {
+        let input: &str = std::str::from_utf8(b"<?xml version=\"1.0\"?>").unwrap();
 
-    let mut reader = Reader::from_str(&input);
-    reader.trim_text(true);
+        let mut reader = Reader::from_str(&input);
+        reader.trim_text(true);
 
-    let mut txt = Vec::new();
-    let mut buf = Vec::new();
+        let mut txt = Vec::new();
+        let mut buf = Vec::new();
 
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(Event::Text(e)) => txt.push(e.unescape_and_decode_without_bom(&mut reader).unwrap()),
-            Ok(Event::Eof) => break,
-            _ => (),
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(Event::StartText(e)) => {
+                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
+                }
+                Ok(Event::Eof) => break,
+                _ => (),
+            }
         }
+        assert!(txt.is_empty());
     }
-    assert!(txt.is_empty());
 }

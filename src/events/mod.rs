@@ -38,16 +38,74 @@ pub mod attributes;
 
 #[cfg(feature = "encoding_rs")]
 use encoding_rs::Encoding;
-use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Deref, str::from_utf8};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt::{self, Debug, Formatter};
+use std::io::BufRead;
+use std::ops::Deref;
+use std::str::from_utf8;
 
+use crate::errors::{Error, Result};
 use crate::escape::{do_unescape, escape, partial_escape};
 use crate::name::{LocalName, QName};
+use crate::reader::{Decoder, Reader};
 use crate::utils::write_cow_string;
-use crate::{errors::Error, errors::Result, reader::Reader};
 use attributes::{Attribute, Attributes};
 
 #[cfg(feature = "serialize")]
 use crate::escape::EscapeError;
+
+/// Text that appeared before an XML declaration, a start element or a comment.
+///
+/// In well-formed XML it could contain a Byte-Order-Mark (BOM). If this event
+/// contains something else except BOM, the XML should be considered ill-formed.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BytesStartText<'a> {
+    content: BytesText<'a>,
+}
+
+impl<'a> BytesStartText<'a> {
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesStartText<'static> {
+        BytesStartText {
+            content: self.content.into_owned(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesStartText` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content.into_inner()
+    }
+
+    /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
+    /// in the event.
+    ///
+    /// This method does not unescapes content, because no escape sequences can
+    /// appeared in the BOM or in the text before the first tag.
+    pub fn decode_with_bom_removal(&self, decoder: Decoder) -> Result<String> {
+        //TODO: Fix lifetime issue - it should be possible to borrow string
+        let decoded = decoder.decode_with_bom_removal(&*self)?;
+
+        Ok(decoded.to_string())
+    }
+}
+
+impl<'a> Deref for BytesStartText<'a> {
+    type Target = BytesText<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+impl<'a> From<BytesText<'a>> for BytesStartText<'a> {
+    fn from(content: BytesText<'a>) -> Self {
+        Self { content }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -249,30 +307,16 @@ impl<'a> BytesStart<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    #[cfg(feature = "encoding")]
     #[inline]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        let decoded = reader.decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
+        let decoded = reader.decoder().decode(&*self)?;
 
-    #[cfg(not(feature = "encoding"))]
-    #[inline]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
-        let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        Ok(String::from_utf8(unescaped.into_owned())?)
     }
 
     /// Edit the name of the BytesStart in-place
@@ -368,11 +412,19 @@ impl<'a> BytesStart<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesStart<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesStart<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesStart {{ buf: ")?;
         write_cow_string(f, &self.buf)?;
         write!(f, ", name_len: {} }}", self.name_len)
+    }
+}
+
+impl<'a> Deref for BytesStart<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.buf
     }
 }
 
@@ -451,7 +503,7 @@ impl<'a> BytesDecl<'a> {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref()).map_err(Error::Utf8)?.to_string();
+                let found = from_utf8(a.key.as_ref())?.to_string();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes
@@ -608,6 +660,14 @@ impl<'a> BytesDecl<'a> {
     }
 }
 
+impl<'a> Deref for BytesDecl<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.element
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A struct to manage `Event::End` events
@@ -656,11 +716,19 @@ impl<'a> BytesEnd<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesEnd<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesEnd<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesEnd {{ name: ")?;
         write_cow_string(f, &self.name)?;
         write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesEnd<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.name
     }
 }
 
@@ -772,100 +840,6 @@ impl<'a> BytesText<'a> {
     }
 
     /// helper method to unescape then decode self using the reader encoding
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-    ) -> Result<String> {
-        self.do_unescape_and_decode_without_bom(reader, None)
-    }
-
-    /// helper method to unescape then decode self using the reader encoding
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-    ) -> Result<String> {
-        self.do_unescape_and_decode_without_bom(reader, None)
-    }
-
-    /// helper method to unescape then decode self using the reader encoding with custom entities
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    ///
-    /// # Pre-condition
-    ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(feature = "encoding")]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
-        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
-    }
-
-    /// helper method to unescape then decode self using the reader encoding with custom entities
-    /// but without BOM (Byte order mark)
-    ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    ///
-    /// # Pre-condition
-    ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    #[cfg(not(feature = "encoding"))]
-    pub fn unescape_and_decode_without_bom_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
-        self.do_unescape_and_decode_without_bom(reader, Some(custom_entities))
-    }
-
-    #[cfg(feature = "encoding")]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &mut Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
-        let decoded = reader.decode_without_bom(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_without_bom<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
-        let decoded = reader.decode_without_bom(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
-
-    /// helper method to unescape then decode self using the reader encoding
     ///
     /// for performance reasons (could avoid allocating a `String`),
     /// it might be wiser to manually use
@@ -893,28 +867,15 @@ impl<'a> BytesText<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    #[cfg(feature = "encoding")]
     fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
     ) -> Result<String> {
-        let decoded = reader.decode(&*self);
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
-    }
+        let decoded = reader.decoder().decode(&*self)?;
 
-    #[cfg(not(feature = "encoding"))]
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<String> {
-        let decoded = reader.decode(&*self)?;
-        let unescaped =
-            do_unescape(decoded.as_bytes(), custom_entities).map_err(Error::EscapeError)?;
-        String::from_utf8(unescaped.into_owned()).map_err(|e| Error::Utf8(e.utf8_error()))
+        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        Ok(String::from_utf8(unescaped.into_owned())?)
     }
 
     /// Gets escaped content.
@@ -923,11 +884,25 @@ impl<'a> BytesText<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesText<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesText<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesText {{ content: ")?;
         write_cow_string(f, &self.content)?;
         write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesText<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
+impl<'a> From<BytesStartText<'a>> for BytesText<'a> {
+    fn from(content: BytesStartText<'a>) -> Self {
+        content.content
     }
 }
 
@@ -1013,21 +988,8 @@ impl<'a> BytesCData<'a> {
     #[cfg(feature = "serialize")]
     pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
         Ok(match &self.content {
-            Cow::Borrowed(bytes) => {
-                #[cfg(feature = "encoding")]
-                {
-                    decoder.decode(bytes)
-                }
-                #[cfg(not(feature = "encoding"))]
-                {
-                    decoder.decode(bytes)?.into()
-                }
-            }
+            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
             Cow::Owned(bytes) => {
-                #[cfg(feature = "encoding")]
-                let decoded = decoder.decode(bytes).into_owned();
-
-                #[cfg(not(feature = "encoding"))]
                 let decoded = decoder.decode(bytes)?.to_string();
 
                 decoded.into()
@@ -1036,21 +998,75 @@ impl<'a> BytesCData<'a> {
     }
 }
 
-impl<'a> std::fmt::Debug for BytesCData<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'a> Debug for BytesCData<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "BytesCData {{ content: ")?;
         write_cow_string(f, &self.content)?;
         write!(f, " }}")
     }
 }
 
+impl<'a> Deref for BytesCData<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &*self.content
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Event emitted by [`Reader::read_event`].
-///
-/// [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
+    /// Text that appeared before the first opening tag or an [XML declaration].
+    /// [According to the XML standard][std], no text allowed before the XML
+    /// declaration. However, if there is a BOM in the stream, some data may be
+    /// present.
+    ///
+    /// When this event is generated, it is the very first event emitted by the
+    /// [`Reader`], and there can be the only one such event.
+    ///
+    /// The [`Writer`] writes content of this event "as is" without encoding or
+    /// escaping. If you write it, it should be written first and only one time
+    /// (but writer does not enforce that).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use std::borrow::Cow;
+    /// use quick_xml::Reader;
+    /// use quick_xml::events::Event;
+    ///
+    /// // XML in UTF-8 with BOM
+    /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>";
+    /// let mut reader = Reader::from_bytes(xml);
+    /// let mut events_processed = 0;
+    /// loop {
+    ///     match reader.read_event_unbuffered() {
+    ///         Ok(Event::StartText(e)) => {
+    ///             assert_eq!(events_processed, 0);
+    ///             // Content contains BOM
+    ///             assert_eq!(e.into_inner(), Cow::Borrowed(b"\xEF\xBB\xBF"));
+    ///         }
+    ///         Ok(Event::Decl(_)) => {
+    ///             assert_eq!(events_processed, 1);
+    ///         }
+    ///         Ok(Event::Eof) => {
+    ///             assert_eq!(events_processed, 2);
+    ///             break;
+    ///         }
+    ///         e => panic!("Unexpected event {:?}", e),
+    ///     }
+    ///     events_processed += 1;
+    /// }
+    /// ```
+    ///
+    /// [XML declaration]: Event::Decl
+    /// [std]: https://www.w3.org/TR/xml11/#NT-document
+    /// [`Writer`]: crate::writer::Writer
+    StartText(BytesStartText<'a>),
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
     /// End tag `</tag>`.
@@ -1078,6 +1094,7 @@ impl<'a> Event<'a> {
     /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
         match self {
+            Event::StartText(e) => Event::StartText(e.into_owned()),
             Event::Start(e) => Event::Start(e.into_owned()),
             Event::End(e) => Event::End(e.into_owned()),
             Event::Empty(e) => Event::Empty(e.into_owned()),
@@ -1092,48 +1109,12 @@ impl<'a> Event<'a> {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-impl<'a> Deref for BytesStart<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.buf
-    }
-}
-
-impl<'a> Deref for BytesDecl<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.element
-    }
-}
-
-impl<'a> Deref for BytesEnd<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.name
-    }
-}
-
-impl<'a> Deref for BytesText<'a> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &*self.content
-    }
-}
-
-impl<'a> Deref for BytesCData<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &*self.content
-    }
-}
-
 impl<'a> Deref for Event<'a> {
     type Target = [u8];
+
     fn deref(&self) -> &[u8] {
         match *self {
+            Event::StartText(ref e) => &*e,
             Event::Start(ref e) | Event::Empty(ref e) => &*e,
             Event::End(ref e) => &*e,
             Event::Text(ref e) => &*e,
