@@ -12,8 +12,8 @@ use pretty_assertions::assert_eq;
 pub enum EscapeError {
     /// Entity with Null character
     EntityWithNull(Range<usize>),
-    /// Unrecognized escape symbol
-    UnrecognizedSymbol(Range<usize>, String),
+    /// Referenced entity in unknown to the parser.
+    UnrecognizedEntity(Range<usize>, String),
     /// Cannot find `;` after `&`
     UnterminatedEntity(Range<usize>),
     /// Cannot convert Hexa to utf8
@@ -36,11 +36,9 @@ impl std::fmt::Display for EscapeError {
                 "Error while escaping character at range {:?}: Null character entity not allowed",
                 e
             ),
-            EscapeError::UnrecognizedSymbol(rge, res) => write!(
-                f,
-                "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
-                rge, res
-            ),
+            EscapeError::UnrecognizedEntity(rge, res) => {
+                write!(f, "at {:?}: unrecognized entity `{}`", rge, res)
+            }
             EscapeError::UnterminatedEntity(e) => write!(
                 f,
                 "Error while escaping character at range {:?}: Cannot find ';' after '&'",
@@ -256,7 +254,7 @@ where
                 } else if let Some(value) = resolve_entity(pat) {
                     unescaped.push_str(value);
                 } else {
-                    return Err(EscapeError::UnrecognizedSymbol(
+                    return Err(EscapeError::UnrecognizedEntity(
                         start + 1..end,
                         pat.to_string(),
                     ));

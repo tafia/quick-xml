@@ -25,6 +25,9 @@
 
 ### Misc Changes
 
+- [#771]: `EscapeError::UnrecognizedSymbol` renamed to `EscapeError::UnrecognizedEntity`.
+
+[#771]: https://github.com/tafia/quick-xml/pull/771
 [#772]: https://github.com/tafia/quick-xml/pull/772
 [#773]: https://github.com/tafia/quick-xml/pull/773
 
