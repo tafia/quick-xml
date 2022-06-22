@@ -89,6 +89,9 @@
   is returned regardless of the status of the feature.
 - [#180]: Error variant `Error::Utf8` replaced by `Error::NonDecodable`
 
+- [#118]: Remove `BytesStart::unescaped*` set of methods because they could return wrong results
+  Use methods on `Attribute` instead
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
