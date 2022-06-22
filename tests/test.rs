@@ -156,9 +156,6 @@ fn fuzz_101() {
     loop {
         match reader.read_event(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
-                if e.unescaped().is_err() {
-                    break;
-                }
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| a.unescaped_value().is_err()) {
                         break;
