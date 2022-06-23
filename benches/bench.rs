@@ -202,7 +202,7 @@ fn one_event(c: &mut Criterion) {
                 .check_comments(false)
                 .trim_text(true);
             match r.read_event(&mut buf) {
-                Ok(Event::Start(ref e)) => nbtxt += e.unescaped().unwrap().len(),
+                Ok(Event::Start(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 
