@@ -56,6 +56,55 @@ enum TagState {
     Exit,
 }
 
+/// A reference to an encoding together with information about how it was retrieved.
+///
+/// The state transition diagram:
+///
+/// ```mermaid
+/// flowchart LR
+///   Implicit    -- from_str       --> Explicit
+///   Implicit    -- BOM            --> BomDetected
+///   Implicit    -- "encoding=..." --> XmlDetected
+///   BomDetected -- "encoding=..." --> XmlDetected
+/// ```
+#[cfg(feature = "encoding")]
+#[derive(Clone, Copy)]
+enum EncodingRef {
+    /// Encoding was implicitly assumed to have a specified value. It can be refined
+    /// using BOM or by the XML declaration event (`<?xml encoding=... ?>`)
+    Implicit(&'static Encoding),
+    /// Encoding was explicitly set to the desired value. It cannot be changed
+    /// nor by BOM, nor by parsing XML declaration (`<?xml encoding=... ?>`)
+    Explicit(&'static Encoding),
+    /// Encoding was detected from a byte order mark (BOM) or by the first bytes
+    /// of the content. It can be refined by the XML declaration event (`<?xml encoding=... ?>`)
+    BomDetected(&'static Encoding),
+    /// Encoding was detected using XML declaration event (`<?xml encoding=... ?>`).
+    /// It can no longer change
+    XmlDetected(&'static Encoding),
+}
+#[cfg(feature = "encoding")]
+impl EncodingRef {
+    #[inline]
+    fn encoding(&self) -> &'static Encoding {
+        match self {
+            Self::Implicit(e) => e,
+            Self::Explicit(e) => e,
+            Self::BomDetected(e) => e,
+            Self::XmlDetected(e) => e,
+        }
+    }
+    #[inline]
+    fn can_be_refined(&self) -> bool {
+        match self {
+            Self::Implicit(_) | Self::BomDetected(_) => true,
+            Self::Explicit(_) | Self::XmlDetected(_) => false,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A low level encoding-agnostic XML event reader.
 ///
 /// Consumes a `BufRead` and streams XML `Event`s.
@@ -144,11 +193,8 @@ pub struct Reader<R: BufRead> {
     pending_pop: bool,
 
     #[cfg(feature = "encoding")]
-    /// the encoding specified in the xml, defaults to utf8
-    encoding: &'static Encoding,
-    #[cfg(feature = "encoding")]
-    /// check if quick-rs could find out the encoding
-    is_encoding_set: bool,
+    /// Reference to the encoding used to read an XML
+    encoding: EncodingRef,
 }
 
 /// Builder methods
@@ -172,9 +218,7 @@ impl<R: BufRead> Reader<R> {
             pending_pop: false,
 
             #[cfg(feature = "encoding")]
-            encoding: ::encoding_rs::UTF_8,
-            #[cfg(feature = "encoding")]
-            is_encoding_set: false,
+            encoding: EncodingRef::Implicit(UTF_8),
         }
     }
 
@@ -412,7 +456,7 @@ impl<R: BufRead> Reader<R> {
     pub fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
-            encoding: self.encoding,
+            encoding: self.encoding.encoding(),
         }
     }
 }
@@ -683,10 +727,9 @@ impl<R: BufRead> Reader<R> {
         {
             Ok(Some(bytes)) => {
                 #[cfg(feature = "encoding")]
-                if first {
+                if first && self.encoding.can_be_refined() {
                     if let Some(encoding) = detect_encoding(bytes) {
-                        self.encoding = encoding;
-                        self.is_encoding_set = true;
+                        self.encoding = EncodingRef::BomDetected(encoding);
                     }
                 }
 
@@ -843,9 +886,10 @@ impl<R: BufRead> Reader<R> {
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
-                if let Some(enc) = event.encoder() {
-                    self.encoding = enc;
-                    self.is_encoding_set = true;
+                if self.encoding.can_be_refined() {
+                    if let Some(encoding) = event.encoder() {
+                        self.encoding = EncodingRef::XmlDetected(encoding);
+                    }
                 }
 
                 Ok(Event::Decl(event))
@@ -905,6 +949,15 @@ impl Reader<BufReader<File>> {
 impl<'a> Reader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
     pub fn from_str(s: &'a str) -> Self {
+        // Rust strings are guaranteed to be UTF-8, so lock the encoding
+        #[cfg(feature = "encoding")]
+        {
+            let mut reader = Self::from_reader(s.as_bytes());
+            reader.encoding = EncodingRef::Explicit(UTF_8);
+            reader
+        }
+
+        #[cfg(not(feature = "encoding"))]
         Self::from_reader(s.as_bytes())
     }
 
@@ -1533,8 +1586,6 @@ impl Decoder {
     /// Copied from [`Encoding::decode_with_bom_removal`]
     #[inline]
     fn remove_bom<'b>(&self, bytes: &'b [u8]) -> &'b [u8] {
-        use encoding_rs::*;
-
         if self.encoding == UTF_8 && bytes.starts_with(b"\xEF\xBB\xBF") {
             return &bytes[3..];
         }
@@ -1556,15 +1607,13 @@ impl Decoder {
     pub(crate) fn utf8() -> Self {
         Decoder {
             #[cfg(feature = "encoding")]
-            encoding: encoding_rs::UTF_8,
+            encoding: UTF_8,
         }
     }
 
     #[cfg(feature = "encoding")]
     pub(crate) fn utf16() -> Self {
-        Decoder {
-            encoding: encoding_rs::UTF_16LE,
-        }
+        Decoder { encoding: UTF_16LE }
     }
 }
 
@@ -2478,6 +2527,62 @@ mod test {
                         reader.read_event_buffered($buf).unwrap(),
                         Event::Eof
                     );
+                }
+            }
+
+            #[cfg(feature = "encoding")]
+            mod encoding {
+                use crate::events::Event;
+                use crate::reader::Reader;
+                use encoding_rs::{UTF_8, UTF_16LE, WINDOWS_1251};
+                use pretty_assertions::assert_eq;
+
+                mod bytes {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    /// Checks that encoding is detected by BOM and changed after XML declaration
+                    #[test]
+                    fn bom_detected() {
+                        let mut reader = Reader::from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
+
+                        assert_eq!(reader.decoder().encoding(), UTF_8);
+                        reader.read_event_buffered($buf).unwrap();
+                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                        reader.read_event_buffered($buf).unwrap();
+                        assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
+
+                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                    }
+
+                    /// Checks that encoding is changed by XML declaration, but only once
+                    #[test]
+                    fn xml_declaration() {
+                        let mut reader = Reader::from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
+
+                        assert_eq!(reader.decoder().encoding(), UTF_8);
+                        reader.read_event_buffered($buf).unwrap();
+                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                        reader.read_event_buffered($buf).unwrap();
+                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                    }
+                }
+
+                /// Checks that XML declaration cannot change the encoding from UTF-8 if
+                /// a `Reader` was created using `from_str` method
+                #[test]
+                fn str_always_has_utf8() {
+                    let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
+
+                    assert_eq!(reader.decoder().encoding(), UTF_8);
+                    reader.read_event_buffered($buf).unwrap();
+                    assert_eq!(reader.decoder().encoding(), UTF_8);
+
+                    assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
                 }
             }
         };

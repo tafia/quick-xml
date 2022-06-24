@@ -23,6 +23,8 @@
 - [#191]: New event variant `StartText` emitted for bytes before the XML declaration
   or a start comment or a tag. For streams with BOM this event will contain a BOM
 - [#395]: Add support for XML Schema `xs:list`
+- [#324]: `Reader::from_str` / `Deserializer::from_str` / `from_str` now ignore
+  the XML declared encoding and always use UTF-8
 
 ### Bug Fixes
 
@@ -106,6 +108,7 @@
 [#9]: https://github.com/Mingun/fast-xml/pull/9
 [#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
+[#324]: https://github.com/tafia/quick-xml/issues/324
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
