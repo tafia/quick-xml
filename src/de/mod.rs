@@ -297,16 +297,8 @@ pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
 {
-    from_slice(s.as_bytes())
-}
-
-/// Deserialize an instance of type `T` from bytes of XML text.
-#[deprecated = "Use `from_slice` instead"]
-pub fn from_bytes<'de, T>(s: &'de [u8]) -> Result<T, DeError>
-where
-    T: Deserialize<'de>,
-{
-    from_slice(s)
+    let mut de = Deserializer::from_str(s);
+    T::deserialize(&mut de)
 }
 
 /// Deserialize an instance of type `T` from bytes of XML text.
@@ -398,12 +390,6 @@ where
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
         }
-    }
-
-    /// Get a new deserializer from a regular BufRead
-    #[deprecated = "Use `Deserializer::new` instead"]
-    pub fn from_borrowing_reader(reader: R) -> Self {
-        Self::new(reader)
     }
 
     /// Set the maximum number of events that could be skipped during deserialization
@@ -711,12 +697,17 @@ where
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
     pub fn from_str(s: &'de str) -> Self {
-        Self::from_slice(s.as_bytes())
+        Self::from_borrowing_reader(Reader::from_str(s))
     }
 
     /// Create new deserializer that will borrow data from the specified byte array
     pub fn from_slice(bytes: &'de [u8]) -> Self {
-        let mut reader = Reader::from_bytes(bytes);
+        Self::from_borrowing_reader(Reader::from_bytes(bytes))
+    }
+
+    /// Create new deserializer that will borrow data from the specified borrowing reader
+    #[inline]
+    fn from_borrowing_reader(mut reader: Reader<&'de [u8]>) -> Self {
         reader
             .expand_empty_elements(true)
             .check_end_names(true)

@@ -4765,3 +4765,25 @@ mod xml_schema_lists {
         }
     }
 }
+
+/// Test for https://github.com/tafia/quick-xml/issues/324
+#[test]
+fn from_str_should_ignore_encoding() {
+    let xml = r#"
+        <?xml version="1.0" encoding="windows-1252" ?>
+        <A a="€" />
+    "#;
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct A {
+        a: String,
+    }
+
+    let a: A = from_str(xml).unwrap();
+    assert_eq!(
+        a,
+        A {
+            a: "€".to_string()
+        }
+    );
+}

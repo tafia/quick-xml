@@ -23,6 +23,8 @@
 - [#191]: New event variant `StartText` emitted for bytes before the XML declaration
   or a start comment or a tag. For streams with BOM this event will contain a BOM
 - [#395]: Add support for XML Schema `xs:list`
+- [#324]: `Reader::from_str` / `Deserializer::from_str` / `from_str` now ignore
+  the XML declared encoding and always use UTF-8
 
 ### Bug Fixes
 
@@ -92,6 +94,8 @@
 - [#118]: Remove `BytesStart::unescaped*` set of methods because they could return wrong results
   Use methods on `Attribute` instead
 
+- [#403]: Remove deprecated `quick_xml::de::from_bytes` and `Deserializer::from_borrowing_reader`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -104,11 +108,13 @@
 [#9]: https://github.com/Mingun/fast-xml/pull/9
 [#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
+[#324]: https://github.com/tafia/quick-xml/issues/324
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
 [#393]: https://github.com/tafia/quick-xml/pull/393
 [#395]: https://github.com/tafia/quick-xml/pull/395
+[#403]: https://github.com/tafia/quick-xml/pull/403
 
 ## 0.23.0 -- 2022-05-08
 
