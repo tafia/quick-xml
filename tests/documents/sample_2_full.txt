@@ -1,4 +1,6 @@
 StartDocument(1.0, utf-8)
+Characters(
+)
 StartElement({urn:example:namespace}p:data)
 Characters(
   )

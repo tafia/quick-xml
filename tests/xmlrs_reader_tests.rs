@@ -355,21 +355,15 @@ fn default_namespace_applies_to_end_elem() {
 }
 
 #[track_caller]
-fn test(input: &str, output: &str, is_short: bool) {
-    test_bytes(input.as_bytes(), output.as_bytes(), is_short);
+fn test(input: &str, output: &str, trim: bool) {
+    test_bytes(input.as_bytes(), output.as_bytes(), trim);
 }
 
 #[track_caller]
-fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
-    // Normalize newlines on Windows to just \n, which is what the reader and
-    // writer use.
-    // let input = input.replace("\r\n", "\n");
-    // let input = input.as_bytes();
-    // let output = output.replace("\r\n", "\n");
-    // let output = output.as_bytes();
+fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     let mut reader = Reader::from_reader(input);
     reader
-        .trim_text(is_short)
+        .trim_text(trim)
         .check_comments(true)
         .expand_empty_elements(false);
 
@@ -401,20 +395,6 @@ fn test_bytes(input: &[u8], output: &[u8], is_short: bool) {
                 break;
             }
             panic!("Unexpected event: {}", line);
-        }
-
-        if !is_short && line.starts_with("StartDocument") {
-            // advance next Characters(empty space) ...
-            if let Ok(Event::Text(ref e)) = reader.read_event(&mut Vec::new()) {
-                if e.iter().any(|b| match *b {
-                    b' ' | b'\r' | b'\n' | b'\t' => false,
-                    _ => true,
-                }) {
-                    panic!("Reader expects empty Text event after a StartDocument");
-                }
-            } else {
-                panic!("Reader expects empty Text event after a StartDocument");
-            }
         }
     }
 }
