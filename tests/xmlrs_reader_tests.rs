@@ -1,3 +1,4 @@
+use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
 use quick_xml::{Decoder, Reader, Result};
@@ -403,21 +404,25 @@ fn namespace_name(n: ResolveResult, name: QName, decoder: Decoder) -> String {
     let name = decoder.decode(name.as_ref()).unwrap();
     match n {
         // Produces string '{namespace}prefixed_name'
-        ResolveResult::Bound(n) => format!("{{{}}}{}", from_utf8(n.as_ref()).unwrap(), name),
+        ResolveResult::Bound(n) => format!("{{{}}}{}", decoder.decode(n.as_ref()).unwrap(), name),
         _ => name.to_string(),
     }
 }
 
-fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
+fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {
             Ok(a) => {
                 if a.key.as_namespace_binding().is_none() {
+                    let key = decoder.decode(a.key.as_ref()).unwrap();
+                    let value = decoder.decode(a.value.as_ref()).unwrap();
+                    let unescaped_value = unescape(value.as_bytes()).unwrap();
                     atts.push(format!(
                         "{}=\"{}\"",
-                        from_utf8(a.key.as_ref()).unwrap(),
-                        from_utf8(&*a.unescaped_value().unwrap()).unwrap()
+                        key,
+                        // unescape does not change validity of an UTF-8 string
+                        from_utf8(&*unescaped_value).unwrap()
                     ));
                 }
             }
@@ -430,43 +435,45 @@ fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
 fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) -> String {
     match opt_event {
         Ok((_, Event::StartText(_))) => "StartText".to_string(),
-        Ok((n, Event::Start(ref e))) => {
+        Ok((n, Event::Start(e))) => {
             let name = namespace_name(n, e.name(), decoder);
-            match make_attrs(e) {
-                Ok(ref attrs) if attrs.is_empty() => format!("StartElement({})", &name),
-                Ok(ref attrs) => format!("StartElement({} [{}])", &name, &attrs),
+            match make_attrs(&e, decoder) {
+                Ok(attrs) if attrs.is_empty() => format!("StartElement({})", &name),
+                Ok(attrs) => format!("StartElement({} [{}])", &name, &attrs),
                 Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
             }
         }
-        Ok((n, Event::Empty(ref e))) => {
+        Ok((n, Event::Empty(e))) => {
             let name = namespace_name(n, e.name(), decoder);
-            match make_attrs(e) {
-                Ok(ref attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
-                Ok(ref attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
+            match make_attrs(&e, decoder) {
+                Ok(attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
+                Ok(attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
                 Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
             }
         }
-        Ok((n, Event::End(ref e))) => {
+        Ok((n, Event::End(e))) => {
             let name = namespace_name(n, e.name(), decoder);
             format!("EndElement({})", name)
         }
-        Ok((_, Event::Comment(ref e))) => format!("Comment({})", from_utf8(e).unwrap()),
-        Ok((_, Event::CData(ref e))) => format!("CData({})", from_utf8(e).unwrap()),
-        Ok((_, Event::Text(ref e))) => match e.unescaped() {
-            Ok(c) => format!("Characters({})", decoder.decode(c.as_ref()).unwrap()),
-            Err(ref err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
+        Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
+        Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
+        Ok((_, Event::Text(e))) => match unescape(decoder.decode(&e).unwrap().as_bytes()) {
+            Ok(c) => format!("Characters({})", from_utf8(c.as_ref()).unwrap()),
+            Err(err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
         },
-        Ok((_, Event::Decl(ref e))) => {
+        Ok((_, Event::Decl(e))) => {
             let version_cow = e.version().unwrap();
-            let version = from_utf8(version_cow.as_ref()).unwrap();
+            let version = decoder.decode(version_cow.as_ref()).unwrap();
             let encoding_cow = e.encoding().unwrap().unwrap();
-            let encoding = from_utf8(encoding_cow.as_ref()).unwrap();
+            let encoding = decoder.decode(encoding_cow.as_ref()).unwrap();
             format!("StartDocument({}, {})", version, encoding)
         }
         Ok((_, Event::Eof)) => format!("EndDocument"),
-        Ok((_, Event::PI(ref e))) => format!("ProcessingInstruction(PI={})", from_utf8(e).unwrap()),
-        Err(ref e) => format!("Error: {}", e),
-        Ok((_, Event::DocType(ref e))) => format!("DocType({})", from_utf8(e).unwrap()),
+        Ok((_, Event::PI(e))) => {
+            format!("ProcessingInstruction(PI={})", decoder.decode(&e).unwrap())
+        }
+        Ok((_, Event::DocType(e))) => format!("DocType({})", decoder.decode(&e).unwrap()),
+        Err(e) => format!("Error: {}", e),
     }
 }
 
