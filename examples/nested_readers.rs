@@ -20,7 +20,7 @@ fn main() -> Result<(), quick_xml::Error> {
     let mut reader = Reader::from_file("tests/documents/document.xml")?;
     let mut found_tables = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Event::Start(element) => match element.name().as_ref() {
                 b"w:tbl" => {
                     count += 1;
@@ -33,7 +33,7 @@ fn main() -> Result<(), quick_xml::Error> {
                     let mut row_index = 0;
                     loop {
                         skip_buf.clear();
-                        match reader.read_event(&mut skip_buf)? {
+                        match reader.read_event_into(&mut skip_buf)? {
                             Event::Start(element) => match element.name().as_ref() {
                                 b"w:tr" => {
                                     stats.rows.push(vec![]);

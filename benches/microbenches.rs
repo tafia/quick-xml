@@ -34,7 +34,7 @@ fn read_event(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Eof) => break,
                     _ => (),
@@ -57,7 +57,7 @@ fn read_event(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Eof) => break,
                     _ => (),
@@ -137,7 +137,7 @@ fn bytes_text_unescaped(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut nbtxt = criterion::black_box(0);
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Text(ref e)) => nbtxt += e.unescaped().unwrap().len(),
                     Ok(Event::Eof) => break,
@@ -175,7 +175,7 @@ fn bytes_text_unescaped(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut nbtxt = criterion::black_box(0);
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Text(ref e)) => nbtxt += e.unescaped().unwrap().len(),
                     Ok(Event::Eof) => break,
@@ -215,7 +215,7 @@ fn one_event(c: &mut Criterion) {
             let mut r = Reader::from_reader(src.as_ref());
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false).check_comments(false);
-            match r.read_event(&mut buf) {
+            match r.read_event_into(&mut buf) {
                 Ok(Event::StartText(e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
@@ -235,7 +235,7 @@ fn one_event(c: &mut Criterion) {
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event(&mut buf) {
+            match r.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
@@ -255,7 +255,7 @@ fn one_event(c: &mut Criterion) {
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event(&mut buf) {
+            match r.read_event_into(&mut buf) {
                 Ok(Event::Comment(ref e)) => nbtxt += e.unescaped().unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
@@ -275,7 +275,7 @@ fn one_event(c: &mut Criterion) {
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event(&mut buf) {
+            match r.read_event_into(&mut buf) {
                 Ok(Event::CData(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
@@ -298,7 +298,7 @@ fn attributes(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Empty(e)) => {
                         for attr in e.attributes() {
                             let _attr = attr.unwrap();
@@ -321,7 +321,7 @@ fn attributes(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Empty(e)) => {
                         for attr in e.attributes().with_checks(false) {
                             let _attr = attr.unwrap();
@@ -344,7 +344,7 @@ fn attributes(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Empty(e)) if e.name() == QName(b"player") => {
                         for name in ["num", "status", "avg"] {
                             if let Some(_attr) = e.try_get_attribute(name).unwrap() {

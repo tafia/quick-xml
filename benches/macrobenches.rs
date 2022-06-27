@@ -21,7 +21,7 @@ static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
 fn parse_document(doc: &[u8]) -> XmlResult<()> {
     let mut r = Reader::from_reader(doc);
     loop {
-        match r.read_event_unbuffered()? {
+        match r.read_event()? {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
                     criterion::black_box(attr?.unescaped_value()?);

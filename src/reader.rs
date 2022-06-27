@@ -125,7 +125,7 @@ impl EncodingRef {
 /// let mut txt = Vec::new();
 /// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event(&mut buf) {
+///     match reader.read_event_into(&mut buf) {
 ///         Ok(Event::Start(ref e)) => {
 ///             match e.name().as_ref() {
 ///                 b"tag1" => println!("attributes values: {:?}",
@@ -362,7 +362,7 @@ impl<R: BufRead> Reader<R> {
     /// }
     ///
     /// loop {
-    ///     match reader.read_event(&mut buf) {
+    ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => match e.name().as_ref() {
     ///             b"tag1" | b"tag2" => (),
     ///             tag => {
@@ -494,7 +494,7 @@ impl<R: BufRead> Reader<R> {
     /// let mut buf = Vec::new();
     /// let mut txt = Vec::new();
     /// loop {
-    ///     match reader.read_event(&mut buf) {
+    ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => count += 1,
     ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
@@ -507,8 +507,8 @@ impl<R: BufRead> Reader<R> {
     /// println!("Text events: {:?}", txt);
     /// ```
     #[inline]
-    pub fn read_event<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        self.read_event_buffered(buf)
+    pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        self.read_event_impl(buf)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -569,7 +569,7 @@ impl<R: BufRead> Reader<R> {
             self.ns_resolver.pop(namespace_buffer);
         }
         self.pending_pop = false;
-        match self.read_event(buf) {
+        match self.read_event_into(buf) {
             Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
@@ -610,11 +610,11 @@ impl<R: BufRead> Reader<R> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
+    pub fn read_to_end_into<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
         let end = end.as_ref();
         loop {
-            match self.read_event(buf) {
+            match self.read_event_into(buf) {
                 Ok(Event::End(ref e)) if e.name().as_ref() == end => {
                     if depth == 0 {
                         return Ok(());
@@ -656,9 +656,9 @@ impl<R: BufRead> Reader<R> {
     ///
     /// let expected = ["<b>", ""];
     /// for &content in expected.iter() {
-    ///     match xml.read_event(&mut Vec::new()) {
+    ///     match xml.read_event_into(&mut Vec::new()) {
     ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), content);
+    ///             assert_eq!(&xml.read_text_into(e.name(), &mut Vec::new()).unwrap(), content);
     ///         },
     ///         e => panic!("Expecting Start event, found {:?}", e),
     ///     }
@@ -667,15 +667,15 @@ impl<R: BufRead> Reader<R> {
     ///
     /// [`Text`]: events/enum.Event.html#variant.Text
     /// [`End`]: events/enum.Event.html#variant.End
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event(buf) {
+    pub fn read_text_into<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
+        let s = match self.read_event_into(buf) {
             Ok(Event::Text(e)) => e.unescape_and_decode(self),
             Ok(Event::End(ref e)) if e.name().as_ref() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),
         };
-        self.read_to_end(end, buf)?;
+        self.read_to_end_into(end, buf)?;
         s
     }
 }
@@ -685,7 +685,7 @@ impl<R: BufRead> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
@@ -718,7 +718,7 @@ impl<R: BufRead> Reader<R> {
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if self.reader.skip_one(b'<', &mut self.buf_position)? {
-            return self.read_event_buffered(buf);
+            return self.read_event_impl(buf);
         }
 
         match self
@@ -968,18 +968,18 @@ impl<'a> Reader<&'a [u8]> {
 
     /// Read an event that borrows from the input rather than a buffer.
     #[inline]
-    pub fn read_event_unbuffered(&mut self) -> Result<Event<'a>> {
-        self.read_event_buffered(())
+    pub fn read_event(&mut self) -> Result<Event<'a>> {
+        self.read_event_impl(())
     }
 
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end_unbuffered<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
         let mut depth = 0;
         let end = end.as_ref();
         loop {
-            match self.read_event_unbuffered() {
+            match self.read_event() {
                 Ok(Event::End(ref e)) if e.name().as_ref() == end => {
                     if depth == 0 {
                         return Ok(());
@@ -2405,7 +2405,7 @@ mod test {
             }
 
             /// Ensures, that no empty `Text` events are generated
-            mod read_event_buffered {
+            mod read_event_impl {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
@@ -2415,7 +2415,7 @@ mod test {
                     let mut reader = Reader::from_str("bom");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::StartText(BytesText::from_escaped(b"bom".as_ref()).into())
                     );
                 }
@@ -2425,7 +2425,7 @@ mod test {
                     let mut reader = Reader::from_str("<?xml ?>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
                     );
                 }
@@ -2435,7 +2435,7 @@ mod test {
                     let mut reader = Reader::from_str("<!DOCTYPE x>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::DocType(BytesText::from_escaped(b"x".as_ref()))
                     );
                 }
@@ -2445,7 +2445,7 @@ mod test {
                     let mut reader = Reader::from_str("<?xml-stylesheet?>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::PI(BytesText::from_escaped(b"xml-stylesheet".as_ref()))
                     );
                 }
@@ -2455,7 +2455,7 @@ mod test {
                     let mut reader = Reader::from_str("<tag>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Start(BytesStart::borrowed_name(b"tag"))
                     );
                 }
@@ -2468,7 +2468,7 @@ mod test {
                     reader.check_end_names(false);
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::End(BytesEnd::borrowed(b"tag"))
                     );
                 }
@@ -2478,7 +2478,7 @@ mod test {
                     let mut reader = Reader::from_str("<tag/>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
                 }
@@ -2489,12 +2489,12 @@ mod test {
                     let mut reader = Reader::from_str("<tag/>text");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Text(BytesText::from_escaped(b"text".as_ref()))
                     );
                 }
@@ -2504,7 +2504,7 @@ mod test {
                     let mut reader = Reader::from_str("<![CDATA[]]>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::CData(BytesCData::from_str(""))
                     );
                 }
@@ -2514,7 +2514,7 @@ mod test {
                     let mut reader = Reader::from_str("<!---->");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Comment(BytesText::from_escaped(b"".as_ref()))
                     );
                 }
@@ -2524,7 +2524,7 @@ mod test {
                     let mut reader = Reader::from_str("");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Eof
                     );
                 }
@@ -2547,13 +2547,13 @@ mod test {
                         let mut reader = Reader::from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
 
-                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                     }
 
                     /// Checks that encoding is changed by XML declaration, but only once
@@ -2562,13 +2562,13 @@ mod test {
                         let mut reader = Reader::from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                     }
                 }
 
@@ -2579,10 +2579,10 @@ mod test {
                     let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
 
                     assert_eq!(reader.decoder().encoding(), UTF_8);
-                    reader.read_event_buffered($buf).unwrap();
+                    reader.read_event_impl($buf).unwrap();
                     assert_eq!(reader.decoder().encoding(), UTF_8);
 
-                    assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                    assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                 }
             }
         };

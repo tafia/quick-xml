@@ -22,7 +22,7 @@ use std::io::Write;
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
 /// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event(&mut buf) {
+///     match reader.read_event_into(&mut buf) {
 ///         Ok(Event::Start(ref e)) if e.name().as_ref() == b"this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling

@@ -17,7 +17,7 @@
 //!
 //! # Reading
 //! When reading a XML stream, the events are emitted by
-//! [`Reader::read_event`]. You must listen
+//! [`Reader::read_event_into`]. You must listen
 //! for the different types of events you are interested in.
 //!
 //! See [`Reader`] for further information.
@@ -29,10 +29,8 @@
 //!
 //! See [`Writer`] for further information.
 //!
-//! [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
-//! [`Reader`]: ../reader/struct.Reader.html
-//! [`Writer`]: ../writer/struct.Writer.html
-//! [`Event`]: enum.Event.html
+//! [`Writer`]: crate::writer::Writer
+//! [`Event`]: crate::events::Event
 
 pub mod attributes;
 
@@ -928,7 +926,7 @@ impl<'a> Deref for BytesCData<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Event emitted by [`Reader::read_event`].
+/// Event emitted by [`Reader::read_event_into`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Text that appeared before the first opening tag or an [XML declaration].
@@ -956,7 +954,7 @@ pub enum Event<'a> {
     /// let mut reader = Reader::from_bytes(xml);
     /// let mut events_processed = 0;
     /// loop {
-    ///     match reader.read_event_unbuffered() {
+    ///     match reader.read_event() {
     ///         Ok(Event::StartText(e)) => {
     ///             assert_eq!(events_processed, 0);
     ///             // Content contains BOM
@@ -1066,7 +1064,10 @@ mod test {
         let mut buf = Vec::new();
         let mut parsed_local_names = Vec::new();
         loop {
-            match rdr.read_event(&mut buf).expect("unable to read xml event") {
+            match rdr
+                .read_event_into(&mut buf)
+                .expect("unable to read xml event")
+            {
                 Event::Start(ref e) => parsed_local_names.push(
                     from_utf8(e.local_name().as_ref())
                         .expect("unable to build str from local_name")

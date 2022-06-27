@@ -96,13 +96,22 @@
 
 - [#403]: Remove deprecated `quick_xml::de::from_bytes` and `Deserializer::from_borrowing_reader`
 
+- [#412]: Rename methods of `Reader`:
+  |Old Name                 |New Name
+  |-------------------------|---------------------------------------------------
+  |`read_event`             |`read_event_into`
+  |`read_to_end`            |`read_to_end_into`
+  |`read_text`              |`read_text_into`
+  |`read_event_unbuffered`  |`read_event`
+  |`read_to_end_unbuffered` |`read_to_end`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
 - [#387]: Added a bunch of tests for sequences deserialization
 - [#393]: Added more tests for namespace resolver
 - [#393]: Added tests for reserved names (started with "xml"i) -- see <https://www.w3.org/TR/xml-names11/#xmlReserved>
-- [#363]: Add tests for `Reader::read_event_buffered` to ensure that proper events generated for corresponding inputs
+- [#363]: Add tests for `Reader::read_event_impl` to ensure that proper events generated for corresponding inputs
 - [#407]: Improved benchmark suite to cover whole-document parsing, escaping and unescaping text
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
@@ -118,6 +127,7 @@
 [#395]: https://github.com/tafia/quick-xml/pull/395
 [#403]: https://github.com/tafia/quick-xml/pull/403
 [#407]: https://github.com/tafia/quick-xml/pull/407
+[#412]: https://github.com/tafia/quick-xml/pull/412
 
 ## 0.23.0 -- 2022-05-08
 

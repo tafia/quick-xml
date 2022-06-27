@@ -11,7 +11,7 @@ fuzz_target!(|data: &[u8]| {
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))=> {
                 if e.unescaped().is_err() {
                     break;

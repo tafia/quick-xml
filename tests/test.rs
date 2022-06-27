@@ -14,7 +14,7 @@ fn test_sample() {
     let mut r = Reader::from_reader(src);
     let mut count = 0;
     loop {
-        match r.read_event(&mut buf).unwrap() {
+        match r.read_event_into(&mut buf).unwrap() {
             Start(_) => count += 1,
             Decl(e) => println!("{:?}", e.version()),
             Eof => break,
@@ -31,7 +31,7 @@ fn test_attributes_empty() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -60,7 +60,7 @@ fn test_attribute_equal() {
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -83,7 +83,7 @@ fn test_comment_starting_with_gt() {
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     loop {
-        match r.read_event(&mut buf) {
+        match r.read_event_into(&mut buf) {
             Ok(Comment(e)) => {
                 assert_eq!(e.as_ref(), b">");
                 break;
@@ -102,7 +102,7 @@ fn test_koi8_r_encoding() {
     r.trim_text(true).expand_empty_elements(false);
     let mut buf = Vec::new();
     loop {
-        match r.read_event(&mut buf) {
+        match r.read_event_into(&mut buf) {
             Ok(Text(e)) => {
                 e.unescape_and_decode(&r).unwrap();
             }
@@ -121,7 +121,7 @@ fn fuzz_53() {
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
             _ => buf.clear(),
         }
@@ -137,7 +137,7 @@ fn test_issue94() {
     reader.trim_text(true);
     let mut buf = vec![];
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(quick_xml::events::Event::Eof) | Err(..) => break,
             _ => buf.clear(),
         }
@@ -154,7 +154,7 @@ fn fuzz_101() {
     let mut reader = Reader::from_reader(cursor);
     let mut buf = vec![];
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| a.unescaped_value().is_err()) {
@@ -178,14 +178,11 @@ fn fuzz_101() {
 fn test_no_trim() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
 
-    assert!(matches!(
-        reader.read_event_unbuffered().unwrap(),
-        StartText(_)
-    ));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Start(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), End(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), StartText(_)));
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
 }
 
 #[test]
@@ -193,13 +190,10 @@ fn test_trim_end() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
     reader.trim_text_end(true);
 
-    assert!(matches!(
-        reader.read_event_unbuffered().unwrap(),
-        StartText(_)
-    ));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Start(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), End(_)));
+    assert!(matches!(reader.read_event().unwrap(), StartText(_)));
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
 }
 
 #[test]
@@ -207,9 +201,9 @@ fn test_trim() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
     reader.trim_text(true);
 
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Start(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), Text(_)));
-    assert!(matches!(reader.read_event_unbuffered().unwrap(), End(_)));
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
 }
 
 #[test]
@@ -218,15 +212,18 @@ fn test_clone_reader() {
     reader.trim_text(true);
     let mut buf = Vec::new();
 
-    assert!(matches!(reader.read_event(&mut buf).unwrap(), Start(_)));
+    assert!(matches!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Start(_)
+    ));
 
     let mut cloned = reader.clone();
 
-    assert!(matches!(reader.read_event(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(reader.read_event(&mut buf).unwrap(), End(_)));
+    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Text(_)));
+    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), End(_)));
 
-    assert!(matches!(cloned.read_event(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(cloned.read_event(&mut buf).unwrap(), End(_)));
+    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), Text(_)));
+    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), End(_)));
 }
 
 #[cfg(feature = "serialize")]
@@ -925,7 +922,7 @@ fn test_issue299() -> Result<(), Error> {
 "#;
     let mut reader = Reader::from_str(xml);
     loop {
-        match reader.read_event_unbuffered()? {
+        match reader.read_event()? {
             Start(e) | Empty(e) => {
                 let attr_count = match e.name().as_ref() {
                     b"MICEX_DOC" => 1,
