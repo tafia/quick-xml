@@ -264,7 +264,8 @@ fn line_score() {
         inning: String,
     }
 
-    let res: LineScoreData = quick_xml::de::from_str(include_str!("documents/linescore.xml")).unwrap();
+    let res: LineScoreData =
+        quick_xml::de::from_str(include_str!("documents/linescore.xml")).unwrap();
 
     let expected = LineScoreData {
         game_pk: 239575,

@@ -1,11 +1,27 @@
 use criterion::{self, criterion_group, Criterion};
 use pretty_assertions::assert_eq;
+use quick_xml::escape::{escape, unescape};
 use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::Reader;
 
 static SAMPLE: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
 static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
+
+static LOREM_IPSUM_TEXT: &[u8] =
+b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
+Risus ultricies tristique nulla aliquet enim tortor at. Fermentum odio eu feugiat pretium nibh ipsum.
+Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu cursus
+euismod quis viverra nibh cras pulvinar mattis. Sed viverra tellus in hac habitasse platea. Quis
+commodo odio aenean sed. Cursus in hac habitasse platea dictumst quisque sagittis purus.
+
+Neque convallis a cras semper auctor. Sit amet mauris commodo quis imperdiet massa. Ac ut consequat
+semper viverra nam libero justo laoreet sit. Adipiscing commodo elit at imperdiet dui accumsan.
+Enim lobortis scelerisque fermentum dui faucibus in ornare. Natoque penatibus et magnis dis parturient
+montes nascetur ridiculus mus. At lectus urna duis convallis convallis tellus id interdum. Libero
+volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea dictumst quisque sagittis
+purus. Consequat id porta nibh venenatis cras sed felis.";
 
 /// Benchmarks the `Reader::read_event` function with all XML well-formless
 /// checks disabled (with and without trimming content of #text nodes)
@@ -25,7 +41,10 @@ fn read_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -45,7 +64,10 @@ fn read_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         });
     });
     group.finish();
@@ -70,7 +92,10 @@ fn read_namespaced_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         });
     });
 
@@ -91,7 +116,10 @@ fn read_namespaced_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         });
     });
     group.finish();
@@ -117,7 +145,10 @@ fn bytes_text_unescaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
@@ -152,7 +183,10 @@ fn bytes_text_unescaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
@@ -333,11 +367,116 @@ fn attributes(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks escaping text using XML rules
+fn escaping(c: &mut Criterion) {
+    let mut group = c.benchmark_group("escape_text");
+
+    group.bench_function("no_chars_to_escape_long", |b| {
+        b.iter(|| {
+            criterion::black_box(escape(LOREM_IPSUM_TEXT));
+        })
+    });
+
+    group.bench_function("no_chars_to_escape_short", |b| {
+        b.iter(|| {
+            criterion::black_box(escape(b"just bit of text"));
+        })
+    });
+
+    group.bench_function("escaped_chars_short", |b| {
+        b.iter(|| {
+            criterion::black_box(escape(b"age > 72 && age < 21"));
+            criterion::black_box(escape(b"\"what's that?\""));
+        })
+    });
+
+    group.bench_function("escaped_chars_long", |b| {
+        let lorem_ipsum_with_escape_chars =
+b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+ut labore et dolore magna aliqua. & Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
+Risus ultricies tristique nulla aliquet enim tortor at. Fermentum odio eu feugiat pretium nibh ipsum.
+Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu cursus
+euismod quis< viverra nibh cras pulvinar mattis. Sed viverra tellus in hac habitasse platea. Quis
+commodo odio aenean sed. Cursus in hac habitasse platea dictumst quisque sagittis purus.
+
+Neque convallis >a cras semper auctor. Sit amet mauris commodo quis imperdiet massa. Ac ut consequat
+semper viverra nam libero justo laoreet sit. 'Adipiscing' commodo elit at imperdiet dui accumsan.
+Enim lobortis scelerisque fermentum dui faucibus in ornare. Natoque penatibus et magnis dis parturient
+montes nascetur ridiculus mus. At lectus urna duis convallis convallis tellus id interdum. Libero
+volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea dictumst quisque sagittis
+purus. Consequat id porta nibh venenatis cras sed felis.";
+
+        b.iter(|| {
+            criterion::black_box(escape(lorem_ipsum_with_escape_chars));
+        })
+    });
+    group.finish();
+}
+
+/// Benchmarks unescaping text encoded using XML rules
+fn unescaping(c: &mut Criterion) {
+    let mut group = c.benchmark_group("unescape_text");
+
+    group.bench_function("no_chars_to_unescape_long", |b| {
+        b.iter(|| {
+            criterion::black_box(unescape(LOREM_IPSUM_TEXT)).unwrap();
+        })
+    });
+
+    group.bench_function("no_chars_to_unescape_short", |b| {
+        b.iter(|| {
+            criterion::black_box(unescape(b"just a bit of text")).unwrap();
+        })
+    });
+
+    group.bench_function("char_reference", |b| {
+        b.iter(|| {
+            let text = b"prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
+            criterion::black_box(unescape(text)).unwrap();
+            let text = b"&#38;&#60;";
+            criterion::black_box(unescape(text)).unwrap();
+        })
+    });
+
+    group.bench_function("entity_reference", |b| {
+        b.iter(|| {
+            let text = b"age &gt; 72 &amp;&amp; age &lt; 21";
+            criterion::black_box(unescape(text)).unwrap();
+            let text = b"&quot;what&apos;s that?&quot;";
+            criterion::black_box(unescape(text)).unwrap();
+        })
+    });
+
+    group.bench_function("mixed", |b| {
+        let text =
+b"Lorem ipsum dolor sit amet, &amp;consectetur adipiscing elit, sed do eiusmod tempor incididunt
+ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
+Risus ultricies &quot;tristique nulla aliquet enim tortor&quot; at. Fermentum odio eu feugiat pretium
+nibh ipsum. Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu
+cursus euismod quis &#60;viverra nibh cras pulvinar mattis. Sed viverra tellus in hac habitasse platea.
+Quis commodo odio aenean sed. Cursus in hac habitasse platea dictumst quisque sagittis purus.
+
+Neque convallis a cras semper auctor. Sit amet mauris commodo quis imperdiet massa. Ac ut consequat
+semper viverra nam libero justo &#35; laoreet sit. Adipiscing commodo elit at imperdiet dui accumsan.
+Enim lobortis scelerisque fermentum dui faucibus in ornare. Natoque penatibus et magnis dis parturient
+montes nascetur ridiculus mus. At lectus urna &#33;duis convallis convallis tellus id interdum. Libero
+volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea dictumst quisque sagittis
+purus. Consequat id porta nibh venenatis cras sed felis.";
+
+        b.iter(|| {
+            criterion::black_box(unescape(text)).unwrap();
+        })
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     read_event,
     bytes_text_unescaped,
     read_namespaced_event,
     one_event,
-    attributes
+    attributes,
+    escaping,
+    unescaping,
 );

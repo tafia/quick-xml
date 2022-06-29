@@ -26,13 +26,13 @@ fn parse_document(doc: &[u8]) -> XmlResult<()> {
                 for attr in e.attributes() {
                     criterion::black_box(attr?.unescaped_value()?);
                 }
-            },
+            }
             Event::Text(e) => {
                 criterion::black_box(e.unescaped()?);
-            },
+            }
             Event::CData(e) => {
                 criterion::black_box(e.into_inner());
-            },
+            }
             Event::End(_) => (),
             Event::Eof => break,
             _ => (),
@@ -131,7 +131,4 @@ pub fn bench_fully_parse_document(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_fully_parse_document,
-);
+criterion_group!(benches, bench_fully_parse_document,);
