@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<filelists xmlns="http://linux.duke.edu/metadata/filelists" packages="12">
+    <package pkgid="328abd9aab5206b5ea74fdbcec38d146851a2fe831b3e5dcebdb23c31c4bdb15" name="apr-util-devel" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/share/aclocal/find_apu.m4</file>
+        <file>/usr/lib64/pkgconfig/apr-util-1.pc</file>
+        <file>/usr/lib64/libaprutil-1.so</file>
+        <file>/usr/lib64/libaprutil-1.la</file>
+        <file>/usr/include/apr-1/apu_want.h</file>
+        <file>/usr/include/apr-1/apu_version.h</file>
+        <file>/usr/include/apr-1/apu_errno.h</file>
+        <file>/usr/include/apr-1/apu.h</file>
+        <file>/usr/include/apr-1/apr_xml.h</file>
+        <file>/usr/include/apr-1/apr_xlate.h</file>
+        <file>/usr/include/apr-1/apr_uuid.h</file>
+        <file>/usr/include/apr-1/apr_uri.h</file>
+        <file>/usr/include/apr-1/apr_thread_pool.h</file>
+        <file>/usr/include/apr-1/apr_strmatch.h</file>
+        <file>/usr/include/apr-1/apr_siphash.h</file>
+        <file>/usr/include/apr-1/apr_sha1.h</file>
+        <file>/usr/include/apr-1/apr_sdbm.h</file>
+        <file>/usr/include/apr-1/apr_rmm.h</file>
+        <file>/usr/include/apr-1/apr_reslist.h</file>
+        <file>/usr/include/apr-1/apr_redis.h</file>
+        <file>/usr/include/apr-1/apr_queue.h</file>
+        <file>/usr/include/apr-1/apr_optional_hooks.h</file>
+        <file>/usr/include/apr-1/apr_optional.h</file>
+        <file>/usr/include/apr-1/apr_memcache.h</file>
+        <file>/usr/include/apr-1/apr_md5.h</file>
+        <file>/usr/include/apr-1/apr_md4.h</file>
+        <file>/usr/include/apr-1/apr_ldap_url.h</file>
+        <file>/usr/include/apr-1/apr_ldap_rebind.h</file>
+        <file>/usr/include/apr-1/apr_ldap_option.h</file>
+        <file>/usr/include/apr-1/apr_ldap_init.h</file>
+        <file>/usr/include/apr-1/apr_ldap.h</file>
+        <file>/usr/include/apr-1/apr_hooks.h</file>
+        <file>/usr/include/apr-1/apr_dbm.h</file>
+        <file>/usr/include/apr-1/apr_dbd.h</file>
+        <file>/usr/include/apr-1/apr_date.h</file>
+        <file>/usr/include/apr-1/apr_crypto.h</file>
+        <file>/usr/include/apr-1/apr_buckets.h</file>
+        <file>/usr/include/apr-1/apr_base64.h</file>
+        <file>/usr/include/apr-1/apr_anylock.h</file>
+        <file>/usr/bin/apu-1-config</file>
+    </package>
+    <package pkgid="bba430bebeec583e817372badbc957259d210e3081f5913a831594eb48f48f64" name="apr-util-bdb" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_dbm_db.so</file>
+        <file>/usr/lib64/apr-util-1/apr_dbm_db-1.so</file>
+        <file>/usr/lib/.build-id/1c/aa4768d439e50d084a67ec81fbcd3df9c058fc</file>
+        <file type="dir">/usr/lib/.build-id/1c</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="403ef93e442ecdb6ea4846e620ffec3c40f7d5bc9d43a4a9055a9540b98f180a" name="apr-util-pgsql" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_dbd_pgsql.so</file>
+        <file>/usr/lib64/apr-util-1/apr_dbd_pgsql-1.so</file>
+        <file>/usr/lib/.build-id/31/ce21d792563c765e73a8aba098540365708ac6</file>
+        <file type="dir">/usr/lib/.build-id/31</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="7bdd897b6a875ea0ea2d0269338be903b69c5f394bb9a682800ccd8f466ab186" name="apr-util-openssl" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_crypto_openssl.so</file>
+        <file>/usr/lib64/apr-util-1/apr_crypto_openssl-1.so</file>
+        <file>/usr/lib/.build-id/e1/aaeed41b3467d28383f986e36cb17fca822321</file>
+        <file type="dir">/usr/lib/.build-id/e1</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="2e7e855181b7e3053fbe067aa6d34e75b73e403215390852666de7be254ca607" name="libacl" arch="x86_64">
+        <version epoch="0" ver="2.2.53" rel="1.el8"/>
+        <file>/usr/lib64/libacl.so.1.1.2253</file>
+        <file>/usr/lib64/libacl.so.1</file>
+        <file>/usr/lib/.build-id/e3/4e4bf1c9f6060fdf5d1da6f04247ee6d3e56de</file>
+        <file type="dir">/usr/lib/.build-id/e3</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="4d5eae10d5108a02e293a033b622544a18d200733ad9f0727973d579b20c1fb3" name="libacl-devel" arch="x86_64">
+        <version epoch="0" ver="2.2.53" rel="1.el8"/>
+        <file>/usr/share/man/man3/acl_valid.3.gz</file>
+        <file>/usr/share/man/man3/acl_to_text.3.gz</file>
+        <file>/usr/share/man/man3/acl_to_any_text.3.gz</file>
+        <file>/usr/share/man/man3/acl_size.3.gz</file>
+        <file>/usr/share/man/man3/acl_set_tag_type.3.gz</file>
+        <file>/usr/share/man/man3/acl_set_qualifier.3.gz</file>
+        <file>/usr/share/man/man3/acl_set_permset.3.gz</file>
+        <file>/usr/share/man/man3/acl_set_file.3.gz</file>
+        <file>/usr/share/man/man3/acl_set_fd.3.gz</file>
+        <file>/usr/share/man/man3/acl_init.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_tag_type.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_qualifier.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_permset.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_perm.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_file.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_fd.3.gz</file>
+        <file>/usr/share/man/man3/acl_get_entry.3.gz</file>
+        <file>/usr/share/man/man3/acl_from_text.3.gz</file>
+        <file>/usr/share/man/man3/acl_from_mode.3.gz</file>
+        <file>/usr/share/man/man3/acl_free.3.gz</file>
+        <file>/usr/share/man/man3/acl_extended_file_nofollow.3.gz</file>
+        <file>/usr/share/man/man3/acl_extended_file.3.gz</file>
+        <file>/usr/share/man/man3/acl_extended_fd.3.gz</file>
+        <file>/usr/share/man/man3/acl_error.3.gz</file>
+        <file>/usr/share/man/man3/acl_equiv_mode.3.gz</file>
+        <file>/usr/share/man/man3/acl_entries.3.gz</file>
+        <file>/usr/share/man/man3/acl_dup.3.gz</file>
+        <file>/usr/share/man/man3/acl_delete_perm.3.gz</file>
+        <file>/usr/share/man/man3/acl_delete_entry.3.gz</file>
+        <file>/usr/share/man/man3/acl_delete_def_file.3.gz</file>
+        <file>/usr/share/man/man3/acl_create_entry.3.gz</file>
+        <file>/usr/share/man/man3/acl_copy_int.3.gz</file>
+        <file>/usr/share/man/man3/acl_copy_ext.3.gz</file>
+        <file>/usr/share/man/man3/acl_copy_entry.3.gz</file>
+        <file>/usr/share/man/man3/acl_cmp.3.gz</file>
+        <file>/usr/share/man/man3/acl_clear_perms.3.gz</file>
+        <file>/usr/share/man/man3/acl_check.3.gz</file>
+        <file>/usr/share/man/man3/acl_calc_mask.3.gz</file>
+        <file>/usr/share/man/man3/acl_add_perm.3.gz</file>
+        <file>/usr/lib64/pkgconfig/libacl.pc</file>
+        <file>/usr/lib64/libacl.so</file>
+        <file>/usr/include/sys/acl.h</file>
+        <file>/usr/include/acl/libacl.h</file>
+        <file type="dir">/usr/include/acl</file>
+    </package>
+    <package pkgid="51e80e35ebaa69f7e72c1d9788e569107aee3b4414347324a8983911a2af46d6" name="acl" arch="x86_64">
+        <version epoch="0" ver="2.2.53" rel="1.el8"/>
+        <file>/usr/share/man/man5/acl.5.gz</file>
+        <file>/usr/share/man/man1/setfacl.1.gz</file>
+        <file>/usr/share/man/man1/getfacl.1.gz</file>
+        <file>/usr/share/man/man1/chacl.1.gz</file>
+        <file>/usr/share/locale/sv/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/pl/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/gl/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/fr/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/es/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/en@quot/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/en@boldquot/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/locale/de/LC_MESSAGES/acl.mo</file>
+        <file>/usr/share/licenses/acl/COPYING.LGPL</file>
+        <file>/usr/share/licenses/acl/COPYING</file>
+        <file type="dir">/usr/share/licenses/acl</file>
+        <file>/usr/lib/.build-id/ea/bd0b51e30f5b8f7a60e8a713ea3e8e87da158a</file>
+        <file type="dir">/usr/lib/.build-id/ea</file>
+        <file>/usr/lib/.build-id/8c/f58e99260c995bf9a178a1eec3f0b6718420cb</file>
+        <file type="dir">/usr/lib/.build-id/8c</file>
+        <file>/usr/lib/.build-id/68/0459a093ce0f41f4da38f101a65134b6239d7d</file>
+        <file type="dir">/usr/lib/.build-id/68</file>
+        <file type="dir">/usr/lib/.build-id</file>
+        <file>/usr/bin/setfacl</file>
+        <file>/usr/bin/getfacl</file>
+        <file>/usr/bin/chacl</file>
+    </package>
+    <package pkgid="56fbbf08e857582e22bb95d252a3e1735e4476ac64cdd4d7e607974876ccbb61" name="apr-util" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/share/doc/apr-util/NOTICE</file>
+        <file>/usr/share/doc/apr-util/LICENSE</file>
+        <file>/usr/share/doc/apr-util/CHANGES</file>
+        <file type="dir">/usr/share/doc/apr-util</file>
+        <file>/usr/lib64/libaprutil-1.so.0.6.1</file>
+        <file>/usr/lib64/libaprutil-1.so.0</file>
+        <file type="dir">/usr/lib64/apr-util-1</file>
+        <file>/usr/lib/.build-id/9a/1329e49ef7c955cbb975d72208c04f3a43df21</file>
+        <file type="dir">/usr/lib/.build-id/9a</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="901e85b18bba94983531accfe46d9649cb23e50222adf5dc15657576ab7d55e4" name="apr-util-ldap" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_ldap.so</file>
+        <file>/usr/lib64/apr-util-1/apr_ldap-1.so</file>
+        <file>/usr/lib/.build-id/de/6f295ab2082ad9db5dc6e4f89f15310f7476b5</file>
+        <file type="dir">/usr/lib/.build-id/de</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="6600d5b2801be6e85d5ed0f69b82b0f0ac9b2c9cf89b4d6a130d87f4bee575f6" name="apr-util-mysql" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_dbd_mysql.so</file>
+        <file>/usr/lib64/apr-util-1/apr_dbd_mysql-1.so</file>
+        <file>/usr/lib/.build-id/12/5b8186db5c0fd8df6f367914de98afde368164</file>
+        <file type="dir">/usr/lib/.build-id/12</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="b97be76fe95186f4c3ec3db709793fcab944eabf091614f46ee8b4271097b6ff" name="apr-util-sqlite" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_dbd_sqlite3.so</file>
+        <file>/usr/lib64/apr-util-1/apr_dbd_sqlite3-1.so</file>
+        <file>/usr/lib/.build-id/6a/11b542c4986631e17444858fc7f09a645c4e08</file>
+        <file type="dir">/usr/lib/.build-id/6a</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+    <package pkgid="72f87880ca38933b9158e3993ffff9f33267f3a0e32e9791c390190587f40cc5" name="apr-util-odbc" arch="x86_64">
+        <version epoch="0" ver="1.6.1" rel="6.el8"/>
+        <file>/usr/lib64/apr-util-1/apr_dbd_odbc.so</file>
+        <file>/usr/lib64/apr-util-1/apr_dbd_odbc-1.so</file>
+        <file>/usr/lib/.build-id/bb/857d0925e0fc4182a542db4338cc99abd269c4</file>
+        <file type="dir">/usr/lib/.build-id/bb</file>
+        <file type="dir">/usr/lib/.build-id</file>
+    </package>
+</filelists>

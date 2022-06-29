@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<otherdata xmlns="http://linux.duke.edu/metadata/other" packages="12">
+<package pkgid="328abd9aab5206b5ea74fdbcec38d146851a2fe831b3e5dcebdb23c31c4bdb15" name="apr-util-devel" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="bba430bebeec583e817372badbc957259d210e3081f5913a831594eb48f48f64" name="apr-util-bdb" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="403ef93e442ecdb6ea4846e620ffec3c40f7d5bc9d43a4a9055a9540b98f180a" name="apr-util-pgsql" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="7bdd897b6a875ea0ea2d0269338be903b69c5f394bb9a682800ccd8f466ab186" name="apr-util-openssl" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="2e7e855181b7e3053fbe067aa6d34e75b73e403215390852666de7be254ca607" name="libacl" arch="x86_64">
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.53-1" date="1530532800">- new upstream release</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-21" date="1520942400">- update link to POSIX.1e draft in acl(5) man page (#1510527)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-20" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Igor Gnatenko &lt;ignatenkobrain@fedoraproject.org&gt; - 2.2.52-19" date="1517745600">- Switch to %ldconfig_scriptlets</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-18" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-17" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-16" date="1500897600">- fix test-suite failure with perl-5.26.0 (#1473845)
+- update URL of the upstream source tarball</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-15" date="1495108800">- setfacl.1: document the meaning of '-' in perms (#1337039)
+- avoid failure of %check when building as root (#1085389)
+- apply patches automatically to ease maintenance</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-14" date="1495022400">- drop obsolete BuildRoot and Group tags
+- fix spurious acl_check() failure on setfacl --restore (#1451826)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-13" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="4d5eae10d5108a02e293a033b622544a18d200733ad9f0727973d579b20c1fb3" name="libacl-devel" arch="x86_64">
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.53-1" date="1530532800">- new upstream release</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-21" date="1520942400">- update link to POSIX.1e draft in acl(5) man page (#1510527)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-20" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Igor Gnatenko &lt;ignatenkobrain@fedoraproject.org&gt; - 2.2.52-19" date="1517745600">- Switch to %ldconfig_scriptlets</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-18" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-17" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-16" date="1500897600">- fix test-suite failure with perl-5.26.0 (#1473845)
+- update URL of the upstream source tarball</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-15" date="1495108800">- setfacl.1: document the meaning of '-' in perms (#1337039)
+- avoid failure of %check when building as root (#1085389)
+- apply patches automatically to ease maintenance</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-14" date="1495022400">- drop obsolete BuildRoot and Group tags
+- fix spurious acl_check() failure on setfacl --restore (#1451826)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-13" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="51e80e35ebaa69f7e72c1d9788e569107aee3b4414347324a8983911a2af46d6" name="acl" arch="x86_64">
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.53-1" date="1530532800">- new upstream release</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-21" date="1520942400">- update link to POSIX.1e draft in acl(5) man page (#1510527)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-20" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Igor Gnatenko &lt;ignatenkobrain@fedoraproject.org&gt; - 2.2.52-19" date="1517745600">- Switch to %ldconfig_scriptlets</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-18" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-17" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-16" date="1500897600">- fix test-suite failure with perl-5.26.0 (#1473845)
+- update URL of the upstream source tarball</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-15" date="1495108800">- setfacl.1: document the meaning of '-' in perms (#1337039)
+- avoid failure of %check when building as root (#1085389)
+- apply patches automatically to ease maintenance</changelog>
+  <changelog author="Kamil Dudka &lt;kdudka@redhat.com&gt; 2.2.52-14" date="1495022400">- drop obsolete BuildRoot and Group tags
+- fix spurious acl_check() failure on setfacl --restore (#1451826)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 2.2.52-13" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="56fbbf08e857582e22bb95d252a3e1735e4476ac64cdd4d7e607974876ccbb61" name="apr-util" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="901e85b18bba94983531accfe46d9649cb23e50222adf5dc15657576ab7d55e4" name="apr-util-ldap" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="6600d5b2801be6e85d5ed0f69b82b0f0ac9b2c9cf89b4d6a130d87f4bee575f6" name="apr-util-mysql" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="b97be76fe95186f4c3ec3db709793fcab944eabf091614f46ee8b4271097b6ff" name="apr-util-sqlite" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+<package pkgid="72f87880ca38933b9158e3993ffff9f33267f3a0e32e9791c390190587f40cc5" name="apr-util-odbc" arch="x86_64">
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.1-6" date="1538395200">- Recommends: apr-util-openssl, apr-util-bdb (#1633973)</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.6.1-5" date="1518004800">- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild</changelog>
+  <changelog author="Florian Weimer &lt;fweimer@redhat.com&gt; - 1.6.1-4" date="1516968000">- Rebuild with new build flags embedded in apr</changelog>
+  <changelog author="Bj&#xF6;rn Esser &lt;besser82@fedoraproject.org&gt; - 1.6.1-3" date="1516449600">- Rebuilt for switch to libxcrypt</changelog>
+  <changelog author="Honza Horak &lt;hhorak@redhat.com&gt; - 1.6.1-2" date="1513684800">- Build with mariadb-connector-c</changelog>
+  <changelog author="Lubo&#x161; Uhliarik &lt;luhliari@redhat.com&gt; - 1.6.1-1" date="1508932800">- new version 1.6.1</changelog>
+  <changelog author="Joe Orton &lt;jorton@redhat.com&gt; - 1.6.0-1" date="1503316800">- update to 1.6.0 (#1460831)
+- move bdb support to loadable DSO in apr-util-dbd subpackage
+- drop NSS, freetds support</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-7" date="1501675200">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-6" date="1501070400">- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild</changelog>
+  <changelog author="Fedora Release Engineering &lt;releng@fedoraproject.org&gt; - 1.5.4-5" date="1486728000">- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild</changelog>
+</package>
+</otherdata>

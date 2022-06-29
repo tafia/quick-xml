@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xmlns="http://linux.duke.edu/metadata/common"
+    xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="4">
+    <package type="rpm">
+        <name>complex-package</name>
+        <arch>x86_64</arch>
+        <version epoch="1" ver="2.3.4" rel="5.el8"/>
+        <checksum type="sha256" pkgid="YES">bbb7b0e9350a0f75b923bdd0ef4f9af39765c668a3e70bfd3486ea9f0f618aaf</checksum>
+        <summary>A package for exercising many different features of RPM metadata</summary>
+        <description>Complex package</description>
+        <packager>Michael Bluth</packager>
+        <url>http://bobloblaw.com</url>
+        <time file="1627052744" build="1627052743"/>
+        <size package="8680" installed="117" archive="932"/>
+        <location href="complex-package-2.3.4-5.el8.x86_64.rpm"/>
+        <format>
+            <rpm:license>MPLv2</rpm:license>
+            <rpm:vendor>Bluth Company</rpm:vendor>
+            <rpm:group>Development/Tools</rpm:group>
+            <rpm:buildhost>localhost</rpm:buildhost>
+            <rpm:sourcerpm>complex-package-2.3.4-5.el8.src.rpm</rpm:sourcerpm>
+            <rpm:header-range start="4504" end="8413"/>
+            <rpm:provides>
+                <rpm:entry name="/usr/bin/ls"/>
+                <rpm:entry name="complex-package" flags="EQ" epoch="1" ver="2.3.4" rel="5.el8"/>
+                <rpm:entry name="complex-package(x86-64)" flags="EQ" epoch="1" ver="2.3.4" rel="5.el8"/>
+                <rpm:entry name="laughter" flags="EQ" epoch="0" ver="33"/>
+                <rpm:entry name="narration(ronhoward)"/>
+            </rpm:provides>
+            <rpm:requires>
+                <rpm:entry name="/usr/bin/bash"/>
+                <rpm:entry name="/usr/sbin/useradd" pre="1"/>
+                <rpm:entry name="arson" flags="GE" epoch="0" ver="1.0.0" rel="1"/>
+                <rpm:entry name="fur" flags="LE" epoch="0" ver="2"/>
+                <rpm:entry name="staircar" flags="LE" epoch="0" ver="99.1" rel="3"/>
+            </rpm:requires>
+            <rpm:conflicts>
+                <rpm:entry name="foxnetwork" flags="GT" epoch="0" ver="5555"/>
+            </rpm:conflicts>
+            <rpm:obsoletes>
+                <rpm:entry name="bluemangroup" flags="LT" epoch="0" ver="32.1" rel="0"/>
+                <rpm:entry name="cornballer" flags="LT" epoch="0" ver="444"/>
+            </rpm:obsoletes>
+            <rpm:suggests>
+                <rpm:entry name="(bobloblaw &gt;= 1.1 if maritimelaw else anyone &lt; 0.5.1-2)"/>
+                <rpm:entry name="(dove and return)"/>
+                <rpm:entry name="(job or money &gt; 9000)"/>
+            </rpm:suggests>
+            <rpm:enhances>
+                <rpm:entry name="(bananas or magic)"/>
+            </rpm:enhances>
+            <rpm:recommends>
+                <rpm:entry name="((hiding and attic) if light-treason)"/>
+                <rpm:entry name="GeneParmesan(PI)"/>
+                <rpm:entry name="yacht" flags="GT" epoch="9" ver="11.0" rel="0"/>
+            </rpm:recommends>
+            <rpm:supplements>
+                <rpm:entry name="((hiding and illusion) unless alliance-of-magicians)"/>
+                <rpm:entry name="comedy" flags="EQ" epoch="0" ver="11.1" rel="4"/>
+            </rpm:supplements>
+            <file>/etc/complex/pkg.cfg</file>
+            <file>/usr/bin/complex_a</file>
+        </format>
+    </package>
+    <package type="rpm">
+        <name>rpm-empty</name>
+        <arch>x86_64</arch>
+        <version epoch="0" ver="0" rel="0"/>
+        <checksum type="sha256" pkgid="YES">90fbba546300f507473547f33e229ee7bad94bbbe6e84b21d485e8e43b5f1132</checksum>
+        <summary>""</summary>
+        <description></description>
+        <packager></packager>
+        <url></url>
+        <time file="1625930845" build="1615686424"/>
+        <size package="6005" installed="0" archive="124"/>
+        <location href="rpm-empty-0-0.x86_64.rpm"/>
+        <format>
+            <rpm:license>LGPL</rpm:license>
+            <rpm:vendor></rpm:vendor>
+            <rpm:group>Unspecified</rpm:group>
+            <rpm:buildhost>localhost</rpm:buildhost>
+            <rpm:sourcerpm>rpm-empty-0-0.src.rpm</rpm:sourcerpm>
+            <rpm:header-range start="4504" end="5961"/>
+            <rpm:provides>
+                <rpm:entry name="rpm-empty" flags="EQ" epoch="0" ver="0" rel="0"/>
+                <rpm:entry name="rpm-empty(x86-64)" flags="EQ" epoch="0" ver="0" rel="0"/>
+            </rpm:provides>
+        </format>
+    </package>
+    <package type="rpm">
+        <name>rpm-with-invalid-chars</name>
+        <arch>noarch</arch>
+        <version epoch="0" ver="1" rel="1.fc33"/>
+        <checksum type="sha256" pkgid="YES">64f1444f8e86a9ae6accdc2c4b12cb4a87fb2414c0998df461a8623a52eb3cc4</checksum>
+        <summary>An RPM file with invalid characters in its description.</summary>
+        <description>This RPM that contains XML-illegal characters such as ampersand &amp; and less-than &lt; greater-than &gt; in its &lt;/description&gt;.
+These must be escaped in the final XML metadata. The XML spec does not strictly require escaping 'single' or "double" quotes
+within text content, and not all XML libraries do so. However, it is generally recommended.</description>
+        <packager></packager>
+        <url>https://github.com/dralley/rpmrepo_rs/</url>
+        <time file="1625930845" build="1617418325"/>
+        <size package="6489" installed="0" archive="124"/>
+        <location href="rpm-with-invalid-chars-1-1.fc33.noarch.rpm"/>
+        <format>
+            <rpm:license>Public Domain</rpm:license>
+            <rpm:vendor></rpm:vendor>
+            <rpm:group>Unspecified</rpm:group>
+            <rpm:buildhost>localhost</rpm:buildhost>
+            <rpm:sourcerpm>rpm-with-invalid-chars-1-1.fc33.src.rpm</rpm:sourcerpm>
+            <rpm:header-range start="4504" end="6445"/>
+            <rpm:provides>
+                <rpm:entry name="rpm-with-invalid-chars" flags="EQ" epoch="0" ver="1" rel="1.fc33"/>
+            </rpm:provides>
+        </format>
+    </package>
+    <package type="rpm">
+        <name>rpm-with-non-ascii</name>
+        <arch>noarch</arch>
+        <version epoch="0" ver="1" rel="1.fc33"/>
+        <checksum type="sha256" pkgid="YES">957de8a966af8fe8e55102489099d8b20bbecc23954c8c2bd88fb59625260393</checksum>
+        <summary>An RPM file with non-ascii characters in its metadata.</summary>
+        <description>This file contains unicode characters and should be encoded as UTF-8. The
+following code points are all outside the "Basic Latin (ASCII)" code point
+block:
+
+* U+0080: 
+* U+0100: Ā
+* U+0180: ƀ
+* U+0250: ɐ
+* U+02B0: ʰ
+* U+0041 0x0300: À
+* U+0370: Ͱ
+
+See: http://www.unicode.org/charts/</description>
+        <packager></packager>
+        <url>https://github.com/dralley/rpmrepo_rs/</url>
+        <time file="1625930845" build="1615686425"/>
+        <size package="6433" installed="0" archive="124"/>
+        <location href="rpm-with-non-ascii-1-1.fc33.noarch.rpm"/>
+        <format>
+            <rpm:license>Public Domain</rpm:license>
+            <rpm:vendor></rpm:vendor>
+            <rpm:group>Unspecified</rpm:group>
+            <rpm:buildhost>localhost</rpm:buildhost>
+            <rpm:sourcerpm>rpm-with-non-ascii-1-1.fc33.src.rpm</rpm:sourcerpm>
+            <rpm:header-range start="4504" end="6389"/>
+            <rpm:provides>
+                <rpm:entry name="rpm-with-non-ascii" flags="EQ" epoch="0" ver="1" rel="1.fc33"/>
+            </rpm:provides>
+        </format>
+    </package>
+</metadata>

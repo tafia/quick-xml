@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<office:document xmlns:officeooo="http://openoffice.org/2009/office" xmlns:css3t="http://www.w3.org/TR/css3-text/" xmlns:grddl="http://www.w3.org/2003/g/data-view#" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:formx="urn:openoffice:names:experimental:ooxml-odf-interop:xmlns:form:1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rpt="http://openoffice.org/2005/report" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:drawooo="http://openoffice.org/2010/draw" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:field="urn:openoffice:names:experimental:ooo-ms-interop:xmlns:field:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:xforms="http://www.w3.org/2002/xforms" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:meta><meta:creation-date>2022-06-28T20:26:31.048176115</meta:creation-date><dc:date>2022-06-28T20:27:13.444218412</dc:date><meta:editing-duration>PT43S</meta:editing-duration><meta:editing-cycles>1</meta:editing-cycles><meta:document-statistic meta:table-count="0" meta:image-count="0" meta:object-count="0" meta:page-count="4" meta:paragraph-count="154" meta:word-count="1319" meta:character-count="6916" meta:non-whitespace-character-count="5186"/><meta:generator>LibreOffice/7.2.7.2$Linux_X86_64 LibreOffice_project/20$Build-2</meta:generator></office:meta>
+ <office:settings>
+  <config:config-item-set config:name="ooo:view-settings">
+   <config:config-item config:name="ViewAreaTop" config:type="long">0</config:config-item>
+   <config:config-item config:name="ViewAreaLeft" config:type="long">0</config:config-item>
+   <config:config-item config:name="ViewAreaWidth" config:type="long">49214</config:config-item>
+   <config:config-item config:name="ViewAreaHeight" config:type="long">22915</config:config-item>
+   <config:config-item config:name="ShowRedlineChanges" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="InBrowseMode" config:type="boolean">false</config:config-item>
+   <config:config-item-map-indexed config:name="Views">
+    <config:config-item-map-entry>
+     <config:config-item config:name="ViewId" config:type="string">view2</config:config-item>
+     <config:config-item config:name="ViewLeft" config:type="long">15812</config:config-item>
+     <config:config-item config:name="ViewTop" config:type="long">2501</config:config-item>
+     <config:config-item config:name="VisibleLeft" config:type="long">0</config:config-item>
+     <config:config-item config:name="VisibleTop" config:type="long">0</config:config-item>
+     <config:config-item config:name="VisibleRight" config:type="long">49213</config:config-item>
+     <config:config-item config:name="VisibleBottom" config:type="long">22913</config:config-item>
+     <config:config-item config:name="ZoomType" config:type="short">0</config:config-item>
+     <config:config-item config:name="ViewLayoutColumns" config:type="short">1</config:config-item>
+     <config:config-item config:name="ViewLayoutBookMode" config:type="boolean">false</config:config-item>
+     <config:config-item config:name="ZoomFactor" config:type="short">100</config:config-item>
+     <config:config-item config:name="IsSelectedFrame" config:type="boolean">false</config:config-item>
+     <config:config-item config:name="KeepRatio" config:type="boolean">false</config:config-item>
+     <config:config-item config:name="AnchoredTextOverflowLegacy" config:type="boolean">false</config:config-item>
+    </config:config-item-map-entry>
+   </config:config-item-map-indexed>
+  </config:config-item-set>
+  <config:config-item-set config:name="ooo:configuration-settings">
+   <config:config-item config:name="PrintProspect" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintReversed" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintSingleJobs" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintLeftPages" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintTables" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintControls" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintPageBackground" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintDrawings" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintBlackFonts" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintAnnotationMode" config:type="short">0</config:config-item>
+   <config:config-item config:name="PrintTextPlaceholder" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ProtectFields" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ProtectBookmarks" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="EmptyDbFieldHidesPara" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="DisableOffPagePositioning" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="SubtractFlysAnchoredAtFlys" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PropLineSpacingShrinksFirstLine" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="ApplyParagraphMarkFormatToNumbering" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="GutterAtTop" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="TreatSingleColumnBreakAsPageBreak" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="EmbedSystemFonts" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="EmbedComplexScriptFonts" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="EmbedAsianScriptFonts" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="EmbedLatinScriptFonts" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="EmbedOnlyUsedFonts" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ContinuousEndnotes" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="EmbedFonts" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ClippedPictures" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="FloattableNomargins" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="UnbreakableNumberings" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="HeaderSpacingBelowLastPara" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AllowPrintJobCancel" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="UseOldPrinterMetrics" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="TabOverMargin" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="TabsRelativeToIndent" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="UseOldNumbering" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="InvertBorderSpacing" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintPaperFromSetup" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="UpdateFromTemplate" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="CurrentDatabaseCommandType" config:type="int">0</config:config-item>
+   <config:config-item config:name="LinkUpdateMode" config:type="short">1</config:config-item>
+   <config:config-item config:name="AddParaSpacingToTableCells" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="FrameAutowidthWithMorePara" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="CurrentDatabaseCommand" config:type="string"/>
+   <config:config-item config:name="PrinterIndependentLayout" config:type="string">high-resolution</config:config-item>
+   <config:config-item config:name="ApplyUserData" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrintFaxName" config:type="string"/>
+   <config:config-item config:name="CurrentDatabaseDataSource" config:type="string"/>
+   <config:config-item config:name="ClipAsCharacterAnchoredWriterFlyFrames" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="IsKernAsianPunctuation" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="SaveThumbnail" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="UseFormerTextWrapping" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AddExternalLeading" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="AddParaTableSpacing" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="StylesNoDefault" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ChartAutoUpdate" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="PrinterSetup" config:type="base64Binary"/>
+   <config:config-item config:name="AddParaTableSpacingAtStart" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="Rsid" config:type="int">426418</config:config-item>
+   <config:config-item config:name="EmbeddedDatabaseName" config:type="string"/>
+   <config:config-item config:name="FieldAutoUpdate" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="OutlineLevelYieldsNumbering" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AlignTabStopPosition" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="CharacterCompressionType" config:type="short">0</config:config-item>
+   <config:config-item config:name="PrinterName" config:type="string"/>
+   <config:config-item config:name="SaveGlobalDocumentLinks" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrinterPaperFromSetup" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="UseFormerLineSpacing" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AddParaLineSpacingToTableCells" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="UseFormerObjectPositioning" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintGraphics" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="SurroundTextWrapSmall" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ConsiderTextWrapOnObjPos" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="MsWordCompTrailingBlanks" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="TabAtLeftIndentForParagraphsInList" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintRightPages" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="TabOverSpacing" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="IgnoreFirstLineIndentInNumbering" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="RedlineProtectionKey" config:type="base64Binary"/>
+   <config:config-item config:name="DoNotJustifyLinesWithManualBreak" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintProspectRTL" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="PrintEmptyPages" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="DoNotResetParaAttrsForNumFont" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AddFrameOffsets" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="IgnoreTabsAndBlanksForLineCalculation" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="LoadReadonly" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="DoNotCaptureDrawObjsOnPage" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="AddVerticalFrameOffsets" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="UnxForceZeroExtLeading" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="IsLabelDocument" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="TableRowKeep" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="RsidRoot" config:type="int">340756</config:config-item>
+   <config:config-item config:name="PrintHiddenText" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="ProtectForm" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="MsWordCompMinLineHeightByFly" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="BackgroundParaOverDrawings" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="SaveVersionOnClose" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="MathBaselineAlignment" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="SmallCapsPercentage66" config:type="boolean">false</config:config-item>
+   <config:config-item config:name="CollapseEmptyCellPara" config:type="boolean">true</config:config-item>
+   <config:config-item config:name="TabOverflow" config:type="boolean">true</config:config-item>
+  </config:config-item-set>
+ </office:settings>
+ <office:scripts>
+  <office:script script:language="ooo:Basic">
+   <ooo:libraries xmlns:ooo="http://openoffice.org/2004/office" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+  </office:script>
+ </office:scripts>
+ <office:font-face-decls>
+  <style:font-face style:name="Droid Sans Devanagari" svg:font-family="&apos;Droid Sans Devanagari&apos;" style:font-family-generic="system" style:font-pitch="variable"/>
+  <style:font-face style:name="Droid Sans Devanagari1" svg:font-family="&apos;Droid Sans Devanagari&apos;" style:font-family-generic="swiss"/>
+  <style:font-face style:name="Liberation Mono" svg:font-family="&apos;Liberation Mono&apos;" style:font-family-generic="modern" style:font-pitch="fixed"/>
+  <style:font-face style:name="Liberation Sans" svg:font-family="&apos;Liberation Sans&apos;" style:font-family-generic="swiss" style:font-pitch="variable"/>
+  <style:font-face style:name="Liberation Serif" svg:font-family="&apos;Liberation Serif&apos;" style:font-family-generic="roman" style:font-pitch="variable"/>
+  <style:font-face style:name="Noto Sans CJK SC" svg:font-family="&apos;Noto Sans CJK SC&apos;" style:font-family-generic="system" style:font-pitch="variable"/>
+  <style:font-face style:name="Noto Sans Mono CJK SC" svg:font-family="&apos;Noto Sans Mono CJK SC&apos;" style:font-family-generic="modern" style:font-pitch="fixed"/>
+ </office:font-face-decls>
+ <office:styles>
+  <style:default-style style:family="graphic">
+   <style:graphic-properties svg:stroke-color="#3465a4" draw:fill-color="#729fcf" fo:wrap-option="no-wrap" draw:shadow-offset-x="0.1181in" draw:shadow-offset-y="0.1181in" draw:start-line-spacing-horizontal="0.1114in" draw:start-line-spacing-vertical="0.1114in" draw:end-line-spacing-horizontal="0.1114in" draw:end-line-spacing-vertical="0.1114in" style:flow-with-text="false"/>
+   <style:paragraph-properties style:text-autospace="ideograph-alpha" style:line-break="strict" style:font-independent-line-spacing="false">
+    <style:tab-stops/>
+   </style:paragraph-properties>
+   <style:text-properties style:use-window-font-color="true" loext:opacity="0%" style:font-name="Liberation Serif" fo:font-size="12pt" fo:language="en" fo:country="US" style:letter-kerning="true" style:font-name-asian="Noto Sans CJK SC" style:font-size-asian="10.5pt" style:language-asian="zh" style:country-asian="CN" style:font-name-complex="Droid Sans Devanagari" style:font-size-complex="12pt" style:language-complex="hi" style:country-complex="IN"/>
+  </style:default-style>
+  <style:default-style style:family="paragraph">
+   <style:paragraph-properties fo:orphans="2" fo:widows="2" fo:hyphenation-ladder-count="no-limit" style:text-autospace="ideograph-alpha" style:punctuation-wrap="hanging" style:line-break="strict" style:tab-stop-distance="0.4925in" style:writing-mode="page"/>
+   <style:text-properties style:use-window-font-color="true" loext:opacity="0%" style:font-name="Liberation Serif" fo:font-size="12pt" fo:language="en" fo:country="US" style:letter-kerning="true" style:font-name-asian="Noto Sans CJK SC" style:font-size-asian="10.5pt" style:language-asian="zh" style:country-asian="CN" style:font-name-complex="Droid Sans Devanagari" style:font-size-complex="12pt" style:language-complex="hi" style:country-complex="IN" fo:hyphenate="false" fo:hyphenation-remain-char-count="2" fo:hyphenation-push-char-count="2" loext:hyphenation-no-caps="false"/>
+  </style:default-style>
+  <style:default-style style:family="table">
+   <style:table-properties table:border-model="collapsing"/>
+  </style:default-style>
+  <style:default-style style:family="table-row">
+   <style:table-row-properties fo:keep-together="auto"/>
+  </style:default-style>
+  <style:style style:name="Standard" style:family="paragraph" style:class="text"/>
+  <style:style style:name="Heading" style:family="paragraph" style:parent-style-name="Standard" style:next-style-name="Text_20_body" style:class="text">
+   <style:paragraph-properties fo:margin-top="0.1665in" fo:margin-bottom="0.0835in" style:contextual-spacing="false" fo:keep-with-next="always"/>
+   <style:text-properties style:font-name="Liberation Sans" fo:font-family="&apos;Liberation Sans&apos;" style:font-family-generic="swiss" style:font-pitch="variable" fo:font-size="14pt" style:font-name-asian="Noto Sans CJK SC" style:font-family-asian="&apos;Noto Sans CJK SC&apos;" style:font-family-generic-asian="system" style:font-pitch-asian="variable" style:font-size-asian="14pt" style:font-name-complex="Droid Sans Devanagari" style:font-family-complex="&apos;Droid Sans Devanagari&apos;" style:font-family-generic-complex="system" style:font-pitch-complex="variable" style:font-size-complex="14pt"/>
+  </style:style>
+  <style:style style:name="Text_20_body" style:display-name="Text body" style:family="paragraph" style:parent-style-name="Standard" style:class="text">
+   <style:paragraph-properties fo:margin-top="0in" fo:margin-bottom="0.0972in" style:contextual-spacing="false" fo:line-height="115%"/>
+  </style:style>
+  <style:style style:name="List" style:family="paragraph" style:parent-style-name="Text_20_body" style:class="list">
+   <style:text-properties style:font-size-asian="12pt" style:font-name-complex="Droid Sans Devanagari1" style:font-family-complex="&apos;Droid Sans Devanagari&apos;" style:font-family-generic-complex="swiss"/>
+  </style:style>
+  <style:style style:name="Caption" style:family="paragraph" style:parent-style-name="Standard" style:class="extra">
+   <style:paragraph-properties fo:margin-top="0.0835in" fo:margin-bottom="0.0835in" style:contextual-spacing="false" text:number-lines="false" text:line-number="0"/>
+   <style:text-properties fo:font-size="12pt" fo:font-style="italic" style:font-size-asian="12pt" style:font-style-asian="italic" style:font-name-complex="Droid Sans Devanagari1" style:font-family-complex="&apos;Droid Sans Devanagari&apos;" style:font-family-generic-complex="swiss" style:font-size-complex="12pt" style:font-style-complex="italic"/>
+  </style:style>
+  <style:style style:name="Index" style:family="paragraph" style:parent-style-name="Standard" style:class="index">
+   <style:paragraph-properties text:number-lines="false" text:line-number="0"/>
+   <style:text-properties fo:language="zxx" fo:country="none" style:font-size-asian="12pt" style:language-asian="zxx" style:country-asian="none" style:font-name-complex="Droid Sans Devanagari1" style:font-family-complex="&apos;Droid Sans Devanagari&apos;" style:font-family-generic-complex="swiss" style:language-complex="zxx" style:country-complex="none"/>
+  </style:style>
+  <style:style style:name="Preformatted_20_Text" style:display-name="Preformatted Text" style:family="paragraph" style:parent-style-name="Standard" style:class="html">
+   <style:paragraph-properties fo:margin-top="0in" fo:margin-bottom="0in" style:contextual-spacing="false"/>
+   <style:text-properties style:font-name="Liberation Mono" fo:font-family="&apos;Liberation Mono&apos;" style:font-family-generic="modern" style:font-pitch="fixed" fo:font-size="10pt" style:font-name-asian="Noto Sans Mono CJK SC" style:font-family-asian="&apos;Noto Sans Mono CJK SC&apos;" style:font-family-generic-asian="modern" style:font-pitch-asian="fixed" style:font-size-asian="10pt" style:font-name-complex="Liberation Mono" style:font-family-complex="&apos;Liberation Mono&apos;" style:font-family-generic-complex="modern" style:font-pitch-complex="fixed" style:font-size-complex="10pt"/>
+  </style:style>
+  <text:outline-style style:name="Outline">
+   <text:outline-level-style text:level="1" loext:num-list-format="%1%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="2" loext:num-list-format="%2%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="3" loext:num-list-format="%3%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="4" loext:num-list-format="%4%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="5" loext:num-list-format="%5%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="6" loext:num-list-format="%6%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="7" loext:num-list-format="%7%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="8" loext:num-list-format="%8%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="9" loext:num-list-format="%9%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+   <text:outline-level-style text:level="10" loext:num-list-format="%10%" style:num-format="">
+    <style:list-level-properties text:list-level-position-and-space-mode="label-alignment">
+     <style:list-level-label-alignment text:label-followed-by="listtab"/>
+    </style:list-level-properties>
+   </text:outline-level-style>
+  </text:outline-style>
+  <text:notes-configuration text:note-class="footnote" style:num-format="1" text:start-value="0" text:footnotes-position="page" text:start-numbering-at="document"/>
+  <text:notes-configuration text:note-class="endnote" style:num-format="i" text:start-value="0"/>
+  <text:linenumbering-configuration text:number-lines="false" text:offset="0.1965in" style:num-format="1" text:number-position="left" text:increment="5"/>
+ </office:styles>
+ <office:automatic-styles>
+  <style:style style:name="P1" style:family="paragraph" style:parent-style-name="Preformatted_20_Text">
+   <style:paragraph-properties fo:margin-top="0in" fo:margin-bottom="0.1965in" style:contextual-spacing="false"/>
+  </style:style>
+  <style:page-layout style:name="pm1">
+   <style:page-layout-properties fo:page-width="8.5in" fo:page-height="11in" style:num-format="1" style:print-orientation="portrait" fo:margin-top="0.7874in" fo:margin-bottom="0.7874in" fo:margin-left="0.7874in" fo:margin-right="0.7874in" style:writing-mode="lr-tb" style:layout-grid-color="#c0c0c0" style:layout-grid-lines="20" style:layout-grid-base-height="0.278in" style:layout-grid-ruby-height="0.139in" style:layout-grid-mode="none" style:layout-grid-ruby-below="false" style:layout-grid-print="false" style:layout-grid-display="false" style:footnote-max-height="0in" loext:margin-gutter="0in">
+    <style:footnote-sep style:width="0.0071in" style:distance-before-sep="0.0398in" style:distance-after-sep="0.0398in" style:line-style="solid" style:adjustment="left" style:rel-width="25%" style:color="#000000"/>
+   </style:page-layout-properties>
+   <style:header-style/>
+   <style:footer-style/>
+  </style:page-layout>
+  <style:style style:name="dp1" style:family="drawing-page">
+   <style:drawing-page-properties draw:background-size="full"/>
+  </style:style>
+ </office:automatic-styles>
+ <office:master-styles>
+  <style:master-page style:name="Standard" style:page-layout-name="pm1" draw:style-name="dp1"/>
+ </office:master-styles>
+ <office:body>
+  <office:text text:use-soft-page-breaks="true">
+   <text:sequence-decls>
+    <text:sequence-decl text:display-outline-level="0" text:name="Illustration"/>
+    <text:sequence-decl text:display-outline-level="0" text:name="Table"/>
+    <text:sequence-decl text:display-outline-level="0" text:name="Text"/>
+    <text:sequence-decl text:display-outline-level="0" text:name="Drawing"/>
+    <text:sequence-decl text:display-outline-level="0" text:name="Figure"/>
+   </text:sequence-decls>
+   <text:p text:style-name="Text_20_body">Original by Markus Kuhn, adapted for HTML by Martin Dürst.</text:p>
+   <text:p text:style-name="Preformatted_20_Text">UTF-8 encoded sample plain-text file</text:p>
+   <text:p text:style-name="Preformatted_20_Text">‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Markus Kuhn [ˈmaʳkʊs kuːn] &lt;mkuhn@acm.org&gt; — 1999-08-20</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">The ASCII compatible UTF-8 encoding of ISO 10646 and Unicode</text:p>
+   <text:p text:style-name="Preformatted_20_Text">plain-text files is defined in RFC 2279 and in ISO 10646-1 Annex R.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Using Unicode/UTF-8, you can write in emails and source code things such as</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Mathematics and Sciences:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>∮ E⋅da = Q, <text:s/>n → ∞, ∑ f(i) = ∏ g(i), ∀x∈ℝ: ⌈x⌉ = −⌊−x⌋, α ∧ ¬β = ¬(¬α ∨ β),</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ℕ ⊆ ℕ₀ ⊂ ℤ ⊂ ℚ ⊂ ℝ ⊂ ℂ, ⊥ &lt; a ≠ b ≡ c ≤ d ≪ ⊤ ⇒ (A ⇔ B),</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>2H₂ + O₂ ⇌ 2H₂O, R = 4.7 kΩ, ⌀ 200 mm</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Linguistics and dictionaries:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ði ıntəˈnæʃənəl fəˈnɛtık əsoʊsiˈeıʃn</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Y [ˈʏpsilɔn], Yen [jɛn], Yoga [ˈjoːgɑ]</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">APL:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>((V⍳V)=⍳⍴V)/V←,V <text:s text:c="3"/>⌷←⍳→⍴∆∇⊃‾⍎⍕⌈</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Nicer typography in plain text files:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>╔══════════════════════════════════════════╗</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• ‘single’ and “double” quotes <text:s text:c="8"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• Curly apostrophes: “We’ve been here” ║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• Latin-1 apostrophe and accents: &apos;´` <text:s/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• ‚deutsche‘ „Anführungszeichen“ <text:s text:c="6"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• †, ‡, ‰, •, 3–4, —, −5/+5, ™, … <text:s text:c="5"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="41"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• ASCII safety test: 1lI|, 0OD, 8B <text:s text:c="4"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="21"/>╭─────────╮ <text:s text:c="8"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="2"/>• the euro symbol: │ 14.95 € │ <text:s text:c="8"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║ <text:s text:c="21"/>╰─────────╯ <text:s text:c="8"/>║</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>╚══════════════════════════════════════════╝</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Greek (in Polytonic):</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>The Greek anthem:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Σὲ γνωρίζω ἀπὸ τὴν κόψη</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τοῦ σπαθιοῦ τὴν τρομερή,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>σὲ γνωρίζω ἀπὸ τὴν ὄψη</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ποὺ μὲ βία μετράει τὴ γῆ.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:soft-page-break/></text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>᾿Απ᾿ τὰ κόκκαλα βγαλμένη</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τῶν ῾Ελλήνων τὰ ἱερά</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>καὶ σὰν πρῶτα ἀνδρειωμένη</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>χαῖρε, ὦ χαῖρε, ᾿Ελευθεριά!</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>From a speech of Demosthenes in the 4th century BC:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Οὐχὶ ταὐτὰ παρίσταταί μοι γιγνώσκειν, ὦ ἄνδρες ᾿Αθηναῖοι,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ὅταν τ᾿ εἰς τὰ πράγματα ἀποβλέψω καὶ ὅταν πρὸς τοὺς</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>λόγους οὓς ἀκούω· τοὺς μὲν γὰρ λόγους περὶ τοῦ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τιμωρήσασθαι Φίλιππον ὁρῶ γιγνομένους, τὰ δὲ πράγματ᾿ </text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>εἰς τοῦτο προήκοντα, <text:s/>ὥσθ᾿ ὅπως μὴ πεισόμεθ᾿ αὐτοὶ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>πρότερον κακῶς σκέψασθαι δέον. οὐδέν οὖν ἄλλο μοι δοκοῦσιν</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>οἱ τὰ τοιαῦτα λέγοντες ἢ τὴν ὑπόθεσιν, περὶ ἧς βουλεύεσθαι,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>οὐχὶ τὴν οὖσαν παριστάντες ὑμῖν ἁμαρτάνειν. ἐγὼ δέ, ὅτι μέν</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ποτ᾿ ἐξῆν τῇ πόλει καὶ τὰ αὑτῆς ἔχειν ἀσφαλῶς καὶ Φίλιππον</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τιμωρήσασθαι, καὶ μάλ᾿ ἀκριβῶς οἶδα· ἐπ᾿ ἐμοῦ γάρ, οὐ πάλαι</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>γέγονεν ταῦτ᾿ ἀμφότερα· νῦν μέντοι πέπεισμαι τοῦθ᾿ ἱκανὸν</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>προλαβεῖν ἡμῖν εἶναι τὴν πρώτην, ὅπως τοὺς συμμάχους</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>σώσομεν. ἐὰν γὰρ τοῦτο βεβαίως ὑπάρξῃ, τότε καὶ περὶ τοῦ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τίνα τιμωρήσεταί τις καὶ ὃν τρόπον ἐξέσται σκοπεῖν· πρὶν δὲ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τὴν ἀρχὴν ὀρθῶς ὑποθέσθαι, μάταιον ἡγοῦμαι περὶ τῆς</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>τελευτῆς ὁντινοῦν ποιεῖσθαι λόγον.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Δημοσθένους, Γ´ ᾿Ολυνθιακὸς</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Georgian:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>From a Unicode conference invitation:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>გთხოვთ ახლავე გაიაროთ რეგისტრაცია Unicode-ის მეათე საერთაშორისო</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>კონფერენციაზე დასასწრებად, რომელიც გაიმართება 10-12 მარტს,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ქ. მაინცში, გერმანიაში. კონფერენცია შეჰკრებს ერთად მსოფლიოს</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ექსპერტებს ისეთ დარგებში როგორიცაა ინტერნეტი და Unicode-ი,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ინტერნაციონალიზაცია და ლოკალიზაცია, Unicode-ის გამოყენება</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ოპერაციულ სისტემებსა, და გამოყენებით პროგრამებში, შრიფტებში,</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ტექსტების დამუშავებასა და მრავალენოვან კომპიუტერულ სისტემებში.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Russian:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>From a Unicode conference invitation:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Зарегистрируйтесь сейчас на Десятую Международную Конференцию по</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Unicode, которая состоится 10-12 марта 1997 года в Майнце в Германии.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Конференция соберет широкий круг экспертов по <text:s/>вопросам глобального</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Интернета и Unicode, локализации и интернационализации, воплощению и</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>применению Unicode в различных операционных системах и программных</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>приложениях, шрифтах, верстке и многоязычных компьютерных системах.</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Thai (UCS Level 2):</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Excerpt from a poetry on The Romance of The Three Kingdoms (a Chinese</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>classic &apos;San Gua&apos;):</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>[----------------------------|------------------------]</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="4"/>๏ แผ่นดินฮั่นเสื่อมโทรมแสนสังเวช <text:s/>พระปกเกศกองบู๊กู้ขึ้นใหม่</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>สิบสองกษัตริย์ก่อนหน้าแลถัดไป <text:s text:c="6"/>สององค์ไซร้โง่เขลาเบาปัญญา</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="4"/>ทรงนับถือขันทีเป็นที่พึ่ง <text:s text:c="10"/>บ้านเมืองจึงวิปริตเป็นนักหนา</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:soft-page-break/><text:s text:c="2"/>โฮจิ๋นเรียกทัพทั่วหัวเมืองมา <text:s text:c="8"/>หมายจะฆ่ามดชั่วตัวสำคัญ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="4"/>เหมือนขับไสไล่เสือจากเคหา <text:s text:c="5"/>รับหมาป่าเข้ามาเลยอาสัญ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ฝ่ายอ้องอุ้นยุแยกให้แตกกัน <text:s text:c="9"/>ใช้สาวนั้นเป็นชนวนชื่นชวนใจ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="4"/>พลันลิฉุยกุยกีกลับก่อเหตุ <text:s text:c="9"/>ช่างอาเพศจริงหนาฟ้าร้องไห้</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ต้องรบราฆ่าฟันจนบรรลัย <text:s text:c="10"/>ฤๅหาใครค้ำชูกู้บรรลังก์ ฯ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>(The above is a two-column text. If combining characters are handled</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>correctly, the lines of the second column should be aligned with the</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>| character above.)</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Ethiopian:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Proverbs in the Amharic language:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ሰማይ አይታረስ ንጉሥ አይከሰስ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ብላ ካለኝ እንደአባቴ በቆመጠኝ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ጌጥ ያለቤቱ ቁምጥና ነው።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ደሀ በሕልሙ ቅቤ ባይጠጣ ንጣት በገደለው።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>የአፍ ወለምታ በቅቤ አይታሽም።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>አይጥ በበላ ዳዋ ተመታ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ሲተረጉሙ ይደረግሙ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ቀስ በቀስ፥ ዕንቁላል በእግሩ ይሄዳል።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ድር ቢያብር አንበሳ ያስር።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ሰው እንደቤቱ እንጅ እንደ ጉረቤቱ አይተዳደርም።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>እግዜር የከፈተውን ጉሮሮ ሳይዘጋው አይድርም።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>የጎረቤት ሌባ፥ ቢያዩት ይስቅ ባያዩት ያጠልቅ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ሥራ ከመፍታት ልጄን ላፋታት።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ዓባይ ማደሪያ የለው፥ ግንድ ይዞ ይዞራል።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>የእስላም አገሩ መካ የአሞራ አገሩ ዋርካ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ተንጋሎ ቢተፉ ተመልሶ ባፉ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ወዳጅህ ማር ቢሆን ጨርስህ አትላሰው።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>እግርህን በፍራሽህ ልክ ዘርጋ።</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Runes:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ᚻᛖ ᚳᚹᚫᚦ ᚦᚫᛏ ᚻᛖ ᛒᚢᛞᛖ ᚩᚾ ᚦᚫᛗ ᛚᚪᚾᛞᛖ ᚾᚩᚱᚦᚹᛖᚪᚱᛞᚢᛗ ᚹᛁᚦ ᚦᚪ ᚹᛖᛥᚫ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>(Old English, which transcribed into Latin reads &apos;He cwaeth that he</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>bude thaem lande northweardum with tha Westsae.&apos; and means &apos;He said</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>that he lived in the northern land near the Western Sea.&apos;)</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Braille:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡌⠁⠧⠑ ⠼⠁⠒ <text:s/>⡍⠜⠇⠑⠹⠰⠎ ⡣⠕⠌</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡍⠜⠇⠑⠹ ⠺⠁⠎ ⠙⠑⠁⠙⠒ ⠞⠕ ⠃⠑⠛⠔ ⠺⠊⠹⠲ ⡹⠻⠑ ⠊⠎ ⠝⠕ ⠙⠳⠃⠞</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠱⠁⠞⠑⠧⠻ ⠁⠃⠳⠞ ⠹⠁⠞⠲ ⡹⠑ ⠗⠑⠛⠊⠌⠻ ⠕⠋ ⠙⠊⠎ ⠃⠥⠗⠊⠁⠇ ⠺⠁⠎</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠎⠊⠛⠝⠫ ⠃⠹ ⠹⠑ ⠊⠇⠻⠛⠹⠍⠁⠝⠂ ⠹⠑ ⠊⠇⠻⠅⠂ ⠹⠑ ⠥⠝⠙⠻⠞⠁⠅⠻⠂</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠁⠝⠙ ⠹⠑ ⠡⠊⠑⠋ ⠍⠳⠗⠝⠻⠲ ⡎⠊⠗⠕⠕⠛⠑ ⠎⠊⠛⠝⠫ ⠊⠞⠲ ⡁⠝⠙</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡎⠊⠗⠕⠕⠛⠑⠰⠎ ⠝⠁⠍⠑ ⠺⠁⠎ ⠛⠕⠕⠙ ⠥⠏⠕⠝ ⠰⡡⠁⠝⠛⠑⠂ ⠋⠕⠗ ⠁⠝⠹⠹⠔⠛ ⠙⠑ </text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠡⠕⠎⠑ ⠞⠕ ⠏⠥⠞ ⠙⠊⠎ ⠙⠁⠝⠙ ⠞⠕⠲</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡕⠇⠙ ⡍⠜⠇⠑⠹ ⠺⠁⠎ ⠁⠎ ⠙⠑⠁⠙ ⠁⠎ ⠁ ⠙⠕⠕⠗⠤⠝⠁⠊⠇⠲</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡍⠔⠙⠖ ⡊ ⠙⠕⠝⠰⠞ ⠍⠑⠁⠝ ⠞⠕ ⠎⠁⠹ ⠹⠁⠞ ⡊ ⠅⠝⠪⠂ ⠕⠋ ⠍⠹</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠪⠝ ⠅⠝⠪⠇⠫⠛⠑⠂ ⠱⠁⠞ ⠹⠻⠑ ⠊⠎ ⠏⠜⠞⠊⠊⠥⠇⠜⠇⠹ ⠙⠑⠁⠙ ⠁⠃⠳⠞</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠁ ⠙⠕⠕⠗⠤⠝⠁⠊⠇⠲ ⡊ ⠍⠊⠣⠞ ⠙⠁⠧⠑ ⠃⠑⠲ ⠔⠊⠇⠔⠫⠂ ⠍⠹⠎⠑⠇⠋⠂ ⠞⠕</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠗⠑⠛⠜⠙ ⠁ ⠊⠕⠋⠋⠔⠤⠝⠁⠊⠇ ⠁⠎ ⠹⠑ ⠙⠑⠁⠙⠑⠌ ⠏⠊⠑⠊⠑ ⠕⠋ ⠊⠗⠕⠝⠍⠕⠝⠛⠻⠹ </text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠔ ⠹⠑ ⠞⠗⠁⠙⠑⠲ ⡃⠥⠞ ⠹⠑ ⠺⠊⠎⠙⠕⠍ ⠕⠋ ⠳⠗ ⠁⠝⠊⠑⠌⠕⠗⠎ </text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:soft-page-break/><text:s text:c="2"/>⠊⠎ ⠔ ⠹⠑ ⠎⠊⠍⠊⠇⠑⠆ ⠁⠝⠙ ⠍⠹ ⠥⠝⠙⠁⠇⠇⠪⠫ ⠙⠁⠝⠙⠎</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠩⠁⠇⠇ ⠝⠕⠞ ⠙⠊⠌⠥⠗⠃ ⠊⠞⠂ ⠕⠗ ⠹⠑ ⡊⠳⠝⠞⠗⠹⠰⠎ ⠙⠕⠝⠑ ⠋⠕⠗⠲ ⡹⠳</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⠺⠊⠇⠇ ⠹⠻⠑⠋⠕⠗⠑ ⠏⠻⠍⠊⠞ ⠍⠑ ⠞⠕ ⠗⠑⠏⠑⠁⠞⠂ ⠑⠍⠏⠙⠁⠞⠊⠊⠁⠇⠇⠹⠂ ⠹⠁⠞</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>⡍⠜⠇⠑⠹ ⠺⠁⠎ ⠁⠎ ⠙⠑⠁⠙ ⠁⠎ ⠁ ⠙⠕⠕⠗⠤⠝⠁⠊⠇⠲</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>(The first couple of paragraphs of &quot;A Christmas Carol&quot; by Dickens)</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Compact font selection example text:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>ABCDEFGHIJKLMNOPQRSTUVWXYZ /0123456789</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>abcdefghijklmnopqrstuvwxyz £©µÀÆÖÞßéöÿ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>–—‘“”„†•…‰™œŠŸž€ ΑΒΓΔΩαβγδω АБВГДабвгд</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>∀∂∈ℝ∧∪≡∞ ↑↗↨↻⇣ ┐┼╔╘░►☺♀ ﬁ�⑀₂ἠḂӥẄɐː⍎אԱა</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Greetings in various languages:</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>Hello world, Καλημέρα κόσμε, コンニチハ</text:p>
+   <text:p text:style-name="Preformatted_20_Text"/>
+   <text:p text:style-name="Preformatted_20_Text">Box drawing alignment tests: <text:s text:c="41"/>█</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="70"/>▉</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>╔══╦══╗ <text:s/>┌──┬──┐ <text:s/>╭──┬──╮ <text:s/>╭──┬──╮ <text:s/>┏━━┳━━┓ <text:s/>┎┒┏┑ <text:s text:c="2"/>╷ <text:s/>╻ ┏┯┓ ┌┰┐ <text:s text:c="3"/>▊ ╱╲╱╲╳╳╳</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║┌─╨─┐║ <text:s/>│╔═╧═╗│ <text:s/>│╒═╪═╕│ <text:s/>│╓─╁─╖│ <text:s/>┃┌─╂─┐┃ <text:s/>┗╃╄┙ <text:s/>╶┼╴╺╋╸┠┼┨ ┝╋┥ <text:s text:c="3"/>▋ ╲╱╲╱╳╳╳</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║│╲ ╱│║ <text:s/>│║ <text:s text:c="2"/>║│ <text:s/>││ │ ││ <text:s/>│║ ┃ ║│ <text:s/>┃│ ╿ │┃ <text:s/>┍╅╆┓ <text:s text:c="2"/>╵ <text:s/>╹ ┗┷┛ └┸┘ <text:s text:c="3"/>▌ ╱╲╱╲╳╳╳</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>╠╡ ╳ ╞╣ <text:s/>├╢ <text:s text:c="2"/>╟┤ <text:s/>├┼─┼─┼┤ <text:s/>├╫─╂─╫┤ <text:s/>┣┿╾┼╼┿┫ <text:s/>┕┛┖┚ <text:s text:c="4"/>┌┄┄┐ ╎ ┏┅┅┓ ┋ ▍ ╲╱╲╱╳╳╳</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║│╱ ╲│║ <text:s/>│║ <text:s text:c="2"/>║│ <text:s/>││ │ ││ <text:s/>│║ ┃ ║│ <text:s/>┃│ ╽ │┃ <text:s/>░░▒▒▓▓██ ┊ <text:s/>┆ ╎ ╏ <text:s/>┇ ┋ ▎</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>║└─╥─┘║ <text:s/>│╚═╤═╝│ <text:s/>│╘═╪═╛│ <text:s/>│╙─╀─╜│ <text:s/>┃└─╂─┘┃ <text:s/>░░▒▒▓▓██ ┊ <text:s/>┆ ╎ ╏ <text:s/>┇ ┋ ▏</text:p>
+   <text:p text:style-name="Preformatted_20_Text"><text:s text:c="2"/>╚══╩══╝ <text:s/>└──┴──┘ <text:s/>╰──┴──╯ <text:s/>╰──┴──╯ <text:s/>┗━━┻━━┛ <text:s text:c="10"/>└╌╌┘ ╎ ┗╍╍┛ ┋ <text:s/>▁▂▃▄▅▆▇█</text:p>
+   <text:p text:style-name="P1"/>
+   <text:p text:style-name="Standard"/>
+  </office:text>
+ </office:body>
+</office:document>
