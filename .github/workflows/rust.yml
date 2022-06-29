@@ -3,7 +3,14 @@ name: Rust
 on: [push, pull_request]
 
 jobs:
-  build:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Check fmt
+      run: cargo fmt -- --check
+
+  test:
     strategy:
       matrix:
         platform: [ubuntu-latest, windows-latest]
@@ -15,13 +22,14 @@ jobs:
       RUSTFLAGS: -C instrument-coverage
 
     steps:
+    - uses: actions/checkout@v3
     - name: Install coverage reporter (llvm-tools-preview)
       if: runner.os == 'Linux'
       run: rustup component add llvm-tools-preview
     - name: Install coverage reporter (grcov)
       if: runner.os == 'Linux'
       run: cargo install grcov
-    - uses: actions/checkout@v1
+
     - name: Build
       run: cargo build
     - name: Build benchmarks
@@ -29,6 +37,9 @@ jobs:
     - name: Build benchmarks (compare)
       working-directory: compare
       run: cargo bench --no-run
+    - name: Run tests + benchmarks
+      run: cargo test --all-features --benches --tests
+
     - name: Run tests (no features)
       env:
         LLVM_PROFILE_FILE: coverage/no-features-%p-%m.profraw
@@ -67,6 +78,4 @@ jobs:
         flags: unittests
         verbose: true
       continue-on-error: true
-    - name: Check fmt
-      run: cargo fmt -- --check
 
