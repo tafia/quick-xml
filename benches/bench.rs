@@ -4,8 +4,8 @@ use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::Reader;
 
-static SAMPLE: &[u8] = include_bytes!("../tests/sample_rss.xml");
-static PLAYERS: &[u8] = include_bytes!("../tests/players.xml");
+static SAMPLE: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
+static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
 
 /// Benchmarks the `Reader::read_event` function with all XML well-formless
 /// checks disabled (with and without trimming content of #text nodes)
@@ -25,7 +25,7 @@ fn read_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -45,7 +45,7 @@ fn read_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         });
     });
     group.finish();
@@ -70,7 +70,7 @@ fn read_namespaced_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         });
     });
 
@@ -91,7 +91,7 @@ fn read_namespaced_event(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         });
     });
     group.finish();
@@ -117,19 +117,19 @@ fn bytes_text_unescaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
             assert_eq!(
                 nbtxt, 67661,
-                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+                "Overall length (in bytes) of all text contents of ./tests/documents/sample_rss.xml"
             );
 
             #[cfg(not(windows))]
             assert_eq!(
                 nbtxt, 66277,
-                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+                "Overall length (in bytes) of all text contents of ./tests/documents/sample_rss.xml"
             );
         });
     });
@@ -152,19 +152,19 @@ fn bytes_text_unescaped(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
 
             // Windows has \r\n instead of \n
             #[cfg(windows)]
             assert_eq!(
                 nbtxt, 50334,
-                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+                "Overall length (in bytes) of all text contents of ./tests/documents/sample_rss.xml"
             );
 
             #[cfg(not(windows))]
             assert_eq!(
                 nbtxt, 50261,
-                "Overall length (in bytes) of all text contents of ./tests/sample_rss.xml"
+                "Overall length (in bytes) of all text contents of ./tests/documents/sample_rss.xml"
             );
         });
     });
@@ -182,7 +182,7 @@ fn one_event(c: &mut Criterion) {
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false).check_comments(false);
             match r.read_event(&mut buf) {
-                Ok(Event::StartText(e)) => nbtxt += e.unescaped().unwrap().len(),
+                Ok(Event::StartText(e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 
