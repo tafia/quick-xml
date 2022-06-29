@@ -1,0 +1,437 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xmlns="http://linux.duke.edu/metadata/common" xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="12">
+<package type="rpm">
+  <name>apr-util-devel</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">328abd9aab5206b5ea74fdbcec38d146851a2fe831b3e5dcebdb23c31c4bdb15</checksum>
+  <summary>APR utility library development kit</summary>
+  <description>This package provides the support files which can be used to
+build applications using the APR utility library.  The mission
+of the Apache Portable Runtime (APR) is to provide a free
+library of C data structures and routines.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323552" build="1632323489"/>
+  <size package="86776" installed="324933" archive="330880"/>
+  <location href="Packages/a/apr-util-devel-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="25020"/>
+    <rpm:provides>
+      <rpm:entry name="pkgconfig(apr-util-1)" flags="EQ" epoch="0" ver="1.6.1"/>
+      <rpm:entry name="libtool(/usr/lib64/libaprutil-1.la)"/>
+      <rpm:entry name="apr-util-devel(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-devel" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="pkgconfig(apr-1)"/>
+      <rpm:entry name="pkgconfig"/>
+      <rpm:entry name="openldap-devel(x86-64)"/>
+      <rpm:entry name="libdb-devel(x86-64)"/>
+      <rpm:entry name="libaprutil-1.so.0()(64bit)"/>
+      <rpm:entry name="expat-devel(x86-64)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-devel(x86-64)"/>
+      <rpm:entry name="/usr/bin/pkg-config"/>
+      <rpm:entry name="/bin/sh"/>
+    </rpm:requires>
+    <file>/usr/bin/apu-1-config</file>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-bdb</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">bba430bebeec583e817372badbc957259d210e3081f5913a831594eb48f48f64</checksum>
+  <summary>APR utility library Berkeley DB driver</summary>
+  <description>This package provides the Berkeley DB driver for the apr-util
+DBM (database abstraction) interface.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323556" build="1632323489"/>
+  <size package="24064" installed="11760" archive="12688"/>
+  <location href="Packages/a/apr-util-bdb-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19820"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-bdb(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-bdb" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.4)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libdb-5.3.so()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-pgsql</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">403ef93e442ecdb6ea4846e620ffec3c40f7d5bc9d43a4a9055a9540b98f180a</checksum>
+  <summary>APR utility library PostgreSQL DBD driver</summary>
+  <description>This package provides the PostgreSQL driver for the apr-util
+DBD (database abstraction) interface.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323560" build="1632323489"/>
+  <size package="29352" installed="24360" archive="25300"/>
+  <location href="Packages/a/apr-util-pgsql-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19876"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-pgsql(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-pgsql" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.14)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libpq.so.5(RHPG_9.6)(64bit)"/>
+      <rpm:entry name="libpq.so.5()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-openssl</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">7bdd897b6a875ea0ea2d0269338be903b69c5f394bb9a682800ccd8f466ab186</checksum>
+  <summary>APR utility library OpenSSL crypto support</summary>
+  <description>This package provides the OpenSSL crypto support for the apr-util.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323557" build="1632323489"/>
+  <size package="26336" installed="20288" archive="21248"/>
+  <location href="Packages/a/apr-util-openssl-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19996"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-openssl(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-openssl" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.14)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libssl.so.1.1()(64bit)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libcrypto.so.1.1(OPENSSL_1_1_0)(64bit)"/>
+      <rpm:entry name="libcrypto.so.1.1()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>libacl</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <checksum type="sha256" pkgid="YES">2e7e855181b7e3053fbe067aa6d34e75b73e403215390852666de7be254ca607</checksum>
+  <summary>Dynamic library for access control list support</summary>
+  <description>This package contains the libacl.so dynamic library which contains
+the POSIX 1003.1e draft standard 17 functions for manipulating access
+control lists.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>https://savannah.nongnu.org/projects/acl</url>
+  <time file="1632323348" build="1632323300"/>
+  <size package="34280" installed="37784" archive="38688"/>
+  <location href="Packages/l/libacl-2.2.53-1.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>LGPLv2+</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>System Environment/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>acl-2.2.53-1.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="18476"/>
+    <rpm:provides>
+      <rpm:entry name="libacl.so.1(ACL_1.2)(64bit)"/>
+      <rpm:entry name="libacl.so.1(ACL_1.1)(64bit)"/>
+      <rpm:entry name="libacl.so.1(ACL_1.0)(64bit)"/>
+      <rpm:entry name="libacl.so.1()(64bit)"/>
+      <rpm:entry name="libacl(x86-64)" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+      <rpm:entry name="libacl" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.14)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libattr.so.1()(64bit)"/>
+    </rpm:requires>
+    <rpm:conflicts>
+      <rpm:entry name="filesystem" flags="LT" epoch="0" ver="3"/>
+    </rpm:conflicts>
+  </format>
+</package>
+<package type="rpm">
+  <name>libacl-devel</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <checksum type="sha256" pkgid="YES">4d5eae10d5108a02e293a033b622544a18d200733ad9f0727973d579b20c1fb3</checksum>
+  <summary>Files needed for building programs with libacl</summary>
+  <description>This package contains header files and documentation needed to develop
+programs which make use of the access control list programming interface
+defined in POSIX 1003.1e draft standard 17.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>https://savannah.nongnu.org/projects/acl</url>
+  <time file="1632323346" build="1632323300"/>
+  <size package="79776" installed="60587" archive="67384"/>
+  <location href="Packages/l/libacl-devel-2.2.53-1.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>LGPLv2+</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>acl-2.2.53-1.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="23940"/>
+    <rpm:provides>
+      <rpm:entry name="pkgconfig(libacl)" flags="EQ" epoch="0" ver="2.2.53"/>
+      <rpm:entry name="libacl-devel(x86-64)" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+      <rpm:entry name="libacl-devel" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libattr-devel"/>
+      <rpm:entry name="libacl.so.1()(64bit)"/>
+      <rpm:entry name="libacl" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+      <rpm:entry name="/usr/bin/pkg-config"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>acl</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="2.2.53" rel="1.el8"/>
+  <checksum type="sha256" pkgid="YES">51e80e35ebaa69f7e72c1d9788e569107aee3b4414347324a8983911a2af46d6</checksum>
+  <summary>Access control list utilities</summary>
+  <description>This package contains the getfacl and setfacl utilities needed for
+manipulating access control lists.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>https://savannah.nongnu.org/projects/acl</url>
+  <time file="1632323342" build="1632323300"/>
+  <size package="81780" installed="198340" archive="202240"/>
+  <location href="Packages/a/acl-2.2.53-1.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>GPLv2+</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Unspecified</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>acl-2.2.53-1.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="21884"/>
+    <rpm:provides>
+      <rpm:entry name="acl(x86-64)" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+      <rpm:entry name="acl" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.14)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libattr.so.1()(64bit)"/>
+      <rpm:entry name="libacl.so.1(ACL_1.0)(64bit)"/>
+      <rpm:entry name="libacl.so.1()(64bit)"/>
+      <rpm:entry name="libacl" flags="EQ" epoch="0" ver="2.2.53" rel="1.el8"/>
+    </rpm:requires>
+    <file>/usr/bin/setfacl</file>
+    <file>/usr/bin/getfacl</file>
+    <file>/usr/bin/chacl</file>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">56fbbf08e857582e22bb95d252a3e1735e4476ac64cdd4d7e607974876ccbb61</checksum>
+  <summary>Apache Portable Runtime Utility library</summary>
+  <description>The mission of the Apache Portable Runtime (APR) is to provide a
+free library of C data structures and routines.  This library
+contains additional utility interfaces for APR; including support
+for XML, LDAP, database interfaces, URI parsing and more.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323552" build="1632323489"/>
+  <size package="106440" installed="221743" archive="223368"/>
+  <location href="Packages/a/apr-util-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>System Environment/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="21180"/>
+    <rpm:provides>
+      <rpm:entry name="libaprutil-1.so.0()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.25)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libuuid.so.1()(64bit)"/>
+      <rpm:entry name="libpthread.so.0(GLIBC_2.2.5)(64bit)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libexpat.so.1()(64bit)"/>
+      <rpm:entry name="libdl.so.2()(64bit)"/>
+      <rpm:entry name="libcrypt.so.1(XCRYPT_2.0)(64bit)"/>
+      <rpm:entry name="libcrypt.so.1()(64bit)"/>
+      <rpm:entry name="libapr-1.so.0()(64bit)"/>
+      <rpm:entry name="/sbin/ldconfig"/>
+      <rpm:entry name="/sbin/ldconfig" pre="1"/>
+    </rpm:requires>
+    <rpm:recommends>
+      <rpm:entry name="apr-util-openssl(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-bdb(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:recommends>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-ldap</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">901e85b18bba94983531accfe46d9649cb23e50222adf5dc15657576ab7d55e4</checksum>
+  <summary>APR utility library LDAP support</summary>
+  <description>This package provides the LDAP support for the apr-util.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323553" build="1632323489"/>
+  <size package="25000" installed="16448" archive="17372"/>
+  <location href="Packages/a/apr-util-ldap-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19808"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-ldap(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-ldap" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.4)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libldap_r-2.4.so.2()(64bit)"/>
+      <rpm:entry name="liblber-2.4.so.2()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-mysql</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">6600d5b2801be6e85d5ed0f69b82b0f0ac9b2c9cf89b4d6a130d87f4bee575f6</checksum>
+  <summary>APR utility library MySQL DBD driver</summary>
+  <description>This package provides the MySQL driver for the apr-util DBD
+(database abstraction) interface.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323559" build="1632323489"/>
+  <size package="29436" installed="28472" archive="29412"/>
+  <location href="Packages/a/apr-util-mysql-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19920"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-mysql(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-mysql" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.4)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libmariadb.so.3(libmysqlclient_18)(64bit)"/>
+      <rpm:entry name="libmariadb.so.3()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-sqlite</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">b97be76fe95186f4c3ec3db709793fcab944eabf091614f46ee8b4271097b6ff</checksum>
+  <summary>APR utility library SQLite DBD driver</summary>
+  <description>This package provides the SQLite driver for the apr-util DBD
+(database abstraction) interface.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323546" build="1632323489"/>
+  <size package="27192" installed="20232" archive="21180"/>
+  <location href="Packages/a/apr-util-sqlite-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19844"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-sqlite(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-sqlite" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.4)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libsqlite3.so.0()(64bit)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+<package type="rpm">
+  <name>apr-util-odbc</name>
+  <arch>x86_64</arch>
+  <version epoch="0" ver="1.6.1" rel="6.el8"/>
+  <checksum type="sha256" pkgid="YES">72f87880ca38933b9158e3993ffff9f33267f3a0e32e9791c390190587f40cc5</checksum>
+  <summary>APR utility library ODBC DBD driver</summary>
+  <description>This package provides the ODBC driver for the apr-util DBD
+(database abstraction) interface.</description>
+  <packager>AlmaLinux Packaging Team &lt;packager@almalinux.org&gt;</packager>
+  <url>http://apr.apache.org/</url>
+  <time file="1632323545" build="1632323489"/>
+  <size package="33120" installed="32704" archive="33644"/>
+  <location href="Packages/a/apr-util-odbc-1.6.1-6.el8.x86_64.rpm"/>
+  <format>
+    <rpm:license>ASL 2.0</rpm:license>
+    <rpm:vendor>AlmaLinux</rpm:vendor>
+    <rpm:group>Development/Libraries</rpm:group>
+    <rpm:buildhost>192-168-246-180.atm.cloudlinux.com</rpm:buildhost>
+    <rpm:sourcerpm>apr-util-1.6.1-6.el8.src.rpm</rpm:sourcerpm>
+    <rpm:header-range start="4504" end="19900"/>
+    <rpm:provides>
+      <rpm:entry name="apr-util-odbc(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+      <rpm:entry name="apr-util-odbc" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:provides>
+    <rpm:requires>
+      <rpm:entry name="libc.so.6(GLIBC_2.14)(64bit)"/>
+      <rpm:entry name="rtld(GNU_HASH)"/>
+      <rpm:entry name="libpthread.so.0()(64bit)"/>
+      <rpm:entry name="libodbc.so.2()(64bit)"/>
+      <rpm:entry name="apr-util(x86-64)" flags="EQ" epoch="0" ver="1.6.1" rel="6.el8"/>
+    </rpm:requires>
+  </format>
+</package>
+</metadata>

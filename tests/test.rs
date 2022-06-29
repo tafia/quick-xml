@@ -9,7 +9,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_sample() {
-    let src: &[u8] = include_bytes!("sample_rss.xml");
+    let src: &[u8] = include_bytes!("documents/sample_rss.xml");
     let mut buf = Vec::new();
     let mut r = Reader::from_reader(src);
     let mut count = 0;
@@ -264,7 +264,8 @@ fn line_score() {
         inning: String,
     }
 
-    let res: LineScoreData = quick_xml::de::from_str(include_str!("linescore.xml")).unwrap();
+    let res: LineScoreData =
+        quick_xml::de::from_str(include_str!("documents/linescore.xml")).unwrap();
 
     let expected = LineScoreData {
         game_pk: 239575,
@@ -376,7 +377,7 @@ fn players() {
         id: u32,
     }
 
-    let res: Game = quick_xml::de::from_str(include_str!("players.xml")).unwrap();
+    let res: Game = quick_xml::de::from_str(include_str!("documents/players.xml")).unwrap();
 
     let expected = Game {
         teams: vec![

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_xml_rs;
 use xml::reader::{EventReader, XmlEvent};
 
-static SOURCE: &str = include_str!("../../tests/sample_rss.xml");
+static SOURCE: &str = include_str!("../../tests/documents/sample_rss.xml");
 
 /// Runs benchmarks for several XML libraries using low-level API
 fn low_level_comparison(c: &mut Criterion) {
@@ -25,7 +25,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -49,7 +49,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 }
                 input = &input[consumed..];
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -68,7 +68,7 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -83,7 +83,7 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -101,7 +101,7 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
 
@@ -152,7 +152,7 @@ fn low_level_comparison(c: &mut Criterion) {
 
             assert_eq!(
                 tok.sink.0, 1550,
-                "Overall tag count in ./tests/sample_rss.xml"
+                "Overall tag count in ./tests/documents/sample_rss.xml"
             );
         })
     });
@@ -166,7 +166,7 @@ fn low_level_comparison(c: &mut Criterion) {
                     count += 1;
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/sample_rss.xml");
+            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
         })
     });
     group.finish();
