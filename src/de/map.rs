@@ -1,13 +1,14 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::escape::EscapedDeserializer,
+    de::key::QNameDeserializer,
     de::seq::{not_in, TagFilter},
     de::simple_type::SimpleTypeDeserializer,
     de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     errors::serialize::DeError,
     events::attributes::IterState,
     events::BytesStart,
+    name::QName,
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::serde_if_integer128;
@@ -227,12 +228,9 @@ where
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
-            seed.deserialize(EscapedDeserializer::new(
-                Cow::Borrowed(&slice[key]),
-                decoder,
-                false,
-            ))
-            .map(Some)
+
+            let de = QNameDeserializer::from_attr(QName(&slice[key]), decoder)?;
+            seed.deserialize(de).map(Some)
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
@@ -275,9 +273,9 @@ where
                 }
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
-                    let name = Cow::Borrowed(e.local_name().into_inner());
-                    seed.deserialize(EscapedDeserializer::new(name, decoder, false))
-                        .map(Some)
+
+                    let de = QNameDeserializer::from_elem(e.name(), decoder)?;
+                    seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
                 DeEvent::End(e) if e.name() == self.start.name() => Ok(None),

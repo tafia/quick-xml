@@ -331,6 +331,7 @@ macro_rules! deserialize_primitives {
 }
 
 mod escape;
+mod key;
 mod map;
 mod seq;
 mod simple_type;
@@ -549,7 +550,7 @@ where
     /// - `$text(with text)`
     /// - `</some-element>`
     /// - `<yet-another-element/>` (virtual start event)
-    /// - `<yet-another-element/>` (vitrual end event)
+    /// - `<yet-another-element/>` (virtual end event)
     /// - `</another-item>`
     ///
     /// Note, that `<yet-another-element/>` internally represented as 2 events:

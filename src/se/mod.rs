@@ -75,7 +75,7 @@ macro_rules! write_primitive {
 
 mod content;
 mod element;
-mod key;
+pub(crate) mod key;
 pub(crate) mod simple_type;
 
 use self::content::ContentSerializer;
