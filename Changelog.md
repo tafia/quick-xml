@@ -38,6 +38,8 @@
   returns `ResolveResult::Unknown` if prefix was not registered in namespace buffer
 - [#393]: Fix breaking processing after encounter an attribute with a reserved name (started with "xmlns")
 - [#363]: Do not generate empty `Event::Text` events
+- [#412]: Fix using incorrect encoding if `read_to_end` family of methods or `read_text`
+  method not found a corresponding end tag and reader has non-UTF-8 encoding
 
 ### Misc Changes
 
@@ -104,6 +106,7 @@
   |`read_text`              |`read_text_into`
   |`read_event_unbuffered`  |`read_event`
   |`read_to_end_unbuffered` |`read_to_end`
+- [#412]: Change `read_to_end*` and `read_text_into` to accept `QName` instead of `AsRef<[u8]>`
 
 ### New Tests
 

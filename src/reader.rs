@@ -610,21 +610,22 @@ impl<R: BufRead> Reader<R> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end_into<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
-        let end = end.as_ref();
         loop {
             match self.read_event_into(buf) {
-                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
+                Err(e) => return Err(e),
+
+                Ok(Event::Start(e)) if e.name() == end => depth += 1,
+                Ok(Event::End(e)) if e.name() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
-                Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
+                    let name = self.decoder().decode(end.as_ref());
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
                 }
                 _ => (),
             }
@@ -665,13 +666,14 @@ impl<R: BufRead> Reader<R> {
     /// }
     /// ```
     ///
-    /// [`Text`]: events/enum.Event.html#variant.Text
-    /// [`End`]: events/enum.Event.html#variant.End
-    pub fn read_text_into<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
+    /// [`Text`]: Event::Text
+    /// [`End`]: Event::End
+    pub fn read_text_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<String> {
         let s = match self.read_event_into(buf) {
-            Ok(Event::Text(e)) => e.unescape_and_decode(self),
-            Ok(Event::End(ref e)) if e.name().as_ref() == end.as_ref() => return Ok("".to_string()),
             Err(e) => return Err(e),
+
+            Ok(Event::Text(e)) => e.unescape_and_decode(self),
+            Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),
         };
@@ -975,21 +977,22 @@ impl<'a> Reader<&'a [u8]> {
     /// Reads until end element is found
     ///
     /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
         let mut depth = 0;
-        let end = end.as_ref();
         loop {
             match self.read_event() {
-                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
+                Err(e) => return Err(e),
+
+                Ok(Event::Start(e)) if e.name() == end => depth += 1,
+                Ok(Event::End(e)) if e.name() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
-                Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
+                    let name = self.decoder().decode(end.as_ref());
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
                 }
                 _ => (),
             }
