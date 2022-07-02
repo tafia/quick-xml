@@ -607,12 +607,91 @@ impl<R: BufRead> Reader<R> {
         }
     }
 
-    /// Reads until end element is found
+    /// Reads until end element is found using provided buffer as intermediate
+    /// storage for events content. This function is supposed to be called after
+    /// you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// If your reader created from a string slice or byte array slice, it is
+    /// better to use [`read_to_end()`] method, because it will not copy bytes
+    /// into intermediate buffer.
+    ///
+    /// The provided `buf` buffer will be filled only by one event content at time.
+    /// Before reading of each event the buffer will be cleared. If you know an
+    /// appropriate size of each event, you can preallocate the buffer to reduce
+    /// number of reallocations.
+    ///
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
+    ///
+    /// The correctness of the skipped events does not checked, if you disabled
+    /// the [`check_end_names`] option.
+    ///
+    /// # Namespaces
+    ///
+    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// does not change the algorithm for comparing names. Although the names
+    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
+    /// same namespace, are semantically equivalent, `</b:name>` cannot close
+    /// `<a:name>`, because according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str(r#"
+    ///     <outer>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    /// let mut buf = Vec::new();
+    ///
+    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Start(start));
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`read_to_end()`]: Self::read_to_end
+    /// [`check_end_names`]: Self::check_end_names
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
         loop {
+            buf.clear();
             match self.read_event_into(buf) {
                 Err(e) => return Err(e),
 
@@ -629,7 +708,6 @@ impl<R: BufRead> Reader<R> {
                 }
                 _ => (),
             }
-            buf.clear();
         }
     }
 
@@ -974,9 +1052,75 @@ impl<'a> Reader<&'a [u8]> {
         self.read_event_impl(())
     }
 
-    /// Reads until end element is found
+    /// Reads until end element is found. This function is supposed to be called
+    /// after you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
+    ///
+    /// The correctness of the skipped events does not checked, if you disabled
+    /// the [`check_end_names`] option.
+    ///
+    /// # Namespaces
+    ///
+    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// does not change the algorithm for comparing names. Although the names
+    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
+    /// same namespace, are semantically equivalent, `</b:name>` cannot close
+    /// `<a:name>`, because according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str(r#"
+    ///     <outer>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end(end.name()).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`check_end_names`]: Self::check_end_names
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<()> {
         let mut depth = 0;
         loop {
