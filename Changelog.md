@@ -107,6 +107,7 @@
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
+[#118]: https://github.com/tafia/quick-xml/issues/118
 [#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
 [#324]: https://github.com/tafia/quick-xml/issues/324
