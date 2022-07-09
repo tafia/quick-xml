@@ -949,7 +949,7 @@ pub struct IoReader<R: BufRead> {
 impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
         let event = loop {
-            let e = self.reader.read_event(&mut self.buf)?;
+            let e = self.reader.read_event_into(&mut self.buf)?;
             match e {
                 //TODO: Probably not the best idea treat StartText as usual text
                 // Usually this event will represent a BOM
@@ -971,7 +971,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     }
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
-        match self.reader.read_to_end(name, &mut self.buf) {
+        match self.reader.read_to_end_into(name, &mut self.buf) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
@@ -993,7 +993,7 @@ pub struct SliceReader<'de> {
 impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         loop {
-            let e = self.reader.read_event_unbuffered()?;
+            let e = self.reader.read_event()?;
             match e {
                 //TODO: Probably not the best idea treat StartText as usual text
                 // Usually this event will represent a BOM
@@ -1011,7 +1011,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     }
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
-        match self.reader.read_to_end_unbuffered(name) {
+        match self.reader.read_to_end(name) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }

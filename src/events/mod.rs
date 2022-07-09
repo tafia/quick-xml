@@ -17,7 +17,7 @@
 //!
 //! # Reading
 //! When reading a XML stream, the events are emitted by
-//! [`Reader::read_event`]. You must listen
+//! [`Reader::read_event_into`]. You must listen
 //! for the different types of events you are interested in.
 //!
 //! See [`Reader`] for further information.
@@ -29,10 +29,8 @@
 //!
 //! See [`Writer`] for further information.
 //!
-//! [`Reader::read_event`]: ../reader/struct.Reader.html#method.read_event
-//! [`Reader`]: ../reader/struct.Reader.html
-//! [`Writer`]: ../writer/struct.Writer.html
-//! [`Event`]: enum.Event.html
+//! [`Writer`]: crate::writer::Writer
+//! [`Event`]: crate::events::Event
 
 pub mod attributes;
 
@@ -41,7 +39,6 @@ use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
-use std::io::BufRead;
 use std::ops::Deref;
 use std::str::from_utf8;
 
@@ -757,7 +754,7 @@ impl<'a> BytesText<'a> {
     /// it might be wiser to manually use
     /// 1. BytesText::unescaped()
     /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B: BufRead>(&self, reader: &Reader<B>) -> Result<String> {
+    pub fn unescape_and_decode<B>(&self, reader: &Reader<B>) -> Result<String> {
         self.do_unescape_and_decode_with_custom_entities(reader, None)
     }
 
@@ -771,7 +768,7 @@ impl<'a> BytesText<'a> {
     /// # Pre-condition
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_with_custom_entities<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -779,7 +776,7 @@ impl<'a> BytesText<'a> {
         self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
     }
 
-    fn do_unescape_and_decode_with_custom_entities<B: BufRead>(
+    fn do_unescape_and_decode_with_custom_entities<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
@@ -928,7 +925,7 @@ impl<'a> Deref for BytesCData<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Event emitted by [`Reader::read_event`].
+/// Event emitted by [`Reader::read_event_into`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Text that appeared before the first opening tag or an [XML declaration].
@@ -956,7 +953,7 @@ pub enum Event<'a> {
     /// let mut reader = Reader::from_bytes(xml);
     /// let mut events_processed = 0;
     /// loop {
-    ///     match reader.read_event_unbuffered() {
+    ///     match reader.read_event() {
     ///         Ok(Event::StartText(e)) => {
     ///             assert_eq!(events_processed, 0);
     ///             // Content contains BOM
@@ -1066,7 +1063,10 @@ mod test {
         let mut buf = Vec::new();
         let mut parsed_local_names = Vec::new();
         loop {
-            match rdr.read_event(&mut buf).expect("unable to read xml event") {
+            match rdr
+                .read_event_into(&mut buf)
+                .expect("unable to read xml event")
+            {
                 Event::Start(ref e) => parsed_local_names.push(
                     from_utf8(e.local_name().as_ref())
                         .expect("unable to build str from local_name")

@@ -1,5 +1,6 @@
 fn main() {
     use quick_xml::events::Event;
+    use quick_xml::name::QName;
     use quick_xml::Reader;
 
     let xml = "<tag1>text1</tag1><tag1>text2</tag1>\
@@ -12,11 +13,11 @@ fn main() {
     let mut buf = Vec::new();
 
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) if e.name().as_ref() == b"tag2" => {
                 txt.push(
                     reader
-                        .read_text(b"tag2", &mut Vec::new())
+                        .read_text_into(QName(b"tag2"), &mut Vec::new())
                         .expect("Cannot decode text value"),
                 );
                 println!("{:?}", txt);

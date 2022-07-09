@@ -41,8 +41,8 @@ let mut buf = Vec::new();
 loop {
     // NOTE: this is the generic case when we don't know about the input BufRead.
     // when the input is a &str or a &[u8], we don't actually need to use another
-    // buffer, we could directly call `reader.read_event_unbuffered()`
-    match reader.read_event(&mut buf) {
+    // buffer, we could directly call `reader.read_event()`
+    match reader.read_event_into(&mut buf) {
         Ok(Event::Start(ref e)) => {
             match e.name() {
                 b"tag1" => println!("attributes values: {:?}",
@@ -77,7 +77,7 @@ reader.trim_text(true);
 let mut writer = Writer::new(Cursor::new(Vec::new()));
 let mut buf = Vec::new();
 loop {
-    match reader.read_event(&mut buf) {
+    match reader.read_event_into(&mut buf) {
         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 
             // crates a new element ... alternatively we could reuse `e` by calling

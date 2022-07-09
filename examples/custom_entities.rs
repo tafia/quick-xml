@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
     loop {
-        match reader.read_event(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
                     custom_entities.insert(cap[1].to_vec(), cap[2].to_vec());

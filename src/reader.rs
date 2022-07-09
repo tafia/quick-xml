@@ -107,7 +107,7 @@ impl EncodingRef {
 
 /// A low level encoding-agnostic XML event reader.
 ///
-/// Consumes a `BufRead` and streams XML `Event`s.
+/// Consumes bytes and streams XML [`Event`]s.
 ///
 /// # Examples
 ///
@@ -125,7 +125,7 @@ impl EncodingRef {
 /// let mut txt = Vec::new();
 /// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event(&mut buf) {
+///     match reader.read_event_into(&mut buf) {
 ///         Ok(Event::Start(ref e)) => {
 ///             match e.name().as_ref() {
 ///                 b"tag1" => println!("attributes values: {:?}",
@@ -144,7 +144,7 @@ impl EncodingRef {
 /// }
 /// ```
 #[derive(Clone)]
-pub struct Reader<R: BufRead> {
+pub struct Reader<R> {
     /// reader
     pub(crate) reader: R,
     /// current buffer position, useful for debugging errors
@@ -198,8 +198,8 @@ pub struct Reader<R: BufRead> {
 }
 
 /// Builder methods
-impl<R: BufRead> Reader<R> {
-    /// Creates a `Reader` that reads from a reader implementing `BufRead`.
+impl<R> Reader<R> {
+    /// Creates a `Reader` that reads from a given reader.
     pub fn from_reader(reader: R) -> Self {
         Self {
             reader,
@@ -323,7 +323,7 @@ impl<R: BufRead> Reader<R> {
 }
 
 /// Getters
-impl<R: BufRead> Reader<R> {
+impl<R> Reader<R> {
     /// Consumes `Reader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
@@ -362,7 +362,7 @@ impl<R: BufRead> Reader<R> {
     /// }
     ///
     /// loop {
-    ///     match reader.read_event(&mut buf) {
+    ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => match e.name().as_ref() {
     ///             b"tag1" | b"tag2" => (),
     ///             tag => {
@@ -494,7 +494,7 @@ impl<R: BufRead> Reader<R> {
     /// let mut buf = Vec::new();
     /// let mut txt = Vec::new();
     /// loop {
-    ///     match reader.read_event(&mut buf) {
+    ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => count += 1,
     ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
@@ -507,8 +507,8 @@ impl<R: BufRead> Reader<R> {
     /// println!("Text events: {:?}", txt);
     /// ```
     #[inline]
-    pub fn read_event<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        self.read_event_buffered(buf)
+    pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        self.read_event_impl(buf)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -569,7 +569,7 @@ impl<R: BufRead> Reader<R> {
             self.ns_resolver.pop(namespace_buffer);
         }
         self.pending_pop = false;
-        match self.read_event(buf) {
+        match self.read_event_into(buf) {
             Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, namespace_buffer);
@@ -607,28 +607,107 @@ impl<R: BufRead> Reader<R> {
         }
     }
 
-    /// Reads until end element is found
+    /// Reads until end element is found using provided buffer as intermediate
+    /// storage for events content. This function is supposed to be called after
+    /// you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<()> {
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// If your reader created from a string slice or byte array slice, it is
+    /// better to use [`read_to_end()`] method, because it will not copy bytes
+    /// into intermediate buffer.
+    ///
+    /// The provided `buf` buffer will be filled only by one event content at time.
+    /// Before reading of each event the buffer will be cleared. If you know an
+    /// appropriate size of each event, you can preallocate the buffer to reduce
+    /// number of reallocations.
+    ///
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
+    ///
+    /// The correctness of the skipped events does not checked, if you disabled
+    /// the [`check_end_names`] option.
+    ///
+    /// # Namespaces
+    ///
+    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// does not change the algorithm for comparing names. Although the names
+    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
+    /// same namespace, are semantically equivalent, `</b:name>` cannot close
+    /// `<a:name>`, because according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str(r#"
+    ///     <outer>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    /// let mut buf = Vec::new();
+    ///
+    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Start(start));
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`read_to_end()`]: Self::read_to_end
+    /// [`check_end_names`]: Self::check_end_names
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
         let mut depth = 0;
-        let end = end.as_ref();
         loop {
-            match self.read_event(buf) {
-                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
+            buf.clear();
+            match self.read_event_into(buf) {
+                Err(e) => return Err(e),
+
+                Ok(Event::Start(e)) if e.name() == end => depth += 1,
+                Ok(Event::End(e)) if e.name() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
-                Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
+                    let name = self.decoder().decode(end.as_ref());
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
                 }
                 _ => (),
             }
-            buf.clear();
         }
     }
 
@@ -656,36 +735,37 @@ impl<R: BufRead> Reader<R> {
     ///
     /// let expected = ["<b>", ""];
     /// for &content in expected.iter() {
-    ///     match xml.read_event(&mut Vec::new()) {
+    ///     match xml.read_event_into(&mut Vec::new()) {
     ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text(e.name(), &mut Vec::new()).unwrap(), content);
+    ///             assert_eq!(&xml.read_text_into(e.name(), &mut Vec::new()).unwrap(), content);
     ///         },
     ///         e => panic!("Expecting Start event, found {:?}", e),
     ///     }
     /// }
     /// ```
     ///
-    /// [`Text`]: events/enum.Event.html#variant.Text
-    /// [`End`]: events/enum.Event.html#variant.End
-    pub fn read_text<K: AsRef<[u8]>>(&mut self, end: K, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event(buf) {
-            Ok(Event::Text(e)) => e.unescape_and_decode(self),
-            Ok(Event::End(ref e)) if e.name().as_ref() == end.as_ref() => return Ok("".to_string()),
+    /// [`Text`]: Event::Text
+    /// [`End`]: Event::End
+    pub fn read_text_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<String> {
+        let s = match self.read_event_into(buf) {
             Err(e) => return Err(e),
+
+            Ok(Event::Text(e)) => e.unescape_and_decode(self),
+            Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),
         };
-        self.read_to_end(end, buf)?;
+        self.read_to_end_into(end, buf)?;
         s
     }
 }
 
 /// Private methods
-impl<R: BufRead> Reader<R> {
+impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_buffered<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
@@ -718,7 +798,7 @@ impl<R: BufRead> Reader<R> {
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if self.reader.skip_one(b'<', &mut self.buf_position)? {
-            return self.read_event_buffered(buf);
+            return self.read_event_impl(buf);
         }
 
         match self
@@ -968,28 +1048,95 @@ impl<'a> Reader<&'a [u8]> {
 
     /// Read an event that borrows from the input rather than a buffer.
     #[inline]
-    pub fn read_event_unbuffered(&mut self) -> Result<Event<'a>> {
-        self.read_event_buffered(())
+    pub fn read_event(&mut self) -> Result<Event<'a>> {
+        self.read_event_impl(())
     }
 
-    /// Reads until end element is found
+    /// Reads until end element is found. This function is supposed to be called
+    /// after you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
-    pub fn read_to_end_unbuffered<K: AsRef<[u8]>>(&mut self, end: K) -> Result<()> {
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
+    ///
+    /// The correctness of the skipped events does not checked, if you disabled
+    /// the [`check_end_names`] option.
+    ///
+    /// # Namespaces
+    ///
+    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// does not change the algorithm for comparing names. Although the names
+    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
+    /// same namespace, are semantically equivalent, `</b:name>` cannot close
+    /// `<a:name>`, because according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str(r#"
+    ///     <outer>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end(end.name()).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`check_end_names`]: Self::check_end_names
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
+    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
         let mut depth = 0;
-        let end = end.as_ref();
         loop {
-            match self.read_event_unbuffered() {
-                Ok(Event::End(ref e)) if e.name().as_ref() == end => {
+            match self.read_event() {
+                Err(e) => return Err(e),
+
+                Ok(Event::Start(e)) if e.name() == end => depth += 1,
+                Ok(Event::End(e)) if e.name() == end => {
                     if depth == 0 {
                         return Ok(());
                     }
                     depth -= 1;
                 }
-                Ok(Event::Start(ref e)) if e.name().as_ref() == end => depth += 1,
-                Err(e) => return Err(e),
                 Ok(Event::Eof) => {
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", from_utf8(end))));
+                    let name = self.decoder().decode(end.as_ref());
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
                 }
                 _ => (),
             }
@@ -2405,7 +2552,7 @@ mod test {
             }
 
             /// Ensures, that no empty `Text` events are generated
-            mod read_event_buffered {
+            mod read_event_impl {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
@@ -2415,7 +2562,7 @@ mod test {
                     let mut reader = Reader::from_str("bom");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::StartText(BytesText::from_escaped(b"bom".as_ref()).into())
                     );
                 }
@@ -2425,7 +2572,7 @@ mod test {
                     let mut reader = Reader::from_str("<?xml ?>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
                     );
                 }
@@ -2435,7 +2582,7 @@ mod test {
                     let mut reader = Reader::from_str("<!DOCTYPE x>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::DocType(BytesText::from_escaped(b"x".as_ref()))
                     );
                 }
@@ -2445,7 +2592,7 @@ mod test {
                     let mut reader = Reader::from_str("<?xml-stylesheet?>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::PI(BytesText::from_escaped(b"xml-stylesheet".as_ref()))
                     );
                 }
@@ -2455,7 +2602,7 @@ mod test {
                     let mut reader = Reader::from_str("<tag>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Start(BytesStart::borrowed_name(b"tag"))
                     );
                 }
@@ -2468,7 +2615,7 @@ mod test {
                     reader.check_end_names(false);
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::End(BytesEnd::borrowed(b"tag"))
                     );
                 }
@@ -2478,7 +2625,7 @@ mod test {
                     let mut reader = Reader::from_str("<tag/>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
                 }
@@ -2489,12 +2636,12 @@ mod test {
                     let mut reader = Reader::from_str("<tag/>text");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Text(BytesText::from_escaped(b"text".as_ref()))
                     );
                 }
@@ -2504,7 +2651,7 @@ mod test {
                     let mut reader = Reader::from_str("<![CDATA[]]>");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::CData(BytesCData::from_str(""))
                     );
                 }
@@ -2514,7 +2661,7 @@ mod test {
                     let mut reader = Reader::from_str("<!---->");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Comment(BytesText::from_escaped(b"".as_ref()))
                     );
                 }
@@ -2524,7 +2671,7 @@ mod test {
                     let mut reader = Reader::from_str("");
 
                     assert_eq!(
-                        reader.read_event_buffered($buf).unwrap(),
+                        reader.read_event_impl($buf).unwrap(),
                         Event::Eof
                     );
                 }
@@ -2547,13 +2694,13 @@ mod test {
                         let mut reader = Reader::from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
 
-                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                     }
 
                     /// Checks that encoding is changed by XML declaration, but only once
@@ -2562,13 +2709,13 @@ mod test {
                         let mut reader = Reader::from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_buffered($buf).unwrap();
+                        reader.read_event_impl($buf).unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                     }
                 }
 
@@ -2579,10 +2726,10 @@ mod test {
                     let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
 
                     assert_eq!(reader.decoder().encoding(), UTF_8);
-                    reader.read_event_buffered($buf).unwrap();
+                    reader.read_event_impl($buf).unwrap();
                     assert_eq!(reader.decoder().encoding(), UTF_8);
 
-                    assert_eq!(reader.read_event_buffered($buf).unwrap(), Event::Eof);
+                    assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
                 }
             }
         };

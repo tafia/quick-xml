@@ -9,7 +9,7 @@ use crate::reader::{is_whitespace, Reader};
 use crate::utils::{write_byte_string, write_cow_string, Bytes};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
-use std::{borrow::Cow, collections::HashMap, io::BufRead, ops::Range};
+use std::{borrow::Cow, collections::HashMap, ops::Range};
 
 /// A struct representing a key/value XML attribute.
 ///
@@ -81,7 +81,7 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value()`]: #method.unescaped_value
     /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
-    pub fn unescape_and_decode_value<B: BufRead>(&self, reader: &Reader<B>) -> XmlResult<String> {
+    pub fn unescape_and_decode_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
         self.do_unescape_and_decode_value(reader, None)
     }
 
@@ -99,7 +99,7 @@ impl<'a> Attribute<'a> {
     /// # Pre-condition
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_value_with_custom_entities<B: BufRead>(
+    pub fn unescape_and_decode_value_with_custom_entities<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -108,7 +108,7 @@ impl<'a> Attribute<'a> {
     }
 
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    fn do_unescape_and_decode_value<B: BufRead>(
+    fn do_unescape_and_decode_value<B>(
         &self,
         reader: &Reader<B>,
         custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,

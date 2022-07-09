@@ -12,7 +12,7 @@ use pretty_assertions::assert_eq;
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf).unwrap() {
+        match $r.read_event_into(&mut buf).unwrap() {
             $t(ref e) if e.name().as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -28,7 +28,7 @@ macro_rules! next_eq_name {
 macro_rules! next_eq_content {
     ($r:expr, $t:tt, $bytes:expr) => {
         let mut buf = Vec::new();
-        match $r.read_event(&mut buf).unwrap() {
+        match $r.read_event_into(&mut buf).unwrap() {
             $t(ref e) if e.as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -130,7 +130,7 @@ fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf).unwrap() {
+    match r.read_event_into(&mut buf).unwrap() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => assert_eq!(
@@ -208,7 +208,7 @@ fn test_writer() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -227,7 +227,7 @@ fn test_writer_borrow() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
         }
@@ -250,7 +250,7 @@ fn test_writer_indent() -> Result<()> {
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -276,7 +276,7 @@ fn test_writer_indent_cdata() -> Result<()> {
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -302,7 +302,7 @@ fn test_write_empty_element_attrs() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -324,7 +324,7 @@ fn test_write_attrs() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        let event = match reader.read_event(&mut buf)? {
+        let event = match reader.read_event_into(&mut buf)? {
             Eof => break,
             Start(elem) => {
                 let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
@@ -430,7 +430,7 @@ fn test_buf_position_err_end_element() {
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
         Err(e) => panic!(
             "expecting buf_pos = 2, found {}, err: {:?}",
@@ -450,7 +450,7 @@ fn test_buf_position_err_comment() {
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         // error at char 4: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -469,11 +469,11 @@ fn test_buf_position_err_comment_2_buf() {
     r.trim_text(true).check_end_names(true);
 
     let mut buf = Vec::new();
-    let _ = r.read_event(&mut buf).unwrap();
+    let _ = r.read_event_into(&mut buf).unwrap();
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         // error at char 4: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -495,7 +495,7 @@ fn test_buf_position_err_comment_trim_text() {
     assert_eq!(r.buffer_position(), 3);
 
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         // error at char 7: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -514,7 +514,7 @@ fn test_escaped_content() {
     r.trim_text(true);
     next_eq!(r, Start, b"a");
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Text(e)) => {
             assert_eq!(
                 &*e,
@@ -562,7 +562,7 @@ fn test_read_write_roundtrip_results_in_identity() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -589,7 +589,7 @@ fn test_read_write_roundtrip() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -616,7 +616,7 @@ fn test_read_write_roundtrip_escape() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             Text(e) => {
                 let t = e.escaped();
@@ -649,7 +649,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let mut buf = Vec::new();
     loop {
-        match reader.read_event(&mut buf)? {
+        match reader.read_event_into(&mut buf)? {
             Eof => break,
             Text(e) => {
                 let t = e.unescape_and_decode(&reader).unwrap();
@@ -671,7 +671,7 @@ fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -700,7 +700,7 @@ fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str(r#"<a attr=">" check="2"></a>"#);
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -729,7 +729,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr="'>'" check="'2'"></a>"#);
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -758,7 +758,7 @@ fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr='">"' check='"2"'></a>"#);
     r.trim_text(true);
     let mut buf = Vec::new();
-    match r.read_event(&mut buf) {
+    match r.read_event_into(&mut buf) {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -798,7 +798,7 @@ mod decode_with_bom_removal {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event(&mut buf) {
+            match reader.read_event_into(&mut buf) {
                 Ok(Event::StartText(e)) => {
                     txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
                 }
@@ -824,7 +824,7 @@ mod decode_with_bom_removal {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event(&mut buf) {
+            match reader.read_event_into(&mut buf) {
                 Ok(Event::StartText(e)) => {
                     txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
                 }
@@ -845,7 +845,7 @@ mod decode_with_bom_removal {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event(&mut buf) {
+            match reader.read_event_into(&mut buf) {
                 Ok(Event::StartText(e)) => {
                     txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
                 }
@@ -868,7 +868,7 @@ mod decode_with_bom_removal {
         let mut buf = Vec::new();
 
         loop {
-            match reader.read_event(&mut buf) {
+            match reader.read_event_into(&mut buf) {
                 Ok(Event::StartText(e)) => {
                     txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
                 }

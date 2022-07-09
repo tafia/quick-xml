@@ -18,7 +18,7 @@ fn low_level_comparison(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             let mut buf = Vec::new();
             loop {
-                match r.read_event(&mut buf) {
+                match r.read_event_into(&mut buf) {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Eof) => break,
                     _ => (),

@@ -14,6 +14,7 @@ struct Simple {
     d: Option<String>,
 }
 
+#[track_caller]
 fn test_parse_ok<'a, T: std::fmt::Debug>(errors: &[(&'a str, T)])
 where
     T: PartialEq + Debug + ser::Serialize + for<'de> de::Deserialize<'de>,
@@ -37,6 +38,7 @@ where
     }
 }
 
+#[track_caller]
 fn test_parse_err<'a, T>(errors: &[&'a str])
 where
     T: PartialEq + Debug + ser::Serialize + for<'de> de::Deserialize<'de>,
