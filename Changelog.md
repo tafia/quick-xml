@@ -25,6 +25,8 @@
 - [#395]: Add support for XML Schema `xs:list`
 - [#324]: `Reader::from_str` / `Deserializer::from_str` / `from_str` now ignore
   the XML declared encoding and always use UTF-8
+- [#413]: Added `Attribute::from_bytes()`, `Attribute::from_escaped_bytes()`,
+  `Attribute::from_str()` and `Attribute::from_escaped_str()` constructors.
 - [#416]: Add `borrow()` methods in all event structs which allows to get
   a borrowed version of any event
 
@@ -42,6 +44,9 @@
 - [#363]: Do not generate empty `Event::Text` events
 - [#412]: Fix using incorrect encoding if `read_to_end` family of methods or `read_text`
   method not found a corresponding end tag and reader has non-UTF-8 encoding
+- [#413]: `Attribute::from((&[u8], &[u8]))` was made consistent with `Attribute::from((&str, &str))`
+  in that both will now escape the value. WARNING: if you were passing escaped values via this
+  approach before, your values will be double-escaped and incorrect.
 
 ### Misc Changes
 
@@ -137,6 +142,7 @@
 [#403]: https://github.com/tafia/quick-xml/pull/403
 [#407]: https://github.com/tafia/quick-xml/pull/407
 [#412]: https://github.com/tafia/quick-xml/pull/412
+[#413]: https://github.com/tafia/quick-xml/pull/413
 [#416]: https://github.com/tafia/quick-xml/pull/416
 [#418]: https://github.com/tafia/quick-xml/pull/418
 

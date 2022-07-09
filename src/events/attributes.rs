@@ -30,6 +30,82 @@ pub struct Attribute<'a> {
 }
 
 impl<'a> Attribute<'a> {
+    /// Creates new attribute from text representation.
+    /// Key is stored as-is, but the value will be escaped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from_str("features", "Bells & whistles");
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
+    pub fn from_str(key: &'a str, val: &'a str) -> Attribute<'a> {
+        Attribute {
+            key: QName(key.as_bytes()),
+            value: escape(val.as_bytes()),
+        }
+    }
+
+    /// Creates new attribute from text representation.
+    /// Does not apply any transformation to either key or value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from_escaped_str("features", "Bells &amp; whistles");
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
+    pub fn from_escaped_str(key: &'a str, val: &'a str) -> Attribute<'a> {
+        Attribute {
+            key: QName(key.as_bytes()),
+            value: Cow::from(val.as_bytes()),
+        }
+    }
+
+    /// Creates new attribute from raw bytes.
+    /// Key is stored as-is, but the value will be escaped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from_bytes("features".as_bytes(), "Bells & whistles".as_bytes());
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
+    pub fn from_bytes(key: &'a [u8], val: &'a [u8]) -> Attribute<'a> {
+        Attribute {
+            key: QName(key),
+            value: escape(val),
+        }
+    }
+
+    /// Creates new attribute from raw bytes.
+    /// Does not apply any transformation to either key or value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from_escaped_bytes("features".as_bytes(), "Bells &amp; whistles".as_bytes());
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
+    pub fn from_escaped_bytes(key: &'a [u8], val: &'a [u8]) -> Attribute<'a> {
+        Attribute {
+            key: QName(key),
+            value: Cow::from(val),
+        }
+    }
+
     /// Returns the unescaped value.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
@@ -130,7 +206,7 @@ impl<'a> Debug for Attribute<'a> {
 
 impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// Creates new attribute from raw bytes.
-    /// Does not apply any transformation to both key and value.
+    /// Key is stored as-is, but the value will be escaped.
     ///
     /// # Examples
     ///
@@ -138,14 +214,11 @@ impl<'a> From<(&'a [u8], &'a [u8])> for Attribute<'a> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::attributes::Attribute;
     ///
-    /// let features = Attribute::from(("features".as_bytes(), "Bells &amp; whistles".as_bytes()));
+    /// let features = Attribute::from(("features".as_bytes(), "Bells & whistles".as_bytes()));
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
     fn from(val: (&'a [u8], &'a [u8])) -> Attribute<'a> {
-        Attribute {
-            key: QName(val.0),
-            value: Cow::from(val.1),
-        }
+        Attribute::from_bytes(val.0, val.1)
     }
 }
 
@@ -163,10 +236,7 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
-        Attribute {
-            key: QName(val.0.as_bytes()),
-            value: escape(val.1.as_bytes()),
-        }
+        Attribute::from_str(val.0, val.1)
     }
 }
 
