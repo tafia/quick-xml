@@ -51,7 +51,7 @@ use {crate::de::DeError, serde::Serialize};
 ///         },
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
-///         Ok(e) => assert!(writer.write_event(e).is_ok()),
+///         Ok(e) => assert!(writer.write_event(e.borrow()).is_ok()),
 ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 ///     }
 /// }
@@ -192,37 +192,37 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<()> {
+    pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> Result<()> {
         let mut next_should_line_break = true;
-        let result = match *event.as_ref() {
-            Event::Start(ref e) => {
-                let result = self.write_wrapped(b"<", e, b">");
+        let result = match event.into() {
+            Event::Start(e) => {
+                let result = self.write_wrapped(b"<", &e, b">");
                 if let Some(i) = self.indent.as_mut() {
                     i.grow();
                 }
                 result
             }
-            Event::End(ref e) => {
+            Event::End(e) => {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
-                self.write_wrapped(b"</", e, b">")
+                self.write_wrapped(b"</", &e, b">")
             }
-            Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
-            Event::Text(ref e) => {
+            Event::Empty(e) => self.write_wrapped(b"<", &e, b"/>"),
+            Event::Text(e) => {
                 next_should_line_break = false;
-                self.write(e)
+                self.write(&e)
             }
-            Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
-            Event::CData(ref e) => {
+            Event::Comment(e) => self.write_wrapped(b"<!--", &e, b"-->"),
+            Event::CData(e) => {
                 next_should_line_break = false;
                 self.write(b"<![CDATA[")?;
-                self.write(e)?;
+                self.write(&e)?;
                 self.write(b"]]>")
             }
-            Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE ", e, b">"),
+            Event::Decl(e) => self.write_wrapped(b"<?", &e, b"?>"),
+            Event::PI(e) => self.write_wrapped(b"<?", &e, b"?>"),
+            Event::DocType(e) => self.write_wrapped(b"<!DOCTYPE ", &e, b">"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {

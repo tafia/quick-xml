@@ -26,7 +26,7 @@ where
             let _event = black_box(event.borrow());
             let _event = black_box(event.as_ref());
             debug_format!(event);
-            debug_format!(writer.write_event(event));
+            debug_format!(writer.write_event(event.borrow()));
         }
         match event_result {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {

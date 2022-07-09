@@ -180,7 +180,7 @@ fn with_trim_ref() {
     loop {
         match reader.read_event().unwrap() {
             Eof => break,
-            e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
+            e => assert!(writer.write_event(e.borrow()).is_ok()), // either `e` or `&e`
         }
     }
 
