@@ -49,11 +49,11 @@ impl<'r, W: Write> Serializer<'r, W> {
     ///
     /// When serializing a primitive type, only its representation will be written:
     ///
-    /// ```edition2018
+    /// ```
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
-    /// use quick_xml::Writer;
     /// # use quick_xml::se::Serializer;
+    /// use quick_xml::writer::Writer;
     ///
     /// let mut buffer = Vec::new();
     /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
@@ -66,11 +66,11 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// When serializing a struct, newtype struct, unit struct or tuple `root_tag`
     /// is used as tag name of root(s) element(s):
     ///
-    /// ```edition2018
+    /// ```
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
-    /// use quick_xml::Writer;
     /// use quick_xml::se::Serializer;
+    /// use quick_xml::writer::Writer;
     ///
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct Struct {

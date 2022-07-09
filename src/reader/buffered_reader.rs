@@ -237,8 +237,8 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
-    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
+    /// use quick_xml::reader::Reader;
     ///
     /// let xml = r#"<tag1 att1 = "test">
     ///                 <tag2><!--Test comment-->Test</tag2>
@@ -317,7 +317,7 @@ impl<R: BufRead> Reader<R> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// let mut reader = Reader::from_str(r#"
     ///     <outer>

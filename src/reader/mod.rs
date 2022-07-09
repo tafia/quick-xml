@@ -1,4 +1,4 @@
-//! A module to handle `Reader`
+//! Contains high-level interface for a pull-based XML parser.
 
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
@@ -380,8 +380,8 @@ impl EncodingRef {
 /// # Examples
 ///
 /// ```
-/// use quick_xml::Reader;
 /// use quick_xml::events::Event;
+/// use quick_xml::reader::Reader;
 ///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
@@ -456,8 +456,8 @@ impl<R> Reader<R> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use std::{str, io::Cursor};
-    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
+    /// use quick_xml::reader::Reader;
     ///
     /// let xml = r#"<tag1 att1 = "test">
     ///                 <tag2><!--Test comment-->Test</tag2>

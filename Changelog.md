@@ -188,6 +188,9 @@
 
 - [#455]: Removed `Reader::read_text_into` which is only not a better wrapper over match on `Event::Text`
 
+- [#456]: Reader and writer stuff grouped under `reader` and `writer` modules.
+  You still can use re-exported definitions from a crate root
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -230,6 +233,7 @@
 [#445]: https://github.com/tafia/quick-xml/pull/445
 [#450]: https://github.com/tafia/quick-xml/pull/450
 [#455]: https://github.com/tafia/quick-xml/pull/455
+[#456]: https://github.com/tafia/quick-xml/pull/456
 
 
 ## 0.23.0 -- 2022-05-08

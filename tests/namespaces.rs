@@ -3,7 +3,7 @@ use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::name::ResolveResult::*;
 use quick_xml::name::{Namespace, QName};
-use quick_xml::NsReader;
+use quick_xml::reader::NsReader;
 use std::borrow::Cow;
 
 #[test]

@@ -1,8 +1,8 @@
 #![no_main]
 #[macro_use] extern crate libfuzzer_sys;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::reader::Reader;
 use std::io::Cursor;
 
 fuzz_target!(|data: &[u8]| {

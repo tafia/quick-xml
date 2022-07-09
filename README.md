@@ -19,8 +19,8 @@ Syntax is inspired by [xml-rs](https://github.com/netvl/xml-rs).
 ### Reader
 
 ```rust
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::reader::Reader;
 
 let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
@@ -66,7 +66,8 @@ loop {
 
 ```rust
 use quick_xml::events::{Event, BytesEnd, BytesStart};
-use quick_xml::{Reader, Writer};
+use quick_xml::reader::Reader;
+use quick_xml::writer::Writer;
 use std::io::Cursor;
 
 let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;

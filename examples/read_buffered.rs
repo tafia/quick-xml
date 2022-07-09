@@ -5,7 +5,7 @@
 
 fn main() -> Result<(), quick_xml::Error> {
     use quick_xml::events::Event;
-    use quick_xml::Reader;
+    use quick_xml::reader::Reader;
 
     let mut reader = Reader::from_file("tests/documents/document.xml")?;
     reader.trim_text(true);

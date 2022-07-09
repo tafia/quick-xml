@@ -1,7 +1,7 @@
 use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
 use quick_xml::events::Event;
+use quick_xml::reader::{NsReader, Reader};
 use quick_xml::Result as XmlResult;
-use quick_xml::{NsReader, Reader};
 
 static RPM_PRIMARY: &str = include_str!("../tests/documents/rpm_primary.xml");
 static RPM_PRIMARY2: &str = include_str!("../tests/documents/rpm_primary2.xml");

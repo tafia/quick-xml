@@ -219,7 +219,7 @@ use crate::{
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    Reader,
+    reader::Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
 use std::borrow::Cow;

@@ -190,9 +190,10 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Example
     ///
-    /// ```rust
-    /// # use quick_xml::{Error, Writer};
+    /// ```
     /// use quick_xml::events::{BytesStart, Event};
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::Error;
     ///
     /// struct SomeStruct<'a> {
     ///     attrs: BytesStart<'a>,
@@ -957,8 +958,8 @@ pub enum Event<'a> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use std::borrow::Cow;
-    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
+    /// use quick_xml::reader::Reader;
     ///
     /// // XML in UTF-8 with BOM
     /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>".as_ref();

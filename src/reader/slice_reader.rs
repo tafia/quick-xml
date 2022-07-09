@@ -45,7 +45,7 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// let mut reader = Reader::from_str(r#"
     ///     <tag1 att1 = "test">
@@ -117,7 +117,7 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// let mut reader = Reader::from_str(r#"
     ///     <outer>
@@ -183,7 +183,7 @@ impl<'a> Reader<&'a [u8]> {
     /// # use pretty_assertions::assert_eq;
     /// # use std::borrow::Cow;
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// let mut reader = Reader::from_str("
     ///     <html>

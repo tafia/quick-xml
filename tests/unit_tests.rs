@@ -6,7 +6,9 @@ use quick_xml::events::attributes::{AttrError, Attribute};
 use quick_xml::events::Event::*;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText};
 use quick_xml::name::QName;
-use quick_xml::{Reader, Result, Writer};
+use quick_xml::reader::Reader;
+use quick_xml::writer::Writer;
+use quick_xml::Result;
 
 use pretty_assertions::assert_eq;
 
