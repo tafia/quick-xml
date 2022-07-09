@@ -670,7 +670,9 @@ impl<'a> Deref for BytesEnd<'a> {
 /// in escaped form. Internally data is stored in escaped form
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
-    // Invariant: The content is always escaped.
+    /// Escaped then encoded content of the event. Content is encoded in the XML
+    /// document encoding when event comes from the reader and should be in the
+    /// document encoding when event passed to the writer
     content: Cow<'a, [u8]>,
 }
 
