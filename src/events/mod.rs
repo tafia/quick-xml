@@ -34,7 +34,7 @@
 
 pub mod attributes;
 
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -554,7 +554,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Gets the decoder struct
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())

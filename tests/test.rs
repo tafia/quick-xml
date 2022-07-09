@@ -95,7 +95,7 @@ fn test_comment_starting_with_gt() {
 }
 
 #[test]
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
     let src: &[u8] = include_bytes!("documents/opennews_all.rss");
     let mut r = Reader::from_reader(src as &[u8]);
