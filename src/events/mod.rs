@@ -163,8 +163,9 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Creates new paired close tag
+    #[inline]
     pub fn to_end(&self) -> BytesEnd {
-        BytesEnd::wrap(self.name().into_inner().into())
+        BytesEnd::from(self.name())
     }
 
     /// Gets the undecoded raw tag name, as present in the input stream.
@@ -319,6 +320,14 @@ impl<'a> Deref for BytesStart<'a> {
 
     fn deref(&self) -> &[u8] {
         &self.buf
+    }
+}
+
+impl<'a> From<QName<'a>> for BytesStart<'a> {
+    #[inline]
+    fn from(name: QName<'a>) -> Self {
+        let name = name.into_inner();
+        Self::wrap(name, name.len())
     }
 }
 
@@ -670,6 +679,13 @@ impl<'a> Deref for BytesEnd<'a> {
 
     fn deref(&self) -> &[u8] {
         &self.name
+    }
+}
+
+impl<'a> From<QName<'a>> for BytesEnd<'a> {
+    #[inline]
+    fn from(name: QName<'a>) -> Self {
+        Self::wrap(name.into_inner().into())
     }
 }
 
