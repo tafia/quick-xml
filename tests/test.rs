@@ -122,7 +122,7 @@ fn fuzz_53() {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            Ok(Eof) | Err(..) => break,
             _ => buf.clear(),
         }
     }
@@ -138,7 +138,7 @@ fn test_issue94() {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            Ok(Eof) | Err(..) => break,
             _ => buf.clear(),
         }
         buf.clear();
