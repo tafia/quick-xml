@@ -12,6 +12,8 @@
 
 ### New Features
 
+- [#758]: Implemented `From<QName>` for `BytesStart` and `BytesEnd`.
+
 ### Bug Fixes
 
 - [#755]: Fix incorrect missing of trimming all-space text events when
@@ -23,6 +25,7 @@
 
 [#650]: https://github.com/tafia/quick-xml/issues/650
 [#755]: https://github.com/tafia/quick-xml/pull/755
+[#758]: https://github.com/tafia/quick-xml/pull/758
 
 
 ## 0.32.0 -- 2024-06-10
