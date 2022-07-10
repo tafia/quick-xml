@@ -108,13 +108,12 @@ impl<'a> From<BytesText<'a>> for BytesStartText<'a> {
 ///
 /// `<name attr="value">`.
 ///
-/// The name can be accessed using the [`name`], [`local_name`] or [`unescaped`] methods. An
-/// iterator over the attributes is returned by the [`attributes`] method.
+/// The name can be accessed using the [`name`] or [`local_name`] methods.
+/// An iterator over the attributes is returned by the [`attributes`] method.
 ///
-/// [`name`]: #method.name
-/// [`local_name`]: #method.local_name
-/// [`unescaped`]: #method.unescaped
-/// [`attributes`]: #method.attributes
+/// [`name`]: Self::name
+/// [`local_name`]: Self::local_name
+/// [`attributes`]: Self::attributes
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
@@ -203,7 +202,7 @@ impl<'a> BytesStart<'a> {
     /// # }}
     /// ```
     ///
-    /// [`to_end`]: #method.to_end
+    /// [`to_end`]: Self::to_end
     pub fn to_borrowed(&self) -> BytesStart {
         BytesStart::borrowed(&self.buf, self.name_len)
     }
@@ -718,7 +717,7 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
-    /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
+    /// See also [`unescaped_with_custom_entities()`](Self::unescaped_with_custom_entities)
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         self.make_unescaped(None)
     }
@@ -733,7 +732,7 @@ impl<'a> BytesText<'a> {
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     ///
-    /// See also [`unescaped()`](#method.unescaped)
+    /// See also [`unescaped()`](Self::unescaped)
     pub fn unescaped_with_custom_entities<'s>(
         &'s self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,

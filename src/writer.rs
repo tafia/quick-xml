@@ -152,13 +152,15 @@ impl<W: Write> Writer<W> {
 
     /// Manually write a newline and indentation at the proper level.
     ///
-    /// This can be used when the heuristic to line break and indent after any [Event] apart
-    /// from [Text] fails such as when a [Start] occurs directly after [Text].
-    /// This method will do nothing if `Writer` was not constructed with `new_with_indent`.
+    /// This can be used when the heuristic to line break and indent after any
+    /// [`Event`] apart from [`Text`] fails such as when a [`Start`] occurs directly
+    /// after [`Text`].
     ///
-    /// [Event]: events/enum.Event.html
-    /// [Text]: events/enum.Event.html#variant.Text
-    /// [Start]: events/enum.Event.html#variant.Start
+    /// This method will do nothing if `Writer` was not constructed with [`new_with_indent`].
+    ///
+    /// [`Text`]: Event::Text
+    /// [`Start`]: Event::Start
+    /// [`new_with_indent`]: Self::new_with_indent
     pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").map_err(Error::Io)?;
@@ -171,7 +173,8 @@ impl<W: Write> Writer<W> {
 
     /// Provides a simple, high-level API for writing XML elements.
     ///
-    /// Returns an [ElementWriter] that simplifies setting attributes and writing content inside the element.
+    /// Returns an [`ElementWriter`] that simplifies setting attributes and writing
+    /// content inside the element.
     ///
     /// # Example
     ///

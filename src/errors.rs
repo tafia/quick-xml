@@ -79,8 +79,6 @@ impl From<AttrError> for Error {
 }
 
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
-///
-/// [`Error`]: enum.Error.html
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl std::fmt::Display for Error {

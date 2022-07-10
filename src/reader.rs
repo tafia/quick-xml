@@ -234,9 +234,9 @@ impl<R> Reader<R> {
     ///
     /// (`false` by default)
     ///
-    /// [`Empty`]: events/enum.Event.html#variant.Empty
-    /// [`Start`]: events/enum.Event.html#variant.Start
-    /// [`End`]: events/enum.Event.html#variant.End
+    /// [`Empty`]: Event::Empty
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
     pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
         self.expand_empty_elements = val;
         self
@@ -249,7 +249,7 @@ impl<R> Reader<R> {
     ///
     /// (`false` by default)
     ///
-    /// [`Text`]: events/enum.Event.html#variant.Text
+    /// [`Text`]: Event::Text
     pub fn trim_text(&mut self, val: bool) -> &mut Self {
         self.trim_text_start = val;
         self.trim_text_end = val;
@@ -262,7 +262,7 @@ impl<R> Reader<R> {
     ///
     /// (`false` by default)
     ///
-    /// [`Text`]: events/enum.Event.html#variant.Text
+    /// [`Text`]: Event::Text
     pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
         self.trim_text_end = val;
         self
@@ -278,7 +278,7 @@ impl<R> Reader<R> {
     ///
     /// (`true` by default)
     ///
-    /// [`End`]: events/enum.Event.html#variant.End
+    /// [`End`]: Event::End
     pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
         self.trim_markup_names_in_closing_tags = val;
         self
@@ -300,7 +300,7 @@ impl<R> Reader<R> {
     ///
     /// (`true` by default)
     ///
-    /// [`End`]: events/enum.Event.html#variant.End
+    /// [`End`]: Event::End
     pub fn check_end_names(&mut self, val: bool) -> &mut Self {
         self.check_end_names = val;
         self
@@ -315,7 +315,7 @@ impl<R> Reader<R> {
     ///
     /// (`false` by default)
     ///
-    /// [`Comment`]: events/enum.Event.html#variant.Comment
+    /// [`Comment`]: Event::Comment
     pub fn check_comments(&mut self, val: bool) -> &mut Self {
         self.check_comments = val;
         self

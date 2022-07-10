@@ -17,15 +17,13 @@ use std::{borrow::Cow, collections::HashMap, ops::Range};
 /// want to access the value using one of the [`unescaped_value`] and [`unescape_and_decode_value`]
 /// functions.
 ///
-/// [`unescaped_value`]: #method.unescaped_value
-/// [`unescape_and_decode_value`]: #method.unescape_and_decode_value
+/// [`unescaped_value`]: Self::unescaped_value
+/// [`unescape_and_decode_value`]: Self::unescape_and_decode_value
 #[derive(Clone, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
     ///
     /// If [`Attributes::with_checks`] is turned off, the key might not be unique.
-    ///
-    /// [`Attributes::with_checks`]: struct.Attributes.html#method.with_checks
     pub key: QName<'a>,
     /// The raw value of the attribute.
     pub value: Cow<'a, [u8]>,
@@ -39,7 +37,7 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
-    /// See also [`unescaped_value_with_custom_entities()`](#method.unescaped_value_with_custom_entities)
+    /// See also [`unescaped_value_with_custom_entities()`](Self::unescaped_value_with_custom_entities)
     pub fn unescaped_value(&self) -> XmlResult<Cow<[u8]>> {
         self.make_unescaped_value(None)
     }
@@ -52,7 +50,7 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
-    /// See also [`unescaped_value()`](#method.unescaped_value)
+    /// See also [`unescaped_value()`](Self::unescaped_value)
     ///
     /// # Pre-condition
     ///
@@ -76,11 +74,11 @@ impl<'a> Attribute<'a> {
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
-    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
     /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
     ///
-    /// [`unescaped_value()`]: #method.unescaped_value
-    /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    /// [`unescaped_value()`]: Self::unescaped_value
+    /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
     pub fn unescape_and_decode_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
         self.do_unescape_and_decode_value(reader, None)
     }
@@ -90,11 +88,11 @@ impl<'a> Attribute<'a> {
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
-    /// * [`Reader::decode()`], as it only allocates when the decoding can't be performed otherwise.
+    /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
     /// * [`unescaped_value_with_custom_entities()`], as it doesn't allocate when no escape sequences are used.
     ///
-    /// [`unescaped_value_with_custom_entities()`]: #method.unescaped_value_with_custom_entities
-    /// [`Reader::decode()`]: ../../reader/struct.Reader.html#method.decode
+    /// [`unescaped_value_with_custom_entities()`]: Self::unescaped_value_with_custom_entities
+    /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
     ///
     /// # Pre-condition
     ///
@@ -189,7 +187,7 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
-/// [`with_checks(false)`]: #method.with_checks
+/// [`with_checks(false)`]: Self::with_checks
 #[derive(Clone, Debug)]
 pub struct Attributes<'a> {
     /// slice of `Element` corresponding to attributes
