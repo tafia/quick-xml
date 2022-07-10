@@ -25,7 +25,10 @@ fn low_level_comparison(c: &mut Criterion) {
                 }
                 buf.clear();
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -49,7 +52,10 @@ fn low_level_comparison(c: &mut Criterion) {
                 }
                 input = &input[consumed..];
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -68,7 +74,10 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -83,7 +92,10 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -101,7 +113,10 @@ fn low_level_comparison(c: &mut Criterion) {
                     _ => (),
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
 
@@ -166,7 +181,10 @@ fn low_level_comparison(c: &mut Criterion) {
                     count += 1;
                 }
             }
-            assert_eq!(count, 1550, "Overall tag count in ./tests/documents/sample_rss.xml");
+            assert_eq!(
+                count, 1550,
+                "Overall tag count in ./tests/documents/sample_rss.xml"
+            );
         })
     });
     group.finish();
