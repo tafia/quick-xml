@@ -154,7 +154,7 @@ where
         } else {
             self.parent
                 .writer
-                .write_event(Event::Start(self.attrs.to_borrowed()))?;
+                .write_event(Event::Start(self.attrs.borrow()))?;
             self.parent.writer.write(&self.children)?;
             self.parent
                 .writer

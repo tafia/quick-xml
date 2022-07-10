@@ -75,6 +75,14 @@ impl<'a> BytesStartText<'a> {
         self.content.into_inner()
     }
 
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesStartText {
+        BytesStartText {
+            content: self.content.borrow(),
+        }
+    }
+
     /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
     /// in the event.
     ///
@@ -195,7 +203,7 @@ impl<'a> BytesStart<'a> {
     /// # fn example(&self) -> Result<(), Error> {
     /// # let mut writer = Writer::new(Vec::new());
     ///
-    /// writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
+    /// writer.write_event(Event::Start(self.attrs.borrow()))?;
     /// // ...
     /// writer.write_event(Event::End(self.attrs.to_end()))?;
     /// # Ok(())
@@ -203,7 +211,7 @@ impl<'a> BytesStart<'a> {
     /// ```
     ///
     /// [`to_end`]: Self::to_end
-    pub fn to_borrowed(&self) -> BytesStart {
+    pub fn borrow(&self) -> BytesStart {
         BytesStart::borrowed(&self.buf, self.name_len)
     }
 
@@ -343,13 +351,13 @@ impl<'a> Deref for BytesStart<'a> {
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
-    element: BytesStart<'a>,
+    content: BytesStart<'a>,
 }
 
 impl<'a> BytesDecl<'a> {
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub fn from_start(start: BytesStart<'a>) -> BytesDecl<'a> {
-        BytesDecl { element: start }
+    pub fn from_start(start: BytesStart<'a>) -> Self {
+        Self { content: start }
     }
 
     /// Gets xml version, excluding quotes (`'` or `"`).
@@ -407,7 +415,7 @@ impl<'a> BytesDecl<'a> {
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
-        match self.element.attributes().with_checks(false).next() {
+        match self.content.attributes().with_checks(false).next() {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
@@ -457,7 +465,7 @@ impl<'a> BytesDecl<'a> {
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        self.element
+        self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
             .transpose()
@@ -499,7 +507,7 @@ impl<'a> BytesDecl<'a> {
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        self.element
+        self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
             .transpose()
@@ -548,7 +556,7 @@ impl<'a> BytesDecl<'a> {
         buf.push(b'"');
 
         BytesDecl {
-            element: BytesStart::owned(buf, 3),
+            content: BytesStart::owned(buf, 3),
         }
     }
 
@@ -563,7 +571,15 @@ impl<'a> BytesDecl<'a> {
     /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesDecl<'static> {
         BytesDecl {
-            element: self.element.into_owned(),
+            content: self.content.into_owned(),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesDecl {
+        BytesDecl {
+            content: self.content.borrow(),
         }
     }
 }
@@ -572,7 +588,7 @@ impl<'a> Deref for BytesDecl<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.element
+        &*self.content
     }
 }
 
@@ -605,6 +621,14 @@ impl<'a> BytesEnd<'a> {
     pub fn into_owned(self) -> BytesEnd<'static> {
         BytesEnd {
             name: Cow::Owned(self.name.into_owned()),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesEnd {
+        BytesEnd {
+            name: Cow::Borrowed(&self.name),
         }
     }
 
@@ -697,6 +721,14 @@ impl<'a> BytesText<'a> {
     #[inline]
     pub fn into_inner(self) -> Cow<'a, [u8]> {
         self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesText {
+        BytesText {
+            content: Cow::Borrowed(&self.content),
+        }
     }
 
     /// Returns unescaped version of the text content, that can be written
@@ -851,6 +883,14 @@ impl<'a> BytesCData<'a> {
     #[inline]
     pub fn into_inner(self) -> Cow<'a, [u8]> {
         self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesCData {
+        BytesCData {
+            content: Cow::Borrowed(&self.content),
+        }
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -1012,6 +1052,24 @@ impl<'a> Event<'a> {
             Event::Decl(e) => Event::Decl(e.into_owned()),
             Event::PI(e) => Event::PI(e.into_owned()),
             Event::DocType(e) => Event::DocType(e.into_owned()),
+            Event::Eof => Event::Eof,
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> Event {
+        match self {
+            Event::StartText(e) => Event::StartText(e.borrow()),
+            Event::Start(e) => Event::Start(e.borrow()),
+            Event::End(e) => Event::End(e.borrow()),
+            Event::Empty(e) => Event::Empty(e.borrow()),
+            Event::Text(e) => Event::Text(e.borrow()),
+            Event::Comment(e) => Event::Comment(e.borrow()),
+            Event::CData(e) => Event::CData(e.borrow()),
+            Event::Decl(e) => Event::Decl(e.borrow()),
+            Event::PI(e) => Event::PI(e.borrow()),
+            Event::DocType(e) => Event::DocType(e.borrow()),
             Event::Eof => Event::Eof,
         }
     }

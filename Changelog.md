@@ -25,6 +25,8 @@
 - [#395]: Add support for XML Schema `xs:list`
 - [#324]: `Reader::from_str` / `Deserializer::from_str` / `from_str` now ignore
   the XML declared encoding and always use UTF-8
+- [#416]: Add `borrow()` methods in all event structs which allows to get
+  a borrowed version of any event
 
 ### Bug Fixes
 
@@ -108,6 +110,9 @@
   |`read_to_end_unbuffered` |`read_to_end`
 - [#412]: Change `read_to_end*` and `read_text_into` to accept `QName` instead of `AsRef<[u8]>`
 
+- [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
+  added to all events
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -131,6 +136,7 @@
 [#403]: https://github.com/tafia/quick-xml/pull/403
 [#407]: https://github.com/tafia/quick-xml/pull/407
 [#412]: https://github.com/tafia/quick-xml/pull/412
+[#416]: https://github.com/tafia/quick-xml/pull/416
 
 ## 0.23.0 -- 2022-05-08
 

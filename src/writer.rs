@@ -256,7 +256,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write some text inside the current element.
     pub fn write_text_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::Text(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -266,7 +266,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write a CData event `<![CDATA[...]]>` inside the current element.
     pub fn write_cdata_content(self, text: BytesCData) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::CData(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -276,7 +276,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write a processing instruction `<?...?>` inside the current element.
     pub fn write_pi_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::PI(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -295,7 +295,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         F: Fn(&mut Writer<W>) -> Result<()>,
     {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         closure(&mut self.writer)?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
