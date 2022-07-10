@@ -135,7 +135,7 @@ impl EncodingRef {
 ///                 _ => (),
 ///             }
 ///         },
-///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+///         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap()),
 ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 ///         Ok(Event::Eof) => break,
 ///         _ => (),
@@ -496,7 +496,7 @@ impl<R: BufRead> Reader<R> {
     /// loop {
     ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).expect("Error!")),
+    ///         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).expect("Error!")),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
@@ -549,7 +549,7 @@ impl<R: BufRead> Reader<R> {
     ///             panic!("Undeclared namespace prefix {:?}", String::from_utf8(p))
     ///         }
     ///         Ok((_, Event::Text(e))) => {
-    ///             txt.push(e.unescape_and_decode(&reader).expect("Error!"))
+    ///             txt.push(e.decode_and_unescape(&reader).expect("Error!"))
     ///         },
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     ///         Ok((_, Event::Eof)) => break,
@@ -750,7 +750,7 @@ impl<R: BufRead> Reader<R> {
         let s = match self.read_event_into(buf) {
             Err(e) => return Err(e),
 
-            Ok(Event::Text(e)) => e.unescape_and_decode(self),
+            Ok(Event::Text(e)) => e.decode_and_unescape(self),
             Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),

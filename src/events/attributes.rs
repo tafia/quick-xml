@@ -2,23 +2,23 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
-use crate::errors::{Error, Result as XmlResult};
-use crate::escape::{do_unescape, escape};
+use crate::errors::Result as XmlResult;
+use crate::escape::{escape, unescape_with};
 use crate::name::QName;
 use crate::reader::{is_whitespace, Reader};
 use crate::utils::{write_byte_string, write_cow_string, Bytes};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
-use std::{borrow::Cow, collections::HashMap, ops::Range};
+use std::{borrow::Cow, ops::Range};
 
 /// A struct representing a key/value XML attribute.
 ///
 /// Field `value` stores raw bytes, possibly containing escape-sequences. Most users will likely
-/// want to access the value using one of the [`unescaped_value`] and [`unescape_and_decode_value`]
+/// want to access the value using one of the [`unescaped_value`] and [`decode_and_unescape_value`]
 /// functions.
 ///
 /// [`unescaped_value`]: Self::unescaped_value
-/// [`unescape_and_decode_value`]: Self::unescape_and_decode_value
+/// [`decode_and_unescape_value`]: Self::decode_and_unescape_value
 #[derive(Clone, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
@@ -37,16 +37,17 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
-    /// See also [`unescaped_value_with_custom_entities()`](Self::unescaped_value_with_custom_entities)
+    /// See also [`unescaped_value_with()`](Self::unescaped_value_with)
     pub fn unescaped_value(&self) -> XmlResult<Cow<[u8]>> {
-        self.make_unescaped_value(None)
+        self.unescaped_value_with(|_| None)
     }
 
     /// Returns the unescaped value, using custom entities.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
     /// replaced with their unescaped equivalents such as `>`.
-    /// Additional entities can be provided in `custom_entities`.
+    /// A fallback resolver for additional custom entities can be provided via
+    /// `resolve_entity`.
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
@@ -54,22 +55,15 @@ impl<'a> Attribute<'a> {
     ///
     /// # Pre-condition
     ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescaped_value_with_custom_entities(
-        &self,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> XmlResult<Cow<[u8]>> {
-        self.make_unescaped_value(Some(custom_entities))
+    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
+    pub fn unescaped_value_with<'s, 'entity>(
+        &'s self,
+        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
+    ) -> XmlResult<Cow<'s, [u8]>> {
+        Ok(unescape_with(&*self.value, resolve_entity)?)
     }
 
-    fn make_unescaped_value(
-        &self,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> XmlResult<Cow<[u8]>> {
-        do_unescape(&*self.value, custom_entities).map_err(Error::EscapeError)
-    }
-
-    /// Decode then unescapes the value
+    /// Decodes then unescapes the value
     ///
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
@@ -79,41 +73,31 @@ impl<'a> Attribute<'a> {
     ///
     /// [`unescaped_value()`]: Self::unescaped_value
     /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
-    pub fn unescape_and_decode_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
-        self.do_unescape_and_decode_value(reader, None)
+    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
+        self.decode_and_unescape_value_with(reader, |_| None)
     }
 
-    /// Decode then unescapes the value with custom entities
+    /// Decodes then unescapes the value with custom entities
     ///
     /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
     /// instead use one of:
     ///
     /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescaped_value_with_custom_entities()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`unescaped_value_with()`], as it doesn't allocate when no escape sequences are used.
     ///
-    /// [`unescaped_value_with_custom_entities()`]: Self::unescaped_value_with_custom_entities
+    /// [`unescaped_value_with()`]: Self::unescaped_value_with
     /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
     ///
     /// # Pre-condition
     ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_value_with_custom_entities<B>(
+    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
+    pub fn decode_and_unescape_value_with<'entity, B>(
         &self,
         reader: &Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> XmlResult<String> {
-        self.do_unescape_and_decode_value(reader, Some(custom_entities))
-    }
-
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    fn do_unescape_and_decode_value<B>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
     ) -> XmlResult<String> {
         let decoded = reader.decoder().decode(&*self.value)?;
-
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        let unescaped = unescape_with(decoded.as_bytes(), resolve_entity)?;
         Ok(String::from_utf8(unescaped.into_owned())?)
     }
 }

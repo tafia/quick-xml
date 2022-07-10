@@ -59,7 +59,7 @@
 //!             }
 //!         },
 //!         // unescape and decode the text event using the reader encoding
-//!         Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+//!         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap()),
 //!         Ok(Event::Eof) => break, // exits the loop when reaching end of file
 //!         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 //!         _ => (), // There are several other `Event`s we do not consider here
@@ -139,7 +139,7 @@ mod errors;
 mod escapei;
 pub mod escape {
     //! Manage xml character escapes
-    pub(crate) use crate::escapei::{do_unescape, EscapeError};
+    pub(crate) use crate::escapei::EscapeError;
     pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
 }
 pub mod events;

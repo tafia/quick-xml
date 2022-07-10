@@ -653,7 +653,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
         match reader.read_event_into(&mut buf)? {
             Eof => break,
             Text(e) => {
-                let t = e.unescape_and_decode(&reader).unwrap();
+                let t = e.decode_and_unescape(&reader).unwrap();
                 assert!(writer
                     .write_event(Text(BytesText::from_plain_str(&t)))
                     .is_ok());
