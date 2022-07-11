@@ -747,17 +747,20 @@ impl<'a> BytesText<'a> {
         ))
     }
 
-    /// gets escaped content
+    /// Decodes using UTF-8 then unescapes the content of the event.
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
     /// See also [`unescape_with()`](Self::unescape_with)
+    ///
+    /// This method is available only if `encoding` feature is **not** enabled.
+    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape(&self) -> Result<Cow<[u8]>> {
         self.unescape_with(|_| None)
     }
 
-    /// gets escaped content with custom entities
+    /// Decodes using UTF-8 then unescapes the content of the event with custom entities.
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
@@ -768,6 +771,9 @@ impl<'a> BytesText<'a> {
     /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
     ///
     /// See also [`unescape()`](Self::unescape)
+    ///
+    /// This method is available only if `encoding` feature is **not** enabled.
+    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_with<'s, 'entity>(
         &'s self,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,

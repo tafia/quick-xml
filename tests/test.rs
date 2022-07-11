@@ -155,15 +155,17 @@ fn fuzz_101() {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Start(ref e)) | Ok(Empty(ref e)) => {
+            Ok(Start(e)) | Ok(Empty(e)) => {
                 for a in e.attributes() {
-                    if a.ok().map_or(true, |a| a.unescape_value().is_err()) {
+                    if a.ok()
+                        .map_or(true, |a| a.decode_and_unescape_value(&reader).is_err())
+                    {
                         break;
                     }
                 }
             }
-            Ok(Text(ref e)) => {
-                if e.unescape().is_err() {
+            Ok(Text(e)) => {
+                if e.decode_and_unescape(&reader).is_err() {
                     break;
                 }
             }

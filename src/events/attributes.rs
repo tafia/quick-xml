@@ -30,7 +30,7 @@ pub struct Attribute<'a> {
 }
 
 impl<'a> Attribute<'a> {
-    /// Returns the unescaped value.
+    /// Decodes using UTF-8 then unescapes the value.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
     /// replaced with their unescaped equivalents such as `>`.
@@ -38,11 +38,14 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescape_value_with()`](Self::unescape_value_with)
+    ///
+    /// This method is available only if `encoding` feature is **not** enabled.
+    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<[u8]>> {
         self.unescape_value_with(|_| None)
     }
 
-    /// Returns the unescaped value, using custom entities.
+    /// Decodes using UTF-8 then unescapes the value, using custom entities.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
     /// replaced with their unescaped equivalents such as `>`.
@@ -53,9 +56,12 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value()`](Self::unescape_value)
     ///
+    /// This method is available only if `encoding` feature is **not** enabled.
+    ///
     /// # Pre-condition
     ///
     /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
+    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value_with<'s, 'entity>(
         &'s self,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
