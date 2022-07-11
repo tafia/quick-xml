@@ -7,7 +7,7 @@ use std::ops::Range;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
-/// Error for XML escape/unescqpe.
+/// Error for XML escape / unescape.
 #[derive(Debug)]
 pub enum EscapeError {
     /// Entity with Null character
@@ -62,22 +62,41 @@ impl std::fmt::Display for EscapeError {
 
 impl std::error::Error for EscapeError {}
 
-/// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
-/// corresponding xml escaped value.
+/// Escapes a `&[u8]` and replaces all xml special characters (`<`, `>`, `&`, `'`, `"`)
+/// with their corresponding xml escaped value.
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `>`       | `&gt;`
+/// | `&`       | `&amp;`
+/// | `'`       | `&apos;`
+/// | `"`       | `&quot;`
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
 }
 
-/// Should only be used for escaping text content. In xml text content, it is allowed
-/// (though not recommended) to leave the quote special characters " and ' unescaped.
-/// This function escapes a `&[u8]` and replaces xml special characters (<, >, &) with
-/// their corresponding xml escaped value, but does not escape quote characters.
+/// Escapes a `&[u8]` and replaces xml special characters (`<`, `>`, `&`)
+/// with their corresponding xml escaped value.
+///
+/// Should only be used for escaping text content. In XML text content, it is allowed
+/// (though not recommended) to leave the quote special characters `"` and `'` unescaped.
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `>`       | `&gt;`
+/// | `&`       | `&amp;`
 pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
 }
 
-/// Escapes a `&[u8]` and replaces a subset of xml special characters (<, >, &, ', ") with their
-/// corresponding xml escaped value.
+/// Escapes a `&[u8]` and replaces a subset of xml special characters (`<`, `>`,
+/// `&`, `'`, `"`) with their corresponding xml escaped value.
 fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     let mut escaped = None;
     let mut bytes = raw.iter();
@@ -110,14 +129,14 @@ fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     }
 }
 
-/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value
+/// Unescape a `&[u8]` and replaces all xml escaped characters (`&...;`) into
+/// their corresponding value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
     unescape_with(raw, |_| None)
 }
 
-/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using a resolver function for custom entities.
+/// Unescape a `&[u8]` and replaces all xml escaped characters (`&...;`) into
+/// their corresponding value, using a resolver function for custom entities.
 ///
 /// # Pre-condition
 ///
