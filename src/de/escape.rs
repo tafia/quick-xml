@@ -1,10 +1,13 @@
 //! Serde `Deserializer` module
 
 use crate::de::deserialize_bool;
-use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
+use crate::errors::serialize::DeError;
+use crate::escape::unescape;
+use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
+use std::str::from_utf8;
 
 /// A deserializer for a xml escaped and encoded value
 ///
@@ -28,13 +31,6 @@ impl<'a> EscapedDeserializer<'a> {
             decoder,
             escaped_value,
             escaped,
-        }
-    }
-    fn unescaped(&self) -> Result<Cow<[u8]>, DeError> {
-        if self.escaped {
-            unescape(&self.escaped_value).map_err(|e| DeError::InvalidXml(Error::EscapeError(e)))
-        } else {
-            Ok(Cow::Borrowed(&self.escaped_value))
         }
     }
 }
@@ -66,10 +62,14 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        let unescaped = self.unescaped()?;
-        let value = self.decoder.decode(&unescaped)?;
-
-        visitor.visit_str(&value)
+        let decoded = self.decoder.decode(&self.escaped_value)?;
+        if self.escaped {
+            let value = unescape(decoded.as_bytes())?;
+            // from_utf8 should never fail because content is always UTF-8 encoded
+            visitor.visit_str(from_utf8(&value)?)
+        } else {
+            visitor.visit_str(&decoded)
+        }
     }
 
     /// Returns [`DeError::Unsupported`]

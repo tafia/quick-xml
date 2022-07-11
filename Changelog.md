@@ -44,6 +44,9 @@
   method not found a corresponding end tag and reader has non-UTF-8 encoding
 - [#421]: Fix incorrect order of unescape and decode operations for serde deserializer:
   decoding should be first, unescape is the second
+- [#421]: Fixed unknown bug in serde deserialization of externally tagged enums
+  when an enum variant represented as a `Text` event (i.e. `<xml>tag</xml>`)
+  and a document encoding is not an UTF-8
 
 ### Misc Changes
 
