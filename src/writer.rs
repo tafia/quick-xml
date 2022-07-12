@@ -152,13 +152,15 @@ impl<W: Write> Writer<W> {
 
     /// Manually write a newline and indentation at the proper level.
     ///
-    /// This can be used when the heuristic to line break and indent after any [Event] apart
-    /// from [Text] fails such as when a [Start] occurs directly after [Text].
-    /// This method will do nothing if `Writer` was not constructed with `new_with_indent`.
+    /// This can be used when the heuristic to line break and indent after any
+    /// [`Event`] apart from [`Text`] fails such as when a [`Start`] occurs directly
+    /// after [`Text`].
     ///
-    /// [Event]: events/enum.Event.html
-    /// [Text]: events/enum.Event.html#variant.Text
-    /// [Start]: events/enum.Event.html#variant.Start
+    /// This method will do nothing if `Writer` was not constructed with [`new_with_indent`].
+    ///
+    /// [`Text`]: Event::Text
+    /// [`Start`]: Event::Start
+    /// [`new_with_indent`]: Self::new_with_indent
     pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").map_err(Error::Io)?;
@@ -171,7 +173,8 @@ impl<W: Write> Writer<W> {
 
     /// Provides a simple, high-level API for writing XML elements.
     ///
-    /// Returns an [ElementWriter] that simplifies setting attributes and writing content inside the element.
+    /// Returns an [`ElementWriter`] that simplifies setting attributes and writing
+    /// content inside the element.
     ///
     /// # Example
     ///
@@ -253,7 +256,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write some text inside the current element.
     pub fn write_text_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::Text(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -263,7 +266,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write a CData event `<![CDATA[...]]>` inside the current element.
     pub fn write_cdata_content(self, text: BytesCData) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::CData(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -273,7 +276,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write a processing instruction `<?...?>` inside the current element.
     pub fn write_pi_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::PI(text))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
@@ -292,7 +295,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         F: Fn(&mut Writer<W>) -> Result<()>,
     {
         self.writer
-            .write_event(Event::Start(self.start_tag.to_borrowed()))?;
+            .write_event(Event::Start(self.start_tag.borrow()))?;
         closure(&mut self.writer)?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;

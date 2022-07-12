@@ -517,7 +517,7 @@ where
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
 
-    /// Tuple representation is the same as [sequences](#method.deserialize_seq).
+    /// Tuple representation is the same as [sequences](Self::deserialize_seq).
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -525,7 +525,7 @@ where
         self.deserialize_seq(visitor)
     }
 
-    /// Named tuple representation is the same as [unnamed tuples](#method.deserialize_tuple).
+    /// Named tuple representation is the same as [unnamed tuples](Self::deserialize_tuple).
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
@@ -687,7 +687,7 @@ where
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
 
-    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+    /// Representation of tuples the same as [sequences](Self::deserialize_seq).
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -695,7 +695,7 @@ where
         self.deserialize_seq(visitor)
     }
 
-    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+    /// Representation of named tuples the same as [unnamed tuples](Self::deserialize_tuple).
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,

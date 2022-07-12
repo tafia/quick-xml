@@ -34,7 +34,7 @@
 
 pub mod attributes;
 
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -75,6 +75,14 @@ impl<'a> BytesStartText<'a> {
         self.content.into_inner()
     }
 
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesStartText {
+        BytesStartText {
+            content: self.content.borrow(),
+        }
+    }
+
     /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
     /// in the event.
     ///
@@ -108,13 +116,12 @@ impl<'a> From<BytesText<'a>> for BytesStartText<'a> {
 ///
 /// `<name attr="value">`.
 ///
-/// The name can be accessed using the [`name`], [`local_name`] or [`unescaped`] methods. An
-/// iterator over the attributes is returned by the [`attributes`] method.
+/// The name can be accessed using the [`name`] or [`local_name`] methods.
+/// An iterator over the attributes is returned by the [`attributes`] method.
 ///
-/// [`name`]: #method.name
-/// [`local_name`]: #method.local_name
-/// [`unescaped`]: #method.unescaped
-/// [`attributes`]: #method.attributes
+/// [`name`]: Self::name
+/// [`local_name`]: Self::local_name
+/// [`attributes`]: Self::attributes
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesStart<'a> {
     /// content of the element, before any utf8 conversion
@@ -196,15 +203,15 @@ impl<'a> BytesStart<'a> {
     /// # fn example(&self) -> Result<(), Error> {
     /// # let mut writer = Writer::new(Vec::new());
     ///
-    /// writer.write_event(Event::Start(self.attrs.to_borrowed()))?;
+    /// writer.write_event(Event::Start(self.attrs.borrow()))?;
     /// // ...
     /// writer.write_event(Event::End(self.attrs.to_end()))?;
     /// # Ok(())
     /// # }}
     /// ```
     ///
-    /// [`to_end`]: #method.to_end
-    pub fn to_borrowed(&self) -> BytesStart {
+    /// [`to_end`]: Self::to_end
+    pub fn borrow(&self) -> BytesStart {
         BytesStart::borrowed(&self.buf, self.name_len)
     }
 
@@ -344,13 +351,13 @@ impl<'a> Deref for BytesStart<'a> {
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
-    element: BytesStart<'a>,
+    content: BytesStart<'a>,
 }
 
 impl<'a> BytesDecl<'a> {
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub fn from_start(start: BytesStart<'a>) -> BytesDecl<'a> {
-        BytesDecl { element: start }
+    pub fn from_start(start: BytesStart<'a>) -> Self {
+        Self { content: start }
     }
 
     /// Gets xml version, excluding quotes (`'` or `"`).
@@ -408,7 +415,7 @@ impl<'a> BytesDecl<'a> {
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
-        match self.element.attributes().with_checks(false).next() {
+        match self.content.attributes().with_checks(false).next() {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
@@ -458,7 +465,7 @@ impl<'a> BytesDecl<'a> {
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        self.element
+        self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
             .transpose()
@@ -500,7 +507,7 @@ impl<'a> BytesDecl<'a> {
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
     pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        self.element
+        self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
             .transpose()
@@ -549,12 +556,12 @@ impl<'a> BytesDecl<'a> {
         buf.push(b'"');
 
         BytesDecl {
-            element: BytesStart::owned(buf, 3),
+            content: BytesStart::owned(buf, 3),
         }
     }
 
     /// Gets the decoder struct
-    #[cfg(feature = "encoding_rs")]
+    #[cfg(feature = "encoding")]
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())
@@ -564,7 +571,15 @@ impl<'a> BytesDecl<'a> {
     /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesDecl<'static> {
         BytesDecl {
-            element: self.element.into_owned(),
+            content: self.content.into_owned(),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesDecl {
+        BytesDecl {
+            content: self.content.borrow(),
         }
     }
 }
@@ -573,7 +588,7 @@ impl<'a> Deref for BytesDecl<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.element
+        &*self.content
     }
 }
 
@@ -606,6 +621,14 @@ impl<'a> BytesEnd<'a> {
     pub fn into_owned(self) -> BytesEnd<'static> {
         BytesEnd {
             name: Cow::Owned(self.name.into_owned()),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesEnd {
+        BytesEnd {
+            name: Cow::Borrowed(&self.name),
         }
     }
 
@@ -647,7 +670,9 @@ impl<'a> Deref for BytesEnd<'a> {
 /// in escaped form. Internally data is stored in escaped form
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
-    // Invariant: The content is always escaped.
+    /// Escaped then encoded content of the event. Content is encoded in the XML
+    /// document encoding when event comes from the reader and should be in the
+    /// document encoding when event passed to the writer
     content: Cow<'a, [u8]>,
 }
 
@@ -700,6 +725,14 @@ impl<'a> BytesText<'a> {
         self.content
     }
 
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesText {
+        BytesText {
+            content: Cow::Borrowed(&self.content),
+        }
+    }
+
     /// Returns unescaped version of the text content, that can be written
     /// as CDATA in XML
     #[cfg(feature = "serialize")]
@@ -718,7 +751,7 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
-    /// See also [`unescaped_with_custom_entities()`](#method.unescaped_with_custom_entities)
+    /// See also [`unescaped_with_custom_entities()`](Self::unescaped_with_custom_entities)
     pub fn unescaped(&self) -> Result<Cow<[u8]>> {
         self.make_unescaped(None)
     }
@@ -733,7 +766,7 @@ impl<'a> BytesText<'a> {
     ///
     /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
     ///
-    /// See also [`unescaped()`](#method.unescaped)
+    /// See also [`unescaped()`](Self::unescaped)
     pub fn unescaped_with_custom_entities<'s>(
         &'s self,
         custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
@@ -852,6 +885,14 @@ impl<'a> BytesCData<'a> {
     #[inline]
     pub fn into_inner(self) -> Cow<'a, [u8]> {
         self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesCData {
+        BytesCData {
+            content: Cow::Borrowed(&self.content),
+        }
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -1016,6 +1057,24 @@ impl<'a> Event<'a> {
             Event::Eof => Event::Eof,
         }
     }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> Event {
+        match self {
+            Event::StartText(e) => Event::StartText(e.borrow()),
+            Event::Start(e) => Event::Start(e.borrow()),
+            Event::End(e) => Event::End(e.borrow()),
+            Event::Empty(e) => Event::Empty(e.borrow()),
+            Event::Text(e) => Event::Text(e.borrow()),
+            Event::Comment(e) => Event::Comment(e.borrow()),
+            Event::CData(e) => Event::CData(e.borrow()),
+            Event::Decl(e) => Event::Decl(e.borrow()),
+            Event::PI(e) => Event::PI(e.borrow()),
+            Event::DocType(e) => Event::DocType(e.borrow()),
+            Event::Eof => Event::Eof,
+        }
+    }
 }
 
 impl<'a> Deref for Event<'a> {
@@ -1049,47 +1108,6 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 mod test {
     use super::*;
     use pretty_assertions::assert_eq;
-
-    #[test]
-    fn local_name() {
-        use std::str::from_utf8;
-        let xml = r#"
-            <foo:bus attr='bar'>foobusbar</foo:bus>
-            <foo: attr='bar'>foobusbar</foo:>
-            <:foo attr='bar'>foobusbar</:foo>
-            <foo:bus:baz attr='bar'>foobusbar</foo:bus:baz>
-            "#;
-        let mut rdr = Reader::from_str(xml);
-        let mut buf = Vec::new();
-        let mut parsed_local_names = Vec::new();
-        loop {
-            match rdr
-                .read_event_into(&mut buf)
-                .expect("unable to read xml event")
-            {
-                Event::Start(ref e) => parsed_local_names.push(
-                    from_utf8(e.local_name().as_ref())
-                        .expect("unable to build str from local_name")
-                        .to_string(),
-                ),
-                Event::End(ref e) => parsed_local_names.push(
-                    from_utf8(e.local_name().as_ref())
-                        .expect("unable to build str from local_name")
-                        .to_string(),
-                ),
-                Event::Eof => break,
-                _ => {}
-            }
-        }
-        assert_eq!(parsed_local_names[0], "bus".to_string());
-        assert_eq!(parsed_local_names[1], "bus".to_string());
-        assert_eq!(parsed_local_names[2], "".to_string());
-        assert_eq!(parsed_local_names[3], "".to_string());
-        assert_eq!(parsed_local_names[4], "foo".to_string());
-        assert_eq!(parsed_local_names[5], "foo".to_string());
-        assert_eq!(parsed_local_names[6], "bus:baz".to_string());
-        assert_eq!(parsed_local_names[7], "bus:baz".to_string());
-    }
 
     #[test]
     fn bytestart_create() {

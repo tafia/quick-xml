@@ -3,9 +3,10 @@ use std::io::Cursor;
 use std::str::from_utf8;
 
 use quick_xml::events::attributes::{AttrError, Attribute};
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::Event::*;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText};
 use quick_xml::name::QName;
-use quick_xml::{events::Event::*, Reader, Result, Writer};
+use quick_xml::{Reader, Result, Writer};
 
 use pretty_assertions::assert_eq;
 
@@ -621,7 +622,7 @@ fn test_read_write_roundtrip_escape() -> Result<()> {
             Text(e) => {
                 let t = e.escaped();
                 assert!(writer
-                    .write_event(Event::Text(BytesText::from_escaped(t.to_vec())))
+                    .write_event(Text(BytesText::from_escaped(t.to_vec())))
                     .is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
@@ -654,7 +655,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
             Text(e) => {
                 let t = e.unescape_and_decode(&reader).unwrap();
                 assert!(writer
-                    .write_event(Event::Text(BytesText::from_plain_str(&t)))
+                    .write_event(Text(BytesText::from_plain_str(&t)))
                     .is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
@@ -799,10 +800,8 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::StartText(e)) => {
-                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
-                }
-                Ok(Event::Eof) => break,
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(Eof) => break,
                 _ => (),
             }
         }
@@ -825,10 +824,8 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::StartText(e)) => {
-                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
-                }
-                Ok(Event::Eof) => break,
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(Eof) => break,
                 _ => (),
             }
         }
@@ -846,10 +843,8 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::StartText(e)) => {
-                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
-                }
-                Ok(Event::Eof) => break,
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(Eof) => break,
                 _ => (),
             }
         }
@@ -869,10 +864,8 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event_into(&mut buf) {
-                Ok(Event::StartText(e)) => {
-                    txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap())
-                }
-                Ok(Event::Eof) => break,
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(Eof) => break,
                 _ => (),
             }
         }

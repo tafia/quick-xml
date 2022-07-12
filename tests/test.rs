@@ -95,7 +95,7 @@ fn test_comment_starting_with_gt() {
 }
 
 #[test]
-#[cfg(feature = "encoding_rs")]
+#[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
     let src: &[u8] = include_bytes!("documents/opennews_all.rss");
     let mut r = Reader::from_reader(src as &[u8]);
@@ -122,7 +122,7 @@ fn fuzz_53() {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            Ok(Eof) | Err(..) => break,
             _ => buf.clear(),
         }
     }
@@ -138,7 +138,7 @@ fn test_issue94() {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Eof) | Err(..) => break,
+            Ok(Eof) | Err(..) => break,
             _ => buf.clear(),
         }
         buf.clear();

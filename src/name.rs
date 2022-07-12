@@ -797,4 +797,31 @@ mod namespaces {
         );
         assert_eq!(resolver.find(name, &buffer), Unknown(b"unknown".to_vec()));
     }
+
+    /// Checks how the QName is decomposed to a prefix and a local name
+    #[test]
+    fn prefix_and_local_name() {
+        let name = QName(b"foo:bus");
+        assert_eq!(name.prefix(), Some(Prefix(b"foo")));
+        assert_eq!(name.local_name(), LocalName(b"bus"));
+        assert_eq!(name.decompose(), (LocalName(b"bus"), Some(Prefix(b"foo"))));
+
+        let name = QName(b"foo:");
+        assert_eq!(name.prefix(), Some(Prefix(b"foo")));
+        assert_eq!(name.local_name(), LocalName(b""));
+        assert_eq!(name.decompose(), (LocalName(b""), Some(Prefix(b"foo"))));
+
+        let name = QName(b":foo");
+        assert_eq!(name.prefix(), Some(Prefix(b"")));
+        assert_eq!(name.local_name(), LocalName(b"foo"));
+        assert_eq!(name.decompose(), (LocalName(b"foo"), Some(Prefix(b""))));
+
+        let name = QName(b"foo:bus:baz");
+        assert_eq!(name.prefix(), Some(Prefix(b"foo")));
+        assert_eq!(name.local_name(), LocalName(b"bus:baz"));
+        assert_eq!(
+            name.decompose(),
+            (LocalName(b"bus:baz"), Some(Prefix(b"foo")))
+        );
+    }
 }
