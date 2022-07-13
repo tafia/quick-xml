@@ -136,3 +136,7 @@ required-features = ["serialize"]
 [[test]]
 name = "serde-migrated"
 required-features = ["serialize"]
+
+[[test]]
+name = "async_test"
+required-features = ["async"]
