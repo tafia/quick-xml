@@ -121,6 +121,7 @@
 - [#393]: Added tests for reserved names (started with "xml"i) -- see <https://www.w3.org/TR/xml-names11/#xmlReserved>
 - [#363]: Add tests for `Reader::read_event_impl` to ensure that proper events generated for corresponding inputs
 - [#407]: Improved benchmark suite to cover whole-document parsing, escaping and unescaping text
+- [#418]: Parameterized macrobenchmarks and comparative benchmarks, added throughput measurements via criterion
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
@@ -137,6 +138,7 @@
 [#407]: https://github.com/tafia/quick-xml/pull/407
 [#412]: https://github.com/tafia/quick-xml/pull/412
 [#416]: https://github.com/tafia/quick-xml/pull/416
+[#418]: https://github.com/tafia/quick-xml/pull/418
 
 ## 0.23.0 -- 2022-05-08
 
