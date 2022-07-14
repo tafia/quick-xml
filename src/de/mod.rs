@@ -695,7 +695,7 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
 
     /// Create new deserializer that will borrow data from the specified borrowing reader
     #[inline]
-    fn from_borrowing_reader(mut reader: Reader<&'de [u8]>) -> Self {
+    fn from_borrowing_reader(mut reader: Reader<crate::SliceReader<'de>>) -> Self {
         reader
             .expand_empty_elements(true)
             .check_end_names(true)
@@ -930,7 +930,7 @@ pub trait XmlRead<'i> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
-    reader: Reader<R>,
+    reader: Reader<crate::IoReader<R>>,
     buf: Vec<u8>,
 }
 
@@ -975,7 +975,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_str`] or [`Deserializer::from_slice`]
 pub struct SliceReader<'de> {
-    reader: Reader<&'de [u8]>,
+    reader: Reader<crate::SliceReader<'de>>,
 }
 
 impl<'de> XmlRead<'de> for SliceReader<'de> {

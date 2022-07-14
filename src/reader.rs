@@ -1,8 +1,8 @@
 //! A module to handle `Reader`
 
 use std::borrow::Cow;
-use std::io::{self, BufRead, BufReader};
-use std::{fs::File, path::Path, str::from_utf8};
+use std::ops::{Deref, DerefMut};
+use std::str::from_utf8;
 
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
@@ -12,6 +12,12 @@ use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Even
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 
 use memchr;
+
+mod io_reader;
+mod slice_reader;
+
+pub use self::io_reader::IoReader;
+pub use self::slice_reader::SliceReader;
 
 /// Possible reader states. The state transition diagram (`true` and `false` shows
 /// value of [`Reader::expand_empty_elements()`] option):
@@ -101,6 +107,15 @@ impl EncodingRef {
             Self::Explicit(_) | Self::XmlDetected(_) => false,
         }
     }
+}
+
+/// A trait for the underlying abstracion handling the actual reading part for the [`Reader`].
+pub trait InnerReader: Deref<Target = Self::Reader> + DerefMut {
+    /// The real type of the inner reader.
+    type Reader;
+
+    /// Consumes this abstration returning the underlying reader.
+    fn into_inner(self) -> Self::Reader;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -200,7 +215,7 @@ pub struct Reader<R> {
 /// Builder methods
 impl<R> Reader<R> {
     /// Creates a `Reader` that reads from a given reader.
-    pub fn from_reader(reader: R) -> Self {
+    fn from_reader_internal(reader: R) -> Self {
         Self {
             reader,
             opened_buffer: Vec::new(),
@@ -323,7 +338,7 @@ impl<R> Reader<R> {
 }
 
 /// Getters
-impl<R> Reader<R> {
+impl<R, I: InnerReader<Reader = R>> Reader<I> {
     /// Consumes `Reader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
@@ -333,7 +348,7 @@ impl<R> Reader<R> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use std::{str, io::Cursor};
-    /// use quick_xml::Reader;
+    /// use quick_xml::{IoReader, Reader};
     /// use quick_xml::events::Event;
     ///
     /// let xml = r#"<tag1 att1 = "test">
@@ -343,7 +358,7 @@ impl<R> Reader<R> {
     /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
     /// let mut buf = Vec::new();
     ///
-    /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
+    /// fn into_line_and_column(reader: Reader<IoReader<Cursor<&[u8]>>>) -> (usize, usize) {
     ///     let end_pos = reader.buffer_position();
     ///     let mut cursor = reader.into_inner();
     ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
@@ -378,7 +393,7 @@ impl<R> Reader<R> {
     /// }
     /// ```
     pub fn into_inner(self) -> R {
-        self.reader
+        self.reader.into_inner()
     }
 
     /// Gets a reference to the underlying reader.
@@ -390,7 +405,10 @@ impl<R> Reader<R> {
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.reader
     }
+}
 
+/// Getters that are not specific to any inner reader implementation
+impl<R> Reader<R> {
     /// Gets the current byte position in the input data.
     ///
     /// Useful when debugging errors.
@@ -461,424 +479,8 @@ impl<R> Reader<R> {
     }
 }
 
-/// Read methods
-impl<R: BufRead> Reader<R> {
-    /// Reads the next `Event`.
-    ///
-    /// This is the main entry point for reading XML `Event`s.
-    ///
-    /// `Event`s borrow `buf` and can be converted to own their data if needed (uses `Cow`
-    /// internally).
-    ///
-    /// Having the possibility to control the internal buffers gives you some additional benefits
-    /// such as:
-    ///
-    /// - Reduce the number of allocations by reusing the same buffer. For constrained systems,
-    ///   you can call `buf.clear()` once you are done with processing the event (typically at the
-    ///   end of your loop).
-    /// - Reserve the buffer length if you know the file size (using `Vec::with_capacity`).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    ///
-    /// let xml = r#"<tag1 att1 = "test">
-    ///                 <tag2><!--Test comment-->Test</tag2>
-    ///                 <tag2>Test 2</tag2>
-    ///             </tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
-    /// let mut count = 0;
-    /// let mut buf = Vec::new();
-    /// let mut txt = Vec::new();
-    /// loop {
-    ///     match reader.read_event_into(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok(Event::Eof) => break,
-    ///         _ => (),
-    ///     }
-    ///     buf.clear();
-    /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
-    /// ```
-    #[inline]
-    pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        self.read_event_impl(buf)
-    }
-
-    /// Reads the next event and resolves its namespace (if applicable).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::str::from_utf8;
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    /// use quick_xml::name::ResolveResult::*;
-    ///
-    /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
-    ///                 <y:tag2><!--Test comment-->Test</y:tag2>
-    ///                 <y:tag2>Test 2</y:tag2>
-    ///             </x:tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
-    /// let mut count = 0;
-    /// let mut buf = Vec::new();
-    /// let mut ns_buf = Vec::new();
-    /// let mut txt = Vec::new();
-    /// loop {
-    ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
-    ///         Ok((Bound(ns), Event::Start(e))) => {
-    ///             count += 1;
-    ///             match (ns.as_ref(), e.local_name().as_ref()) {
-    ///                 (b"www.xxxx", b"tag1") => (),
-    ///                 (b"www.yyyy", b"tag2") => (),
-    ///                 (ns, n) => panic!("Namespace and local name mismatch"),
-    ///             }
-    ///             println!("Resolved namespace: {:?}", ns);
-    ///         }
-    ///         Ok((Unbound, Event::Start(_))) => {
-    ///             panic!("Element not in any namespace")
-    ///         },
-    ///         Ok((Unknown(p), Event::Start(_))) => {
-    ///             panic!("Undeclared namespace prefix {:?}", String::from_utf8(p))
-    ///         }
-    ///         Ok((_, Event::Text(e))) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
-    ///         },
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok((_, Event::Eof)) => break,
-    ///         _ => (),
-    ///     }
-    ///     buf.clear();
-    /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
-    /// ```
-    pub fn read_namespaced_event<'b, 'ns>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        namespace_buffer: &'ns mut Vec<u8>,
-    ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
-        if self.pending_pop {
-            self.ns_resolver.pop(namespace_buffer);
-        }
-        self.pending_pop = false;
-        match self.read_event_into(buf) {
-            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
-            Ok(Event::Start(e)) => {
-                self.ns_resolver.push(&e, namespace_buffer);
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::Start(e),
-                ))
-            }
-            Ok(Event::Empty(e)) => {
-                // For empty elements we need to 'artificially' keep the namespace scope on the
-                // stack until the next `next()` call occurs.
-                // Otherwise the caller has no chance to use `resolve` in the context of the
-                // namespace declarations that are 'in scope' for the empty element alone.
-                // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
-                self.ns_resolver.push(&e, namespace_buffer);
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::Empty(e),
-                ))
-            }
-            Ok(Event::End(e)) => {
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::End(e),
-                ))
-            }
-            Ok(e) => Ok((ResolveResult::Unbound, e)),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Reads until end element is found using provided buffer as intermediate
-    /// storage for events content. This function is supposed to be called after
-    /// you already read a [`Start`] event.
-    ///
-    /// Manages nested cases where parent and child elements have the same name.
-    ///
-    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
-    /// will be returned. In particularly, that error will be returned if you call
-    /// this method without consuming the corresponding [`Start`] event first.
-    ///
-    /// If your reader created from a string slice or byte array slice, it is
-    /// better to use [`read_to_end()`] method, because it will not copy bytes
-    /// into intermediate buffer.
-    ///
-    /// The provided `buf` buffer will be filled only by one event content at time.
-    /// Before reading of each event the buffer will be cleared. If you know an
-    /// appropriate size of each event, you can preallocate the buffer to reduce
-    /// number of reallocations.
-    ///
-    /// The `end` parameter should contain name of the end element _in the reader
-    /// encoding_. It is good practice to always get that parameter using
-    /// [`BytesStart::to_end()`] method.
-    ///
-    /// The correctness of the skipped events does not checked, if you disabled
-    /// the [`check_end_names`] option.
-    ///
-    /// # Namespaces
-    ///
-    /// While the [`Reader`] does not support namespace resolution, namespaces
-    /// does not change the algorithm for comparing names. Although the names
-    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
-    /// same namespace, are semantically equivalent, `</b:name>` cannot close
-    /// `<a:name>`, because according to [the specification]
-    ///
-    /// > The end of every element that begins with a **start-tag** MUST be marked
-    /// > by an **end-tag** containing a name that echoes the element's type as
-    /// > given in the **start-tag**
-    ///
-    /// # Examples
-    ///
-    /// This example shows, how you can skip XML content after you read the
-    /// start event.
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
-    ///
-    /// let mut reader = Reader::from_str(r#"
-    ///     <outer>
-    ///         <inner>
-    ///             <inner></inner>
-    ///             <inner/>
-    ///             <outer></outer>
-    ///             <outer/>
-    ///         </inner>
-    ///     </outer>
-    /// "#);
-    /// reader.trim_text(true);
-    /// let mut buf = Vec::new();
-    ///
-    /// let start = BytesStart::borrowed_name(b"outer");
-    /// let end   = start.to_end().into_owned();
-    ///
-    /// // First, we read a start event...
-    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Start(start));
-    ///
-    /// //...then, we could skip all events to the corresponding end event.
-    /// // This call will correctly handle nested <outer> elements.
-    /// // Note, however, that this method does not handle namespaces.
-    /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
-    ///
-    /// // At the end we should get an Eof event, because we ate the whole XML
-    /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
-    /// ```
-    ///
-    /// [`Start`]: Event::Start
-    /// [`End`]: Event::End
-    /// [`read_to_end()`]: Self::read_to_end
-    /// [`check_end_names`]: Self::check_end_names
-    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
-    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
-        let mut depth = 0;
-        loop {
-            buf.clear();
-            match self.read_event_into(buf) {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
-            }
-        }
-    }
-
-    /// Reads optional text between start and end tags.
-    ///
-    /// If the next event is a [`Text`] event, returns the decoded and unescaped content as a
-    /// `String`. If the next event is an [`End`] event, returns the empty string. In all other
-    /// cases, returns an error.
-    ///
-    /// Any text will be decoded using the XML encoding specified in the XML declaration (or UTF-8
-    /// if none is specified).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    ///
-    /// let mut xml = Reader::from_reader(b"
-    ///     <a>&lt;b&gt;</a>
-    ///     <a></a>
-    /// " as &[u8]);
-    /// xml.trim_text(true);
-    ///
-    /// let expected = ["<b>", ""];
-    /// for &content in expected.iter() {
-    ///     match xml.read_event_into(&mut Vec::new()) {
-    ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text_into(e.name(), &mut Vec::new()).unwrap(), content);
-    ///         },
-    ///         e => panic!("Expecting Start event, found {:?}", e),
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// [`Text`]: Event::Text
-    /// [`End`]: Event::End
-    pub fn read_text_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event_into(buf) {
-            Err(e) => return Err(e),
-
-            Ok(Event::Text(e)) => e.decode_and_unescape(self)?.into_owned(),
-            Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
-            Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
-            _ => return Err(Error::TextNotFound),
-        };
-        self.read_to_end_into(end, buf)?;
-        Ok(s)
-    }
-}
-
-/// Private methods
+/// Common parsing code for all reader implementations.
 impl<R> Reader<R> {
-    /// Read text into the given buffer, and return an event that borrows from
-    /// either that buffer or from the input itself, based on the type of the
-    /// reader.
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        let event = match self.tag_state {
-            TagState::Init => self.read_until_open(buf, true),
-            TagState::Closed => self.read_until_open(buf, false),
-            TagState::Opened => self.read_until_close(buf),
-            TagState::Empty => self.close_expanded_empty(),
-            TagState::Exit => return Ok(Event::Eof),
-        };
-        match event {
-            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
-            _ => {}
-        }
-        event
-    }
-
-    /// Read until '<' is found and moves reader to an `Opened` state.
-    ///
-    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
-    fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        self.tag_state = TagState::Opened;
-
-        if self.trim_text_start {
-            self.reader.skip_whitespace(&mut self.buf_position)?;
-        }
-
-        // If we already at the `<` symbol, do not try to return an empty Text event
-        if self.reader.skip_one(b'<', &mut self.buf_position)? {
-            return self.read_event_impl(buf);
-        }
-
-        match self
-            .reader
-            .read_bytes_until(b'<', buf, &mut self.buf_position)
-        {
-            Ok(Some(bytes)) => {
-                #[cfg(feature = "encoding")]
-                if first && self.encoding.can_be_refined() {
-                    if let Some(encoding) = detect_encoding(bytes) {
-                        self.encoding = EncodingRef::BomDetected(encoding);
-                    }
-                }
-
-                let content = if self.trim_text_end {
-                    // Skip the ending '<
-                    let len = bytes
-                        .iter()
-                        .rposition(|&b| !is_whitespace(b))
-                        .map_or_else(|| bytes.len(), |p| p + 1);
-                    &bytes[..len]
-                } else {
-                    bytes
-                };
-
-                Ok(if first {
-                    Event::StartText(BytesText::from_escaped(content).into())
-                } else {
-                    Event::Text(BytesText::from_escaped(content))
-                })
-            }
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Private function to read until `>` is found. This function expects that
-    /// it was called just after encounter a `<` symbol.
-    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        self.tag_state = TagState::Closed;
-
-        match self.reader.peek_one() {
-            // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
-                Err(e) => Err(e),
-            },
-            // `</` - closing tag
-            Ok(Some(b'/')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_end(bytes),
-                Err(e) => Err(e),
-            },
-            // `<?` - processing instruction
-            Ok(Some(b'?')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_question_mark(bytes),
-                Err(e) => Err(e),
-            },
-            // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_start(bytes),
-                Err(e) => Err(e),
-            },
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
-    }
-
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
     fn read_bang<'b>(&mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
@@ -1015,555 +617,48 @@ impl<R> Reader<R> {
             Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
         }
     }
-}
 
-impl Reader<BufReader<File>> {
-    /// Creates an XML reader from a file path.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path).map_err(Error::Io)?;
-        let reader = BufReader::new(file);
-        Ok(Self::from_reader(reader))
-    }
-}
-
-impl<'a> Reader<&'a [u8]> {
-    /// Creates an XML reader from a string slice.
-    pub fn from_str(s: &'a str) -> Self {
-        // Rust strings are guaranteed to be UTF-8, so lock the encoding
-        #[cfg(feature = "encoding")]
-        {
-            let mut reader = Self::from_reader(s.as_bytes());
-            reader.encoding = EncodingRef::Explicit(UTF_8);
-            reader
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        Self::from_reader(s.as_bytes())
-    }
-
-    /// Creates an XML reader from a slice of bytes.
-    pub fn from_bytes(s: &'a [u8]) -> Self {
-        Self::from_reader(s)
-    }
-
-    /// Read an event that borrows from the input rather than a buffer.
-    #[inline]
-    pub fn read_event(&mut self) -> Result<Event<'a>> {
-        self.read_event_impl(())
-    }
-
-    /// Reads until end element is found. This function is supposed to be called
-    /// after you already read a [`Start`] event.
-    ///
-    /// Manages nested cases where parent and child elements have the same name.
-    ///
-    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
-    /// will be returned. In particularly, that error will be returned if you call
-    /// this method without consuming the corresponding [`Start`] event first.
-    ///
-    /// The `end` parameter should contain name of the end element _in the reader
-    /// encoding_. It is good practice to always get that parameter using
-    /// [`BytesStart::to_end()`] method.
-    ///
-    /// The correctness of the skipped events does not checked, if you disabled
-    /// the [`check_end_names`] option.
-    ///
-    /// # Namespaces
-    ///
-    /// While the [`Reader`] does not support namespace resolution, namespaces
-    /// does not change the algorithm for comparing names. Although the names
-    /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
-    /// same namespace, are semantically equivalent, `</b:name>` cannot close
-    /// `<a:name>`, because according to [the specification]
-    ///
-    /// > The end of every element that begins with a **start-tag** MUST be marked
-    /// > by an **end-tag** containing a name that echoes the element's type as
-    /// > given in the **start-tag**
-    ///
-    /// # Examples
-    ///
-    /// This example shows, how you can skip XML content after you read the
-    /// start event.
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
-    ///
-    /// let mut reader = Reader::from_str(r#"
-    ///     <outer>
-    ///         <inner>
-    ///             <inner></inner>
-    ///             <inner/>
-    ///             <outer></outer>
-    ///             <outer/>
-    ///         </inner>
-    ///     </outer>
-    /// "#);
-    /// reader.trim_text(true);
-    ///
-    /// let start = BytesStart::borrowed_name(b"outer");
-    /// let end   = start.to_end().into_owned();
-    ///
-    /// // First, we read a start event...
-    /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
-    ///
-    /// //...then, we could skip all events to the corresponding end event.
-    /// // This call will correctly handle nested <outer> elements.
-    /// // Note, however, that this method does not handle namespaces.
-    /// reader.read_to_end(end.name()).unwrap();
-    ///
-    /// // At the end we should get an Eof event, because we ate the whole XML
-    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
-    /// ```
-    ///
-    /// [`Start`]: Event::Start
-    /// [`End`]: Event::End
-    /// [`check_end_names`]: Self::check_end_names
-    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
-    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
-        let mut depth = 0;
-        loop {
-            match self.read_event() {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
+    fn resolve_namespaced_event_inner<'b, 'ns>(
+        &mut self,
+        event: Result<Event<'b>>,
+        namespace_buffer: &'ns mut Vec<u8>,
+    ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
+        match event {
+            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
+            Ok(Event::Start(e)) => {
+                self.ns_resolver.push(&e, namespace_buffer);
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::Start(e),
+                ))
             }
-        }
-    }
-}
-
-/// Represents an input for a reader that can return borrowed data.
-///
-/// There are two implementors of this trait: generic one that read data from
-/// `Self`, copies some part of it into a provided buffer of type `B` and then
-/// returns data that borrow from that buffer.
-///
-/// The other implementor is for `&[u8]` and instead of copying data returns
-/// borrowed data from `Self` instead. This implementation allows zero-copy
-/// deserialization.
-///
-/// # Parameters
-/// - `'r`: lifetime of a buffer from which events will borrow
-/// - `B`: a type of a buffer that can be used to store data read from `Self` and
-///   from which events can borrow
-trait XmlSource<'r, B> {
-    /// Read input until `byte` is found or end of input is reached.
-    ///
-    /// Returns a slice of data read up to `byte`, which does not include into result.
-    /// If input (`Self`) is exhausted, returns `None`.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc*def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     Some(b"abc".as_ref())
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
-    /// # Parameters
-    /// - `byte`: Byte for search
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: B,
-        position: &mut usize,
-    ) -> Result<Option<&'r [u8]>>;
-
-    /// Read input until comment, CDATA or processing instruction is finished.
-    ///
-    /// This method expect that `<` already was read.
-    ///
-    /// Returns a slice of data read up to end of comment, CDATA or processing
-    /// instruction (`>`), which does not include into result.
-    ///
-    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
-    ///
-    /// # Parameters
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bang_element(
-        &mut self,
-        buf: B,
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'r [u8])>>;
-
-    /// Read input until XML element is closed by approaching a `>` symbol.
-    /// Returns `Some(buffer)` that contains a data between `<` and `>` or
-    /// `None` if end-of-input was reached and nothing was read.
-    ///
-    /// Derived from `read_until`, but modified to handle XML attributes
-    /// using a minimal state machine.
-    ///
-    /// Attribute values are [defined] as follows:
-    /// ```plain
-    /// AttValue := '"' (([^<&"]) | Reference)* '"'
-    ///           | "'" (([^<&']) | Reference)* "'"
-    /// ```
-    /// (`Reference` is something like `&quot;`, but we don't care about
-    /// escaped characters at this level)
-    ///
-    /// # Parameters
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
-    /// [events]: crate::events::Event
-    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
-
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
-
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
-
-    fn peek_one(&mut self) -> Result<Option<u8>>;
-}
-
-/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
-/// `Vec<u8>` as buffer that will be borrowed by events.
-impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
-    #[inline]
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
-        let mut read = 0;
-        let mut done = false;
-        let start = buf.len();
-        while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e));
-                    }
-                };
-
-                match memchr::memchr(byte, available) {
-                    Some(i) => {
-                        buf.extend_from_slice(&available[..i]);
-                        done = true;
-                        i + 1
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-                        available.len()
-                    }
-                }
-            };
-            self.consume(used);
-            read += used;
-        }
-        *position += read;
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
-        }
-    }
-
-    fn read_bang_element(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'b [u8])>> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        let start = buf.len();
-        let mut read = 1;
-        buf.push(b'!');
-        self.consume(1);
-
-        let bang_type = BangType::new(self.peek_one()?)?;
-
-        loop {
-            match self.fill_buf() {
-                // Note: Do not update position, so the error points to
-                // somewhere sane rather than at the EOF
-                Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
-                Ok(available) => {
-                    if let Some((consumed, used)) = bang_type.parse(available, read) {
-                        buf.extend_from_slice(consumed);
-
-                        self.consume(used);
-                        read += used;
-
-                        *position += read;
-                        break;
-                    } else {
-                        buf.extend_from_slice(available);
-
-                        let used = available.len();
-                        self.consume(used);
-                        read += used;
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
+            Ok(Event::Empty(e)) => {
+                // For empty elements we need to 'artificially' keep the namespace scope on the
+                // stack until the next `next()` call occurs.
+                // Otherwise the caller has no chance to use `resolve` in the context of the
+                // namespace declarations that are 'in scope' for the empty element alone.
+                // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
+                self.ns_resolver.push(&e, namespace_buffer);
+                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::Empty(e),
+                ))
             }
-        }
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some((bang_type, &buf[start..])))
-        }
-    }
-
-    #[inline]
-    fn read_element(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
-        let mut state = ReadElementState::Elem;
-        let mut read = 0;
-
-        let start = buf.len();
-        loop {
-            match self.fill_buf() {
-                Ok(n) if n.is_empty() => break,
-                Ok(available) => {
-                    if let Some((consumed, used)) = state.change(available) {
-                        buf.extend_from_slice(consumed);
-
-                        self.consume(used);
-                        read += used;
-
-                        *position += read;
-                        break;
-                    } else {
-                        buf.extend_from_slice(available);
-
-                        let used = available.len();
-                        self.consume(used);
-                        read += used;
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            };
-        }
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
-        }
-    }
-
-    /// Consume and discard all the whitespace until the next non-whitespace
-    /// character or EOF.
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        loop {
-            break match self.fill_buf() {
-                Ok(n) => {
-                    let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
-                    if count > 0 {
-                        self.consume(count);
-                        *position += count;
-                        continue;
-                    } else {
-                        Ok(())
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => Err(Error::Io(e)),
-            };
-        }
-    }
-
-    /// Consume and discard one character if it matches the given byte. Return
-    /// true if it matched.
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        match self.peek_one()? {
-            Some(b) if b == byte => {
-                *position += 1;
-                self.consume(1);
-                Ok(true)
+            Ok(Event::End(e)) => {
+                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::End(e),
+                ))
             }
-            _ => Ok(false),
+            Ok(e) => Ok((ResolveResult::Unbound, e)),
+            Err(e) => Err(e),
         }
-    }
-
-    /// Return one character without consuming it, so that future `read_*` calls
-    /// will still include it. On EOF, return None.
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        loop {
-            break match self.fill_buf() {
-                Ok(n) if n.is_empty() => Ok(None),
-                Ok(n) => Ok(Some(n[0])),
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => Err(Error::Io(e)),
-            };
-        }
-    }
-}
-
-/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
-/// that will be borrowed by events. This implementation provides a zero-copy deserialization
-impl<'a> XmlSource<'a, ()> for &'a [u8] {
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
-            *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            bytes
-        } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
-            bytes
-        }))
-    }
-
-    fn read_bang_element(
-        &mut self,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'a [u8])>> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        debug_assert_eq!(self[0], b'!');
-
-        let bang_type = BangType::new(self[1..].first().copied())?;
-
-        if let Some((bytes, i)) = bang_type.parse(self, 0) {
-            *position += i;
-            *self = &self[i..];
-            return Ok(Some((bang_type, bytes)));
-        }
-
-        // Note: Do not update position, so the error points to
-        // somewhere sane rather than at the EOF
-        Err(bang_type.to_err())
-    }
-
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
-            return Ok(None);
-        }
-
-        let mut state = ReadElementState::Elem;
-
-        if let Some((bytes, i)) = state.change(self) {
-            *position += i;
-            *self = &self[i..];
-            return Ok(Some(bytes));
-        }
-
-        // Note: Do not update position, so the error points to a sane place
-        // rather than at the EOF.
-        Err(Error::UnexpectedEof("Element".to_string()))
-
-        // FIXME: Figure out why the other one works without UnexpectedEof
-    }
-
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        let whitespaces = self
-            .iter()
-            .position(|b| !is_whitespace(*b))
-            .unwrap_or(self.len());
-        *position += whitespaces;
-        *self = &self[whitespaces..];
-        Ok(())
-    }
-
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
-            *position += 1;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        Ok(self.first().copied())
-    }
-}
-
-/// This is just a helper implementation for using `&mut ()` as buffer while reading from an
-/// `&[u8]` to unify how the `check!` macro below works.
-impl<'a, 'b> XmlSource<'a, &'b mut ()> for &'a [u8] {
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: &mut (),
-        position: &mut usize,
-    ) -> Result<Option<&'a [u8]>> {
-        self.read_bytes_until(byte, (), position)
-    }
-
-    fn read_bang_element(
-        &mut self,
-        _buf: &mut (),
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'a [u8])>> {
-        self.read_bang_element((), position)
-    }
-
-    fn read_element(&mut self, _buf: &mut (), position: &mut usize) -> Result<Option<&'a [u8]>> {
-        self.read_element((), position)
-    }
-
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        <Self as XmlSource<'a, ()>>::skip_whitespace(self, position)
-    }
-
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        <Self as XmlSource<'a, ()>>::skip_one(self, byte, position)
-    }
-
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        <Self as XmlSource<'a, ()>>::peek_one(self)
     }
 }
 
@@ -1855,7 +950,7 @@ mod test {
     macro_rules! check {
         ($(let mut $buf:ident = $init:expr;)?) => {
             mod read_bytes_until {
-                use crate::reader::XmlSource;
+                use super::input_from_bytes;
                 // Use Bytes for printing bytes as strings for ASCII range
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
@@ -1865,7 +960,7 @@ mod test {
                 fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"".as_ref();
+                    let mut input = input_from_bytes(b"".as_ref());
                     //                ^= 0
 
                     assert_eq!(
@@ -1884,7 +979,7 @@ mod test {
                 fn non_existent() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"abcdef".as_ref();
+                    let mut input = input_from_bytes(b"abcdef".as_ref());
                     //                      ^= 6
 
                     assert_eq!(
@@ -1904,7 +999,7 @@ mod test {
                 fn at_the_start() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"*abcdef".as_ref();
+                    let mut input = input_from_bytes(b"*abcdef".as_ref());
                     //                 ^= 1
 
                     assert_eq!(
@@ -1924,7 +1019,7 @@ mod test {
                 fn inside() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"abc*def".as_ref();
+                    let mut input = input_from_bytes(b"abc*def".as_ref());
                     //                    ^= 4
 
                     assert_eq!(
@@ -1944,7 +1039,7 @@ mod test {
                 fn in_the_end() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"abcdef*".as_ref();
+                    let mut input = input_from_bytes(b"abcdef*".as_ref());
                     //                       ^= 7
 
                     assert_eq!(
@@ -1959,10 +1054,12 @@ mod test {
             }
 
             mod read_bang_element {
+                use super::input_from_bytes;
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
+                    use super::input_from_bytes;
                     use crate::errors::Error;
-                    use crate::reader::{BangType, XmlSource};
+                    use crate::reader::BangType;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1973,7 +1070,7 @@ mod test {
                     fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"![]]>other content".as_ref();
+                        let mut input = input_from_bytes(b"![]]>other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1993,7 +1090,7 @@ mod test {
                     fn not_closed() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"![CDATA[other content".as_ref();
+                        let mut input = input_from_bytes(b"![CDATA[other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2012,7 +1109,7 @@ mod test {
                     fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"![CDATA[]]>other content".as_ref();
+                        let mut input = input_from_bytes(b"![CDATA[]]>other content".as_ref());
                         //                           ^= 11
 
                         assert_eq!(
@@ -2032,7 +1129,7 @@ mod test {
                     fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref();
+                        let mut input = input_from_bytes(b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref());
                         //                                            ^= 28
 
                         assert_eq!(
@@ -2063,8 +1160,9 @@ mod test {
                 ///
                 /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
                 mod comment {
+                    use super::input_from_bytes;
                     use crate::errors::Error;
-                    use crate::reader::{BangType, XmlSource};
+                    use crate::reader::BangType;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -2073,7 +1171,7 @@ mod test {
                     fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!- -->other content".as_ref();
+                        let mut input = input_from_bytes(b"!- -->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2091,7 +1189,7 @@ mod test {
                     fn not_properly_end() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!->other content".as_ref();
+                        let mut input = input_from_bytes(b"!->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2109,7 +1207,7 @@ mod test {
                     fn not_closed1() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!--other content".as_ref();
+                        let mut input = input_from_bytes(b"!--other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2127,7 +1225,7 @@ mod test {
                     fn not_closed2() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!-->other content".as_ref();
+                        let mut input = input_from_bytes(b"!-->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2145,7 +1243,7 @@ mod test {
                     fn not_closed3() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!--->other content".as_ref();
+                        let mut input = input_from_bytes(b"!--->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2163,7 +1261,7 @@ mod test {
                     fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!---->other content".as_ref();
+                        let mut input = input_from_bytes(b"!---->other content".as_ref());
                         //                      ^= 6
 
                         assert_eq!(
@@ -2180,7 +1278,7 @@ mod test {
                     fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"!--->comment<--->other content".as_ref();
+                        let mut input = input_from_bytes(b"!--->comment<--->other content".as_ref());
                         //                                 ^= 17
 
                         assert_eq!(
@@ -2196,9 +1294,11 @@ mod test {
 
                 /// Checks that reading DOCTYPE definition works correctly
                 mod doctype {
+                    use super::input_from_bytes;
                     mod uppercase {
+                        use super::input_from_bytes;
                         use crate::errors::Error;
-                        use crate::reader::{BangType, XmlSource};
+                        use crate::reader::BangType;
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2206,7 +1306,7 @@ mod test {
                         fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!D other content".as_ref();
+                            let mut input = input_from_bytes(b"!D other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2224,7 +1324,7 @@ mod test {
                         fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!DOCTYPEother content".as_ref();
+                            let mut input = input_from_bytes(b"!DOCTYPEother content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2242,7 +1342,7 @@ mod test {
                         fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!DOCTYPE>other content".as_ref();
+                            let mut input = input_from_bytes(b"!DOCTYPE>other content".as_ref());
                             //                         ^= 9
 
                             assert_eq!(
@@ -2259,7 +1359,7 @@ mod test {
                         fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!DOCTYPE other content".as_ref();
+                            let mut input = input_from_bytes(b"!DOCTYPE other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2275,8 +1375,9 @@ mod test {
                     }
 
                     mod lowercase {
+                        use super::input_from_bytes;
                         use crate::errors::Error;
-                        use crate::reader::{BangType, XmlSource};
+                        use crate::reader::BangType;
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
@@ -2284,7 +1385,7 @@ mod test {
                         fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!d other content".as_ref();
+                            let mut input = input_from_bytes(b"!d other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2302,7 +1403,7 @@ mod test {
                         fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!doctypeother content".as_ref();
+                            let mut input = input_from_bytes(b"!doctypeother content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2320,7 +1421,7 @@ mod test {
                         fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!doctype>other content".as_ref();
+                            let mut input = input_from_bytes(b"!doctype>other content".as_ref());
                             //                         ^= 9
 
                             assert_eq!(
@@ -2337,7 +1438,7 @@ mod test {
                         fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = b"!doctype other content".as_ref();
+                            let mut input = input_from_bytes(b"!doctype other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -2355,7 +1456,7 @@ mod test {
             }
 
             mod read_element {
-                use crate::reader::XmlSource;
+                use super::input_from_bytes;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -2364,7 +1465,7 @@ mod test {
                 fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = b"".as_ref();
+                    let mut input = input_from_bytes(b"".as_ref());
                     //                ^= 0
 
                     assert_eq!(input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes), None);
@@ -2372,7 +1473,7 @@ mod test {
                 }
 
                 mod open {
-                    use crate::reader::XmlSource;
+                    use super::input_from_bytes;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -2380,7 +1481,7 @@ mod test {
                     fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b">".as_ref();
+                        let mut input = input_from_bytes(b">".as_ref());
                         //                 ^= 1
 
                         assert_eq!(
@@ -2394,7 +1495,7 @@ mod test {
                     fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"tag>".as_ref();
+                        let mut input = input_from_bytes(b"tag>".as_ref());
                         //                    ^= 4
 
                         assert_eq!(
@@ -2408,7 +1509,7 @@ mod test {
                     fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b":>".as_ref();
+                        let mut input = input_from_bytes(b":>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
@@ -2422,7 +1523,7 @@ mod test {
                     fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b":tag>".as_ref();
+                        let mut input = input_from_bytes(b":tag>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
@@ -2436,7 +1537,7 @@ mod test {
                     fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref();
+                        let mut input = input_from_bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref());
                         //                                                        ^= 38
 
                         assert_eq!(
@@ -2448,7 +1549,7 @@ mod test {
                 }
 
                 mod self_closed {
-                    use crate::reader::XmlSource;
+                    use super::input_from_bytes;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -2456,7 +1557,7 @@ mod test {
                     fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"/>".as_ref();
+                        let mut input = input_from_bytes(b"/>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
@@ -2470,7 +1571,7 @@ mod test {
                     fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b"tag/>".as_ref();
+                        let mut input = input_from_bytes(b"tag/>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
@@ -2484,7 +1585,7 @@ mod test {
                     fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b":/>".as_ref();
+                        let mut input = input_from_bytes(b":/>".as_ref());
                         //                   ^= 3
 
                         assert_eq!(
@@ -2498,7 +1599,7 @@ mod test {
                     fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = b":tag/>".as_ref();
+                        let mut input = input_from_bytes(b":tag/>".as_ref());
                         //                      ^= 6
 
                         assert_eq!(
@@ -2512,7 +1613,7 @@ mod test {
                     fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref();
+                        let mut input = input_from_bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref());
                         //                                                           ^= 41
 
                         assert_eq!(
@@ -2525,12 +1626,13 @@ mod test {
             }
 
             mod issue_344 {
+                use super::reader_from_str;
                 use crate::errors::Error;
 
                 #[test]
                 fn cdata() {
                     let doc = "![]]>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
                     match reader.read_until_close($(&mut $buf)?) {
@@ -2546,7 +1648,7 @@ mod test {
                 #[test]
                 fn comment() {
                     let doc = "!- -->";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
                     match reader.read_until_close($(&mut $buf)?) {
@@ -2562,7 +1664,7 @@ mod test {
                 #[test]
                 fn doctype_uppercase() {
                     let doc = "!D>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
                     match reader.read_until_close($(&mut $buf)?) {
@@ -2578,7 +1680,7 @@ mod test {
                 #[test]
                 fn doctype_lowercase() {
                     let doc = "!d>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
                     match reader.read_until_close($(&mut $buf)?) {
@@ -2594,13 +1696,13 @@ mod test {
 
             /// Ensures, that no empty `Text` events are generated
             mod read_event_impl {
+                use super::reader_from_str;
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-                use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
                 #[test]
                 fn start_text() {
-                    let mut reader = Reader::from_str("bom");
+                    let mut reader = reader_from_str("bom");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2611,7 +1713,7 @@ mod test {
 
                 #[test]
                 fn declaration() {
-                    let mut reader = Reader::from_str("<?xml ?>");
+                    let mut reader = reader_from_str("<?xml ?>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2622,7 +1724,7 @@ mod test {
 
                 #[test]
                 fn doctype() {
-                    let mut reader = Reader::from_str("<!DOCTYPE x>");
+                    let mut reader = reader_from_str("<!DOCTYPE x>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2633,7 +1735,7 @@ mod test {
 
                 #[test]
                 fn processing_instruction() {
-                    let mut reader = Reader::from_str("<?xml-stylesheet?>");
+                    let mut reader = reader_from_str("<?xml-stylesheet?>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2644,7 +1746,7 @@ mod test {
 
                 #[test]
                 fn start() {
-                    let mut reader = Reader::from_str("<tag>");
+                    let mut reader = reader_from_str("<tag>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2655,7 +1757,7 @@ mod test {
 
                 #[test]
                 fn end() {
-                    let mut reader = Reader::from_str("</tag>");
+                    let mut reader = reader_from_str("</tag>");
                     // Because we expect invalid XML, do not check that
                     // the end name paired with the start name
                     reader.check_end_names(false);
@@ -2669,7 +1771,7 @@ mod test {
 
                 #[test]
                 fn empty() {
-                    let mut reader = Reader::from_str("<tag/>");
+                    let mut reader = reader_from_str("<tag/>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2681,7 +1783,7 @@ mod test {
                 /// Text event cannot be generated without preceding event of another type
                 #[test]
                 fn text() {
-                    let mut reader = Reader::from_str("<tag/>text");
+                    let mut reader = reader_from_str("<tag/>text");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2697,7 +1799,7 @@ mod test {
 
                 #[test]
                 fn cdata() {
-                    let mut reader =Reader::from_str("<![CDATA[]]>");
+                    let mut reader = reader_from_str("<![CDATA[]]>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2708,7 +1810,7 @@ mod test {
 
                 #[test]
                 fn comment() {
-                    let mut reader = Reader::from_str("<!---->");
+                    let mut reader = reader_from_str("<!---->");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2719,7 +1821,7 @@ mod test {
 
                 #[test]
                 fn eof() {
-                    let mut reader = Reader::from_str("");
+                    let mut reader = reader_from_str("");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
@@ -2731,19 +1833,19 @@ mod test {
 
             #[cfg(feature = "encoding")]
             mod encoding {
+                use super::reader_from_bytes;
                 use crate::events::Event;
-                use crate::reader::Reader;
                 use encoding_rs::{UTF_8, UTF_16LE, WINDOWS_1251};
-                use pretty_assertions::assert_eq;
 
                 mod bytes {
+                    use super::reader_from_bytes;
                     use super::*;
                     use pretty_assertions::assert_eq;
 
                     /// Checks that encoding is detected by BOM and changed after XML declaration
                     #[test]
                     fn bom_detected() {
-                        let mut reader = Reader::from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
+                        let mut reader = reader_from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
                         $(let mut $buf = $init;)?
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
@@ -2759,7 +1861,7 @@ mod test {
                     /// Checks that encoding is changed by XML declaration, but only once
                     #[test]
                     fn xml_declaration() {
-                        let mut reader = Reader::from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
+                        let mut reader = reader_from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
                         $(let mut $buf = $init;)?
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
@@ -2772,31 +1874,31 @@ mod test {
                         assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
                     }
                 }
-
-                /// Checks that XML declaration cannot change the encoding from UTF-8 if
-                /// a `Reader` was created using `from_str` method
-                #[test]
-                fn str_always_has_utf8() {
-                    let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
-                    $(let mut $buf = $init;)?
-
-                    assert_eq!(reader.decoder().encoding(), UTF_8);
-                    reader.read_event_impl($(&mut $buf)?).unwrap();
-                    assert_eq!(reader.decoder().encoding(), UTF_8);
-
-                    assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
-                }
             }
         };
     }
 
-    /// Tests for reader that generates events that borrow from the provided buffer
-    mod buffered {
-        check!(let mut buf = Vec::new(););
-    }
+    pub(super) use check;
 
-    /// Tests for reader that generates events that borrow from the input
-    mod borrowed {
-        check!(let mut buf = (););
+    #[cfg(feature = "encoding")]
+    mod encoding {
+        use crate::events::Event;
+        use crate::reader::UTF_8;
+        use pretty_assertions::assert_eq;
+        /// Checks that XML declaration cannot change the encoding from UTF-8 if
+        /// a `Reader` was created using `from_str` method.
+        /// This is outside the `check` macro as this is only relevant for the
+        /// `Reader::from_str` method.
+        #[test]
+        fn str_always_has_utf8() {
+            let mut reader = crate::Reader::from_str("<?xml encoding='UTF-16'?>");
+            let mut buf = Vec::new();
+
+            assert_eq!(reader.decoder().encoding(), UTF_8);
+            reader.read_event_into(&mut buf).unwrap();
+            assert_eq!(reader.decoder().encoding(), UTF_8);
+
+            assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+        }
     }
 }

@@ -20,8 +20,9 @@ static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
 // TODO: use fully normalized attribute values
 fn parse_document(doc: &[u8]) -> XmlResult<()> {
     let mut r = Reader::from_reader(doc);
+    let mut buf = Vec::new();
     loop {
-        match r.read_event()? {
+        match r.read_event_into(&mut buf)? {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
                     criterion::black_box(attr?.decode_and_unescape_value(&r)?);
