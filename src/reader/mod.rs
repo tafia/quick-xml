@@ -134,7 +134,7 @@ pub trait InnerReader: Deref<Target = Self::Reader> + DerefMut {
 ///                 <tag2><!--Test comment-->Test</tag2>
 ///                 <tag2>Test 2</tag2>
 ///              </tag1>"#;
-/// let mut reader = Reader::from_str(xml);
+/// let mut reader = Reader::from_reader(xml.as_bytes());
 /// reader.trim_text(true);
 ///
 /// let mut count = 0;
@@ -1903,13 +1903,12 @@ mod test {
         #[test]
         fn str_always_has_utf8() {
             let mut reader = crate::Reader::from_str("<?xml encoding='UTF-16'?>");
-            let mut buf = Vec::new();
 
             assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event_into(&mut buf).unwrap();
+            reader.read_event().unwrap();
             assert_eq!(reader.decoder().encoding(), UTF_8);
 
-            assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }
     }
 }

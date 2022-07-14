@@ -27,7 +27,11 @@ let xml = r#"<tag1 att1 = "test">
                 <tag2><!--Test comment-->Test</tag2>
                 <tag2>Test 2</tag2>
              </tag1>"#;
-let mut reader = Reader::from_str(xml);
+let mut reader = Reader::from_reader(xml.as_bytes());
+// If you want to read from a string or byte slice without buffering, use:
+// let mut reader = Reader::from_str(xml);
+// In that case, `Vec` is *not* needed for buffering below and you should use
+// `read_event` instead of `read_event_into`.
 reader.trim_text(true);
 
 let mut count = 0;

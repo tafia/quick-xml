@@ -20,11 +20,11 @@ impl<'buf> Reader<SliceReader<'buf>> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_impl(&mut self, _buf: &mut ()) -> Result<Event<'buf>> {
+    fn read_event_impl(&mut self) -> Result<Event<'buf>> {
         let event = match self.tag_state {
-            TagState::Init => self.read_until_open(&mut (), true),
-            TagState::Closed => self.read_until_open(&mut (), false),
-            TagState::Opened => self.read_until_close(&mut ()),
+            TagState::Init => self.read_until_open(true),
+            TagState::Closed => self.read_until_open(false),
+            TagState::Opened => self.read_until_close(),
             TagState::Empty => self.close_expanded_empty(),
             TagState::Exit => return Ok(Event::Eof),
         };
@@ -38,7 +38,7 @@ impl<'buf> Reader<SliceReader<'buf>> {
     /// Read until '<' is found and moves reader to an `Opened` state.
     ///
     /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
-    fn read_until_open(&mut self, _buf: &mut (), first: bool) -> Result<Event<'buf>> {
+    fn read_until_open(&mut self, first: bool) -> Result<Event<'buf>> {
         self.tag_state = TagState::Opened;
 
         if self.trim_text_start {
@@ -47,13 +47,10 @@ impl<'buf> Reader<SliceReader<'buf>> {
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if self.reader.skip_one(b'<', &mut self.buf_position)? {
-            return self.read_event_impl(&mut ());
+            return self.read_event_impl();
         }
 
-        match self
-            .reader
-            .read_bytes_until(b'<', &mut (), &mut self.buf_position)
-        {
+        match self.reader.read_bytes_until(b'<', &mut self.buf_position) {
             Ok(Some(bytes)) => {
                 #[cfg(feature = "encoding")]
                 if first && self.encoding.can_be_refined() {
@@ -86,43 +83,30 @@ impl<'buf> Reader<SliceReader<'buf>> {
 
     /// Private function to read until `>` is found. This function expects that
     /// it was called just after encounter a `<` symbol.
-    fn read_until_close(&mut self, _buf: &mut ()) -> Result<Event<'buf>> {
+    fn read_until_close(&mut self) -> Result<Event<'buf>> {
         self.tag_state = TagState::Closed;
 
         match self.reader.peek_one() {
             // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self
-                .reader
-                .read_bang_element(&mut (), &mut self.buf_position)
-            {
+            Ok(Some(b'!')) => match self.reader.read_bang_element(&mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
-            Ok(Some(b'/')) => {
-                match self
-                    .reader
-                    .read_bytes_until(b'>', &mut (), &mut self.buf_position)
-                {
-                    Ok(None) => Ok(Event::Eof),
-                    Ok(Some(bytes)) => self.read_end(bytes),
-                    Err(e) => Err(e),
-                }
-            }
+            Ok(Some(b'/')) => match self.reader.read_bytes_until(b'>', &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_end(bytes),
+                Err(e) => Err(e),
+            },
             // `<?` - processing instruction
-            Ok(Some(b'?')) => {
-                match self
-                    .reader
-                    .read_bytes_until(b'>', &mut (), &mut self.buf_position)
-                {
-                    Ok(None) => Ok(Event::Eof),
-                    Ok(Some(bytes)) => self.read_question_mark(bytes),
-                    Err(e) => Err(e),
-                }
-            }
+            Ok(Some(b'?')) => match self.reader.read_bytes_until(b'>', &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
             // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(&mut (), &mut self.buf_position) {
+            Ok(Some(_)) => match self.reader.read_element(&mut self.buf_position) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_start(bytes),
                 Err(e) => Err(e),
@@ -160,14 +144,7 @@ impl<'buf> Reader<SliceReader<'buf>> {
     /// Read an event that borrows from the input rather than a buffer.
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'buf>> {
-        self.read_event_impl(&mut ())
-    }
-
-    /// Temporary helper to keep both `read_event` and `read_event_into` available for reading
-    /// from `&[u8]`.
-    #[inline]
-    pub fn read_event_into(&mut self, _buf: &mut Vec<u8>) -> Result<Event<'buf>> {
-        self.read_event()
+        self.read_event_impl()
     }
 
     /// Reads until end element is found. This function is supposed to be called
@@ -262,12 +239,6 @@ impl<'buf> Reader<SliceReader<'buf>> {
         }
     }
 
-    /// Temporary helper to keep both `read_to_end` and `read_to_end_into` available for reading
-    /// from `&[u8]`.
-    pub fn read_to_end_into(&mut self, end: QName, _buf: &mut Vec<u8>) -> Result<()> {
-        self.read_to_end(end)
-    }
-
     /// Reads optional text between start and end tags.
     ///
     /// If the next event is a [`Text`] event, returns the decoded and unescaped content as a
@@ -314,12 +285,6 @@ impl<'buf> Reader<SliceReader<'buf>> {
         };
         self.read_to_end(end)?;
         Ok(s)
-    }
-
-    /// Temporary helper to keep both `read_text` and `read_text_into` available for reading
-    /// from `&[u8]`.
-    pub fn read_text_into(&mut self, end: QName, _buf: &mut Vec<u8>) -> Result<String> {
-        self.read_text(end)
     }
 
     /// Reads the next event and resolves its namespace (if applicable).
@@ -412,12 +377,7 @@ impl<'buf> InnerReader for SliceReader<'buf> {
 
 /// Private reading functions for a [`SliceReader`].
 impl<'buf> SliceReader<'buf> {
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: &mut (),
-        position: &mut usize,
-    ) -> Result<Option<&'buf [u8]>> {
+    fn read_bytes_until(&mut self, byte: u8, position: &mut usize) -> Result<Option<&'buf [u8]>> {
         if self.0.is_empty() {
             return Ok(None);
         }
@@ -437,7 +397,6 @@ impl<'buf> SliceReader<'buf> {
 
     fn read_bang_element(
         &mut self,
-        _buf: &mut (),
         position: &mut usize,
     ) -> Result<Option<(BangType, &'buf [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
@@ -457,7 +416,7 @@ impl<'buf> SliceReader<'buf> {
         Err(bang_type.to_err())
     }
 
-    fn read_element(&mut self, _buf: &mut (), position: &mut usize) -> Result<Option<&'buf [u8]>> {
+    fn read_element(&mut self, position: &mut usize) -> Result<Option<&'buf [u8]>> {
         if self.0.is_empty() {
             return Ok(None);
         }
@@ -521,5 +480,5 @@ mod test {
         Reader::from_bytes(s)
     }
 
-    check!(let mut buf = (););
+    check!();
 }
