@@ -72,14 +72,17 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
         visitor.visit_str(&value)
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    /// Returns [`DeError::Unsupported`]
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let v = self.unescaped()?;
-        visitor.visit_bytes(&v)
+        Err(DeError::Unsupported(
+            "binary data content is not supported by XML format",
+        ))
     }
 
+    /// Forwards deserialization to the [`Self::deserialize_bytes`]
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,

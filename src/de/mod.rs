@@ -183,23 +183,20 @@ macro_rules! deserialize_primitives {
             }
         }
 
-        fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        /// Returns [`DeError::Unsupported`]
+        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because bytes gives access to the raw XML input
-            let text = self.next_text(false)?;
-            visitor.visit_bytes(&text)
+            Err(DeError::Unsupported("binary data content is not supported by XML format"))
         }
 
-        fn deserialize_byte_buf<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).
+        fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because bytes gives access to the raw XML input
-            let text = self.next_text(false)?;
-            let value = text.into_inner().into_owned();
-            visitor.visit_byte_buf(value)
+            self.deserialize_bytes(visitor)
         }
 
         /// Identifiers represented as [strings](#method.deserialize_str).

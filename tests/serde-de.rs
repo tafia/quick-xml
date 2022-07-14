@@ -1,5 +1,5 @@
 use quick_xml::de::Deserializer;
-use quick_xml::utils::ByteBuf;
+use quick_xml::utils::{ByteBuf, Bytes};
 use quick_xml::DeError;
 
 use pretty_assertions::assert_eq;
@@ -152,13 +152,6 @@ fn collection_of_enums() {
     );
 }
 
-#[test]
-fn deserialize_bytes() {
-    let item: ByteBuf = from_str(r#"<item>bytes</item>"#).unwrap();
-
-    assert_eq!(item, ByteBuf(b"bytes".to_vec()));
-}
-
 /// Test for https://github.com/tafia/quick-xml/issues/231
 #[test]
 fn implicit_value() {
@@ -233,11 +226,12 @@ mod trivial {
         ($name:ident: $type:ty = $value:expr) => {
             #[test]
             fn $name() {
-                let item = from_str::<$type>($value).unwrap_err();
-
-                match item {
-                    DeError::UnexpectedEof => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", item),
+                match from_str::<$type>($value) {
+                    Err(DeError::UnexpectedEof) => (),
+                    x => panic!(
+                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        x
+                    ),
                 }
             }
         };
@@ -267,15 +261,43 @@ mod trivial {
             eof!(char_: char = $value);
 
             eof!(string: String = $value);
-            eof!(byte_buf: ByteBuf = $value);
+
+            /// XML does not able to store binary data
+            #[test]
+            fn byte_buf() {
+                match from_str::<ByteBuf>($value) {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
+
+            /// XML does not able to store binary data
+            #[test]
+            fn bytes() {
+                match from_str::<Bytes>($value) {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
 
             #[test]
             fn unit() {
-                let item = from_str::<()>($value).unwrap_err();
-
-                match item {
-                    DeError::UnexpectedEof => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", item),
+                match from_str::<()>($value) {
+                    Err(DeError::UnexpectedEof) => (),
+                    x => panic!(
+                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        x
+                    ),
                 }
             }
         };
@@ -284,12 +306,16 @@ mod trivial {
     /// Empty document should considered invalid no matter what type we try to deserialize
     mod empty_doc {
         use super::*;
+        use pretty_assertions::assert_eq;
+
         eof!("");
     }
 
     /// Document that contains only comment should be handled as if it is empty
     mod only_comment {
         use super::*;
+        use pretty_assertions::assert_eq;
+
         eof!("<!--comment-->");
     }
 
@@ -360,11 +386,34 @@ mod trivial {
             in_struct!(char_: char = "<root>r</root>", 'r');
 
             in_struct!(string:   String  = "<root>escaped&#x20;string</root>", "escaped string".into());
-            // Byte buffers gives access to the raw data from the input, so never treated as escaped
-            // TODO: It is a bit unusual and it would be better completely forbid deserialization
-            // into bytes, because XML cannot store any bytes natively. User should use some sort
-            // of encoding to a string, for example, hex or base64
-            in_struct!(byte_buf: ByteBuf = "<root>escaped&#x20;byte_buf</root>", ByteBuf(r"escaped&#x20;byte_buf".into()));
+
+            /// XML does not able to store binary data
+            #[test]
+            fn byte_buf() {
+                match from_str::<Trivial<ByteBuf>>("<root>escaped&#x20;byte_buf</root>") {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
+
+            /// XML does not able to store binary data
+            #[test]
+            fn bytes() {
+                match from_str::<Trivial<Bytes>>("<root>escaped&#x20;byte_buf</root>") {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
         }
 
         /// Tests deserialization from CDATA content in a tag.
@@ -400,7 +449,34 @@ mod trivial {
 
             // Escape sequences does not processed inside CDATA section
             in_struct!(string:   String  = "<root><![CDATA[escaped&#x20;string]]></root>", "escaped&#x20;string".into());
-            in_struct!(byte_buf: ByteBuf = "<root><![CDATA[escaped&#x20;byte_buf]]></root>", ByteBuf(r"escaped&#x20;byte_buf".into()));
+
+            /// XML does not able to store binary data
+            #[test]
+            fn byte_buf() {
+                match from_str::<Trivial<ByteBuf>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
+
+            /// XML does not able to store binary data
+            #[test]
+            fn bytes() {
+                match from_str::<Trivial<Bytes>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
         }
     }
 }

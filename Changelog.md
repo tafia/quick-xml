@@ -124,6 +124,9 @@
   added to all events
 
 - [#421]: `decode_and_unescape*` methods now does one less allocation if unescaping is not required
+- [#421]: Removed ability to deserialize byte arrays from serde deserializer.
+  XML is not able to store binary data directly, you should always use some encoding
+  scheme, for example, HEX or Base64
 
 ### New Tests
 
