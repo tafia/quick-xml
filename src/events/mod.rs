@@ -48,9 +48,6 @@ use crate::reader::{Decoder, Reader};
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 
-#[cfg(feature = "serialize")]
-use crate::escape::EscapeError;
-
 /// Text that appeared before an XML declaration, a start element or a comment.
 ///
 /// In well-formed XML it could contain a Byte-Order-Mark (BOM). If this event
@@ -732,21 +729,6 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Returns unescaped version of the text content, that can be written
-    /// as CDATA in XML
-    #[cfg(feature = "serialize")]
-    pub(crate) fn unescape_as_cdata(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
-        //TODO: need to think about better API instead of dozens similar functions
-        // Maybe use builder pattern. After that expose function as public API
-        //FIXME: need to take into account entities defined in the document
-        Ok(BytesCData::new(
-            match unescape_with(&self.content, |_| None)? {
-                Cow::Borrowed(_) => self.content,
-                Cow::Owned(unescaped) => Cow::Owned(unescaped),
-            },
-        ))
-    }
-
     /// Decodes using UTF-8 then unescapes the content of the event.
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
@@ -815,6 +797,31 @@ impl<'a> BytesText<'a> {
     /// Gets escaped content.
     pub fn escape(&self) -> &[u8] {
         self.content.as_ref()
+    }
+
+    /// Gets content of this text buffer in the specified encoding and optionally
+    /// unescapes it. Unlike [`Self::decode_and_unescape`] & Co., the lifetime
+    /// of the returned `Cow` is bound to the original buffer / input
+    #[cfg(feature = "serialize")]
+    pub(crate) fn decode(&self, decoder: Decoder, unescape: bool) -> Result<Cow<'a, str>> {
+        //TODO: too many copies, can be optimized
+        let text = match &self.content {
+            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
+        };
+        let text = if unescape {
+            //FIXME: need to take into account entities defined in the document
+            match unescape_with(text.as_bytes(), |_| None)? {
+                // Because result is borrowed, no replacements was done and we can use original string
+                Cow::Borrowed(_) => text,
+                // from_utf8 should never fail because content is always UTF-8 encoded
+                Cow::Owned(bytes) => String::from_utf8(bytes)?.into(),
+            }
+        } else {
+            text
+        };
+        Ok(text)
     }
 }
 
@@ -928,14 +935,11 @@ impl<'a> BytesCData<'a> {
 
     /// Gets content of this text buffer in the specified encoding
     #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: crate::reader::Decoder) -> Result<Cow<'a, str>> {
+    pub(crate) fn decode(&self, decoder: Decoder) -> Result<Cow<'a, str>> {
         Ok(match &self.content {
             Cow::Borrowed(bytes) => decoder.decode(bytes)?,
-            Cow::Owned(bytes) => {
-                let decoded = decoder.decode(bytes)?.to_string();
-
-                decoded.into()
-            }
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
         })
     }
 }

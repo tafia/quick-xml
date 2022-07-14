@@ -42,6 +42,8 @@
 - [#363]: Do not generate empty `Event::Text` events
 - [#412]: Fix using incorrect encoding if `read_to_end` family of methods or `read_text`
   method not found a corresponding end tag and reader has non-UTF-8 encoding
+- [#421]: Fix incorrect order of unescape and decode operations for serde deserializer:
+  decoding should be first, unescape is the second
 
 ### Misc Changes
 
