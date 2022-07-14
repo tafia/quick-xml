@@ -1,20 +1,136 @@
-//! This is an implementation of [`Reader`] for reading from a [`BufRead`] as
+//! This is an implementation of [`Reader`] for reading from a [`Read`] or [`BufRead`] as
 //! underlying byte stream.
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
-use crate::errors::{Error, Result};
-use crate::events::Event;
+use crate::events::{BytesText, Event};
 use crate::name::{QName, ResolveResult};
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader};
+use crate::{Error, Result};
 
-use memchr;
+#[cfg(feature = "encoding")]
+use crate::reader::{detect_encoding, EncodingRef};
+use crate::reader::{is_whitespace, BangType, InnerReader, ReadElementState, Reader, TagState};
 
-/// This is an implementation of [`Reader`] for reading from a [`BufRead`] as
-/// underlying byte stream.
-impl<R: BufRead> Reader<R> {
+/// Private functions for a [`Reader`] based on an [`BufferedReader`].
+impl<R: BufRead> Reader<BufferedReader<R>> {
+    /// Read text into the given buffer, and return an event that borrows from
+    /// either that buffer or from the input itself, based on the type of the
+    /// reader.
+    fn read_event_impl<'buf>(&mut self, buf: &'buf mut Vec<u8>) -> Result<Event<'buf>> {
+        let event = match self.tag_state {
+            TagState::Init => self.read_until_open(buf, true),
+            TagState::Closed => self.read_until_open(buf, false),
+            TagState::Opened => self.read_until_close(buf),
+            TagState::Empty => self.close_expanded_empty(),
+            TagState::Exit => return Ok(Event::Eof),
+        };
+        match event {
+            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
+            _ => {}
+        }
+        event
+    }
+
+    /// Read until '<' is found and moves reader to an `Opened` state.
+    ///
+    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
+    fn read_until_open<'buf>(
+        &mut self,
+        buf: &'buf mut Vec<u8>,
+        first: bool,
+    ) -> Result<Event<'buf>> {
+        self.tag_state = TagState::Opened;
+
+        if self.trim_text_start {
+            self.reader.skip_whitespace(&mut self.buf_position)?;
+        }
+
+        // If we already at the `<` symbol, do not try to return an empty Text event
+        if self.reader.skip_one(b'<', &mut self.buf_position)? {
+            return self.read_event_impl(buf);
+        }
+
+        match self
+            .reader
+            .read_bytes_until(b'<', buf, &mut self.buf_position)
+        {
+            Ok(Some(bytes)) => {
+                #[cfg(feature = "encoding")]
+                if first && self.encoding.can_be_refined() {
+                    if let Some(encoding) = detect_encoding(bytes) {
+                        self.encoding = EncodingRef::BomDetected(encoding);
+                    }
+                }
+
+                let content = if self.trim_text_end {
+                    // Skip the ending '<
+                    let len = bytes
+                        .iter()
+                        .rposition(|&b| !is_whitespace(b))
+                        .map_or_else(|| bytes.len(), |p| p + 1);
+                    &bytes[..len]
+                } else {
+                    bytes
+                };
+
+                Ok(if first {
+                    Event::StartText(BytesText::from_escaped(content).into())
+                } else {
+                    Event::Text(BytesText::from_escaped(content))
+                })
+            }
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Private function to read until `>` is found. This function expects that
+    /// it was called just after encounter a `<` symbol.
+    fn read_until_close<'buf>(&mut self, buf: &'buf mut Vec<u8>) -> Result<Event<'buf>> {
+        self.tag_state = TagState::Closed;
+
+        match self.reader.peek_one() {
+            // `<!` - comment, CDATA or DOCTYPE declaration
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
+                Err(e) => Err(e),
+            },
+            // `</` - closing tag
+            Ok(Some(b'/')) => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_end(bytes),
+                Err(e) => Err(e),
+            },
+            // `<?` - processing instruction
+            Ok(Some(b'?')) => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
+            // `<...` - opening or self-closed tag
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_start(bytes),
+                Err(e) => Err(e),
+            },
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Public reading methods for a [`Reader`] based on an [`BufferedReader`].
+impl<R: BufRead> Reader<BufferedReader<R>> {
     /// Reads the next `Event`.
     ///
     /// This is the main entry point for reading XML `Event`s.
@@ -40,7 +156,9 @@ impl<R: BufRead> Reader<R> {
     ///                 <tag2><!--Test comment-->Test</tag2>
     ///                 <tag2>Test 2</tag2>
     ///             </tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
+    /// // This explicitly uses `from_reader(xml.as_bytes())` to use a buffered reader instead of
+    /// // relying on the zero-copy optimizations for reading from byte slices.
+    /// let mut reader = Reader::from_reader(xml.as_bytes());
     /// reader.trim_text(true);
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -59,7 +177,7 @@ impl<R: BufRead> Reader<R> {
     /// println!("Text events: {:?}", txt);
     /// ```
     #[inline]
-    pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    pub fn read_event_into<'buf>(&mut self, buf: &'buf mut Vec<u8>) -> Result<Event<'buf>> {
         self.read_event_impl(buf)
     }
 
@@ -77,7 +195,7 @@ impl<R: BufRead> Reader<R> {
     ///                 <y:tag2><!--Test comment-->Test</y:tag2>
     ///                 <y:tag2>Test 2</y:tag2>
     ///             </x:tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
+    /// let mut reader = Reader::from_reader(xml.as_bytes());
     /// reader.trim_text(true);
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -173,7 +291,7 @@ impl<R: BufRead> Reader<R> {
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::Reader;
     ///
-    /// let mut reader = Reader::from_str(r#"
+    /// let mut reader = Reader::from_reader(r#"
     ///     <outer>
     ///         <inner>
     ///             <inner></inner>
@@ -182,7 +300,7 @@ impl<R: BufRead> Reader<R> {
     ///             <outer/>
     ///         </inner>
     ///     </outer>
-    /// "#);
+    /// "#.as_bytes());
     /// reader.trim_text(true);
     /// let mut buf = Vec::new();
     ///
@@ -203,7 +321,6 @@ impl<R: BufRead> Reader<R> {
     ///
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
-    /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`read_to_end()`]: Self::read_to_end
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
@@ -279,20 +396,58 @@ impl<R: BufRead> Reader<R> {
     }
 }
 
-impl Reader<BufReader<File>> {
+/// Builder for reading from a file.
+impl Reader<BufferedReader<BufReader<File>>> {
     /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path).map_err(Error::Io)?;
         let reader = BufReader::new(file);
-        Ok(Self::from_reader(reader))
+        Ok(Self::from_reader_internal(BufferedReader(reader)))
     }
 }
 
+/// Builder for reading from any [`BufRead`].
+impl<R: BufRead> Reader<BufferedReader<R>> {
+    /// Creates an XML reader from any type implementing [`BufRead`].
+    pub fn from_reader(reader: R) -> Self {
+        Self::from_reader_internal(BufferedReader(reader))
+    }
+}
+
+/// Builder for reading from any [`Read`].
+impl<R: Read> Reader<BufferedReader<BufReader<R>>> {
+    /// Creates an XML reader from any type implementing [`Read`].
+    pub fn from_unbuffered_reader(reader: R) -> Self {
+        Self::from_reader_internal(BufferedReader(BufReader::new(reader)))
+    }
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A struct for handling reading functions based on reading from a [`BufRead`].
 #[derive(Debug, Clone)]
 pub struct BufferedReader<R: BufRead>(R);
+
+impl<R: BufRead> Deref for BufferedReader<R> {
+    type Target = R;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<R: BufRead> DerefMut for BufferedReader<R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<R: BufRead> InnerReader for BufferedReader<R> {
+    type Reader = R;
+
+    fn into_inner(self) -> Self::Reader {
+        self.0
+    }
+}
 
 /// Private reading functions.
 impl<R: BufRead> BufferedReader<R> {
@@ -484,4 +639,25 @@ impl<R: BufRead> BufferedReader<R> {
             };
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::reader::test::check;
+
+    fn input_from_bytes(bytes: &[u8]) -> BufferedReader<&[u8]> {
+        BufferedReader(bytes)
+    }
+
+    fn reader_from_str(s: &str) -> Reader<BufferedReader<&[u8]>> {
+        Reader::from_reader_internal(BufferedReader(s.as_bytes()))
+    }
+
+    #[allow(dead_code)]
+    fn reader_from_bytes(s: &[u8]) -> Reader<BufferedReader<&[u8]>> {
+        Reader::from_reader_internal(BufferedReader(s))
+    }
+
+    check!(let mut buf = Vec::new(););
 }

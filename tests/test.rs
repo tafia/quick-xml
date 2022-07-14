@@ -56,7 +56,8 @@ fn test_attribute_equal() {
     let src = b"<a att1=\"a=b\"/>";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
-    match r.read_event() {
+    let mut buf = Vec::new();
+    match r.read_event_into(&mut buf) {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -77,8 +78,9 @@ fn test_comment_starting_with_gt() {
     let src = b"<a /><!-->-->";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
+    let mut buf = Vec::new();
     loop {
-        match r.read_event() {
+        match r.read_event_into(&mut buf) {
             Ok(Comment(e)) => {
                 assert_eq!(e.as_ref(), b">");
                 break;
@@ -129,8 +131,9 @@ fn test_issue94() {
 </Run>"#;
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
+    let mut buf = Vec::new();
     loop {
-        match reader.read_event() {
+        match reader.read_event_into(&mut buf) {
             Ok(Eof) | Err(..) => break,
             _ => (),
         }

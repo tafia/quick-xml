@@ -65,5 +65,5 @@ mod writer;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};
-pub use crate::reader::{Decoder, Reader};
+pub use crate::reader::{BufferedReader, Decoder, Reader, SliceReader};
 pub use crate::writer::{ElementWriter, Writer};
