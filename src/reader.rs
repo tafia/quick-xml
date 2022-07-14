@@ -946,7 +946,12 @@ fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
 #[cfg(test)]
 mod test {
     macro_rules! check {
-        ($(let mut $buf:ident = $init:expr;)?) => {
+        ($(let mut $buf:ident = $init:expr; $($await:tt)?)?) => {
+            check!(#[test] {
+                $(let mut $buf = $init; $($await)?)?
+            });
+        };
+        (#[$test:meta] $($async:ident)? { $(let mut $buf:ident = $init:expr; $($await:tt)?)? }) => {
             mod read_bytes_until {
                 use super::input_from_bytes;
                 // Use Bytes for printing bytes as strings for ASCII range
@@ -954,8 +959,8 @@ mod test {
                 use pretty_assertions::assert_eq;
 
                 /// Checks that search in the empty buffer returns `None`
-                #[test]
-                fn empty() {
+                #[$test]
+                $($async)? fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"".as_ref());
@@ -964,6 +969,7 @@ mod test {
                     assert_eq!(
                         input
                             .read_bytes_until(b'*', $(&mut $buf, )? &mut position)
+                            $($(.$await)?)?
                             .unwrap()
                             .map(Bytes),
                         None
@@ -973,8 +979,8 @@ mod test {
 
                 /// Checks that search in the buffer non-existent value returns entire buffer
                 /// as a result and set `position` to `len()`
-                #[test]
-                fn non_existent() {
+                #[$test]
+                $($async)? fn non_existent() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"abcdef".as_ref());
@@ -983,6 +989,7 @@ mod test {
                     assert_eq!(
                         input
                             .read_bytes_until(b'*', $(&mut $buf, )? &mut position)
+                            $($(.$await)?)?
                             .unwrap()
                             .map(Bytes),
                         Some(Bytes(b"abcdef"))
@@ -993,8 +1000,8 @@ mod test {
                 /// Checks that search in the buffer an element that is located in the front of
                 /// buffer returns empty slice as a result and set `position` to one symbol
                 /// after match (`1`)
-                #[test]
-                fn at_the_start() {
+                #[$test]
+                $($async)? fn at_the_start() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"*abcdef".as_ref());
@@ -1003,6 +1010,7 @@ mod test {
                     assert_eq!(
                         input
                             .read_bytes_until(b'*', $(&mut $buf, )? &mut position)
+                            $($(.$await)?)?
                             .unwrap()
                             .map(Bytes),
                         Some(Bytes(b""))
@@ -1013,8 +1021,8 @@ mod test {
                 /// Checks that search in the buffer an element that is located in the middle of
                 /// buffer returns slice before that symbol as a result and set `position` to one
                 /// symbol after match
-                #[test]
-                fn inside() {
+                #[$test]
+                $($async)? fn inside() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"abc*def".as_ref());
@@ -1023,6 +1031,7 @@ mod test {
                     assert_eq!(
                         input
                             .read_bytes_until(b'*', $(&mut $buf, )? &mut position)
+                            $($(.$await)?)?
                             .unwrap()
                             .map(Bytes),
                         Some(Bytes(b"abc"))
@@ -1033,8 +1042,8 @@ mod test {
                 /// Checks that search in the buffer an element that is located in the end of
                 /// buffer returns slice before that symbol as a result and set `position` to one
                 /// symbol after match (`len()`)
-                #[test]
-                fn in_the_end() {
+                #[$test]
+                $($async)? fn in_the_end() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"abcdef*".as_ref());
@@ -1043,6 +1052,7 @@ mod test {
                     assert_eq!(
                         input
                             .read_bytes_until(b'*', $(&mut $buf, )? &mut position)
+                            $($(.$await)?)?
                             .unwrap()
                             .map(Bytes),
                         Some(Bytes(b"abcdef"))
@@ -1063,15 +1073,15 @@ mod test {
 
                     /// Checks that if input begins like CDATA element, but CDATA start sequence
                     /// is not finished, parsing ends with an error
-                    #[test]
+                    #[$test]
                     #[ignore = "start CDATA sequence fully checked outside of `read_bang_element`"]
-                    fn not_properly_start() {
+                    $($async)? fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"![]]>other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "CData" => {}
                             x => assert!(
                                 false,
@@ -1084,14 +1094,14 @@ mod test {
 
                     /// Checks that if CDATA startup sequence was matched, but an end sequence
                     /// is not found, parsing ends with an error
-                    #[test]
-                    fn not_closed() {
+                    #[$test]
+                    $($async)? fn not_closed() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"![CDATA[other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "CData" => {}
                             x => assert!(
                                 false,
@@ -1103,8 +1113,8 @@ mod test {
                     }
 
                     /// Checks that CDATA element without content inside parsed successfully
-                    #[test]
-                    fn empty() {
+                    #[$test]
+                    $($async)? fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"![CDATA[]]>other content".as_ref());
@@ -1113,6 +1123,7 @@ mod test {
                         assert_eq!(
                             input
                                 .read_bang_element($(&mut $buf, )? &mut position)
+                                $($(.$await)?)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
                             Some((BangType::CData, Bytes(b"![CDATA[")))
@@ -1123,8 +1134,8 @@ mod test {
                     /// Checks that CDATA element with content parsed successfully.
                     /// Additionally checks that sequences inside CDATA that may look like
                     /// a CDATA end sequence do not interrupt CDATA parsing
-                    #[test]
-                    fn with_content() {
+                    #[$test]
+                    $($async)? fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref());
@@ -1133,6 +1144,7 @@ mod test {
                         assert_eq!(
                             input
                                 .read_bang_element($(&mut $buf, )? &mut position)
+                                $($(.$await)?)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
                             Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content")))
@@ -1164,15 +1176,15 @@ mod test {
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
-                    #[test]
+                    #[$test]
                     #[ignore = "start comment sequence fully checked outside of `read_bang_element`"]
-                    fn not_properly_start() {
+                    $($async)? fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!- -->other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                             x => assert!(
                                 false,
@@ -1183,14 +1195,14 @@ mod test {
                         assert_eq!(position, 0);
                     }
 
-                    #[test]
-                    fn not_properly_end() {
+                    #[$test]
+                    $($async)? fn not_properly_end() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!->other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                             x => assert!(
                                 false,
@@ -1201,14 +1213,14 @@ mod test {
                         assert_eq!(position, 0);
                     }
 
-                    #[test]
-                    fn not_closed1() {
+                    #[$test]
+                    $($async)? fn not_closed1() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!--other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                             x => assert!(
                                 false,
@@ -1219,14 +1231,14 @@ mod test {
                         assert_eq!(position, 0);
                     }
 
-                    #[test]
-                    fn not_closed2() {
+                    #[$test]
+                    $($async)? fn not_closed2() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!-->other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                             x => assert!(
                                 false,
@@ -1237,14 +1249,14 @@ mod test {
                         assert_eq!(position, 0);
                     }
 
-                    #[test]
-                    fn not_closed3() {
+                    #[$test]
+                    $($async)? fn not_closed3() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!--->other content".as_ref());
                         //                ^= 0
 
-                        match input.read_bang_element($(&mut $buf, )? &mut position) {
+                        match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                             x => assert!(
                                 false,
@@ -1255,8 +1267,8 @@ mod test {
                         assert_eq!(position, 0);
                     }
 
-                    #[test]
-                    fn empty() {
+                    #[$test]
+                    $($async)? fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!---->other content".as_ref());
@@ -1265,6 +1277,7 @@ mod test {
                         assert_eq!(
                             input
                                 .read_bang_element($(&mut $buf, )? &mut position)
+                                $($(.$await)?)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
                             Some((BangType::Comment, Bytes(b"!----")))
@@ -1272,8 +1285,8 @@ mod test {
                         assert_eq!(position, 6);
                     }
 
-                    #[test]
-                    fn with_content() {
+                    #[$test]
+                    $($async)? fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"!--->comment<--->other content".as_ref());
@@ -1282,6 +1295,7 @@ mod test {
                         assert_eq!(
                             input
                                 .read_bang_element($(&mut $buf, )? &mut position)
+                                $($(.$await)?)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
                             Some((BangType::Comment, Bytes(b"!--->comment<---")))
@@ -1300,14 +1314,14 @@ mod test {
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
-                        #[test]
-                        fn not_properly_start() {
+                        #[$test]
+                        $($async)? fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!D other content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1318,14 +1332,14 @@ mod test {
                             assert_eq!(position, 0);
                         }
 
-                        #[test]
-                        fn without_space() {
+                        #[$test]
+                        $($async)? fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!DOCTYPEother content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1336,8 +1350,8 @@ mod test {
                             assert_eq!(position, 0);
                         }
 
-                        #[test]
-                        fn empty() {
+                        #[$test]
+                        $($async)? fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!DOCTYPE>other content".as_ref());
@@ -1346,6 +1360,7 @@ mod test {
                             assert_eq!(
                                 input
                                     .read_bang_element($(&mut $buf, )? &mut position)
+                                    $($(.$await)?)?
                                     .unwrap()
                                     .map(|(ty, data)| (ty, Bytes(data))),
                                 Some((BangType::DocType, Bytes(b"!DOCTYPE")))
@@ -1353,14 +1368,14 @@ mod test {
                             assert_eq!(position, 9);
                         }
 
-                        #[test]
-                        fn not_closed() {
+                        #[$test]
+                        $($async)? fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!DOCTYPE other content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1379,14 +1394,14 @@ mod test {
                         use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
-                        #[test]
-                        fn not_properly_start() {
+                        #[$test]
+                        $($async)? fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!d other content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1397,14 +1412,14 @@ mod test {
                             assert_eq!(position, 0);
                         }
 
-                        #[test]
-                        fn without_space() {
+                        #[$test]
+                        $($async)? fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!doctypeother content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1415,8 +1430,8 @@ mod test {
                             assert_eq!(position, 0);
                         }
 
-                        #[test]
-                        fn empty() {
+                        #[$test]
+                        $($async)? fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!doctype>other content".as_ref());
@@ -1425,6 +1440,7 @@ mod test {
                             assert_eq!(
                                 input
                                     .read_bang_element($(&mut $buf, )? &mut position)
+                                    $($(.$await)?)?
                                     .unwrap()
                                     .map(|(ty, data)| (ty, Bytes(data))),
                                 Some((BangType::DocType, Bytes(b"!doctype")))
@@ -1432,14 +1448,14 @@ mod test {
                             assert_eq!(position, 9);
                         }
 
-                        #[test]
-                        fn not_closed() {
+                        #[$test]
+                        $($async)? fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
                             let mut input = input_from_bytes(b"!doctype other content".as_ref());
                             //                ^= 0
 
-                            match input.read_bang_element($(&mut $buf, )? &mut position) {
+                            match input.read_bang_element($(&mut $buf, )? &mut position)$($(.$await)?)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                                 x => assert!(
                                     false,
@@ -1459,14 +1475,14 @@ mod test {
                 use pretty_assertions::assert_eq;
 
                 /// Checks that nothing was read from empty buffer
-                #[test]
-                fn empty() {
+                #[$test]
+                $($async)? fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
                     let mut input = input_from_bytes(b"".as_ref());
                     //                ^= 0
 
-                    assert_eq!(input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes), None);
+                    assert_eq!(input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes), None);
                     assert_eq!(position, 0);
                 }
 
@@ -1475,71 +1491,71 @@ mod test {
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
-                    #[test]
-                    fn empty_tag() {
+                    #[$test]
+                    $($async)? fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b">".as_ref());
                         //                 ^= 1
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b""))
                         );
                         assert_eq!(position, 1);
                     }
 
-                    #[test]
-                    fn normal() {
+                    #[$test]
+                    $($async)? fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"tag>".as_ref());
                         //                    ^= 4
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b"tag"))
                         );
                         assert_eq!(position, 4);
                     }
 
-                    #[test]
-                    fn empty_ns_empty_tag() {
+                    #[$test]
+                    $($async)? fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b":>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b":"))
                         );
                         assert_eq!(position, 2);
                     }
 
-                    #[test]
-                    fn empty_ns() {
+                    #[$test]
+                    $($async)? fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b":tag>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b":tag"))
                         );
                         assert_eq!(position, 5);
                     }
 
-                    #[test]
-                    fn with_attributes() {
+                    #[$test]
+                    $($async)? fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref());
                         //                                                        ^= 38
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#))
                         );
                         assert_eq!(position, 38);
@@ -1551,71 +1567,71 @@ mod test {
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
-                    #[test]
-                    fn empty_tag() {
+                    #[$test]
+                    $($async)? fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"/>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b"/"))
                         );
                         assert_eq!(position, 2);
                     }
 
-                    #[test]
-                    fn normal() {
+                    #[$test]
+                    $($async)? fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b"tag/>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b"tag/"))
                         );
                         assert_eq!(position, 5);
                     }
 
-                    #[test]
-                    fn empty_ns_empty_tag() {
+                    #[$test]
+                    $($async)? fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b":/>".as_ref());
                         //                   ^= 3
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b":/"))
                         );
                         assert_eq!(position, 3);
                     }
 
-                    #[test]
-                    fn empty_ns() {
+                    #[$test]
+                    $($async)? fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(b":tag/>".as_ref());
                         //                      ^= 6
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(b":tag/"))
                         );
                         assert_eq!(position, 6);
                     }
 
-                    #[test]
-                    fn with_attributes() {
+                    #[$test]
+                    $($async)? fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
                         let mut input = input_from_bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref());
                         //                                                           ^= 41
 
                         assert_eq!(
-                            input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes),
+                            input.read_element($(&mut $buf, )? &mut position)$($(.$await)?)?.unwrap().map(Bytes),
                             Some(Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#))
                         );
                         assert_eq!(position, 41);
@@ -1627,13 +1643,13 @@ mod test {
                 use super::reader_from_str;
                 use crate::errors::Error;
 
-                #[test]
-                fn cdata() {
+                #[$test]
+                $($async)? fn cdata() {
                     let doc = "![]]>";
                     let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
-                    match reader.read_until_close($(&mut $buf)?) {
+                    match reader.read_until_close($(&mut $buf)?)$($(.$await)?)? {
                         Err(Error::UnexpectedEof(s)) if s == "CData" => {}
                         x => assert!(
                             false,
@@ -1643,13 +1659,13 @@ mod test {
                     }
                 }
 
-                #[test]
-                fn comment() {
+                #[$test]
+                $($async)? fn comment() {
                     let doc = "!- -->";
                     let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
-                    match reader.read_until_close($(&mut $buf)?) {
+                    match reader.read_until_close($(&mut $buf)?)$($(.$await)?)? {
                         Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
                         x => assert!(
                             false,
@@ -1659,13 +1675,13 @@ mod test {
                     }
                 }
 
-                #[test]
-                fn doctype_uppercase() {
+                #[$test]
+                $($async)? fn doctype_uppercase() {
                     let doc = "!D>";
                     let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
-                    match reader.read_until_close($(&mut $buf)?) {
+                    match reader.read_until_close($(&mut $buf)?)$($(.$await)?)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                         x => assert!(
                             false,
@@ -1675,13 +1691,13 @@ mod test {
                     }
                 }
 
-                #[test]
-                fn doctype_lowercase() {
+                #[$test]
+                $($async)? fn doctype_lowercase() {
                     let doc = "!d>";
                     let mut reader = reader_from_str(doc);
                     $(let mut $buf = $init;)?
 
-                    match reader.read_until_close($(&mut $buf)?) {
+                    match reader.read_until_close($(&mut $buf)?)$($(.$await)?)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
                         x => assert!(
                             false,
@@ -1698,63 +1714,63 @@ mod test {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
                 use pretty_assertions::assert_eq;
 
-                #[test]
-                fn start_text() {
+                #[$test]
+                $($async)? fn start_text() {
                     let mut reader = reader_from_str("bom");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::StartText(BytesText::from_escaped_str("bom").into())
                     );
                 }
 
-                #[test]
-                fn declaration() {
+                #[$test]
+                $($async)? fn declaration() {
                     let mut reader = reader_from_str("<?xml ?>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
                     );
                 }
 
-                #[test]
-                fn doctype() {
+                #[$test]
+                $($async)? fn doctype() {
                     let mut reader = reader_from_str("<!DOCTYPE x>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::DocType(BytesText::from_escaped_str("x"))
                     );
                 }
 
-                #[test]
-                fn processing_instruction() {
+                #[$test]
+                $($async)? fn processing_instruction() {
                     let mut reader = reader_from_str("<?xml-stylesheet?>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::PI(BytesText::from_escaped_str("xml-stylesheet"))
                     );
                 }
 
-                #[test]
-                fn start() {
+                #[$test]
+                $($async)? fn start() {
                     let mut reader = reader_from_str("<tag>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Start(BytesStart::borrowed_name(b"tag"))
                     );
                 }
 
-                #[test]
-                fn end() {
+                #[$test]
+                $($async)? fn end() {
                     let mut reader = reader_from_str("</tag>");
                     // Because we expect invalid XML, do not check that
                     // the end name paired with the start name
@@ -1762,68 +1778,68 @@ mod test {
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::End(BytesEnd::borrowed(b"tag"))
                     );
                 }
 
-                #[test]
-                fn empty() {
+                #[$test]
+                $($async)? fn empty() {
                     let mut reader = reader_from_str("<tag/>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
                 }
 
                 /// Text event cannot be generated without preceding event of another type
-                #[test]
-                fn text() {
+                #[$test]
+                $($async)? fn text() {
                     let mut reader = reader_from_str("<tag/>text");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Empty(BytesStart::borrowed_name(b"tag"))
                     );
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Text(BytesText::from_escaped_str("text"))
                     );
                 }
 
-                #[test]
-                fn cdata() {
+                #[$test]
+                $($async)? fn cdata() {
                     let mut reader = reader_from_str("<![CDATA[]]>");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::CData(BytesCData::from_str(""))
                     );
                 }
 
-                #[test]
-                fn comment() {
+                #[$test]
+                $($async)? fn comment() {
                     let mut reader = reader_from_str("<!---->");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Comment(BytesText::from_escaped_str(""))
                     );
                 }
 
-                #[test]
-                fn eof() {
+                #[$test]
+                $($async)? fn eof() {
                     let mut reader = reader_from_str("");
                     $(let mut $buf = $init;)?
 
                     assert_eq!(
-                        reader.read_event_impl($(&mut $buf)?).unwrap(),
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(),
                         Event::Eof
                     );
                 }
@@ -1841,35 +1857,35 @@ mod test {
                     use pretty_assertions::assert_eq;
 
                     /// Checks that encoding is detected by BOM and changed after XML declaration
-                    #[test]
-                    fn bom_detected() {
+                    #[$test]
+                    $($async)? fn bom_detected() {
                         let mut reader = reader_from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
                         $(let mut $buf = $init;)?
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap();
                         assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
 
-                        assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(), Event::Eof);
                     }
 
                     /// Checks that encoding is changed by XML declaration, but only once
-                    #[test]
-                    fn xml_declaration() {
+                    #[$test]
+                    $($async)? fn xml_declaration() {
                         let mut reader = reader_from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
                         $(let mut $buf = $init;)?
 
                         assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
+                        reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap();
                         assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-                        assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
+                        assert_eq!(reader.read_event_impl($(&mut $buf)?)$($(.$await)?)?.unwrap(), Event::Eof);
                     }
                 }
             }
