@@ -20,9 +20,8 @@ use std::io::Write;
 /// let mut reader = Reader::from_str(xml);
 /// reader.trim_text(true);
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
-/// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event_into(&mut buf) {
+///     match reader.read_event() {
 ///         Ok(Event::Start(ref e)) if e.name().as_ref() == b"this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
@@ -46,7 +45,6 @@ use std::io::Write;
 ///         Ok(e) => assert!(writer.write_event(&e).is_ok()),
 ///         Err(e) => panic!("{}", e),
 ///     }
-///     buf.clear();
 /// }
 ///
 /// let result = writer.into_inner().into_inner();

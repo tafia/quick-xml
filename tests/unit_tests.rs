@@ -12,8 +12,7 @@ use pretty_assertions::assert_eq;
 
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
-        let mut buf = Vec::new();
-        match $r.read_event_into(&mut buf).unwrap() {
+        match $r.read_event().unwrap() {
             $t(ref e) if e.name().as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -22,14 +21,12 @@ macro_rules! next_eq_name {
                 e
             ),
         }
-        buf.clear();
     };
 }
 
 macro_rules! next_eq_content {
     ($r:expr, $t:tt, $bytes:expr) => {
-        let mut buf = Vec::new();
-        match $r.read_event_into(&mut buf).unwrap() {
+        match $r.read_event().unwrap() {
             $t(ref e) if e.as_ref() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
@@ -38,7 +35,6 @@ macro_rules! next_eq_content {
                 e
             ),
         }
-        buf.clear();
     };
 }
 
@@ -130,8 +126,7 @@ fn test_comment() {
 fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
     r.trim_text(true);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf).unwrap() {
+    match r.read_event().unwrap() {
         Decl(ref e) => {
             match e.version() {
                 Ok(v) => assert_eq!(
@@ -207,9 +202,8 @@ fn test_writer() -> Result<()> {
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -226,9 +220,8 @@ fn test_writer_borrow() -> Result<()> {
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
         }
@@ -249,9 +242,8 @@ fn test_writer_indent() -> Result<()> {
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -275,9 +267,8 @@ fn test_writer_indent_cdata() -> Result<()> {
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -301,9 +292,8 @@ fn test_write_empty_element_attrs() -> Result<()> {
     let mut reader = Reader::from_str(str_from);
     reader.expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -323,9 +313,8 @@ fn test_write_attrs() -> Result<()> {
     let mut reader = Reader::from_str(str_from);
     reader.trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        let event = match reader.read_event_into(&mut buf)? {
+        let event = match reader.read_event()? {
             Eof => break,
             Start(elem) => {
                 let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
@@ -430,8 +419,7 @@ fn test_buf_position_err_end_element() {
     let mut r = Reader::from_str("</a>");
     r.trim_text(true).check_end_names(true);
 
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
         Err(e) => panic!(
             "expecting buf_pos = 2, found {}, err: {:?}",
@@ -450,8 +438,7 @@ fn test_buf_position_err_comment() {
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
 
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         // error at char 4: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -469,12 +456,10 @@ fn test_buf_position_err_comment_2_buf() {
     let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
-    let mut buf = Vec::new();
-    let _ = r.read_event_into(&mut buf).unwrap();
+    let _ = r.read_event().unwrap();
     assert_eq!(r.buffer_position(), 3);
 
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         // error at char 4: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -495,8 +480,7 @@ fn test_buf_position_err_comment_trim_text() {
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
 
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         // error at char 7: no closing --> tag found
         Err(e) => assert_eq!(
             r.buffer_position(),
@@ -514,8 +498,7 @@ fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
     r.trim_text(true);
     next_eq!(r, Start, b"a");
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Text(e)) => {
             assert_eq!(
                 &*e,
@@ -556,9 +539,8 @@ fn test_read_write_roundtrip_results_in_identity() -> Result<()> {
     let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -583,9 +565,8 @@ fn test_read_write_roundtrip() -> Result<()> {
     let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -610,9 +591,8 @@ fn test_read_write_roundtrip_escape() -> Result<()> {
     let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             Text(e) => {
                 let t = e.escape();
@@ -643,9 +623,8 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
     let mut reader = Reader::from_str(input);
     reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
-    let mut buf = Vec::new();
     loop {
-        match reader.read_event_into(&mut buf)? {
+        match reader.read_event()? {
             Eof => break,
             Text(e) => {
                 let t = e.decode_and_unescape(&reader).unwrap();
@@ -666,8 +645,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
 fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
     r.trim_text(true);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -695,8 +673,7 @@ fn test_closing_bracket_in_single_quote_attr() {
 fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str(r#"<a attr=">" check="2"></a>"#);
     r.trim_text(true);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -724,8 +701,7 @@ fn test_closing_bracket_in_double_quote_attr() {
 fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr="'>'" check="'2'"></a>"#);
     r.trim_text(true);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -753,8 +729,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
 fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr='">"' check='"2"'></a>"#);
     r.trim_text(true);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -791,10 +766,9 @@ mod decode_with_bom_removal {
         reader.trim_text(true);
 
         let mut txt = Vec::new();
-        let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
+            match reader.read_event() {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
                 Ok(Eof) => break,
                 _ => (),
@@ -855,10 +829,9 @@ mod decode_with_bom_removal {
         reader.trim_text(true);
 
         let mut txt = Vec::new();
-        let mut buf = Vec::new();
 
         loop {
-            match reader.read_event_into(&mut buf) {
+            match reader.read_event() {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
                 Ok(Eof) => break,
                 _ => (),

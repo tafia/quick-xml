@@ -30,7 +30,11 @@ let xml = r#"<tag1 att1 = "test">
                 </tag2>
             </tag1>"#;
 
-let mut reader = Reader::from_str(xml);
+let mut reader = Reader::from_reader(xml.as_bytes());
+// If you want to read from a string or byte slice without buffering, use:
+// let mut reader = Reader::from_str(xml);
+// In that case, `Vec` is *not* needed for buffering below and you should use
+// `read_event` instead of `read_event_into`.
 reader.trim_text(true);
 
 let mut count = 0;
@@ -75,9 +79,8 @@ let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 let mut reader = Reader::from_str(xml);
 reader.trim_text(true);
 let mut writer = Writer::new(Cursor::new(Vec::new()));
-let mut buf = Vec::new();
 loop {
-    match reader.read_event_into(&mut buf) {
+    match reader.read_event() {
         Ok(Event::Start(ref e)) if e.name() == b"this_tag" => {
 
             // crates a new element ... alternatively we could reuse `e` by calling
@@ -101,7 +104,6 @@ loop {
         Ok(e) => assert!(writer.write_event(&e).is_ok()),
         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     }
-    buf.clear();
 }
 
 let result = writer.into_inner().into_inner();

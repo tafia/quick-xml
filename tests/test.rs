@@ -212,20 +212,16 @@ fn test_trim() {
 fn test_clone_reader() {
     let mut reader = Reader::from_str("<tag>text</tag>");
     reader.trim_text(true);
-    let mut buf = Vec::new();
 
-    assert!(matches!(
-        reader.read_event_into(&mut buf).unwrap(),
-        Start(_)
-    ));
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
 
     let mut cloned = reader.clone();
 
-    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), End(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
 
-    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), End(_)));
+    assert!(matches!(cloned.read_event().unwrap(), Text(_)));
+    assert!(matches!(cloned.read_event().unwrap(), End(_)));
 }
 
 #[cfg(feature = "serialize")]

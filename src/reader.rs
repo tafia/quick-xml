@@ -138,9 +138,8 @@ pub trait InnerReader: Deref<Target = Self::Reader> + DerefMut {
 /// reader.trim_text(true);
 /// let mut count = 0;
 /// let mut txt = Vec::new();
-/// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event_into(&mut buf) {
+///     match reader.read_event() {
 ///         Ok(Event::Start(ref e)) => {
 ///             match e.name().as_ref() {
 ///                 b"tag1" => println!("attributes values: {:?}",
@@ -155,7 +154,6 @@ pub trait InnerReader: Deref<Target = Self::Reader> + DerefMut {
 ///         Ok(Event::Eof) => break,
 ///         _ => (),
 ///     }
-///     buf.clear();
 /// }
 /// ```
 #[derive(Clone)]
@@ -1892,13 +1890,12 @@ mod test {
         #[test]
         fn str_always_has_utf8() {
             let mut reader = crate::Reader::from_str("<?xml encoding='UTF-16'?>");
-            let mut buf = Vec::new();
 
             assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event_into(&mut buf).unwrap();
+            reader.read_event().unwrap();
             assert_eq!(reader.decoder().encoding(), UTF_8);
 
-            assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }
     }
 }
