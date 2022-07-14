@@ -16,6 +16,8 @@ document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 serde = { version = "1.0", optional = true }
 memchr = "2.5"
+tokio = { version = "1.19", optional = true, default-features = false, features = ["io-util"] }
+async-recursion = { version = "1.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.3"
@@ -23,6 +25,8 @@ pretty_assertions = "1.2"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
+tokio = { version = "1.20", default-features = false, features = ["macros", "rt-multi-thread"] }
+tokio-test = "0.4"
 
 [lib]
 bench = false
@@ -100,6 +104,19 @@ serialize = ["serde"]
 
 ## Enables support for recognizing all [HTML 5 entities](https://dev.w3.org/html5/html-author/charref)
 escape-html = []
+
+## Enables support for asynchronous reading from `tokio`'s IO-Traits.
+##
+## This can be used for example with `Reader::from_async_reader(read)` where `read`
+## is some type implementing `tokio::io::AsyncBufRead`.
+async = ["tokio", "async-recursion"]
+
+## Enables support for asynchronous reading from files using `tokio`. This feature
+## also automatically enables the `async` feature as well.
+##
+## This can be used for example with `Reader::from_file_async(path)` where `path`
+## is a file path.
+async-fs = ["async", "tokio/fs"]
 
 [package.metadata.docs.rs]
 all-features = true

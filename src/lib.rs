@@ -158,5 +158,7 @@ mod writer;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};
+#[cfg(feature = "async")]
+pub use crate::reader::AsyncReader;
 pub use crate::reader::{Decoder, IoReader, Reader, SliceReader};
 pub use crate::writer::{ElementWriter, Writer};

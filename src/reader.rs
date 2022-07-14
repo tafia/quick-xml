@@ -13,9 +13,13 @@ use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 
 use memchr;
 
+#[cfg(feature = "async")]
+mod async_reader;
 mod io_reader;
 mod slice_reader;
 
+#[cfg(feature = "async")]
+pub use self::async_reader::AsyncReader;
 pub use self::io_reader::IoReader;
 pub use self::slice_reader::SliceReader;
 
