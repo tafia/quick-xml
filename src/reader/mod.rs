@@ -129,12 +129,15 @@ macro_rules! configure_methods {
 
 macro_rules! read_event_impl {
     (
-        $self:ident, $buf:ident
+        $self:ident, $buf:ident,
+        $read_until_open:ident,
+        $read_until_close:ident
+        $(, $await:ident)?
     ) => {{
         let event = match $self.parser.state {
-            ParseState::Init => $self.read_until_open($buf, true),
-            ParseState::ClosedTag => $self.read_until_open($buf, false),
-            ParseState::OpenedTag => $self.read_until_close($buf),
+            ParseState::Init => $self.$read_until_open($buf, true) $(.$await)?,
+            ParseState::ClosedTag => $self.$read_until_open($buf, false) $(.$await)?,
+            ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
             ParseState::Empty => $self.parser.close_expanded_empty(),
             ParseState::Exit => return Ok(Event::Eof),
         };
@@ -148,22 +151,25 @@ macro_rules! read_event_impl {
 
 macro_rules! read_until_open {
     (
-        $self:ident, $buf:ident, $first:ident
+        $self:ident, $buf:ident, $first:ident,
+        $read_event:ident
+        $(, $await:ident)?
     ) => {{
         $self.parser.state = ParseState::OpenedTag;
 
         if $self.parser.trim_text_start {
-            $self.reader.skip_whitespace(&mut $self.parser.offset)?;
+            $self.reader.skip_whitespace(&mut $self.parser.offset) $(.$await)? ?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if $self.reader.skip_one(b'<', &mut $self.parser.offset)? {
-            return $self.read_event_impl($buf);
+        if $self.reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
+            return $self.$read_event($buf) $(.$await)?;
         }
 
         match $self
             .reader
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
+            $(.$await)?
         {
             Ok(Some(bytes)) => $self.parser.read_text(bytes, $first),
             Ok(None) => Ok(Event::Eof),
@@ -175,14 +181,16 @@ macro_rules! read_until_open {
 macro_rules! read_until_close {
     (
         $self:ident, $buf:ident
+        $(, $await:ident)?
     ) => {{
         $self.parser.state = ParseState::ClosedTag;
 
-        match $self.reader.peek_one() {
+        match $self.reader.peek_one() $(.$await)? {
             // `<!` - comment, CDATA or DOCTYPE declaration
             Ok(Some(b'!')) => match $self
                 .reader
                 .read_bang_element($buf, &mut $self.parser.offset)
+                $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some((bang_type, bytes))) => $self.parser.read_bang(bang_type, bytes),
@@ -190,9 +198,9 @@ macro_rules! read_until_close {
             },
             // `</` - closing tag
             Ok(Some(b'/')) => match $self
-                // Comment for prevent formatting
                 .reader
                 .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+                $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => $self.parser.read_end(bytes),
@@ -200,16 +208,20 @@ macro_rules! read_until_close {
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $self
-                // Comment for prevent formatting
                 .reader
                 .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+                $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => $self.parser.read_question_mark(bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match $self.reader.read_element($buf, &mut $self.parser.offset) {
+            Ok(Some(_)) => match $self
+                .reader
+                .read_element($buf, &mut $self.parser.offset)
+                $(.$await)?
+            {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => $self.parser.read_start(bytes),
                 Err(e) => Err(e),
@@ -224,13 +236,15 @@ macro_rules! read_until_close {
 macro_rules! read_to_end {
     (
         $self:expr, $end:expr, $buf:expr,
+        $read_event:ident,
         // Code block that performs clearing of internal buffer after read of each event
         $clear:block
+        $(, $await:ident)?
     ) => {{
         let mut depth = 0;
         loop {
             $clear
-            match $self.read_event_impl($buf) {
+            match $self.$read_event($buf) $(.$await)? {
                 Err(e) => return Err(e),
 
                 Ok(Event::Start(e)) if e.name() == $end => depth += 1,
@@ -528,7 +542,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_event_impl!(self, buf)
+        read_event_impl!(self, buf, read_until_open, read_until_close)
     }
 
     /// Read until '<' is found and moves reader to an `OpenedTag` state.
@@ -538,7 +552,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_until_open!(self, buf, first)
+        read_until_open!(self, buf, first, read_event_impl)
     }
 
     /// Private function to read until `>` is found. This function expects that

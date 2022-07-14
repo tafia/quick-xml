@@ -138,7 +138,7 @@ impl<'a> Reader<&'a [u8]> {
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<()> {
-        read_to_end!(self, end, (), {})
+        read_to_end!(self, end, (), read_event_impl, {})
     }
 }
 
