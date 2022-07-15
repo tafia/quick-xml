@@ -17,9 +17,6 @@
 - [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
   and `PrefixDeclaration` wrappers around byte arrays and `ResolveResult` with
   the result of namespace resolution
-- [#180]: Make `Decoder` struct public. You already had access to it via the
-  `Reader::decoder()` method, but could not name it in the code. Now the preferred
-  way to access decoding functionality is via this struct
 - [#191]: New event variant `StartText` emitted for bytes before the XML declaration
   or a start comment or a tag. For streams with BOM this event will contain a BOM
 - [#395]: Add support for XML Schema `xs:list`
@@ -27,6 +24,9 @@
   the XML declared encoding and always use UTF-8
 - [#416]: Add `borrow()` methods in all event structs which allows to get
   a borrowed version of any event
+- [#420]: Removed all `decode` functions from the public API, as decoding will now be
+  performed internally with `&str`, `String`, or `Cow<str>` returned in places where
+  previously `&[u8]`, `Vec<u8>`, or `Cow<[u8]>` would have been.
 
 ### Bug Fixes
 
@@ -73,31 +73,8 @@
 - [#393]: Now `BytesStart::name()` and `BytesEnd::name()` returns `QName`, and
   `BytesStart::local_name()` and `BytesEnd::local_name()` returns `LocalName`
 
-- [#191]: Remove unused `reader.decoder().decode_owned()`. If you ever used it,
-  use `String::from_utf8` instead (which that function did)
 - [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
   Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
-- [#191]: Remove `Reader::decode()` and `Reader::decode_without_bom()`, they are replaced by
-  `Decoder::decode()` and `Decoder::decode_with_bom_removal()`.
-  Use `reader.decoder().decode_*(...)` instead of `reader.decode_*(...)` for now.
-  `Reader::encoding()` is replaced by `Decoder::encoding()` as well
-- [#191]: Remove poorly designed `BytesText::unescape_and_decode_without_bom()` and
-  `BytesText::unescape_and_decode_without_bom_with_custom_entities()`. Although these methods worked
-  as expected, this was only due to good luck. They was replaced by the
-  `BytesStartText::decode_with_bom_removal()`:
-  - conceptually, you should decode BOM only for the first `Text` event from the
-    reader (since now `StartText` event is emitted instead for this)
-  - text before the first tag is not an XML content at all, so it is meaningless
-    to try to unescape something in it
-
-- [#180]: Eliminated the differences in the decoding API when feature `encoding` enabled and when it is
-  disabled. Signatures of functions are now the same regardless of whether or not the feature is
-  enabled, and an error will be returned instead of performing replacements for invalid characters
-  in both cases.
-
-  Previously, if the `encoding` feature was enabled, decoding functions would return `Result<Cow<&str>>`
-  while without this feature they would return `Result<&str>`. With this change, only `Result<Cow<&str>>`
-  is returned regardless of the status of the feature.
 - [#180]: Error variant `Error::Utf8` replaced by `Error::NonDecodable`
 
 - [#118]: Remove `BytesStart::unescaped*` set of methods because they could return wrong results
@@ -117,9 +94,8 @@
 
 - [#415]: Changed custom entity unescaping API to accept closures rather than a mapping of entity to
   replacement text. This avoids needing to allocate a map and provides the user with more flexibility.
-- [#415]: Renamed many functions following the pattern `unescape_and_decode*` to `decode_and_unescape*`
-  to better communicate their function. Renamed functions following the pattern `*_with_custom_entities`
-  to `decode_and_unescape_with` to be more consistent across the API.
+- [#415]: Renamed functions following the pattern `unescape_with_custom_entities`
+  to `unescape_with` to be more consistent across the API.
 - [#415]: `BytesText::escaped()` renamed to `BytesText::escape()`, `BytesText::unescaped()` renamed to
   `BytesText::unescape()`, `BytesText::unescaped_with()` renamed to `BytesText::unescape_with()`,
   `Attribute::escaped_value()` renamed to `Attribute::escape_value()`, and `Attribute::escaped_value_with()`
@@ -128,7 +104,6 @@
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
 
-- [#421]: `decode_and_unescape*` methods now does one less allocation if unescaping is not required
 - [#421]: Removed ability to deserialize byte arrays from serde deserializer.
   XML is not able to store binary data directly, you should always use some encoding
   scheme, for example, HEX or Base64
@@ -161,6 +136,7 @@
 [#415]: https://github.com/tafia/quick-xml/pull/415
 [#416]: https://github.com/tafia/quick-xml/pull/416
 [#418]: https://github.com/tafia/quick-xml/pull/418
+[#420]: https://github.com/tafia/quick-xml/pull/420
 [#421]: https://github.com/tafia/quick-xml/pull/421
 
 ## 0.23.0 -- 2022-05-08

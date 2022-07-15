@@ -44,7 +44,6 @@ use std::str::from_utf8;
 use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
-use crate::reader::{Decoder, Reader};
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 
@@ -79,17 +78,18 @@ impl<'a> BytesStartText<'a> {
         }
     }
 
-    /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
-    /// in the event.
-    ///
-    /// This method does not unescapes content, because no escape sequences can
-    /// appeared in the BOM or in the text before the first tag.
-    pub fn decode_with_bom_removal(&self, decoder: Decoder) -> Result<String> {
-        //TODO: Fix lifetime issue - it should be possible to borrow string
-        let decoded = decoder.decode_with_bom_removal(&*self)?;
+    // TODO: clean this up
+    // /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
+    // /// in the event.
+    // ///
+    // /// This method does not unescapes content, because no escape sequences can
+    // /// appeared in the BOM or in the text before the first tag.
+    // pub fn decode_with_bom_removal(&self, decoder: Decoder) -> Result<String> {
+    //     //TODO: Fix lifetime issue - it should be possible to borrow string
+    //     let decoded = decoder.decode_with_bom_removal(&*self)?;
 
-        Ok(decoded.to_string())
-    }
+    //     Ok(decoded.to_string())
+    // }
 }
 
 impl<'a> Deref for BytesStartText<'a> {
@@ -729,29 +729,23 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Decodes using UTF-8 then unescapes the content of the event.
+    /// Returns the unescaped content of the event.
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
     /// See also [`unescape_with()`](Self::unescape_with)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape(&self) -> Result<Cow<str>> {
         self.unescape_with(|_| None)
     }
 
-    /// Decodes using UTF-8 then unescapes the content of the event with custom entities.
+    /// Returns the unescaped content of the event with a custom entity resolver.
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     /// A fallback resolver for additional custom entities can be provided via `resolve_entity`.
     ///
     /// See also [`unescape()`](Self::unescape)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_with<'entity>(
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
@@ -760,63 +754,9 @@ impl<'a> BytesText<'a> {
         Ok(unescape_with(from_utf8(&self.content)?, resolve_entity)?)
     }
 
-    /// Decodes then unescapes the content of the event.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn decode_and_unescape<B>(&self, reader: &Reader<B>) -> Result<Cow<str>> {
-        self.decode_and_unescape_with(reader, |_| None)
-    }
-
-    /// Decodes then unescapes the content of the event with custom entities.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    ///
-    /// # Pre-condition
-    ///
-    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
-    pub fn decode_and_unescape_with<'entity, B>(
-        &self,
-        reader: &Reader<B>,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<str>> {
-        let decoded = reader.decoder().decode(&*self)?;
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
-    }
-
     /// Gets escaped content.
-    pub fn escape(&self) -> &[u8] {
-        self.content.as_ref()
-    }
-
-    /// Gets content of this text buffer in the specified encoding and optionally
-    /// unescapes it. Unlike [`Self::decode_and_unescape`] & Co., the lifetime
-    /// of the returned `Cow` is bound to the original buffer / input
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: Decoder, unescape: bool) -> Result<Cow<'a, str>> {
-        //TODO: too many copies, can be optimized
-        let text = match &self.content {
-            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
-        };
-        let text = if unescape {
-            //FIXME: need to take into account entities defined in the document
-            match unescape_with(&text, |_| None)? {
-                // Because result is borrowed, no replacements was done and we can use original string
-                Cow::Borrowed(_) => text,
-                Cow::Owned(s) => s.into(),
-            }
-        } else {
-            text
-        };
-        Ok(text)
+    pub fn escape(&self) -> Cow<str> {
+        Cow::Borrowed(std::str::from_utf8(&self.content).unwrap()) // TODO(dalley): remove from_utf8
     }
 }
 
@@ -925,16 +865,6 @@ impl<'a> BytesCData<'a> {
         BytesText::from_escaped(match partial_escape(&self.content) {
             Cow::Borrowed(_) => self.content,
             Cow::Owned(escaped) => Cow::Owned(escaped),
-        })
-    }
-
-    /// Gets content of this text buffer in the specified encoding
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: Decoder) -> Result<Cow<'a, str>> {
-        Ok(match &self.content {
-            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
         })
     }
 }

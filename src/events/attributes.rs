@@ -5,7 +5,7 @@
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, unescape_with};
 use crate::name::QName;
-use crate::reader::{is_whitespace, Reader};
+use crate::reader::is_whitespace;
 use crate::utils::{write_byte_string, write_cow_string, Bytes};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
@@ -14,11 +14,7 @@ use std::{borrow::Cow, ops::Range};
 /// A struct representing a key/value XML attribute.
 ///
 /// Field `value` stores raw bytes, possibly containing escape-sequences. Most users will likely
-/// want to access the value using one of the [`unescape_value`] and [`decode_and_unescape_value`]
-/// functions.
-///
-/// [`unescape_value`]: Self::unescape_value
-/// [`decode_and_unescape_value`]: Self::decode_and_unescape_value
+/// want to access the value using one of the [`unescape_value`] function.
 #[derive(Clone, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
@@ -30,7 +26,7 @@ pub struct Attribute<'a> {
 }
 
 impl<'a> Attribute<'a> {
-    /// Decodes using UTF-8 then unescapes the value.
+    /// Unescapes the value.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
     /// replaced with their unescaped equivalents such as `>`.
@@ -38,26 +34,19 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescape_value_with()`](Self::unescape_value_with)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<str>> {
         self.unescape_value_with(|_| None)
     }
 
-    /// Decodes using UTF-8 then unescapes the value, using custom entities.
+    /// Unescapes the value using a custom entity resolver.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
-    /// replaced with their unescaped equivalents such as `>`.
-    /// A fallback resolver for additional custom entities can be provided via
-    /// `resolve_entity`.
+    /// replaced with their unescaped equivalents such as `>`. A fallback resolver for
+    /// additional custom entities can be provided via `resolve_entity`.
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
     /// See also [`unescape_value()`](Self::unescape_value)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value_with<'entity>(
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
@@ -67,32 +56,6 @@ impl<'a> Attribute<'a> {
             std::str::from_utf8(&self.value)?,
             resolve_entity,
         )?)
-    }
-
-    /// Decodes then unescapes the value.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<str>> {
-        self.decode_and_unescape_value_with(reader, |_| None)
-    }
-
-    /// Decodes then unescapes the value with custom entities.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn decode_and_unescape_value_with<'entity, B>(
-        &self,
-        reader: &Reader<B>,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> XmlResult<Cow<str>> {
-        let decoded = reader.decoder().decode(&*self.value)?;
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
     }
 }
 

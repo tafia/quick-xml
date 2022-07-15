@@ -108,7 +108,7 @@ impl<W: Write> Writer<W> {
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
-                self.write(&e.escape())
+                self.write(e.escape().as_bytes())
             }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => {

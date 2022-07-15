@@ -36,8 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
                     custom_entities.insert(
-                        reader.decoder().decode(&cap[1])?.into_owned(),
-                        reader.decoder().decode(&cap[2])?.into_owned(),
+                        String::from_utf8(cap[1].to_owned())?,
+                        String::from_utf8(cap[2].to_owned())?,
                     );
                 }
             }
@@ -47,25 +47,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .attributes()
                         .map(|a| {
                             a.unwrap()
-                                .decode_and_unescape_value_with(&reader, |ent| {
+                                .unescape_value_with(|ent| {
                                     custom_entities.get(ent).map(|s| s.as_str())
                                 })
                                 .unwrap()
                                 .into_owned()
                         })
-                        .collect::<Vec<_>>();
+                        .collect::<Vec<String>>();
                     println!("attributes values: {:?}", attributes);
                 }
                 _ => (),
             },
             Ok(Event::Text(ref e)) => {
-                println!(
-                    "text value: {}",
-                    e.decode_and_unescape_with(&reader, |ent| custom_entities
-                        .get(ent)
-                        .map(|s| s.as_str()))
-                        .unwrap()
-                );
+                let txt = e
+                    .unescape_with(|ent| custom_entities.get(ent).map(|s| s.as_str()))
+                    .unwrap();
+                println!("text value: {}", txt);
             }
             Ok(Event::Eof) => break,
             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),

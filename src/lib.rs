@@ -7,8 +7,7 @@
 //! A streaming API based on the [StAX] model. This is suited for larger XML documents which
 //! cannot completely read into memory at once.
 //!
-//! The user has to expicitely _ask_ for the next XML event, similar
-//! to a database cursor.
+//! The user has to explicitly _ask_ for the next XML event, similar to a database cursor.
 //! This is achieved by the following two structs:
 //!
 //! - [`Reader`]: A low level XML pull-reader where buffer allocation/clearing is left to user.
@@ -58,8 +57,8 @@
 //!                 _ => (),
 //!             }
 //!         },
-//!         // unescape and decode the text event using the reader encoding
-//!         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
+//!         // unescape the text event
+//!         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 //!         Ok(Event::Eof) => break, // exits the loop when reaching end of file
 //!         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 //!         _ => (), // There are several other `Event`s we do not consider here
@@ -156,5 +155,5 @@ mod writer;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};
-pub use crate::reader::{Decoder, Reader};
+pub use crate::reader::Reader;
 pub use crate::writer::{ElementWriter, Writer};

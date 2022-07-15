@@ -24,11 +24,11 @@ fn parse_document(doc: &[u8]) -> XmlResult<()> {
         match r.read_event()? {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(&r)?);
+                    criterion::black_box(attr?.unescape_value()?);
                 }
             }
             Event::Text(e) => {
-                criterion::black_box(e.decode_and_unescape(&r)?);
+                criterion::black_box(e.unescape()?);
             }
             Event::CData(e) => {
                 criterion::black_box(e.into_inner());
