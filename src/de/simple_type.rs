@@ -218,9 +218,9 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         if self.escaped {
-            match unescape(self.content.as_str().as_bytes())? {
+            match unescape(self.content.as_str())? {
                 Cow::Borrowed(_) => self.content.deserialize_item(visitor),
-                Cow::Owned(buf) => visitor.visit_string(String::from_utf8(buf)?),
+                Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
             self.content.deserialize_item(visitor)
@@ -625,9 +625,9 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     {
         let content = self.decode()?;
         if self.escaped {
-            match unescape(content.as_str().as_bytes())? {
+            match unescape(content.as_str())? {
                 Cow::Borrowed(_) => content.deserialize_all(visitor),
-                Cow::Owned(buf) => visitor.visit_string(String::from_utf8(buf)?),
+                Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
             content.deserialize_all(visitor)
@@ -642,15 +642,14 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    /// Returns [`DeError::Unsupported`]
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.content {
-            CowRef::Input(content) => visitor.visit_borrowed_bytes(content),
-            CowRef::Slice(content) => visitor.visit_bytes(content),
-            CowRef::Owned(content) => visitor.visit_byte_buf(content),
-        }
+        Err(DeError::Unsupported(
+            "binary data content is not supported by XML format",
+        ))
     }
 
     /// Forwards deserialization to the [`Self::deserialize_bytes`]
@@ -1176,10 +1175,12 @@ mod tests {
         simple!(utf8, char_escaped: char = "&lt;" => '<');
 
         simple!(utf8, string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        simple!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string" => ByteBuf(b"&lt;escaped&#x20;string".to_vec()));
+        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+             => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        simple!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string" => Bytes(b"&lt;escaped&#x20;string"));
+        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+             => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, option_none: Option<&str> = "" => None);
         simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
@@ -1258,7 +1259,8 @@ mod tests {
         utf16!(char_escaped: char = "&lt;" => '<');
 
         utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        utf16!(byte_buf: ByteBuf = "&lt;escaped&#x20;string" => ByteBuf(to_utf16("&lt;escaped&#x20;string")));
+        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+                     => "binary data content is not supported by XML format");
 
         utf16!(option_none: Option<()> = "" => None);
         utf16!(option_some: Option<()> = "any data" => Some(()));
@@ -1278,12 +1280,12 @@ mod tests {
                      => "structures are not supported for XSD `simpleType`s");
 
         utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
-        err!(utf16, enum_newtype: Enum = to_utf16("Newtype")
-             => Unsupported("enum newtype variants are not supported for XSD `simpleType`s"));
-        err!(utf16, enum_tuple: Enum = to_utf16("Tuple")
-             => Unsupported("enum tuple variants are not supported for XSD `simpleType`s"));
-        err!(utf16, enum_struct: Enum = to_utf16("Struct")
-             => Unsupported("enum struct variants are not supported for XSD `simpleType`s"));
+        unsupported!(enum_newtype: Enum = "Newtype"
+                     => "enum newtype variants are not supported for XSD `simpleType`s");
+        unsupported!(enum_tuple: Enum = "Tuple"
+                     => "enum tuple variants are not supported for XSD `simpleType`s");
+        unsupported!(enum_struct: Enum = "Struct"
+                     => "enum struct variants are not supported for XSD `simpleType`s");
         err!(utf16, enum_other: Enum = to_utf16("any data")
              => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 

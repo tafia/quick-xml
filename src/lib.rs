@@ -59,7 +59,7 @@
 //!             }
 //!         },
 //!         // unescape and decode the text event using the reader encoding
-//!         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap()),
+//!         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
 //!         Ok(Event::Eof) => break, // exits the loop when reaching end of file
 //!         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 //!         _ => (), // There are several other `Event`s we do not consider here

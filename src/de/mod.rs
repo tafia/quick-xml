@@ -117,8 +117,7 @@ macro_rules! deserialize_type {
         {
             // No need to unescape because valid integer representations cannot be escaped
             let text = self.next_text(false)?;
-            let string = text.decode(self.decoder())?;
-            visitor.$visit(string.parse()?)
+            visitor.$visit(text.parse()?)
         }
     };
 }
@@ -152,7 +151,7 @@ macro_rules! deserialize_primitives {
             // No need to unescape because valid boolean representations cannot be escaped
             let text = self.next_text(false)?;
 
-            deserialize_bool(text.as_ref(), self.decoder(), visitor)
+            str2bool(&text, visitor)
         }
 
         /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
@@ -176,30 +175,26 @@ macro_rules! deserialize_primitives {
             V: Visitor<'de>,
         {
             let text = self.next_text(true)?;
-            let string = text.decode(self.decoder())?;
-            match string {
+            match text {
                 Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
                 Cow::Owned(string) => visitor.visit_string(string),
             }
         }
 
-        fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        /// Returns [`DeError::Unsupported`]
+        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because bytes gives access to the raw XML input
-            let text = self.next_text(false)?;
-            visitor.visit_bytes(&text)
+            Err(DeError::Unsupported("binary data content is not supported by XML format"))
         }
 
-        fn deserialize_byte_buf<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
+        /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).
+        fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because bytes gives access to the raw XML input
-            let text = self.next_text(false)?;
-            let value = text.into_inner().into_owned();
-            visitor.visit_byte_buf(value)
+            self.deserialize_bytes(visitor)
         }
 
         /// Identifiers represented as [strings](#method.deserialize_str).
@@ -576,7 +571,7 @@ where
     }
 
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.next_text_impl(unescape, true)
     }
 
@@ -616,25 +611,24 @@ where
         &mut self,
         unescape: bool,
         allow_start: bool,
-    ) -> Result<BytesCData<'de>, DeError> {
+    ) -> Result<Cow<'de, str>, DeError> {
+        let decoder = self.reader.decoder();
         match self.next()? {
-            DeEvent::Text(e) if unescape => e.unescape_as_cdata().map_err(Into::into),
-            DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
-            DeEvent::CData(e) => Ok(e),
+            DeEvent::Text(e) => Ok(e.decode(decoder, unescape)?),
+            DeEvent::CData(e) => Ok(e.decode(decoder)?),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) if unescape => t.unescape_as_cdata()?,
-                    DeEvent::Text(t) => BytesCData::new(t.into_inner()),
-                    DeEvent::CData(t) => t,
+                    DeEvent::Text(t) => t.decode(decoder, unescape)?,
+                    DeEvent::CData(t) => t.decode(decoder)?,
                     DeEvent::Start(s) => {
                         return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
                     }
                     // We can get End event in case of `<tag></tag>` or `<tag/>` input
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
-                        return Ok(BytesCData::new(&[] as &[u8]));
+                        return Ok("".into());
                     }
                     DeEvent::End(end) => {
                         return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
@@ -648,12 +642,6 @@ where
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
-    }
-
-    /// Returns a decoder, used inside `deserialize_primitives!()`
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
     }
 
     /// Drops all events until event with [name](BytesEnd::name()) `name` won't be

@@ -1,7 +1,9 @@
 //! Serde `Deserializer` module
 
 use crate::de::deserialize_bool;
-use crate::{errors::serialize::DeError, errors::Error, escape::unescape, reader::Decoder};
+use crate::errors::serialize::DeError;
+use crate::escape::unescape;
+use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
@@ -28,13 +30,6 @@ impl<'a> EscapedDeserializer<'a> {
             decoder,
             escaped_value,
             escaped,
-        }
-    }
-    fn unescaped(&self) -> Result<Cow<[u8]>, DeError> {
-        if self.escaped {
-            unescape(&self.escaped_value).map_err(|e| DeError::InvalidXml(Error::EscapeError(e)))
-        } else {
-            Ok(Cow::Borrowed(&self.escaped_value))
         }
     }
 }
@@ -66,20 +61,31 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        let unescaped = self.unescaped()?;
-        let value = self.decoder.decode(&unescaped)?;
-
-        visitor.visit_str(&value)
+        let decoded = self.decoder.decode(&self.escaped_value)?;
+        if self.escaped {
+            match unescape(&decoded)? {
+                Cow::Borrowed(s) => visitor.visit_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            }
+        } else {
+            match decoded {
+                Cow::Borrowed(s) => visitor.visit_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            }
+        }
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    /// Returns [`DeError::Unsupported`]
+    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let v = self.unescaped()?;
-        visitor.visit_bytes(&v)
+        Err(DeError::Unsupported(
+            "binary data content is not supported by XML format",
+        ))
     }
 
+    /// Forwards deserialization to the [`Self::deserialize_bytes`]
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,

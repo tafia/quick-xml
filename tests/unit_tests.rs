@@ -523,13 +523,8 @@ fn test_escaped_content() {
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
                 from_utf8(&*e)
             );
-            match e.unescape() {
-                Ok(ref c) => assert_eq!(
-                    &**c,
-                    b"<test>",
-                    "unescaped content unexpected: expecting '&lt;test&lt;', got '{:?}'",
-                    from_utf8(c)
-                ),
+            match e.decode_and_unescape(&r) {
+                Ok(c) => assert_eq!(c, "<test>"),
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
                     r.buffer_position(),

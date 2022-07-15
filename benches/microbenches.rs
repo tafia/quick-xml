@@ -8,8 +8,8 @@ use quick_xml::Reader;
 static SAMPLE: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
 static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
 
-static LOREM_IPSUM_TEXT: &[u8] =
-b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+static LOREM_IPSUM_TEXT: &str =
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
 ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
 Risus ultricies tristique nulla aliquet enim tortor at. Fermentum odio eu feugiat pretium nibh ipsum.
 Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu cursus
@@ -176,7 +176,7 @@ fn one_event(c: &mut Criterion) {
                 .check_comments(false)
                 .trim_text(true);
             match r.read_event_into(&mut buf) {
-                Ok(Event::Comment(ref e)) => nbtxt += e.unescape().unwrap().len(),
+                Ok(Event::Comment(e)) => nbtxt += e.decode_and_unescape(&r).unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 
@@ -293,7 +293,7 @@ fn escaping(c: &mut Criterion) {
 
     group.bench_function("no_chars_to_escape_long", |b| {
         b.iter(|| {
-            criterion::black_box(escape(LOREM_IPSUM_TEXT));
+            criterion::black_box(escape(LOREM_IPSUM_TEXT.as_bytes()));
         })
     });
 
@@ -345,31 +345,31 @@ fn unescaping(c: &mut Criterion) {
 
     group.bench_function("no_chars_to_unescape_short", |b| {
         b.iter(|| {
-            criterion::black_box(unescape(b"just a bit of text")).unwrap();
+            criterion::black_box(unescape("just a bit of text")).unwrap();
         })
     });
 
     group.bench_function("char_reference", |b| {
         b.iter(|| {
-            let text = b"prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
+            let text = "prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
             criterion::black_box(unescape(text)).unwrap();
-            let text = b"&#38;&#60;";
+            let text = "&#38;&#60;";
             criterion::black_box(unescape(text)).unwrap();
         })
     });
 
     group.bench_function("entity_reference", |b| {
         b.iter(|| {
-            let text = b"age &gt; 72 &amp;&amp; age &lt; 21";
+            let text = "age &gt; 72 &amp;&amp; age &lt; 21";
             criterion::black_box(unescape(text)).unwrap();
-            let text = b"&quot;what&apos;s that?&quot;";
+            let text = "&quot;what&apos;s that?&quot;";
             criterion::black_box(unescape(text)).unwrap();
         })
     });
 
     group.bench_function("mixed", |b| {
         let text =
-b"Lorem ipsum dolor sit amet, &amp;consectetur adipiscing elit, sed do eiusmod tempor incididunt
+"Lorem ipsum dolor sit amet, &amp;consectetur adipiscing elit, sed do eiusmod tempor incididunt
 ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
 Risus ultricies &quot;tristique nulla aliquet enim tortor&quot; at. Fermentum odio eu feugiat pretium
 nibh ipsum. Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu

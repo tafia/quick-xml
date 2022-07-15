@@ -4,11 +4,10 @@ use crate::{
     de::escape::EscapedDeserializer,
     de::seq::{not_in, TagFilter},
     de::simple_type::SimpleTypeDeserializer,
-    de::{deserialize_bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
+    de::{str2bool, DeEvent, Deserializer, XmlRead, INNER_VALUE, UNFLATTEN_PREFIX},
     errors::serialize::DeError,
     events::attributes::IterState,
-    events::{BytesCData, BytesStart},
-    reader::Decoder,
+    events::BytesStart,
 };
 use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
 use serde::serde_if_integer128;
@@ -479,14 +478,8 @@ where
 {
     /// Returns a text event, used inside [`deserialize_primitives!()`]
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.map.de.next_text_impl(unescape, self.allow_start)
-    }
-
-    /// Returns a decoder, used inside [`deserialize_primitives!()`]
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.map.de.reader.decoder()
     }
 }
 
@@ -649,14 +642,8 @@ where
 {
     /// Returns a text event, used inside [`deserialize_primitives!()`]
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<BytesCData<'de>, DeError> {
+    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.map.de.next_text_impl(unescape, true)
-    }
-
-    /// Returns a decoder, used inside [`deserialize_primitives!()`]
-    #[inline]
-    fn decoder(&self) -> Decoder {
-        self.map.de.reader.decoder()
     }
 }
 

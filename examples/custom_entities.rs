@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     reader.trim_text(true);
 
     let mut buf = Vec::new();
-    let mut custom_entities: HashMap<Vec<u8>, String> = HashMap::new();
+    let mut custom_entities: HashMap<String, String> = HashMap::new();
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
     loop {
@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
                     custom_entities.insert(
-                        cap[1].to_vec(),
+                        reader.decoder().decode(&cap[1])?.into_owned(),
                         reader.decoder().decode(&cap[2])?.into_owned(),
                     );
                 }
@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     custom_entities.get(ent).map(|s| s.as_str())
                                 })
                                 .unwrap()
+                                .into_owned()
                         })
                         .collect::<Vec<_>>();
                     println!("attributes values: {:?}", attributes);
