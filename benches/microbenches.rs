@@ -1,4 +1,4 @@
-use criterion::{self, criterion_group, Criterion};
+use criterion::{self, criterion_group, criterion_main, Criterion};
 use pretty_assertions::assert_eq;
 use quick_xml::escape::{escape, unescape};
 use quick_xml::events::Event;
@@ -480,3 +480,4 @@ criterion_group!(
     escaping,
     unescaping,
 );
+criterion_main!(benches);

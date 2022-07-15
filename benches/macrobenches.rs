@@ -1,4 +1,4 @@
-use criterion::{self, criterion_group, Criterion, Throughput};
+use criterion::{self, criterion_group, criterion_main, Criterion, Throughput};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use quick_xml::Result as XmlResult;
@@ -82,3 +82,4 @@ pub fn bench_fully_parse_document(c: &mut Criterion) {
 }
 
 criterion_group!(benches, bench_fully_parse_document,);
+criterion_main!(benches);
