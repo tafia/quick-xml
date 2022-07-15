@@ -109,7 +109,15 @@
   |`read_event_unbuffered`  |`read_event`
   |`read_to_end_unbuffered` |`read_to_end`
 - [#412]: Change `read_to_end*` and `read_text_into` to accept `QName` instead of `AsRef<[u8]>`
-
+- [#415]: Changed custom entity unescaping API to accept closures rather than a mapping of entity to
+  replacement text. This avoids needing to allocate a map and provides the user with more flexibility.
+- [#415]: Renamed many functions following the pattern `unescape_and_decode*` to `decode_and_unescape*`
+  to better communicate their function. Renamed functions following the pattern `*_with_custom_entities`
+  to `decode_and_unescape_with` to be more consistent across the API.
+- [#415]: `BytesText::escaped()` renamed to `BytesText::escape()`, `BytesText::unescaped()` renamed to
+  `BytesText::unescape()`, `BytesText::unescaped_with()` renamed to `BytesText::unescape_with()`,
+  `Attribute::escaped_value()` renamed to `Attribute::escape_value()`, and `Attribute::escaped_value_with()`
+  renamed to `Attribute::escape_value_with()` for consistency across the API.
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
 
@@ -137,6 +145,7 @@
 [#403]: https://github.com/tafia/quick-xml/pull/403
 [#407]: https://github.com/tafia/quick-xml/pull/407
 [#412]: https://github.com/tafia/quick-xml/pull/412
+[#415]: https://github.com/tafia/quick-xml/pull/415
 [#416]: https://github.com/tafia/quick-xml/pull/416
 [#418]: https://github.com/tafia/quick-xml/pull/418
 

@@ -104,7 +104,7 @@ fn test_koi8_r_encoding() {
     loop {
         match r.read_event_into(&mut buf) {
             Ok(Text(e)) => {
-                e.unescape_and_decode(&r).unwrap();
+                e.decode_and_unescape(&r).unwrap();
             }
             Ok(Eof) => break,
             _ => (),
@@ -157,13 +157,13 @@ fn fuzz_101() {
         match reader.read_event_into(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
                 for a in e.attributes() {
-                    if a.ok().map_or(true, |a| a.unescaped_value().is_err()) {
+                    if a.ok().map_or(true, |a| a.unescape_value().is_err()) {
                         break;
                     }
                 }
             }
             Ok(Text(ref e)) => {
-                if e.unescaped().is_err() {
+                if e.unescape().is_err() {
                     break;
                 }
             }

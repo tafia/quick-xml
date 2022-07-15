@@ -37,13 +37,12 @@ pub mod attributes;
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::ops::Deref;
 use std::str::from_utf8;
 
 use crate::errors::{Error, Result};
-use crate::escape::{do_unescape, escape, partial_escape};
+use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
 use crate::reader::{Decoder, Reader};
 use crate::utils::write_cow_string;
@@ -736,14 +735,16 @@ impl<'a> BytesText<'a> {
     /// Returns unescaped version of the text content, that can be written
     /// as CDATA in XML
     #[cfg(feature = "serialize")]
-    pub(crate) fn unescape(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
+    pub(crate) fn unescape_as_cdata(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
         //TODO: need to think about better API instead of dozens similar functions
         // Maybe use builder pattern. After that expose function as public API
         //FIXME: need to take into account entities defined in the document
-        Ok(BytesCData::new(match do_unescape(&self.content, None)? {
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(unescaped) => Cow::Owned(unescaped),
-        }))
+        Ok(BytesCData::new(
+            match unescape_with(&self.content, |_| None)? {
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(unescaped) => Cow::Owned(unescaped),
+            },
+        ))
     }
 
     /// gets escaped content
@@ -751,77 +752,62 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
-    /// See also [`unescaped_with_custom_entities()`](Self::unescaped_with_custom_entities)
-    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        self.make_unescaped(None)
+    /// See also [`unescape_with()`](Self::unescape_with)
+    pub fn unescape(&self) -> Result<Cow<[u8]>> {
+        self.unescape_with(|_| None)
     }
 
     /// gets escaped content with custom entities
     ///
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
-    /// Additional entities can be provided in `custom_entities`.
+    /// A fallback resolver for additional custom entities can be provided via `resolve_entity`.
     ///
     /// # Pre-condition
     ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
+    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
     ///
-    /// See also [`unescaped()`](Self::unescaped)
-    pub fn unescaped_with_custom_entities<'s>(
+    /// See also [`unescape()`](Self::unescape)
+    pub fn unescape_with<'s, 'entity>(
         &'s self,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
+        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
     ) -> Result<Cow<'s, [u8]>> {
-        self.make_unescaped(Some(custom_entities))
-    }
-
-    fn make_unescaped<'s>(
-        &'s self,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-    ) -> Result<Cow<'s, [u8]>> {
-        do_unescape(self, custom_entities).map_err(Error::EscapeError)
+        Ok(unescape_with(self, resolve_entity)?)
     }
 
     /// helper method to unescape then decode self using the reader encoding
     ///
     /// for performance reasons (could avoid allocating a `String`),
     /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
-    pub fn unescape_and_decode<B>(&self, reader: &Reader<B>) -> Result<String> {
-        self.do_unescape_and_decode_with_custom_entities(reader, None)
+    /// 1. Reader::decode(...)
+    /// 2. BytesText::unescaped()
+    pub fn decode_and_unescape<B>(&self, reader: &Reader<B>) -> Result<String> {
+        self.decode_and_unescape_with(reader, |_| None)
     }
 
     /// helper method to unescape then decode self using the reader encoding with custom entities
     ///
     /// for performance reasons (could avoid allocating a `String`),
     /// it might be wiser to manually use
-    /// 1. BytesText::unescaped()
-    /// 2. Reader::decode(...)
+    /// 1. Reader::decode(...)
+    /// 2. BytesText::unescaped()
     ///
     /// # Pre-condition
     ///
-    /// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-    pub fn unescape_and_decode_with_custom_entities<B>(
+    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
+    pub fn decode_and_unescape_with<'entity, B>(
         &self,
         reader: &Reader<B>,
-        custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-    ) -> Result<String> {
-        self.do_unescape_and_decode_with_custom_entities(reader, Some(custom_entities))
-    }
-
-    fn do_unescape_and_decode_with_custom_entities<B>(
-        &self,
-        reader: &Reader<B>,
-        custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
+        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
     ) -> Result<String> {
         let decoded = reader.decoder().decode(&*self)?;
 
-        let unescaped = do_unescape(decoded.as_bytes(), custom_entities)?;
+        let unescaped = unescape_with(decoded.as_bytes(), resolve_entity)?;
         Ok(String::from_utf8(unescaped.into_owned())?)
     }
 
     /// Gets escaped content.
-    pub fn escaped(&self) -> &[u8] {
+    pub fn escape(&self) -> &[u8] {
         self.content.as_ref()
     }
 }

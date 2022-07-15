@@ -459,7 +459,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) ->
         Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
         Ok((_, Event::Text(e))) => match unescape(decoder.decode(&e).unwrap().as_bytes()) {
             Ok(c) => format!("Characters({})", from_utf8(c.as_ref()).unwrap()),
-            Err(err) => format!("FailedUnescape({:?}; {})", e.escaped(), err),
+            Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
         },
         Ok((_, Event::Decl(e))) => {
             let version_cow = e.version().unwrap();

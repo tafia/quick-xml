@@ -2,7 +2,6 @@
 
 use memchr;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::ops::Range;
 
 #[cfg(test)]
@@ -66,15 +65,7 @@ impl std::error::Error for EscapeError {}
 /// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
 /// corresponding xml escaped value.
 pub fn escape(raw: &[u8]) -> Cow<[u8]> {
-    #[inline]
-    fn to_escape(b: u8) -> bool {
-        match b {
-            b'<' | b'>' | b'\'' | b'&' | b'"' => true,
-            _ => false,
-        }
-    }
-
-    _escape(raw, to_escape)
+    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
 }
 
 /// Should only be used for escaping text content. In xml text content, it is allowed
@@ -82,15 +73,7 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 /// This function escapes a `&[u8]` and replaces xml special characters (<, >, &) with
 /// their corresponding xml escaped value, but does not escape quote characters.
 pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
-    #[inline]
-    fn to_escape(b: u8) -> bool {
-        match b {
-            b'<' | b'>' | b'&' => true,
-            _ => false,
-        }
-    }
-
-    _escape(raw, to_escape)
+    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
 }
 
 /// Escapes a `&[u8]` and replaces a subset of xml special characters (<, >, &, ', ") with their
@@ -130,32 +113,23 @@ fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
 /// value
 pub fn unescape(raw: &[u8]) -> Result<Cow<[u8]>, EscapeError> {
-    do_unescape(raw, None)
+    unescape_with(raw, |_| None)
 }
 
 /// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using a dictionnary of custom entities.
+/// value, using a resolver function for custom entities.
 ///
 /// # Pre-condition
 ///
-/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-pub fn unescape_with<'a>(
-    raw: &'a [u8],
-    custom_entities: &HashMap<Vec<u8>, Vec<u8>>,
-) -> Result<Cow<'a, [u8]>, EscapeError> {
-    do_unescape(raw, Some(custom_entities))
-}
-
-/// Unescape a `&[u8]` and replaces all xml escaped characters ('&...;') into their corresponding
-/// value, using an optional dictionary of custom entities.
-///
-/// # Pre-condition
-///
-/// The keys and values of `custom_entities`, if any, must be valid UTF-8.
-pub fn do_unescape<'a>(
-    raw: &'a [u8],
-    custom_entities: Option<&HashMap<Vec<u8>, Vec<u8>>>,
-) -> Result<Cow<'a, [u8]>, EscapeError> {
+/// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
+pub fn unescape_with<'input, 'entity, F>(
+    raw: &'input [u8],
+    resolve_entity: F,
+) -> Result<Cow<'input, [u8]>, EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: Fn(&[u8]) -> Option<&'entity str>,
+{
     let mut unescaped = None;
     let mut last_end = 0;
     let mut iter = memchr::memchr2_iter(b'&', b';', raw);
@@ -171,12 +145,14 @@ pub fn do_unescape<'a>(
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
-                if let Some(s) = named_entity(pat) {
-                    unescaped.extend_from_slice(s.as_bytes());
-                } else if pat.starts_with(b"#") {
-                    push_utf8(unescaped, parse_number(&pat[1..], start..end)?);
-                } else if let Some(value) = custom_entities.and_then(|hm| hm.get(pat)) {
-                    unescaped.extend_from_slice(&value);
+                if pat.starts_with(b"#") {
+                    let entity = &pat[1..]; // starts after the #
+                    let codepoint = parse_number(entity, start..end)?;
+                    push_utf8(unescaped, codepoint);
+                } else if let Some(value) = named_entity(pat) {
+                    unescaped.extend_from_slice(value.as_bytes());
+                } else if let Some(value) = resolve_entity(pat) {
+                    unescaped.extend_from_slice(value.as_bytes());
                 } else {
                     return Err(EscapeError::UnrecognizedSymbol(
                         start + 1..end,
@@ -1740,18 +1716,20 @@ fn test_unescape() {
 
 #[test]
 fn test_unescape_with() {
-    let custom_entities = vec![(b"foo".to_vec(), b"BAR".to_vec())]
-        .into_iter()
-        .collect();
-    assert_eq!(&*unescape_with(b"test", &custom_entities).unwrap(), b"test");
+    let custom_entities = |ent: &[u8]| match ent {
+        b"foo" => Some("BAR"),
+        _ => None,
+    };
+
+    assert_eq!(&*unescape_with(b"test", custom_entities).unwrap(), b"test");
     assert_eq!(
-        &*unescape_with(b"&lt;test&gt;", &custom_entities).unwrap(),
+        &*unescape_with(b"&lt;test&gt;", custom_entities).unwrap(),
         b"<test>"
     );
-    assert_eq!(&*unescape_with(b"&#x30;", &custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with(b"&#48;", &custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with(b"&foo;", &custom_entities).unwrap(), b"BAR");
-    assert!(unescape_with(b"&fop;", &custom_entities).is_err());
+    assert_eq!(&*unescape_with(b"&#x30;", custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(b"&#48;", custom_entities).unwrap(), b"0");
+    assert_eq!(&*unescape_with(b"&foo;", custom_entities).unwrap(), b"BAR");
+    assert!(unescape_with(b"&fop;", custom_entities).is_err());
 }
 
 #[test]

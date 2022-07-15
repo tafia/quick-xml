@@ -7,10 +7,11 @@
 //! * the regex in this example is simple but brittle;
 //! * it does not support the use of entities in entity declaration.
 
+use std::collections::HashMap;
+
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::bytes::Regex;
-use std::collections::HashMap;
 
 const DATA: &str = r#"
 
@@ -27,35 +28,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     reader.trim_text(true);
 
     let mut buf = Vec::new();
-    let mut custom_entities = HashMap::new();
+    let mut custom_entities: HashMap<Vec<u8>, String> = HashMap::new();
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
-                    custom_entities.insert(cap[1].to_vec(), cap[2].to_vec());
+                    custom_entities.insert(
+                        cap[1].to_vec(),
+                        reader.decoder().decode(&cap[2])?.into_owned(),
+                    );
                 }
             }
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                b"test" => println!(
-                    "attributes values: {:?}",
-                    e.attributes()
-                        .map(|a| a
-                            .unwrap()
-                            .unescape_and_decode_value_with_custom_entities(
-                                &reader,
-                                &custom_entities
-                            )
-                            .unwrap())
-                        .collect::<Vec<_>>()
-                ),
+                b"test" => {
+                    let attributes = e
+                        .attributes()
+                        .map(|a| {
+                            a.unwrap()
+                                .decode_and_unescape_value_with(&reader, |ent| {
+                                    custom_entities.get(ent).map(|s| s.as_str())
+                                })
+                                .unwrap()
+                        })
+                        .collect::<Vec<_>>();
+                    println!("attributes values: {:?}", attributes);
+                }
                 _ => (),
             },
             Ok(Event::Text(ref e)) => {
                 println!(
                     "text value: {}",
-                    e.unescape_and_decode_with_custom_entities(&reader, &custom_entities)
+                    e.decode_and_unescape_with(&reader, |ent| custom_entities
+                        .get(ent)
+                        .map(|s| s.as_str()))
                         .unwrap()
                 );
             }
