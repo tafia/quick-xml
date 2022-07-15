@@ -7,7 +7,6 @@ use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
-use std::str::from_utf8;
 
 /// A deserializer for a xml escaped and encoded value
 ///
@@ -64,11 +63,15 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     {
         let decoded = self.decoder.decode(&self.escaped_value)?;
         if self.escaped {
-            let value = unescape(&decoded)?;
-            // from_utf8 should never fail because content is always UTF-8 encoded
-            visitor.visit_str(from_utf8(&value)?)
+            match unescape(&decoded)? {
+                Cow::Borrowed(s) => visitor.visit_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            }
         } else {
-            visitor.visit_str(&decoded)
+            match decoded {
+                Cow::Borrowed(s) => visitor.visit_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            }
         }
     }
 

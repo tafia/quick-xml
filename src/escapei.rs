@@ -3,7 +3,6 @@
 use memchr;
 use std::borrow::Cow;
 use std::ops::Range;
-use std::str::from_utf8;
 
 #[cfg(test)]
 use pretty_assertions::assert_eq;
@@ -12,14 +11,11 @@ use pretty_assertions::assert_eq;
 #[derive(Debug)]
 pub enum EscapeError {
     /// Entity with Null character
-    EntityWithNull(::std::ops::Range<usize>),
+    EntityWithNull(Range<usize>),
     /// Unrecognized escape symbol
-    UnrecognizedSymbol(
-        ::std::ops::Range<usize>,
-        ::std::result::Result<String, ::std::string::FromUtf8Error>,
-    ),
+    UnrecognizedSymbol(Range<usize>, String),
     /// Cannot find `;` after `&`
-    UnterminatedEntity(::std::ops::Range<usize>),
+    UnterminatedEntity(Range<usize>),
     /// Cannot convert Hexa to utf8
     TooLongHexadecimal,
     /// Character is not a valid hexadecimal value
@@ -132,7 +128,7 @@ fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
 
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
 /// their corresponding value
-pub fn unescape(raw: &str) -> Result<Cow<[u8]>, EscapeError> {
+pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
     unescape_with(raw, |_| None)
 }
 
@@ -141,42 +137,39 @@ pub fn unescape(raw: &str) -> Result<Cow<[u8]>, EscapeError> {
 pub fn unescape_with<'input, 'entity, F>(
     raw: &'input str,
     resolve_entity: F,
-) -> Result<Cow<'input, [u8]>, EscapeError>
+) -> Result<Cow<'input, str>, EscapeError>
 where
     // the lifetime of the output comes from a capture or is `'static`
     F: Fn(&str) -> Option<&'entity str>,
 {
-    let raw = raw.as_bytes();
+    let bytes = raw.as_bytes();
     let mut unescaped = None;
     let mut last_end = 0;
-    let mut iter = memchr::memchr2_iter(b'&', b';', raw);
-    while let Some(start) = iter.by_ref().find(|p| raw[*p] == b'&') {
+    let mut iter = memchr::memchr2_iter(b'&', b';', bytes);
+    while let Some(start) = iter.by_ref().find(|p| bytes[*p] == b'&') {
         match iter.next() {
-            Some(end) if raw[end] == b';' => {
+            Some(end) if bytes[end] == b';' => {
                 // append valid data
                 if unescaped.is_none() {
-                    unescaped = Some(Vec::with_capacity(raw.len()));
+                    unescaped = Some(String::with_capacity(raw.len()));
                 }
                 let unescaped = unescaped.as_mut().expect("initialized");
-                unescaped.extend_from_slice(&raw[last_end..start]);
+                unescaped.push_str(&raw[last_end..start]);
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
-                if pat.starts_with(b"#") {
+                if pat.starts_with("#") {
                     let entity = &pat[1..]; // starts after the #
                     let codepoint = parse_number(entity, start..end)?;
-                    push_utf8(unescaped, codepoint);
+                    unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
                 } else if let Some(value) = named_entity(pat) {
-                    unescaped.extend_from_slice(value.as_bytes());
-                // from_utf8 cannot fail because we operate on UTF-8 string and
-                // search for an UTF-8 characters
-                //TODO: can use unsafe conversion if unsafe will be allowed
-                } else if let Some(value) = resolve_entity(from_utf8(pat).unwrap()) {
-                    unescaped.extend_from_slice(value.as_bytes());
+                    unescaped.push_str(value);
+                } else if let Some(value) = resolve_entity(pat) {
+                    unescaped.push_str(value);
                 } else {
                     return Err(EscapeError::UnrecognizedSymbol(
                         start + 1..end,
-                        String::from_utf8(pat.to_vec()),
+                        pat.to_string(),
                     ));
                 }
 
@@ -188,7 +181,7 @@ where
 
     if let Some(mut unescaped) = unescaped {
         if let Some(raw) = raw.get(last_end..) {
-            unescaped.extend_from_slice(raw);
+            unescaped.push_str(raw);
         }
         Ok(Cow::Owned(unescaped))
     } else {
@@ -197,8 +190,9 @@ where
 }
 
 #[cfg(not(feature = "escape-html"))]
-const fn named_entity(name: &[u8]) -> Option<&str> {
-    let s = match name {
+const fn named_entity(name: &str) -> Option<&str> {
+    // match over strings are not allowed in const functions
+    let s = match name.as_bytes() {
         b"lt" => "<",
         b"gt" => ">",
         b"amp" => "&",
@@ -209,9 +203,10 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
     Some(s)
 }
 #[cfg(feature = "escape-html")]
-const fn named_entity(name: &[u8]) -> Option<&str> {
+const fn named_entity(name: &str) -> Option<&str> {
     // imported from https://dev.w3.org/html5/html-author/charref
-    let s = match name {
+    // match over strings are not allowed in const functions
+    let s = match name.as_bytes() {
         b"Tab" => "\u{09}",
         b"NewLine" => "\u{0A}",
         b"excl" => "\u{21}",
@@ -1671,13 +1666,8 @@ const fn named_entity(name: &[u8]) -> Option<&str> {
     Some(s)
 }
 
-fn push_utf8(out: &mut Vec<u8>, code: char) {
-    let mut buf = [0u8; 4];
-    out.extend_from_slice(code.encode_utf8(&mut buf).as_bytes());
-}
-
-fn parse_number(bytes: &[u8], range: Range<usize>) -> Result<char, EscapeError> {
-    let code = if bytes.starts_with(b"x") {
+fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
+    let code = if bytes.starts_with("x") {
         parse_hexadecimal(&bytes[1..])
     } else {
         parse_decimal(&bytes)
@@ -1691,13 +1681,13 @@ fn parse_number(bytes: &[u8], range: Range<usize>) -> Result<char, EscapeError> 
     }
 }
 
-fn parse_hexadecimal(bytes: &[u8]) -> Result<u32, EscapeError> {
+fn parse_hexadecimal(bytes: &str) -> Result<u32, EscapeError> {
     // maximum code is 0x10FFFF => 6 characters
     if bytes.len() > 6 {
         return Err(EscapeError::TooLongHexadecimal);
     }
     let mut code = 0;
-    for &b in bytes {
+    for b in bytes.bytes() {
         code <<= 4;
         code += match b {
             b'0'..=b'9' => b - b'0',
@@ -1709,13 +1699,13 @@ fn parse_hexadecimal(bytes: &[u8]) -> Result<u32, EscapeError> {
     Ok(code)
 }
 
-fn parse_decimal(bytes: &[u8]) -> Result<u32, EscapeError> {
+fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
     // maximum code is 0x10FFFF = 1114111 => 7 characters
     if bytes.len() > 7 {
         return Err(EscapeError::TooLongDecimal);
     }
     let mut code = 0;
-    for &b in bytes {
+    for b in bytes.bytes() {
         code *= 10;
         code += match b {
             b'0'..=b'9' => b - b'0',
@@ -1727,10 +1717,10 @@ fn parse_decimal(bytes: &[u8]) -> Result<u32, EscapeError> {
 
 #[test]
 fn test_unescape() {
-    assert_eq!(&*unescape("test").unwrap(), b"test");
-    assert_eq!(&*unescape("&lt;test&gt;").unwrap(), b"<test>");
-    assert_eq!(&*unescape("&#x30;").unwrap(), b"0");
-    assert_eq!(&*unescape("&#48;").unwrap(), b"0");
+    assert_eq!(&*unescape("test").unwrap(), "test");
+    assert_eq!(&*unescape("&lt;test&gt;").unwrap(), "<test>");
+    assert_eq!(&*unescape("&#x30;").unwrap(), "0");
+    assert_eq!(&*unescape("&#48;").unwrap(), "0");
     assert!(unescape("&foo;").is_err());
 }
 
@@ -1741,14 +1731,14 @@ fn test_unescape_with() {
         _ => None,
     };
 
-    assert_eq!(&*unescape_with("test", custom_entities).unwrap(), b"test");
+    assert_eq!(&*unescape_with("test", custom_entities).unwrap(), "test");
     assert_eq!(
         &*unescape_with("&lt;test&gt;", custom_entities).unwrap(),
-        b"<test>"
+        "<test>"
     );
-    assert_eq!(&*unescape_with("&#x30;", custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with("&#48;", custom_entities).unwrap(), b"0");
-    assert_eq!(&*unescape_with("&foo;", custom_entities).unwrap(), b"BAR");
+    assert_eq!(&*unescape_with("&#x30;", custom_entities).unwrap(), "0");
+    assert_eq!(&*unescape_with("&#48;", custom_entities).unwrap(), "0");
+    assert_eq!(&*unescape_with("&foo;", custom_entities).unwrap(), "BAR");
     assert!(unescape_with("&fop;", custom_entities).is_err());
 }
 

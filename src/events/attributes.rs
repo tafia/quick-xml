@@ -41,7 +41,7 @@ impl<'a> Attribute<'a> {
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
     #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape_value(&self) -> XmlResult<Cow<[u8]>> {
+    pub fn unescape_value(&self) -> XmlResult<Cow<str>> {
         self.unescape_value_with(|_| None)
     }
 
@@ -61,7 +61,7 @@ impl<'a> Attribute<'a> {
     pub fn unescape_value_with<'entity>(
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> XmlResult<Cow<[u8]>> {
+    ) -> XmlResult<Cow<str>> {
         // from_utf8 should never fail because content is always UTF-8 encoded
         Ok(unescape_with(
             std::str::from_utf8(&self.value)?,
@@ -91,8 +91,7 @@ impl<'a> Attribute<'a> {
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
             Cow::Borrowed(_) => Ok(decoded),
-            // from_utf8 should never fail because content is always UTF-8 encoded
-            Cow::Owned(bytes) => Ok(String::from_utf8(bytes)?.into()),
+            Cow::Owned(s) => Ok(s.into()),
         }
     }
 }

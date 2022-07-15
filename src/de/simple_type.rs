@@ -220,7 +220,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         if self.escaped {
             match unescape(self.content.as_str())? {
                 Cow::Borrowed(_) => self.content.deserialize_item(visitor),
-                Cow::Owned(buf) => visitor.visit_string(String::from_utf8(buf)?),
+                Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
             self.content.deserialize_item(visitor)
@@ -627,7 +627,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         if self.escaped {
             match unescape(content.as_str())? {
                 Cow::Borrowed(_) => content.deserialize_all(visitor),
-                Cow::Owned(buf) => visitor.visit_string(String::from_utf8(buf)?),
+                Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
             content.deserialize_all(visitor)

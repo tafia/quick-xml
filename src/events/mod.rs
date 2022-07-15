@@ -738,7 +738,7 @@ impl<'a> BytesText<'a> {
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
     #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape(&self) -> Result<Cow<[u8]>> {
+    pub fn unescape(&self) -> Result<Cow<str>> {
         self.unescape_with(|_| None)
     }
 
@@ -752,10 +752,10 @@ impl<'a> BytesText<'a> {
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
     #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape_with<'s, 'entity>(
-        &'s self,
+    pub fn unescape_with<'entity>(
+        &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<'s, [u8]>> {
+    ) -> Result<Cow<str>> {
         // from_utf8 should never fail because content is always UTF-8 encoded
         Ok(unescape_with(from_utf8(&self.content)?, resolve_entity)?)
     }
@@ -786,8 +786,7 @@ impl<'a> BytesText<'a> {
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
             Cow::Borrowed(_) => Ok(decoded),
-            // from_utf8 should never fail because content is always UTF-8 encoded
-            Cow::Owned(bytes) => Ok(String::from_utf8(bytes)?.into()),
+            Cow::Owned(s) => Ok(s.into()),
         }
     }
 
@@ -812,8 +811,7 @@ impl<'a> BytesText<'a> {
             match unescape_with(&text, |_| None)? {
                 // Because result is borrowed, no replacements was done and we can use original string
                 Cow::Borrowed(_) => text,
-                // from_utf8 should never fail because content is always UTF-8 encoded
-                Cow::Owned(bytes) => String::from_utf8(bytes)?.into(),
+                Cow::Owned(s) => s.into(),
             }
         } else {
             text

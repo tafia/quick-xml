@@ -243,7 +243,7 @@ fn issue_93_large_characters_in_entity_references() {
         r#"<hello>&𤶼;</hello>"#,
         r#"
             |StartElement(hello)
-            |1:10 FailedUnescape([38, 240, 164, 182, 188, 59]; Error while escaping character at range 1..5: Unrecognized escape symbol: Ok("𤶼"))
+            |1:10 FailedUnescape([38, 240, 164, 182, 188, 59]; Error while escaping character at range 1..5: Unrecognized escape symbol: "𤶼")
             |EndElement(hello)
             |EndDocument
         "#,
@@ -422,7 +422,7 @@ fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String,
                         "{}=\"{}\"",
                         key,
                         // unescape does not change validity of an UTF-8 string
-                        from_utf8(&*unescaped_value).unwrap()
+                        &unescaped_value
                     ));
                 }
             }
@@ -458,7 +458,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) ->
         Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
         Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
         Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
-            Ok(c) => format!("Characters({})", from_utf8(c.as_ref()).unwrap()),
+            Ok(c) => format!("Characters({})", &c),
             Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
         },
         Ok((_, Event::Decl(e))) => {

@@ -132,6 +132,7 @@
 - [#421]: Removed ability to deserialize byte arrays from serde deserializer.
   XML is not able to store binary data directly, you should always use some encoding
   scheme, for example, HEX or Base64
+- [#421]: All unescaping functions now accepts and returns strings instead of byte slices
 
 ### New Tests
 
