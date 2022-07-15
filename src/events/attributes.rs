@@ -63,30 +63,18 @@ impl<'a> Attribute<'a> {
         Ok(unescape_with(&*self.value, resolve_entity)?)
     }
 
-    /// Decodes then unescapes the value
+    /// Decodes then unescapes the value.
     ///
-    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
-    /// instead use one of:
-    ///
-    /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescape_value()`], as it doesn't allocate when no escape sequences are used.
-    ///
-    /// [`unescape_value()`]: Self::unescape_value
-    /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
-    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
+    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<str>> {
         self.decode_and_unescape_value_with(reader, |_| None)
     }
 
-    /// Decodes then unescapes the value with custom entities
+    /// Decodes then unescapes the value with custom entities.
     ///
-    /// This allocates a `String` in all cases. For performance reasons it might be a better idea to
-    /// instead use one of:
-    ///
-    /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescape_value_with()`], as it doesn't allocate when no escape sequences are used.
-    ///
-    /// [`unescape_value_with()`]: Self::unescape_value_with
-    /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
     ///
     /// # Pre-condition
     ///
@@ -95,10 +83,15 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
-    ) -> XmlResult<String> {
+    ) -> XmlResult<Cow<str>> {
         let decoded = reader.decoder().decode(&*self.value)?;
-        let unescaped = unescape_with(decoded.as_bytes(), resolve_entity)?;
-        Ok(String::from_utf8(unescaped.into_owned())?)
+
+        match unescape_with(decoded.as_bytes(), resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            // from_utf8 should never fail because content is always UTF-8 encoded
+            Cow::Owned(bytes) => Ok(String::from_utf8(bytes)?.into()),
+        }
     }
 }
 

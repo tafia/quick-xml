@@ -775,22 +775,18 @@ impl<'a> BytesText<'a> {
         Ok(unescape_with(self, resolve_entity)?)
     }
 
-    /// helper method to unescape then decode self using the reader encoding
+    /// Decodes then unescapes the content of the event.
     ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. Reader::decode(...)
-    /// 2. BytesText::unescaped()
-    pub fn decode_and_unescape<B>(&self, reader: &Reader<B>) -> Result<String> {
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
+    pub fn decode_and_unescape<B>(&self, reader: &Reader<B>) -> Result<Cow<str>> {
         self.decode_and_unescape_with(reader, |_| None)
     }
 
-    /// helper method to unescape then decode self using the reader encoding with custom entities
+    /// Decodes then unescapes the content of the event with custom entities.
     ///
-    /// for performance reasons (could avoid allocating a `String`),
-    /// it might be wiser to manually use
-    /// 1. Reader::decode(...)
-    /// 2. BytesText::unescaped()
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
     ///
     /// # Pre-condition
     ///
@@ -799,11 +795,15 @@ impl<'a> BytesText<'a> {
         &self,
         reader: &Reader<B>,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
-    ) -> Result<String> {
+    ) -> Result<Cow<str>> {
         let decoded = reader.decoder().decode(&*self)?;
 
-        let unescaped = unescape_with(decoded.as_bytes(), resolve_entity)?;
-        Ok(String::from_utf8(unescaped.into_owned())?)
+        match unescape_with(decoded.as_bytes(), resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            // from_utf8 should never fail because content is always UTF-8 encoded
+            Cow::Owned(bytes) => Ok(String::from_utf8(bytes)?.into()),
+        }
     }
 
     /// Gets escaped content.

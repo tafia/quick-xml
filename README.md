@@ -51,7 +51,7 @@ loop {
                 _ => (),
             }
         },
-        Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap()),
+        Ok(Event::Text(e)) => txt.push(e.unescape_and_decode(&reader).unwrap().into_owned()),
         Ok(Event::Eof) => break, // exits the loop when reaching end of file
         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
         _ => (), // There are several other `Event`s we do not consider here

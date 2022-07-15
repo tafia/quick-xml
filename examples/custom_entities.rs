@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     custom_entities.get(ent).map(|s| s.as_str())
                                 })
                                 .unwrap()
+                                .into_owned()
                         })
                         .collect::<Vec<_>>();
                     println!("attributes values: {:?}", attributes);
