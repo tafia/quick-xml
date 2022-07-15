@@ -523,7 +523,7 @@ fn test_escaped_content() {
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
                 from_utf8(&*e)
             );
-            match e.unescaped() {
+            match e.unescape() {
                 Ok(ref c) => assert_eq!(
                     &**c,
                     b"<test>",
@@ -620,7 +620,7 @@ fn test_read_write_roundtrip_escape() -> Result<()> {
         match reader.read_event_into(&mut buf)? {
             Eof => break,
             Text(e) => {
-                let t = e.escaped();
+                let t = e.escape();
                 assert!(writer
                     .write_event(Text(BytesText::from_escaped(t.to_vec())))
                     .is_ok());

@@ -114,6 +114,10 @@
 - [#415]: Renamed many functions following the pattern `unescape_and_decode*` to `decode_and_unescape*`
   to better communicate their function. Renamed functions following the pattern `*_with_custom_entities`
   to `decode_and_unescape_with` to be more consistent across the API.
+- [#415]: `BytesText::escaped()` renamed to `BytesText::escape()`, `BytesText::unescaped()` renamed to
+  `BytesText::unescape()`, `BytesText::unescaped_with()` renamed to `BytesText::unescape_with()`,
+  `Attribute::escaped_value()` renamed to `Attribute::escape_value()`, and `Attribute::escaped_value_with()`
+  renamed to `Attribute::escape_value_with()` for consistency across the API.
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
 

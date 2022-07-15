@@ -618,14 +618,14 @@ where
         allow_start: bool,
     ) -> Result<BytesCData<'de>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) if unescape => e.unescape().map_err(Into::into),
+            DeEvent::Text(e) if unescape => e.unescape_as_cdata().map_err(Into::into),
             DeEvent::Text(e) => Ok(BytesCData::new(e.into_inner())),
             DeEvent::CData(e) => Ok(e),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) if unescape => t.unescape()?,
+                    DeEvent::Text(t) if unescape => t.unescape_as_cdata()?,
                     DeEvent::Text(t) => BytesCData::new(t.into_inner()),
                     DeEvent::CData(t) => t,
                     DeEvent::Start(s) => {

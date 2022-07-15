@@ -735,7 +735,7 @@ impl<'a> BytesText<'a> {
     /// Returns unescaped version of the text content, that can be written
     /// as CDATA in XML
     #[cfg(feature = "serialize")]
-    pub(crate) fn unescape(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
+    pub(crate) fn unescape_as_cdata(self) -> std::result::Result<BytesCData<'a>, EscapeError> {
         //TODO: need to think about better API instead of dozens similar functions
         // Maybe use builder pattern. After that expose function as public API
         //FIXME: need to take into account entities defined in the document
@@ -752,9 +752,9 @@ impl<'a> BytesText<'a> {
     /// Searches for '&' into content and try to escape the coded character if possible
     /// returns Malformed error with index within element if '&' is not followed by ';'
     ///
-    /// See also [`unescaped_with()`](Self::unescaped_with)
-    pub fn unescaped(&self) -> Result<Cow<[u8]>> {
-        self.unescaped_with(|_| None)
+    /// See also [`unescape_with()`](Self::unescape_with)
+    pub fn unescape(&self) -> Result<Cow<[u8]>> {
+        self.unescape_with(|_| None)
     }
 
     /// gets escaped content with custom entities
@@ -767,8 +767,8 @@ impl<'a> BytesText<'a> {
     ///
     /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
     ///
-    /// See also [`unescaped()`](Self::unescaped)
-    pub fn unescaped_with<'s, 'entity>(
+    /// See also [`unescape()`](Self::unescape)
+    pub fn unescape_with<'s, 'entity>(
         &'s self,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
     ) -> Result<Cow<'s, [u8]>> {
@@ -807,7 +807,7 @@ impl<'a> BytesText<'a> {
     }
 
     /// Gets escaped content.
-    pub fn escaped(&self) -> &[u8] {
+    pub fn escape(&self) -> &[u8] {
         self.content.as_ref()
     }
 }

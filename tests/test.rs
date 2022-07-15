@@ -157,13 +157,13 @@ fn fuzz_101() {
         match reader.read_event_into(&mut buf) {
             Ok(Start(ref e)) | Ok(Empty(ref e)) => {
                 for a in e.attributes() {
-                    if a.ok().map_or(true, |a| a.unescaped_value().is_err()) {
+                    if a.ok().map_or(true, |a| a.unescape_value().is_err()) {
                         break;
                     }
                 }
             }
             Ok(Text(ref e)) => {
-                if e.unescaped().is_err() {
+                if e.unescape().is_err() {
                     break;
                 }
             }

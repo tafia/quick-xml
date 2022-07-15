@@ -14,10 +14,10 @@ use std::{borrow::Cow, ops::Range};
 /// A struct representing a key/value XML attribute.
 ///
 /// Field `value` stores raw bytes, possibly containing escape-sequences. Most users will likely
-/// want to access the value using one of the [`unescaped_value`] and [`decode_and_unescape_value`]
+/// want to access the value using one of the [`unescape_value`] and [`decode_and_unescape_value`]
 /// functions.
 ///
-/// [`unescaped_value`]: Self::unescaped_value
+/// [`unescape_value`]: Self::unescape_value
 /// [`decode_and_unescape_value`]: Self::decode_and_unescape_value
 #[derive(Clone, PartialEq)]
 pub struct Attribute<'a> {
@@ -37,9 +37,9 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
-    /// See also [`unescaped_value_with()`](Self::unescaped_value_with)
-    pub fn unescaped_value(&self) -> XmlResult<Cow<[u8]>> {
-        self.unescaped_value_with(|_| None)
+    /// See also [`unescape_value_with()`](Self::unescape_value_with)
+    pub fn unescape_value(&self) -> XmlResult<Cow<[u8]>> {
+        self.unescape_value_with(|_| None)
     }
 
     /// Returns the unescaped value, using custom entities.
@@ -51,12 +51,12 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences.
     ///
-    /// See also [`unescaped_value()`](Self::unescaped_value)
+    /// See also [`unescape_value()`](Self::unescape_value)
     ///
     /// # Pre-condition
     ///
     /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
-    pub fn unescaped_value_with<'s, 'entity>(
+    pub fn unescape_value_with<'s, 'entity>(
         &'s self,
         resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'s, [u8]>> {
@@ -69,9 +69,9 @@ impl<'a> Attribute<'a> {
     /// instead use one of:
     ///
     /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescaped_value()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`unescape_value()`], as it doesn't allocate when no escape sequences are used.
     ///
-    /// [`unescaped_value()`]: Self::unescaped_value
+    /// [`unescape_value()`]: Self::unescape_value
     /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
     pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<String> {
         self.decode_and_unescape_value_with(reader, |_| None)
@@ -83,9 +83,9 @@ impl<'a> Attribute<'a> {
     /// instead use one of:
     ///
     /// * [`Reader::decoder().decode()`], as it only allocates when the decoding can't be performed otherwise.
-    /// * [`unescaped_value_with()`], as it doesn't allocate when no escape sequences are used.
+    /// * [`unescape_value_with()`], as it doesn't allocate when no escape sequences are used.
     ///
-    /// [`unescaped_value_with()`]: Self::unescaped_value_with
+    /// [`unescape_value_with()`]: Self::unescape_value_with
     /// [`Reader::decoder().decode()`]: crate::reader::Decoder::decode
     ///
     /// # Pre-condition
