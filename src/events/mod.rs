@@ -748,19 +748,16 @@ impl<'a> BytesText<'a> {
     /// returns Malformed error with index within element if '&' is not followed by ';'
     /// A fallback resolver for additional custom entities can be provided via `resolve_entity`.
     ///
-    /// # Pre-condition
-    ///
-    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
-    ///
     /// See also [`unescape()`](Self::unescape)
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_with<'s, 'entity>(
         &'s self,
-        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
     ) -> Result<Cow<'s, [u8]>> {
-        Ok(unescape_with(self, resolve_entity)?)
+        // from_utf8 should never fail because content is always UTF-8 encoded
+        Ok(unescape_with(from_utf8(&self.content)?, resolve_entity)?)
     }
 
     /// Decodes then unescapes the content of the event.
@@ -782,11 +779,11 @@ impl<'a> BytesText<'a> {
     pub fn decode_and_unescape_with<'entity, B>(
         &self,
         reader: &Reader<B>,
-        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
     ) -> Result<Cow<str>> {
         let decoded = reader.decoder().decode(&*self)?;
 
-        match unescape_with(decoded.as_bytes(), resolve_entity)? {
+        match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
             Cow::Borrowed(_) => Ok(decoded),
             // from_utf8 should never fail because content is always UTF-8 encoded
@@ -812,7 +809,7 @@ impl<'a> BytesText<'a> {
         };
         let text = if unescape {
             //FIXME: need to take into account entities defined in the document
-            match unescape_with(text.as_bytes(), |_| None)? {
+            match unescape_with(&text, |_| None)? {
                 // Because result is borrowed, no replacements was done and we can use original string
                 Cow::Borrowed(_) => text,
                 // from_utf8 should never fail because content is always UTF-8 encoded

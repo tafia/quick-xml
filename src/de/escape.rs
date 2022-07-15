@@ -64,7 +64,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     {
         let decoded = self.decoder.decode(&self.escaped_value)?;
         if self.escaped {
-            let value = unescape(decoded.as_bytes())?;
+            let value = unescape(&decoded)?;
             // from_utf8 should never fail because content is always UTF-8 encoded
             visitor.visit_str(from_utf8(&value)?)
         } else {

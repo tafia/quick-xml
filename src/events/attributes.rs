@@ -57,16 +57,16 @@ impl<'a> Attribute<'a> {
     /// See also [`unescape_value()`](Self::unescape_value)
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
-    ///
-    /// # Pre-condition
-    ///
-    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
     #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape_value_with<'s, 'entity>(
-        &'s self,
-        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
-    ) -> XmlResult<Cow<'s, [u8]>> {
-        Ok(unescape_with(&*self.value, resolve_entity)?)
+    pub fn unescape_value_with<'entity>(
+        &self,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+    ) -> XmlResult<Cow<[u8]>> {
+        // from_utf8 should never fail because content is always UTF-8 encoded
+        Ok(unescape_with(
+            std::str::from_utf8(&self.value)?,
+            resolve_entity,
+        )?)
     }
 
     /// Decodes then unescapes the value.
@@ -81,18 +81,14 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    ///
-    /// # Pre-condition
-    ///
-    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
     pub fn decode_and_unescape_value_with<'entity, B>(
         &self,
         reader: &Reader<B>,
-        resolve_entity: impl Fn(&[u8]) -> Option<&'entity str>,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<str>> {
         let decoded = reader.decoder().decode(&*self.value)?;
 
-        match unescape_with(decoded.as_bytes(), resolve_entity)? {
+        match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
             Cow::Borrowed(_) => Ok(decoded),
             // from_utf8 should never fail because content is always UTF-8 encoded

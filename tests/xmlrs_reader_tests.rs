@@ -417,7 +417,7 @@ fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String,
                 if a.key.as_namespace_binding().is_none() {
                     let key = decoder.decode(a.key.as_ref()).unwrap();
                     let value = decoder.decode(a.value.as_ref()).unwrap();
-                    let unescaped_value = unescape(value.as_bytes()).unwrap();
+                    let unescaped_value = unescape(&value).unwrap();
                     atts.push(format!(
                         "{}=\"{}\"",
                         key,
@@ -457,7 +457,7 @@ fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) ->
         }
         Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
         Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
-        Ok((_, Event::Text(e))) => match unescape(decoder.decode(&e).unwrap().as_bytes()) {
+        Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
             Ok(c) => format!("Characters({})", from_utf8(c.as_ref()).unwrap()),
             Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
         },
