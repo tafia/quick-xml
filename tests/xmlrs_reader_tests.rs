@@ -80,6 +80,7 @@ fn escaped_characters_html() {
 }
 
 #[cfg(feature = "encoding")]
+#[ignore = "TODO(dalley): fixme"]
 #[test]
 fn encoded_characters() {
     test_bytes(

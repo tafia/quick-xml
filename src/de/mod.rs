@@ -1058,7 +1058,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::borrowed_name(b"inner")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::borrowed_name(b"inner")),
                     End(BytesEnd::borrowed(b"inner")),
                     End(BytesEnd::borrowed(b"inner")),
@@ -1095,7 +1095,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::borrowed_name(b"inner")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::borrowed_name(b"inner")),
                     End(BytesEnd::borrowed(b"inner")),
                     End(BytesEnd::borrowed(b"inner")),
@@ -1122,7 +1122,7 @@ mod tests {
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                 ]
             );
 
@@ -1145,15 +1145,12 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     End(BytesEnd::borrowed(b"inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(
-                de.next().unwrap(),
-                Text(BytesText::from_escaped_str("text"))
-            );
+            assert_eq!(de.next().unwrap(), Text(BytesText::from_escaped("text")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"inner")));
             assert_eq!(
                 de.next().unwrap(),
@@ -1196,7 +1193,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::borrowed_name(b"skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::borrowed_name(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
@@ -1220,7 +1217,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::borrowed_name(b"skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::borrowed_name(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
@@ -1242,7 +1239,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::borrowed_name(b"skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::borrowed_name(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
                     End(BytesEnd::borrowed(b"skip")),
@@ -1405,7 +1402,7 @@ mod tests {
                     br#"item name="hello" source="world.rs""#,
                     4
                 )),
-                Text(BytesText::from_escaped_str("Some text")),
+                Text(BytesText::from_escaped("Some text")),
                 End(BytesEnd::borrowed(b"item")),
                 Start(BytesStart::borrowed(b"item2", 5)),
                 End(BytesEnd::borrowed(b"item2")),

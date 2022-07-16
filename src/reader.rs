@@ -824,6 +824,7 @@ impl<R> Reader<R> {
                     bytes
                 };
 
+                let content = self.decoder().decode(content)?; // TODO(dalley): temporary
                 Ok(if first {
                     Event::StartText(BytesText::from_escaped(content).into())
                 } else {
@@ -898,7 +899,8 @@ impl<R> Reader<R> {
                         return Err(Error::UnexpectedToken("--".to_string()));
                     }
                 }
-                Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
+                let comment = self.decoder().decode(&buf[3..len - 2])?; // TODO(dalley): this is temporary
+                Ok(Event::Comment(BytesText::from_escaped(comment)))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
                 Ok(Event::CData(BytesCData::new(&buf[8..])))
@@ -909,7 +911,8 @@ impl<R> Reader<R> {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or_else(|| len - 8);
                 debug_assert!(start < len - 8, "DocType must have a name");
-                Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
+                let doctype = self.decoder().decode(&buf[8 + start..])?; // TODO(dalley): this is temporary
+                Ok(Event::DocType(BytesText::from_escaped(doctype)))
             }
             _ => Err(bang_type.to_err()),
         }
@@ -974,7 +977,8 @@ impl<R> Reader<R> {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
+                let pi = self.decoder().decode(&buf[1..len - 1])?; // TODO(dalley): this is temporary
+                Ok(Event::PI(BytesText::from_escaped(pi)))
             }
         } else {
             self.buf_position -= len;
@@ -2563,7 +2567,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::StartText(BytesText::from_escaped_str("bom").into())
+                        Event::StartText(BytesText::from_escaped("bom").into())
                     );
                 }
 
@@ -2583,7 +2587,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::DocType(BytesText::from_escaped_str("x"))
+                        Event::DocType(BytesText::from_escaped("x"))
                     );
                 }
 
@@ -2593,7 +2597,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::PI(BytesText::from_escaped_str("xml-stylesheet"))
+                        Event::PI(BytesText::from_escaped("xml-stylesheet"))
                     );
                 }
 
@@ -2642,7 +2646,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Text(BytesText::from_escaped_str("text"))
+                        Event::Text(BytesText::from_escaped("text"))
                     );
                 }
 
@@ -2662,7 +2666,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Comment(BytesText::from_escaped_str(""))
+                        Event::Comment(BytesText::from_escaped(""))
                     );
                 }
 

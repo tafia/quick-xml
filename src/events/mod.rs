@@ -673,33 +673,25 @@ pub struct BytesText<'a> {
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new `BytesText` from an escaped byte sequence.
-    #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
-        Self {
-            content: content.into(),
-        }
-    }
-
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
-    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::from_escaped(match content.into() {
-            Cow::Owned(o) => Cow::Owned(o.into_bytes()),
-            Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
-        })
+    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        let content = match content.into() {
+            Cow::Borrowed(c) => Cow::Borrowed(c.as_bytes().into()),
+            Cow::Owned(c) => Cow::Owned(c.into()),
+        };
+        Self { content }
     }
 
     /// Creates a new `BytesText` from a string. The string is expected not to
     /// be escaped.
     #[inline]
-    pub fn from_plain_str(content: &'a str) -> Self {
-        Self {
-            content: match escape(content) {
-                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
-                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
-            },
-        }
+    pub fn from_plain(content: &'a str) -> Self {
+        let content = match escape(content).into() {
+            Cow::Borrowed(c) => Cow::Borrowed(c.as_bytes().into()),
+            Cow::Owned(c) => Cow::Owned(c.into()),
+        };
+        Self { content }
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -901,8 +893,8 @@ impl<'a> BytesCData<'a> {
         let decoded = self.decode(decoder)?;
         Ok(BytesText::from_escaped(match escape(&decoded) {
             // Because result is borrowed, no replacements was done and we can use original content
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            Cow::Borrowed(_) => decoded,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
         }))
     }
 
@@ -923,8 +915,8 @@ impl<'a> BytesCData<'a> {
         let decoded = self.decode(decoder)?;
         Ok(BytesText::from_escaped(match partial_escape(&decoded) {
             // Because result is borrowed, no replacements was done and we can use original content
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            Cow::Borrowed(_) => decoded,
+            Cow::Owned(escaped) => Cow::Owned(escaped),
         }))
     }
 

@@ -135,8 +135,9 @@
 - [#421]: All unescaping functions now accepts and returns strings instead of byte slices
 
 - [#423]: All escaping functions now accepts and returns strings instead of byte slices
-- [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
-  but since now escaping works on strings. Use `BytesText::from_plain_str` instead
+- [#424]: `BytesText::from_escaped_str()` and `BytesText::from_plain_str()` renamed to
+  `BytesText::from_escaped()` and `BytesText::from_plain()`, respectively. The previous functions
+  with those names (which operated over `&[u8]`) have been removed.
 
 ### New Tests
 
