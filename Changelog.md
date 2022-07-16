@@ -127,6 +127,9 @@
 
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
+- [#422]: `BytesText::from_escaped_str()` and `BytesText::from_plain_str()` renamed to
+  `BytesText::from_escaped()` and `BytesText::from_plain()`, respectively. The previous functions
+  with those names (which operated over `&[u8]`) have been removed.
 
 - [#421]: `decode_and_unescape*` methods now does one less allocation if unescaping is not required
 - [#421]: Removed ability to deserialize byte arrays from serde deserializer.

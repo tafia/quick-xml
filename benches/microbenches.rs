@@ -293,26 +293,26 @@ fn escaping(c: &mut Criterion) {
 
     group.bench_function("no_chars_to_escape_long", |b| {
         b.iter(|| {
-            criterion::black_box(escape(LOREM_IPSUM_TEXT.as_bytes()));
+            criterion::black_box(escape(LOREM_IPSUM_TEXT));
         })
     });
 
     group.bench_function("no_chars_to_escape_short", |b| {
         b.iter(|| {
-            criterion::black_box(escape(b"just bit of text"));
+            criterion::black_box(escape("just bit of text"));
         })
     });
 
     group.bench_function("escaped_chars_short", |b| {
         b.iter(|| {
-            criterion::black_box(escape(b"age > 72 && age < 21"));
-            criterion::black_box(escape(b"\"what's that?\""));
+            criterion::black_box(escape("age > 72 && age < 21"));
+            criterion::black_box(escape("\"what's that?\""));
         })
     });
 
     group.bench_function("escaped_chars_long", |b| {
         let lorem_ipsum_with_escape_chars =
-b"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
 ut labore et dolore magna aliqua. & Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
 Risus ultricies tristique nulla aliquet enim tortor at. Fermentum odio eu feugiat pretium nibh ipsum.
 Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu cursus
