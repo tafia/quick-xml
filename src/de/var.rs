@@ -34,11 +34,18 @@ where
         V: DeserializeSeed<'de>,
     {
         let de = match self.de.peek()? {
-            DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), true),
+            DeEvent::Text(t) => {
+                EscapedDeserializer::new(Cow::Borrowed(std::str::from_utf8(t)?), true)
+            } // TODO(dalley): temporary
             // Escape sequences does not processed inside CDATA section
-            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), false),
+            DeEvent::CData(t) => {
+                EscapedDeserializer::new(Cow::Borrowed(std::str::from_utf8(t)?), false)
+            } // TODO(dalley): temporary
             DeEvent::Start(e) => {
-                EscapedDeserializer::new(Cow::Borrowed(e.name().into_inner()), false)
+                EscapedDeserializer::new(
+                    Cow::Borrowed(std::str::from_utf8(e.name().into_inner())?),
+                    false,
+                ) // TODO(dalley): temporary
             }
             _ => {
                 return Err(DeError::Unsupported(

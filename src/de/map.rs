@@ -236,8 +236,11 @@ where
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
-            seed.deserialize(EscapedDeserializer::new(Cow::Borrowed(&slice[key]), false))
-                .map(Some)
+            seed.deserialize(EscapedDeserializer::new(
+                Cow::Borrowed(std::str::from_utf8(&slice[key])?),
+                false,
+            )) // TODO(dalley): this is temporary
+            .map(Some)
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
@@ -288,8 +291,8 @@ where
                         // }
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
-                        let name = Cow::Borrowed(e.local_name().into_inner());
-                        seed.deserialize(EscapedDeserializer::new(name, false))
+                        let name = std::str::from_utf8(e.local_name().into_inner())?; // TODO(dalley): this is temporary
+                        seed.deserialize(EscapedDeserializer::new(Cow::Borrowed(name), false))
                     };
                     key.map(Some)
                 }
