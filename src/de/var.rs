@@ -33,13 +33,12 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
-            DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, true),
+            DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), true),
             // Escape sequences does not processed inside CDATA section
-            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, false),
+            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), false),
             DeEvent::Start(e) => {
-                EscapedDeserializer::new(Cow::Borrowed(e.name().into_inner()), decoder, false)
+                EscapedDeserializer::new(Cow::Borrowed(e.name().into_inner()), false)
             }
             _ => {
                 return Err(DeError::Unsupported(

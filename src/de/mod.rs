@@ -216,9 +216,9 @@ mod var;
 pub use crate::errors::serialize::DeError;
 use crate::{
     errors::Error,
+    escape::unescape_with,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Decoder,
     Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
@@ -334,30 +334,13 @@ where
     }
 }
 
-fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
+fn deserialize_bool<'de, V>(value: &[u8], visitor: V) -> Result<V::Value, DeError>
 where
     V: Visitor<'de>,
 {
-    #[cfg(feature = "encoding")]
-    {
-        let value = decoder.decode(value)?;
-        // No need to unescape because valid boolean representations cannot be escaped
-        str2bool(value.as_ref(), visitor)
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    {
-        // No need to unescape because valid boolean representations cannot be escaped
-        match value {
-            b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                visitor.visit_bool(true)
-            }
-            b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                visitor.visit_bool(false)
-            }
-            e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
-        }
-    }
+    let value = std::str::from_utf8(value)?; // TODO(dalley): this is temporary
+                                             // No need to unescape because valid boolean representations cannot be escaped
+    str2bool(value.as_ref(), visitor)
 }
 
 impl<'de, R> Deserializer<'de, R>
@@ -612,16 +595,15 @@ where
         unescape: bool,
         allow_start: bool,
     ) -> Result<Cow<'de, str>, DeError> {
-        let decoder = self.reader.decoder();
         match self.next()? {
-            DeEvent::Text(e) => Ok(e.decode(decoder, unescape)?),
-            DeEvent::CData(e) => Ok(e.decode(decoder)?),
+            DeEvent::Text(e) => Self::decode_text(e.into_inner(), unescape),
+            DeEvent::CData(e) => Self::decode_cdata(e.into_inner()),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) => t.decode(decoder, unescape)?,
-                    DeEvent::CData(t) => t.decode(decoder)?,
+                    DeEvent::Text(t) => Self::decode_text(t.into_inner(), unescape)?,
+                    DeEvent::CData(t) => Self::decode_cdata(t.into_inner())?,
                     DeEvent::Start(s) => {
                         return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
                     }
@@ -642,6 +624,39 @@ where
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
+    }
+
+    /// Gets content of this text buffer in the specified encoding
+    fn decode_cdata<'a>(text: Cow<'a, [u8]>) -> Result<Cow<'a, str>, DeError> {
+        Ok(match text {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes)?),
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Cow::Owned(String::from_utf8(bytes)?.into()),
+        })
+    }
+
+    // TODO(dalley): remove from_utf8
+    /// Gets content of this text buffer in the specified encoding and optionally
+    /// unescapes it. Unlike [`Self::decode_and_unescape`] & Co., the lifetime
+    /// of the returned `Cow` is bound to the original buffer / input
+    fn decode_text<'a>(text: Cow<'a, [u8]>, unescape: bool) -> Result<Cow<'a, str>, DeError> {
+        //TODO: too many copies, can be optimized
+        let text = match text {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes)?),
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Cow::Owned(String::from_utf8(bytes.to_vec())?),
+        };
+        let text = if unescape {
+            //FIXME: need to take into account entities defined in the document
+            match unescape_with(&text, |_| None)? {
+                // Because result is borrowed, no replacements was done and we can use original string
+                Cow::Borrowed(_) => text,
+                Cow::Owned(s) => Cow::Owned(s.to_owned()),
+            }
+        } else {
+            text
+        };
+        Ok(text)
     }
 
     /// Drops all events until event with [name](BytesEnd::name()) `name` won't be
@@ -920,9 +935,6 @@ pub trait XmlRead<'i> {
     /// Skips until end element is found. Unlike `next()` it will not allocate
     /// when it cannot satisfy the lifetime.
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError>;
-
-    /// A copy of the reader's decoder used to decode strings.
-    fn decoder(&self) -> Decoder;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -964,10 +976,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
             other => Ok(other?),
         }
     }
-
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
-    }
 }
 
 /// XML input source that reads from a slice of bytes and can borrow from it.
@@ -1003,10 +1011,6 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             other => Ok(other?),
         }
-    }
-
-    fn decoder(&self) -> Decoder {
-        self.reader.decoder()
     }
 }
 

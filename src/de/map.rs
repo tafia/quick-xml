@@ -231,18 +231,13 @@ where
 
         // FIXME: There error positions counted from the start of tag name - need global position
         let slice = &self.start.buf;
-        let decoder = self.de.reader.decoder();
 
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
-            seed.deserialize(EscapedDeserializer::new(
-                Cow::Borrowed(&slice[key]),
-                decoder,
-                false,
-            ))
-            .map(Some)
+            seed.deserialize(EscapedDeserializer::new(Cow::Borrowed(&slice[key]), false))
+                .map(Some)
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
@@ -269,7 +264,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
+                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e)? => {
                     self.source = ValueSource::Content;
                     seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
                 }
@@ -294,7 +289,7 @@ where
                         seed.deserialize(self.unflatten_fields.remove(p).into_deserializer())
                     } else {
                         let name = Cow::Borrowed(e.local_name().into_inner());
-                        seed.deserialize(EscapedDeserializer::new(name, decoder, false))
+                        seed.deserialize(EscapedDeserializer::new(name, false))
                     };
                     key.map(Some)
                 }
@@ -312,7 +307,6 @@ where
                 &self.start.buf,
                 value,
                 true,
-                self.de.reader.decoder(),
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -324,16 +318,12 @@ where
             // of that events)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
             ValueSource::Text => match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    true,
-                    self.de.reader.decoder(),
-                )),
-                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    false,
-                    self.de.reader.decoder(),
-                )),
+                DeEvent::Text(e) => {
+                    seed.deserialize(SimpleTypeDeserializer::from_cow(e.into_inner(), true))
+                }
+                DeEvent::CData(e) => {
+                    seed.deserialize(SimpleTypeDeserializer::from_cow(e.into_inner(), false))
+                }
                 // SAFETY: We set `Text` only when we seen `Text` or `CData`
                 _ => unreachable!(),
             },
@@ -594,18 +584,17 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
         loop {
             break match self.map.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => {
+                DeEvent::Start(e) if !self.filter.is_suitable(&e)? => {
                     self.map.de.skip()?;
                     continue;
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => Ok(None),
+                DeEvent::Start(e) if !self.filter.is_suitable(&e)? => Ok(None),
 
                 // Stop iteration after reaching a closing tag
                 DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
@@ -704,32 +693,20 @@ where
                 // Comment to prevent auto-formatting and keep Text and Cdata similar
                 e.into_inner(),
                 true,
-                self.map.de.reader.decoder(),
             )
             .deserialize_seq(visitor),
-            DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                e.into_inner(),
-                false,
-                self.map.de.reader.decoder(),
-            )
-            .deserialize_seq(visitor),
+            DeEvent::CData(e) => {
+                SimpleTypeDeserializer::from_cow(e.into_inner(), false).deserialize_seq(visitor)
+            }
             // This is a sequence element. We cannot treat it as another flatten
             // sequence if type will require `deserialize_seq` We instead forward
             // it to `xs:simpleType` implementation
             DeEvent::Start(e) => {
                 let value = match self.map.de.next()? {
-                    DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        true,
-                        self.map.de.reader.decoder(),
-                    )
-                    .deserialize_seq(visitor),
-                    DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        false,
-                        self.map.de.reader.decoder(),
-                    )
-                    .deserialize_seq(visitor),
+                    DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(e.into_inner(), true)
+                        .deserialize_seq(visitor),
+                    DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(e.into_inner(), false)
+                        .deserialize_seq(visitor),
                     e => Err(DeError::Custom(format!("Unsupported event {:?}", e))),
                 };
                 // TODO: May be assert that here we expect only matching closing tag?

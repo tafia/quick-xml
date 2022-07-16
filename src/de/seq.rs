@@ -1,20 +1,14 @@
 use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
 use crate::events::BytesStart;
-use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, SeqAccess};
 
-/// Check if tag `start` is included in the `fields` list. `decoder` is used to
-/// get a string representation of a tag.
+/// Check if tag `start` is included in the `fields` list.
 ///
 /// Returns `true`, if `start` is not in the `fields` list and `false` otherwise.
-pub fn not_in(
-    fields: &'static [&'static str],
-    start: &BytesStart,
-    decoder: Decoder,
-) -> Result<bool, DeError> {
-    let tag = decoder.decode(start.name().into_inner())?;
+pub fn not_in(fields: &'static [&'static str], start: &BytesStart) -> Result<bool, DeError> {
+    let tag = start.name().into_inner();
 
-    Ok(fields.iter().all(|&field| field != tag.as_ref()))
+    Ok(fields.iter().all(|field| field.as_bytes() != tag))
 }
 
 /// A filter that determines, what tags should form a sequence.
@@ -59,10 +53,10 @@ pub enum TagFilter<'de> {
 }
 
 impl<'de> TagFilter<'de> {
-    pub fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
+    pub fn is_suitable(&self, start: &BytesStart) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
-            Self::Exclude(fields) => not_in(fields, start, decoder),
+            Self::Exclude(fields) => not_in(fields, start),
         }
     }
 }
@@ -110,18 +104,17 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
         loop {
             break match self.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => {
                     self.de.skip()?;
                     continue;
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => Ok(None),
                 DeEvent::End(_) => Ok(None),
                 DeEvent::Eof => Ok(None),
 
@@ -136,13 +129,7 @@ where
 fn test_not_in() {
     let tag = BytesStart::borrowed_name(b"tag");
 
-    assert_eq!(not_in(&[], &tag, Decoder::utf8()).unwrap(), true);
-    assert_eq!(
-        not_in(&["no", "such", "tags"], &tag, Decoder::utf8()).unwrap(),
-        true
-    );
-    assert_eq!(
-        not_in(&["some", "tag", "included"], &tag, Decoder::utf8()).unwrap(),
-        false
-    );
+    assert_eq!(not_in(&[], &tag).unwrap(), true);
+    assert_eq!(not_in(&["no", "such", "tags"], &tag).unwrap(), true);
+    assert_eq!(not_in(&["some", "tag", "included"], &tag,).unwrap(), false);
 }

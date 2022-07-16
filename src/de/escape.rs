@@ -3,7 +3,6 @@
 use crate::de::deserialize_bool;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
@@ -17,7 +16,6 @@ use std::borrow::Cow;
 /// anyway
 #[derive(Clone, Debug)]
 pub struct EscapedDeserializer<'a> {
-    decoder: Decoder,
     /// Possible escaped value of text/CDATA or attribute value
     escaped_value: Cow<'a, [u8]>,
     /// If `true`, value requires unescaping before using
@@ -25,9 +23,8 @@ pub struct EscapedDeserializer<'a> {
 }
 
 impl<'a> EscapedDeserializer<'a> {
-    pub fn new(escaped_value: Cow<'a, [u8]>, decoder: Decoder, escaped: bool) -> Self {
+    pub fn new(escaped_value: Cow<'a, [u8]>, escaped: bool) -> Self {
         EscapedDeserializer {
-            decoder,
             escaped_value,
             escaped,
         }
@@ -40,7 +37,7 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            let value = self.decoder.decode(self.escaped_value.as_ref())?.parse()?;
+            let value = String::from_utf8(self.escaped_value.as_ref().to_vec())?.parse()?; // TODO(dalley): this is temporary
 
             visitor.$visit(value)
         }
@@ -61,16 +58,16 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        let decoded = self.decoder.decode(&self.escaped_value)?;
         if self.escaped {
-            match unescape(&decoded)? {
+            match unescape(std::str::from_utf8(self.escaped_value.as_ref())?)? {
+                // TODO(dalley): remove temporary from_utf8
                 Cow::Borrowed(s) => visitor.visit_str(s),
                 Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
-            match decoded {
-                Cow::Borrowed(s) => visitor.visit_str(s),
-                Cow::Owned(s) => visitor.visit_string(s),
+            match self.escaped_value {
+                Cow::Borrowed(s) => visitor.visit_str(std::str::from_utf8(s)?),
+                Cow::Owned(s) => visitor.visit_string(String::from_utf8(s)?),
             }
         }
     }
@@ -104,7 +101,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        deserialize_bool(self.escaped_value.as_ref(), self.decoder, visitor)
+        deserialize_bool(self.escaped_value.as_ref(), visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>

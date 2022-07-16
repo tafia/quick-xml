@@ -6,7 +6,6 @@
 use crate::de::{deserialize_bool, str2bool};
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use crate::reader::Decoder;
 use memchr::memchr;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};
@@ -515,62 +514,41 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
     content: CowRef<'de, 'a>,
     /// If `true`, `content` in escaped form and should be unescaped before use
     escaped: bool,
-    /// Decoder used to deserialize string data, numeric and boolean data.
-    /// Not used for deserializing raw byte buffers
-    decoder: Decoder,
 }
 
 impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// Creates a deserializer from a value, that possible borrowed from input
-    pub fn from_cow(value: Cow<'de, [u8]>, escaped: bool, decoder: Decoder) -> Self {
+    pub fn from_cow(value: Cow<'de, [u8]>, escaped: bool) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(slice),
             Cow::Owned(content) => CowRef::Owned(content),
         };
-        Self::new(content, escaped, decoder)
+        Self::new(content, escaped)
     }
 
     /// Creates a deserializer from a part of value at specified range
-    pub fn from_part(
-        value: &'a Cow<'de, [u8]>,
-        range: Range<usize>,
-        escaped: bool,
-        decoder: Decoder,
-    ) -> Self {
+    pub fn from_part(value: &'a Cow<'de, [u8]>, range: Range<usize>, escaped: bool) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
             Cow::Owned(slice) => CowRef::Slice(&slice[range]),
         };
-        Self::new(content, escaped, decoder)
+        Self::new(content, escaped)
     }
 
     /// Constructor for tests
     #[inline]
-    fn new(content: CowRef<'de, 'a>, escaped: bool, decoder: Decoder) -> Self {
-        Self {
-            content,
-            escaped,
-            decoder,
-        }
+    fn new(content: CowRef<'de, 'a>, escaped: bool) -> Self {
+        Self { content, escaped }
     }
 
     /// Decodes raw bytes using the encoding specified.
     /// The method will borrow if has the UTF-8 compatible representation.
     #[inline]
     fn decode<'b>(&'b self) -> Result<Content<'de, 'b>, DeError> {
-        Ok(match self.content {
-            CowRef::Input(content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Input(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
-            },
-            CowRef::Slice(content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Slice(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
-            },
-            CowRef::Owned(ref content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Slice(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
-            },
+        Ok(match &self.content {
+            CowRef::Input(content) => Content::Input(std::str::from_utf8(content)?), // TODO(dalley): this is temporary
+            CowRef::Slice(content) => Content::Slice(std::str::from_utf8(content)?),
+            CowRef::Owned(content) => Content::Owned(String::from_utf8(content.clone())?, 0),
         })
     }
 }
@@ -590,7 +568,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        deserialize_bool(&self.content, self.decoder, visitor)
+        deserialize_bool(&self.content, visitor)
     }
 
     deserialize_num!(deserialize_i8  => visit_i8);
@@ -834,12 +812,11 @@ mod tests {
     use std::collections::HashMap;
 
     macro_rules! simple {
-        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
+        ($name:ident: $type:ty = $xml:expr => $result:expr) => {
             #[test]
             fn $name() {
-                let decoder = Decoder::$encoding();
                 let xml = $xml;
-                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true, decoder);
+                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true);
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
                 assert_eq!(data, $result);
@@ -848,12 +825,11 @@ mod tests {
     }
 
     macro_rules! err {
-        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $kind:ident($reason:literal)) => {
+        ($name:ident: $type:ty = $xml:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let decoder = Decoder::$encoding();
                 let xml = $xml;
-                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true, decoder);
+                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true);
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
                 match err {
@@ -1151,145 +1127,145 @@ mod tests {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        simple!(utf8, i8_:  i8  = "-2" => -2);
-        simple!(utf8, i16_: i16 = "-2" => -2);
-        simple!(utf8, i32_: i32 = "-2" => -2);
-        simple!(utf8, i64_: i64 = "-2" => -2);
+        simple!(i8_:  i8  = "-2" => -2);
+        simple!(i16_: i16 = "-2" => -2);
+        simple!(i32_: i32 = "-2" => -2);
+        simple!(i64_: i64 = "-2" => -2);
 
-        simple!(utf8, u8_:  u8  = "3" => 3);
-        simple!(utf8, u16_: u16 = "3" => 3);
-        simple!(utf8, u32_: u32 = "3" => 3);
-        simple!(utf8, u64_: u64 = "3" => 3);
+        simple!(u8_:  u8  = "3" => 3);
+        simple!(u16_: u16 = "3" => 3);
+        simple!(u32_: u32 = "3" => 3);
+        simple!(u64_: u64 = "3" => 3);
 
         serde_if_integer128! {
-            simple!(utf8, i128_: i128 = "-2" => -2);
-            simple!(utf8, u128_: u128 = "2" => 2);
+            simple!(i128_: i128 = "-2" => -2);
+            simple!(u128_: u128 = "2" => 2);
         }
 
-        simple!(utf8, f32_: f32 = "1.23" => 1.23);
-        simple!(utf8, f64_: f64 = "1.23" => 1.23);
+        simple!(f32_: f32 = "1.23" => 1.23);
+        simple!(f64_: f64 = "1.23" => 1.23);
 
-        simple!(utf8, false_: bool = "false" => false);
-        simple!(utf8, true_: bool  = "true" => true);
-        simple!(utf8, char_unescaped: char = "h" => 'h');
-        simple!(utf8, char_escaped: char = "&lt;" => '<');
+        simple!(false_: bool = "false" => false);
+        simple!(true_: bool  = "true" => true);
+        simple!(char_unescaped: char = "h" => 'h');
+        simple!(char_escaped: char = "&lt;" => '<');
 
-        simple!(utf8, string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+        simple!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
+        err!(byte_buf: ByteBuf = "&lt;escaped&#x20;string"
              => Unsupported("binary data content is not supported by XML format"));
 
-        simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+        simple!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
+        err!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
              => Unsupported("binary data content is not supported by XML format"));
 
-        simple!(utf8, option_none: Option<&str> = "" => None);
-        simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
+        simple!(option_none: Option<&str> = "" => None);
+        simple!(option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
 
-        simple!(utf8, unit: () = "any data" => ());
-        simple!(utf8, unit_struct: Unit = "any data" => Unit);
+        simple!(unit: () = "any data" => ());
+        simple!(unit_struct: Unit = "any data" => Unit);
 
-        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
-        simple!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+        simple!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        simple!(newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
 
-        err!(utf8, map: HashMap<(), ()> = "any data"
+        err!(map: HashMap<(), ()> = "any data"
              => Unsupported("maps are not supported for XSD `simpleType`s"));
-        err!(utf8, struct_: Struct = "any data"
+        err!(struct_: Struct = "any data"
              => Unsupported("structures are not supported for XSD `simpleType`s"));
 
-        simple!(utf8, enum_unit: Enum = "Unit" => Enum::Unit);
-        err!(utf8, enum_newtype: Enum = "Newtype"
+        simple!(enum_unit: Enum = "Unit" => Enum::Unit);
+        err!(enum_newtype: Enum = "Newtype"
              => Unsupported("enum newtype variants are not supported for XSD `simpleType`s"));
-        err!(utf8, enum_tuple: Enum = "Tuple"
+        err!(enum_tuple: Enum = "Tuple"
              => Unsupported("enum tuple variants are not supported for XSD `simpleType`s"));
-        err!(utf8, enum_struct: Enum = "Struct"
+        err!(enum_struct: Enum = "Struct"
              => Unsupported("enum struct variants are not supported for XSD `simpleType`s"));
-        err!(utf8, enum_other: Enum = "any data"
+        err!(enum_other: Enum = "any data"
              => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        simple!(utf8, identifier: Id = "Field" => Id::Field);
-        simple!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
+        simple!(identifier: Id = "Field" => Id::Field);
+        simple!(ignored_any: Any = "any data" => Any(IgnoredAny));
     }
 
-    #[cfg(feature = "encoding")]
-    mod utf16 {
-        use super::*;
-        use pretty_assertions::assert_eq;
+    // #[cfg(feature = "encoding")]
+    // mod utf16 {
+    //     use super::*;
+    //     use pretty_assertions::assert_eq;
 
-        fn to_utf16(string: &str) -> Vec<u8> {
-            let mut bytes = Vec::new();
-            for ch in string.encode_utf16() {
-                bytes.extend(&ch.to_le_bytes());
-            }
-            bytes
-        }
+    //     fn to_utf16(string: &str) -> Vec<u8> {
+    //         let mut bytes = Vec::new();
+    //         for ch in string.encode_utf16() {
+    //             bytes.extend(&ch.to_le_bytes());
+    //         }
+    //         bytes
+    //     }
 
-        macro_rules! utf16 {
-            ($name:ident: $type:ty = $xml:literal => $result:expr) => {
-                simple!(utf16, $name: $type = to_utf16($xml) => $result);
-            };
-        }
+    //     macro_rules! utf16 {
+    //             ($name:ident: $type:ty = $xml:literal => $result:expr) => {
+    //                 simple!($name: $type = to_utf16($xml) => $result);
+    //             };
+    //         }
 
-        macro_rules! unsupported {
-            ($name:ident: $type:ty = $xml:literal => $err:literal) => {
-                err!(utf16, $name: $type = to_utf16($xml) => Unsupported($err));
-            };
-        }
+    //     macro_rules! unsupported {
+    //             ($name:ident: $type:ty = $xml:literal => $err:literal) => {
+    //                 err!($name: $type = to_utf16($xml) => Unsupported($err));
+    //             };
+    //         }
 
-        utf16!(i8_:  i8  = "-2" => -2);
-        utf16!(i16_: i16 = "-2" => -2);
-        utf16!(i32_: i32 = "-2" => -2);
-        utf16!(i64_: i64 = "-2" => -2);
+    //     utf16!(i8_:  i8  = "-2" => -2);
+    //     utf16!(i16_: i16 = "-2" => -2);
+    //     utf16!(i32_: i32 = "-2" => -2);
+    //     utf16!(i64_: i64 = "-2" => -2);
 
-        utf16!(u8_:  u8  = "3" => 3);
-        utf16!(u16_: u16 = "3" => 3);
-        utf16!(u32_: u32 = "3" => 3);
-        utf16!(u64_: u64 = "3" => 3);
+    //     utf16!(u8_:  u8  = "3" => 3);
+    //     utf16!(u16_: u16 = "3" => 3);
+    //     utf16!(u32_: u32 = "3" => 3);
+    //     utf16!(u64_: u64 = "3" => 3);
 
-        serde_if_integer128! {
-            utf16!(i128_: i128 = "-2" => -2);
-            utf16!(u128_: u128 = "2" => 2);
-        }
+    //     serde_if_integer128! {
+    //         utf16!(i128_: i128 = "-2" => -2);
+    //         utf16!(u128_: u128 = "2" => 2);
+    //     }
 
-        utf16!(f32_: f32 = "1.23" => 1.23);
-        utf16!(f64_: f64 = "1.23" => 1.23);
+    //     utf16!(f32_: f32 = "1.23" => 1.23);
+    //     utf16!(f64_: f64 = "1.23" => 1.23);
 
-        utf16!(false_: bool = "false" => false);
-        utf16!(true_: bool  = "true" => true);
-        utf16!(char_unescaped: char = "h" => 'h');
-        utf16!(char_escaped: char = "&lt;" => '<');
+    //     utf16!(false_: bool = "false" => false);
+    //     utf16!(true_: bool  = "true" => true);
+    //     utf16!(char_unescaped: char = "h" => 'h');
+    //     utf16!(char_escaped: char = "&lt;" => '<');
 
-        utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
-                     => "binary data content is not supported by XML format");
+    //     utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
+    //     unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+    //                     => "binary data content is not supported by XML format");
 
-        utf16!(option_none: Option<()> = "" => None);
-        utf16!(option_some: Option<()> = "any data" => Some(()));
+    //     utf16!(option_none: Option<()> = "" => None);
+    //     utf16!(option_some: Option<()> = "any data" => Some(()));
 
-        utf16!(unit: () = "any data" => ());
-        utf16!(unit_struct: Unit = "any data" => Unit);
+    //     utf16!(unit: () = "any data" => ());
+    //     utf16!(unit_struct: Unit = "any data" => Unit);
 
-        utf16!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+    //     utf16!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
 
-        // UTF-16 data never borrow because data was decoded not in-place
-        err!(utf16, newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")
-             => Custom("invalid type: string \"non-escaped string\", expected a borrowed string"));
+    //     // UTF-16 data never borrow because data was decoded not in-place
+    //     err!(newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")
+    //              => Custom("invalid type: string \"non-escaped string\", expected a borrowed string"));
 
-        unsupported!(map: HashMap<(), ()> = "any data"
-                     => "maps are not supported for XSD `simpleType`s");
-        unsupported!(struct_: Struct = "any data"
-                     => "structures are not supported for XSD `simpleType`s");
+    //     unsupported!(map: HashMap<(), ()> = "any data"
+    //                      => "maps are not supported for XSD `simpleType`s");
+    //     unsupported!(struct_: Struct = "any data"
+    //                      => "structures are not supported for XSD `simpleType`s");
 
-        utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
-        unsupported!(enum_newtype: Enum = "Newtype"
-                     => "enum newtype variants are not supported for XSD `simpleType`s");
-        unsupported!(enum_tuple: Enum = "Tuple"
-                     => "enum tuple variants are not supported for XSD `simpleType`s");
-        unsupported!(enum_struct: Enum = "Struct"
-                     => "enum struct variants are not supported for XSD `simpleType`s");
-        err!(utf16, enum_other: Enum = to_utf16("any data")
-             => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
+    //     utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
+    //     unsupported!(enum_newtype: Enum = "Newtype"
+    //                     => "enum newtype variants are not supported for XSD `simpleType`s");
+    //     unsupported!(enum_tuple: Enum = "Tuple"
+    //                     => "enum tuple variants are not supported for XSD `simpleType`s");
+    //     unsupported!(enum_struct: Enum = "Struct"
+    //                     => "enum struct variants are not supported for XSD `simpleType`s");
+    //     err!(enum_other: Enum = to_utf16("any data")
+    //             => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        utf16!(identifier: Id = "Field" => Id::Field);
-        utf16!(ignored_any: Any = "any data" => Any(IgnoredAny));
-    }
+    //     utf16!(identifier: Id = "Field" => Id::Field);
+    //     utf16!(ignored_any: Any = "any data" => Any(IgnoredAny));
+    // }
 }
