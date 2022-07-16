@@ -616,7 +616,7 @@ fn test_read_write_roundtrip_escape() -> Result<()> {
             Eof => break,
             Text(e) => {
                 assert!(writer
-                    .write_event(Text(BytesText::from_escaped(e.escape().as_bytes())))
+                    .write_event(Text(BytesText::from_escaped(e.escape())))
                     .is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
@@ -648,7 +648,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
             Eof => break,
             Text(e) => {
                 assert!(writer
-                    .write_event(Text(BytesText::from_plain_str(&e.unescape().unwrap())))
+                    .write_event(Text(BytesText::from_plain(&e.unescape().unwrap())))
                     .is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),

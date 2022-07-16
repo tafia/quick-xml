@@ -100,7 +100,7 @@ impl<'r, W: Write> Serializer<'r, W> {
         value: P,
         escaped: bool,
     ) -> Result<(), DeError> {
-        let value = value.to_string().into_bytes();
+        let value = value.to_string();
         let event = if escaped {
             BytesText::from_escaped(value)
         } else {
