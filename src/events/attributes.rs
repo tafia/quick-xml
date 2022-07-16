@@ -104,9 +104,14 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
     /// ```
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
+        let value = match escape(val.1).into() {
+            Cow::Borrowed(v) => Cow::Borrowed(v.as_bytes().into()),
+            Cow::Owned(v) => Cow::Owned(v.into()),
+        };
+
         Attribute {
             key: QName(val.0.as_bytes()),
-            value: escape(val.1.as_bytes()),
+            value: value,
         }
     }
 }

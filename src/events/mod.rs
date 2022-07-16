@@ -750,13 +750,12 @@ impl<'a> BytesText<'a> {
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
     ) -> Result<Cow<str>> {
-        // from_utf8 should never fail because content is always UTF-8 encoded
-        Ok(unescape_with(from_utf8(&self.content)?, resolve_entity)?)
+        Ok(unescape_with(from_utf8(self)?, resolve_entity)?) // TODO(dalley): this is temporary
     }
 
     /// Gets escaped content.
-    pub fn escape(&self) -> Cow<str> {
-        Cow::Borrowed(std::str::from_utf8(&self.content).unwrap()) // TODO(dalley): remove from_utf8
+    pub fn escape(&self) -> &str {
+        from_utf8(self).unwrap() // TODO(dalley): this is temporary
     }
 }
 
@@ -842,10 +841,8 @@ impl<'a> BytesCData<'a> {
     /// | `'`       | `&apos;`
     /// | `"`       | `&quot;`
     pub fn escape(self) -> BytesText<'a> {
-        BytesText::from_escaped(match escape(&self.content) {
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
-        })
+        let content = std::str::from_utf8(&self.content).unwrap(); // TODO(dalley): this is temporary
+        BytesText::from_escaped(escape(&content)).into_owned()
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -862,10 +859,8 @@ impl<'a> BytesCData<'a> {
     /// | `>`       | `&gt;`
     /// | `&`       | `&amp;`
     pub fn partial_escape(self) -> BytesText<'a> {
-        BytesText::from_escaped(match partial_escape(&self.content) {
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
-        })
+        let content = std::str::from_utf8(&self.content).unwrap(); // TODO(dalley): this is temporary
+        BytesText::from_escaped(partial_escape(&content)).into_owned()
     }
 }
 
