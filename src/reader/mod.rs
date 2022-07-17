@@ -514,9 +514,9 @@ impl<R> Reader<R> {
                 };
 
                 Ok(if first {
-                    Event::StartText(BytesText::wrap(content).into())
+                    Event::StartText(BytesText::wrap(content, self.decoder()).into())
                 } else {
-                    Event::Text(BytesText::wrap(content))
+                    Event::Text(BytesText::wrap(content, self.decoder()))
                 })
             }
             Ok(None) => Ok(Event::Eof),
@@ -587,10 +587,13 @@ impl<R> Reader<R> {
                         return Err(Error::UnexpectedToken("--".to_string()));
                     }
                 }
-                Ok(Event::Comment(BytesText::wrap(&buf[3..len - 2])))
+                Ok(Event::Comment(BytesText::wrap(
+                    &buf[3..len - 2],
+                    self.decoder(),
+                )))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
-                Ok(Event::CData(BytesCData::wrap(&buf[8..])))
+                Ok(Event::CData(BytesCData::wrap(&buf[8..], self.decoder())))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 let start = buf[8..]
@@ -598,7 +601,10 @@ impl<R> Reader<R> {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or_else(|| len - 8);
                 debug_assert!(start < len - 8, "DocType must have a name");
-                Ok(Event::DocType(BytesText::wrap(&buf[8 + start..])))
+                Ok(Event::DocType(BytesText::wrap(
+                    &buf[8 + start..],
+                    self.decoder(),
+                )))
             }
             _ => Err(bang_type.to_err()),
         }
@@ -663,7 +669,7 @@ impl<R> Reader<R> {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1])))
+                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
             }
         } else {
             self.buf_position -= len;
@@ -935,7 +941,7 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
 /// any XML declarations are ignored.
 ///
 /// [utf16]: https://github.com/tafia/quick-xml/issues/158
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Decoder {
     #[cfg(feature = "encoding")]
     encoding: &'static Encoding,
@@ -1025,9 +1031,6 @@ impl Decoder {
     }
 }
 
-/// This implementation is required for tests of other parts of the library
-#[cfg(test)]
-#[cfg(feature = "serialize")]
 impl Decoder {
     pub(crate) fn utf8() -> Self {
         Decoder {
@@ -1036,7 +1039,7 @@ impl Decoder {
         }
     }
 
-    #[cfg(feature = "encoding")]
+    #[cfg(all(test, feature = "encoding", feature = "serialize"))]
     pub(crate) fn utf16() -> Self {
         Decoder { encoding: UTF_16LE }
     }

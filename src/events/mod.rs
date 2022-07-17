@@ -153,7 +153,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Warning
     ///
-    /// `&content` is not checked to be a valid name
+    /// `name` is not checked to be a valid name
     #[inline]
     pub fn borrowed_name(name: &'a str) -> BytesStart<'a> {
         Self::borrowed(name, name.len())
@@ -694,24 +694,30 @@ pub struct BytesText<'a> {
     /// document encoding when event comes from the reader and should be in the
     /// document encoding when event passed to the writer
     content: Cow<'a, [u8]>,
+    /// Encoding in which the `content` is stored inside the event
+    decoder: Decoder,
 }
 
 impl<'a> BytesText<'a> {
-    /// Creates a new `BytesText` from an escaped byte sequence.
+    /// Creates a new `BytesText` from an escaped byte sequence in the specified encoding.
     #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
         Self {
             content: content.into(),
+            decoder,
         }
     }
 
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
     pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(match content.into() {
-            Cow::Owned(o) => Cow::Owned(o.into_bytes()),
-            Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
-        })
+        Self::wrap(
+            match content.into() {
+                Cow::Owned(o) => Cow::Owned(o.into_bytes()),
+                Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
+            },
+            Decoder::utf8(),
+        )
     }
 
     /// Creates a new `BytesText` from a string. The string is expected not to
@@ -723,6 +729,7 @@ impl<'a> BytesText<'a> {
                 Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
                 Cow::Owned(s) => Cow::Owned(s.into_bytes()),
             },
+            decoder: Decoder::utf8(),
         }
     }
 
@@ -732,6 +739,7 @@ impl<'a> BytesText<'a> {
     pub fn into_owned(self) -> BytesText<'static> {
         BytesText {
             content: self.content.into_owned().into(),
+            decoder: self.decoder,
         }
     }
 
@@ -746,6 +754,7 @@ impl<'a> BytesText<'a> {
     pub fn borrow(&self) -> BytesText {
         BytesText {
             content: Cow::Borrowed(&self.content),
+            decoder: self.decoder,
         }
     }
 
@@ -864,21 +873,24 @@ impl<'a> From<BytesStartText<'a>> for BytesText<'a> {
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesCData<'a> {
     content: Cow<'a, [u8]>,
+    /// Encoding in which the `content` is stored inside the event
+    decoder: Decoder,
 }
 
 impl<'a> BytesCData<'a> {
-    /// Creates a new `BytesCData` from a byte sequence.
+    /// Creates a new `BytesCData` from a byte sequence in the specified encoding.
     #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
         Self {
             content: content.into(),
+            decoder,
         }
     }
 
     /// Creates a new `BytesCData` from a string
     #[inline]
     pub fn from_str(content: &'a str) -> Self {
-        Self::wrap(content.as_bytes())
+        Self::wrap(content.as_bytes(), Decoder::utf8())
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -887,6 +899,7 @@ impl<'a> BytesCData<'a> {
     pub fn into_owned(self) -> BytesCData<'static> {
         BytesCData {
             content: self.content.into_owned().into(),
+            decoder: self.decoder,
         }
     }
 
@@ -901,6 +914,7 @@ impl<'a> BytesCData<'a> {
     pub fn borrow(&self) -> BytesCData {
         BytesCData {
             content: Cow::Borrowed(&self.content),
+            decoder: self.decoder,
         }
     }
 
@@ -918,11 +932,14 @@ impl<'a> BytesCData<'a> {
     /// | `"`       | `&quot;`
     pub fn escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
-        Ok(BytesText::wrap(match escape(&decoded) {
-            // Because result is borrowed, no replacements was done and we can use original content
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-        }))
+        Ok(BytesText::wrap(
+            match escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -940,11 +957,14 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     pub fn partial_escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
-        Ok(BytesText::wrap(match partial_escape(&decoded) {
-            // Because result is borrowed, no replacements was done and we can use original content
-            Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-        }))
+        Ok(BytesText::wrap(
+            match partial_escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
     }
 
     /// Gets content of this text buffer in the specified encoding
