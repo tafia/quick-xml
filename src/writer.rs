@@ -422,7 +422,7 @@ mod indentation {
         let start = BytesStart::borrowed_name(name)
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
-        let text = BytesText::from_plain(b"text");
+        let text = BytesText::from_plain_str("text");
 
         writer
             .write_event(Event::Start(start))
@@ -449,7 +449,7 @@ mod indentation {
         let start = BytesStart::borrowed_name(name)
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = BytesEnd::borrowed(name);
-        let text = BytesText::from_plain(b"text");
+        let text = BytesText::from_plain_str("text");
         let inner = BytesStart::borrowed_name(b"inner");
 
         writer

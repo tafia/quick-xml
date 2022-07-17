@@ -681,15 +681,6 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Creates a new `BytesText` from a byte sequence. The byte sequence is
-    /// expected not to be escaped.
-    #[inline]
-    pub fn from_plain(content: &'a [u8]) -> Self {
-        Self {
-            content: escape(content),
-        }
-    }
-
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
     pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
@@ -703,7 +694,12 @@ impl<'a> BytesText<'a> {
     /// be escaped.
     #[inline]
     pub fn from_plain_str(content: &'a str) -> Self {
-        Self::from_plain(content.as_bytes())
+        Self {
+            content: match escape(content) {
+                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+            },
+        }
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -901,11 +897,13 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     /// | `'`       | `&apos;`
     /// | `"`       | `&quot;`
-    pub fn escape(self) -> BytesText<'a> {
-        BytesText::from_escaped(match escape(&self.content) {
+    pub fn escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
+        let decoded = self.decode(decoder)?;
+        Ok(BytesText::from_escaped(match escape(&decoded) {
+            // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
-        })
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+        }))
     }
 
     /// Converts this CDATA content to an escaped version, that can be written
@@ -921,15 +919,16 @@ impl<'a> BytesCData<'a> {
     /// | `<`       | `&lt;`
     /// | `>`       | `&gt;`
     /// | `&`       | `&amp;`
-    pub fn partial_escape(self) -> BytesText<'a> {
-        BytesText::from_escaped(match partial_escape(&self.content) {
+    pub fn partial_escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
+        let decoded = self.decode(decoder)?;
+        Ok(BytesText::from_escaped(match partial_escape(&decoded) {
+            // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
-        })
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+        }))
     }
 
     /// Gets content of this text buffer in the specified encoding
-    #[cfg(feature = "serialize")]
     pub(crate) fn decode(&self, decoder: Decoder) -> Result<Cow<'a, str>> {
         Ok(match &self.content {
             Cow::Borrowed(bytes) => decoder.decode(bytes)?,

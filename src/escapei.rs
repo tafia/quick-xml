@@ -59,7 +59,7 @@ impl std::fmt::Display for EscapeError {
 
 impl std::error::Error for EscapeError {}
 
-/// Escapes a `&[u8]` and replaces all xml special characters (`<`, `>`, `&`, `'`, `"`)
+/// Escapes an `&str` and replaces all xml special characters (`<`, `>`, `&`, `'`, `"`)
 /// with their corresponding xml escaped value.
 ///
 /// This function performs following replacements:
@@ -71,11 +71,11 @@ impl std::error::Error for EscapeError {}
 /// | `&`       | `&amp;`
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
-pub fn escape(raw: &[u8]) -> Cow<[u8]> {
+pub fn escape(raw: &str) -> Cow<str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
 }
 
-/// Escapes a `&[u8]` and replaces xml special characters (`<`, `>`, `&`)
+/// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
 /// with their corresponding xml escaped value.
 ///
 /// Should only be used for escaping text content. In XML text content, it is allowed
@@ -88,24 +88,25 @@ pub fn escape(raw: &[u8]) -> Cow<[u8]> {
 /// | `<`       | `&lt;`
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
-pub fn partial_escape(raw: &[u8]) -> Cow<[u8]> {
+pub fn partial_escape(raw: &str) -> Cow<str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
 }
 
-/// Escapes a `&[u8]` and replaces a subset of xml special characters (`<`, `>`,
+/// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
+fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
+    let bytes = raw.as_bytes();
     let mut escaped = None;
-    let mut bytes = raw.iter();
+    let mut iter = bytes.iter();
     let mut pos = 0;
-    while let Some(i) = bytes.position(|&b| escape_chars(b)) {
+    while let Some(i) = iter.position(|&b| escape_chars(b)) {
         if escaped.is_none() {
             escaped = Some(Vec::with_capacity(raw.len()));
         }
         let escaped = escaped.as_mut().expect("initialized");
         let new_pos = pos + i;
-        escaped.extend_from_slice(&raw[pos..new_pos]);
-        match raw[new_pos] {
+        escaped.extend_from_slice(&bytes[pos..new_pos]);
+        match bytes[new_pos] {
             b'<' => escaped.extend_from_slice(b"&lt;"),
             b'>' => escaped.extend_from_slice(b"&gt;"),
             b'\'' => escaped.extend_from_slice(b"&apos;"),
@@ -117,10 +118,14 @@ fn _escape<F: Fn(u8) -> bool>(raw: &[u8], escape_chars: F) -> Cow<[u8]> {
     }
 
     if let Some(mut escaped) = escaped {
-        if let Some(raw) = raw.get(pos..) {
+        if let Some(raw) = bytes.get(pos..) {
             escaped.extend_from_slice(raw);
         }
-        Cow::Owned(escaped)
+        // SAFETY: we operate on UTF-8 input and search for an one byte chars only,
+        // so all slices that was put to the `escaped` is a valid UTF-8 encoded strings
+        // TODO: Can be replaced with `unsafe { String::from_utf8_unchecked() }`
+        // if unsafe code will be allowed
+        Cow::Owned(String::from_utf8(escaped).unwrap())
     } else {
         Cow::Borrowed(raw)
     }
@@ -1717,10 +1722,10 @@ fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
 
 #[test]
 fn test_unescape() {
-    assert_eq!(&*unescape("test").unwrap(), "test");
-    assert_eq!(&*unescape("&lt;test&gt;").unwrap(), "<test>");
-    assert_eq!(&*unescape("&#x30;").unwrap(), "0");
-    assert_eq!(&*unescape("&#48;").unwrap(), "0");
+    assert_eq!(unescape("test").unwrap(), Cow::Borrowed("test"));
+    assert_eq!(unescape("&lt;test&gt;").unwrap(), "<test>");
+    assert_eq!(unescape("&#x30;").unwrap(), "0");
+    assert_eq!(unescape("&#48;").unwrap(), "0");
     assert!(unescape("&foo;").is_err());
 }
 
@@ -1731,37 +1736,40 @@ fn test_unescape_with() {
         _ => None,
     };
 
-    assert_eq!(&*unescape_with("test", custom_entities).unwrap(), "test");
     assert_eq!(
-        &*unescape_with("&lt;test&gt;", custom_entities).unwrap(),
+        unescape_with("test", custom_entities).unwrap(),
+        Cow::Borrowed("test")
+    );
+    assert_eq!(
+        unescape_with("&lt;test&gt;", custom_entities).unwrap(),
         "<test>"
     );
-    assert_eq!(&*unescape_with("&#x30;", custom_entities).unwrap(), "0");
-    assert_eq!(&*unescape_with("&#48;", custom_entities).unwrap(), "0");
-    assert_eq!(&*unescape_with("&foo;", custom_entities).unwrap(), "BAR");
+    assert_eq!(unescape_with("&#x30;", custom_entities).unwrap(), "0");
+    assert_eq!(unescape_with("&#48;", custom_entities).unwrap(), "0");
+    assert_eq!(unescape_with("&foo;", custom_entities).unwrap(), "BAR");
     assert!(unescape_with("&fop;", custom_entities).is_err());
 }
 
 #[test]
 fn test_escape() {
-    assert_eq!(&*escape(b"test"), b"test");
-    assert_eq!(&*escape(b"<test>"), b"&lt;test&gt;");
-    assert_eq!(&*escape(b"\"a\"bc"), b"&quot;a&quot;bc");
-    assert_eq!(&*escape(b"\"a\"b&c"), b"&quot;a&quot;b&amp;c");
+    assert_eq!(escape("test"), Cow::Borrowed("test"));
+    assert_eq!(escape("<test>"), "&lt;test&gt;");
+    assert_eq!(escape("\"a\"bc"), "&quot;a&quot;bc");
+    assert_eq!(escape("\"a\"b&c"), "&quot;a&quot;b&amp;c");
     assert_eq!(
-        &*escape(b"prefix_\"a\"b&<>c"),
-        "prefix_&quot;a&quot;b&amp;&lt;&gt;c".as_bytes()
+        escape("prefix_\"a\"b&<>c"),
+        "prefix_&quot;a&quot;b&amp;&lt;&gt;c"
     );
 }
 
 #[test]
 fn test_partial_escape() {
-    assert_eq!(&*partial_escape(b"test"), b"test");
-    assert_eq!(&*partial_escape(b"<test>"), b"&lt;test&gt;");
-    assert_eq!(&*partial_escape(b"\"a\"bc"), b"\"a\"bc");
-    assert_eq!(&*partial_escape(b"\"a\"b&c"), b"\"a\"b&amp;c");
+    assert_eq!(partial_escape("test"), Cow::Borrowed("test"));
+    assert_eq!(partial_escape("<test>"), "&lt;test&gt;");
+    assert_eq!(partial_escape("\"a\"bc"), "\"a\"bc");
+    assert_eq!(partial_escape("\"a\"b&c"), "\"a\"b&amp;c");
     assert_eq!(
-        &*partial_escape(b"prefix_\"a\"b&<>c"),
-        "prefix_\"a\"b&amp;&lt;&gt;c".as_bytes()
+        partial_escape("prefix_\"a\"b&<>c"),
+        "prefix_\"a\"b&amp;&lt;&gt;c"
     );
 }

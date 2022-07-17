@@ -2563,7 +2563,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::StartText(BytesText::from_escaped(b"bom".as_ref()).into())
+                        Event::StartText(BytesText::from_escaped_str("bom").into())
                     );
                 }
 
@@ -2583,7 +2583,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::DocType(BytesText::from_escaped(b"x".as_ref()))
+                        Event::DocType(BytesText::from_escaped_str("x"))
                     );
                 }
 
@@ -2593,7 +2593,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::PI(BytesText::from_escaped(b"xml-stylesheet".as_ref()))
+                        Event::PI(BytesText::from_escaped_str("xml-stylesheet"))
                     );
                 }
 
@@ -2642,7 +2642,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Text(BytesText::from_escaped(b"text".as_ref()))
+                        Event::Text(BytesText::from_escaped_str("text"))
                     );
                 }
 
@@ -2662,7 +2662,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Comment(BytesText::from_escaped(b"".as_ref()))
+                        Event::Comment(BytesText::from_escaped_str(""))
                     );
                 }
 
