@@ -124,7 +124,7 @@ impl<R: BufRead> Reader<R> {
     /// reader.trim_text(true);
     /// let mut buf = Vec::new();
     ///
-    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let start = BytesStart::borrowed_name("outer");
     /// let end   = start.to_end().into_owned();
     ///
     /// // First, we read a start event...

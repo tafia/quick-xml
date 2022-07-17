@@ -127,15 +127,24 @@ pub struct BytesStart<'a> {
 }
 
 impl<'a> BytesStart<'a> {
+    /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
+    #[inline]
+    pub(crate) fn wrap(content: &'a [u8], name_len: usize) -> Self {
+        BytesStart {
+            buf: Cow::Borrowed(content),
+            name_len,
+        }
+    }
+
     /// Creates a new `BytesStart` from the given content (name + attributes).
     ///
     /// # Warning
     ///
     /// `&content[..name_len]` is not checked to be a valid name
     #[inline]
-    pub fn borrowed(content: &'a [u8], name_len: usize) -> Self {
+    pub fn borrowed(content: &'a str, name_len: usize) -> Self {
         BytesStart {
-            buf: Cow::Borrowed(content),
+            buf: Cow::Borrowed(content.as_bytes()),
             name_len,
         }
     }
@@ -146,7 +155,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// `&content` is not checked to be a valid name
     #[inline]
-    pub fn borrowed_name(name: &'a [u8]) -> BytesStart<'a> {
+    pub fn borrowed_name(name: &'a str) -> BytesStart<'a> {
         Self::borrowed(name, name.len())
     }
 
@@ -154,9 +163,9 @@ impl<'a> BytesStart<'a> {
     ///
     /// Owns its contents.
     #[inline]
-    pub fn owned<C: Into<Vec<u8>>>(content: C, name_len: usize) -> BytesStart<'static> {
+    pub fn owned<C: Into<String>>(content: C, name_len: usize) -> BytesStart<'static> {
         BytesStart {
-            buf: Cow::Owned(content.into()),
+            buf: Cow::Owned(content.into().into_bytes()),
             name_len,
         }
     }
@@ -165,8 +174,8 @@ impl<'a> BytesStart<'a> {
     ///
     /// Owns its contents.
     #[inline]
-    pub fn owned_name<C: Into<Vec<u8>>>(name: C) -> BytesStart<'static> {
-        let content = name.into();
+    pub fn owned_name<C: Into<String>>(name: C) -> BytesStart<'static> {
+        let content = name.into().into_bytes();
         BytesStart {
             name_len: content.len(),
             buf: Cow::Owned(content),
@@ -175,12 +184,18 @@ impl<'a> BytesStart<'a> {
 
     /// Converts the event into an owned event.
     pub fn into_owned(self) -> BytesStart<'static> {
-        Self::owned(self.buf.into_owned(), self.name_len)
+        BytesStart {
+            buf: Cow::Owned(self.buf.into_owned()),
+            name_len: self.name_len,
+        }
     }
 
     /// Converts the event into an owned event without taking ownership of Event
     pub fn to_owned(&self) -> BytesStart<'static> {
-        Self::owned(self.buf.to_owned(), self.name_len)
+        BytesStart {
+            buf: Cow::Owned(self.buf.to_owned().into()),
+            name_len: self.name_len,
+        }
     }
 
     /// Converts the event into a borrowed event. Most useful when paired with [`to_end`].
@@ -208,12 +223,15 @@ impl<'a> BytesStart<'a> {
     ///
     /// [`to_end`]: Self::to_end
     pub fn borrow(&self) -> BytesStart {
-        BytesStart::borrowed(&self.buf, self.name_len)
+        BytesStart {
+            buf: Cow::Borrowed(&self.buf),
+            name_len: self.name_len,
+        }
     }
 
     /// Creates new paired close tag
     pub fn to_end(&self) -> BytesEnd {
-        BytesEnd::borrowed(self.name().into_inner())
+        BytesEnd::wrap(self.name().into_inner().into())
     }
 
     /// Gets the undecoded raw tag name, as present in the input stream.
@@ -373,35 +391,35 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
     /// assert_eq!(
     ///     decl.version().unwrap(),
     ///     Cow::Borrowed(b"1.1".as_ref())
     /// );
     ///
     /// // <?xml version='1.0' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.0' version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.0' version='1.1'", 0));
     /// assert_eq!(
     ///     decl.version().unwrap(),
     ///     Cow::Borrowed(b"1.0".as_ref())
     /// );
     ///
     /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='utf-8' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8' version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8' version='1.1'", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b"", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed("", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
     ///     _ => assert!(false),
@@ -441,18 +459,18 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
     /// assert!(decl.encoding().is_none());
     ///
     /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
     /// match decl.encoding() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='something_WRONG' encoding='utf-8'", 0));
     /// match decl.encoding() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
     ///     _ => assert!(false),
@@ -483,18 +501,18 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
     /// assert!(decl.standalone().is_none());
     ///
     /// // <?xml standalone='yes'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='yes'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='yes'", 0));
     /// match decl.standalone() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(b" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='something_WRONG' encoding='utf-8'", 0));
     /// match decl.standalone() {
     ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
     ///     _ => assert!(false),
@@ -597,19 +615,25 @@ pub struct BytesEnd<'a> {
 }
 
 impl<'a> BytesEnd<'a> {
+    /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
+    #[inline]
+    pub(crate) fn wrap(name: Cow<'a, [u8]>) -> Self {
+        BytesEnd { name }
+    }
+
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
-    pub fn borrowed(name: &'a [u8]) -> BytesEnd<'a> {
+    pub fn borrowed(name: &'a str) -> BytesEnd<'a> {
         BytesEnd {
-            name: Cow::Borrowed(name),
+            name: Cow::Borrowed(name.as_bytes()),
         }
     }
 
     /// Creates a new `BytesEnd` owning its name
     #[inline]
-    pub fn owned(name: Vec<u8>) -> BytesEnd<'static> {
+    pub fn owned(name: String) -> BytesEnd<'static> {
         BytesEnd {
-            name: Cow::Owned(name),
+            name: Cow::Owned(name.into_bytes()),
         }
     }
 

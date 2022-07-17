@@ -54,7 +54,7 @@ where
         if let Some(tag) = self.parent.root_tag {
             self.parent
                 .writer
-                .write_event(Event::End(BytesEnd::borrowed(tag.as_bytes())))?;
+                .write_event(Event::End(BytesEnd::borrowed(tag)))?;
         }
         Ok(())
     }
@@ -100,7 +100,6 @@ where
 {
     /// Create a new `Struct`
     pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
-        let name = name.as_bytes();
         Struct {
             parent,
             attrs: BytesStart::borrowed_name(name),

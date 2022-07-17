@@ -1042,13 +1042,10 @@ mod tests {
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(
-                de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"root"))
-            );
+            assert_eq!(de.next().unwrap(), Start(BytesStart::borrowed_name("root")));
             assert_eq!(
                 de.peek().unwrap(),
-                &Start(BytesStart::borrowed_name(b"inner"))
+                &Start(BytesStart::borrowed_name("inner"))
             );
 
             // Should skip first <inner> tree
@@ -1057,11 +1054,11 @@ mod tests {
             assert_eq!(
                 de.write,
                 vec![
-                    Start(BytesStart::borrowed_name(b"inner")),
+                    Start(BytesStart::borrowed_name("inner")),
                     Text(BytesText::from_escaped_str("text")),
-                    Start(BytesStart::borrowed_name(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
+                    Start(BytesStart::borrowed_name("inner")),
+                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::borrowed("inner")),
                 ]
             );
 
@@ -1073,11 +1070,8 @@ mod tests {
             //   </inner>
             //   <target/>
             // </root>
-            assert_eq!(
-                de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"next"))
-            );
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"next")));
+            assert_eq!(de.next().unwrap(), Start(BytesStart::borrowed_name("next")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("next")));
 
             // We finish writing. Next call to `next()` should start replay that messages:
             //
@@ -1094,17 +1088,17 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Start(BytesStart::borrowed_name(b"inner")),
+                    Start(BytesStart::borrowed_name("inner")),
                     Text(BytesText::from_escaped_str("text")),
-                    Start(BytesStart::borrowed_name(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
+                    Start(BytesStart::borrowed_name("inner")),
+                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::borrowed("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
             assert_eq!(
                 de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"inner"))
+                Start(BytesStart::borrowed_name("inner"))
             );
 
             // Skip `#text` node and consume <inner/> after it
@@ -1112,9 +1106,9 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Start(BytesStart::borrowed_name(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
-                    End(BytesEnd::borrowed(b"inner")),
+                    Start(BytesStart::borrowed_name("inner")),
+                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::borrowed("inner")),
                 ]
             );
             assert_eq!(
@@ -1128,9 +1122,9 @@ mod tests {
 
             assert_eq!(
                 de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"inner"))
+                Start(BytesStart::borrowed_name("inner"))
             );
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"inner")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("inner")));
 
             // We finish writing. Next call to `next()` should start replay messages:
             //
@@ -1146,7 +1140,7 @@ mod tests {
                 de.read,
                 vec![
                     Text(BytesText::from_escaped_str("text")),
-                    End(BytesEnd::borrowed(b"inner")),
+                    End(BytesEnd::borrowed("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
@@ -1154,13 +1148,13 @@ mod tests {
                 de.next().unwrap(),
                 Text(BytesText::from_escaped_str("text"))
             );
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"inner")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("inner")));
             assert_eq!(
                 de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"target"))
+                Start(BytesStart::borrowed_name("target"))
             );
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"target")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("target")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
         }
 
         /// Checks that `read_to_end()` behaves correctly after `skip()`
@@ -1184,10 +1178,7 @@ mod tests {
             assert_eq!(de.read, vec![]);
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(
-                de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"root"))
-            );
+            assert_eq!(de.next().unwrap(), Start(BytesStart::borrowed_name("root")));
 
             // Skip the <skip> tree
             de.skip().unwrap();
@@ -1195,11 +1186,11 @@ mod tests {
             assert_eq!(
                 de.write,
                 vec![
-                    Start(BytesStart::borrowed_name(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
                     Text(BytesText::from_escaped_str("text")),
-                    Start(BytesStart::borrowed_name(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
+                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::borrowed("skip")),
                 ]
             );
 
@@ -1212,18 +1203,18 @@ mod tests {
             // </root>
             assert_eq!(
                 de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"target"))
+                Start(BytesStart::borrowed_name("target"))
             );
             de.read_to_end(QName(b"target")).unwrap();
             assert_eq!(de.read, vec![]);
             assert_eq!(
                 de.write,
                 vec![
-                    Start(BytesStart::borrowed_name(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
                     Text(BytesText::from_escaped_str("text")),
-                    Start(BytesStart::borrowed_name(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
+                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::borrowed("skip")),
                 ]
             );
 
@@ -1241,22 +1232,19 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Start(BytesStart::borrowed_name(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
                     Text(BytesText::from_escaped_str("text")),
-                    Start(BytesStart::borrowed_name(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
-                    End(BytesEnd::borrowed(b"skip")),
+                    Start(BytesStart::borrowed_name("skip")),
+                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::borrowed("skip")),
                 ]
             );
             assert_eq!(de.write, vec![]);
 
-            assert_eq!(
-                de.next().unwrap(),
-                Start(BytesStart::borrowed_name(b"skip"))
-            );
+            assert_eq!(de.next().unwrap(), Start(BytesStart::borrowed_name("skip")));
             de.read_to_end(QName(b"skip")).unwrap();
 
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
         }
 
         /// Checks that limiting buffer size works correctly
@@ -1306,34 +1294,31 @@ mod tests {
             "#,
         );
 
-        assert_eq!(
-            de.next().unwrap(),
-            Start(BytesStart::borrowed_name(b"root"))
-        );
+        assert_eq!(de.next().unwrap(), Start(BytesStart::borrowed_name("root")));
 
         assert_eq!(
             de.next().unwrap(),
-            Start(BytesStart::borrowed(br#"tag a="1""#, 3))
+            Start(BytesStart::borrowed(r#"tag a="1""#, 3))
         );
         assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
         assert_eq!(
             de.next().unwrap(),
-            Start(BytesStart::borrowed(br#"tag a="2""#, 3))
+            Start(BytesStart::borrowed(r#"tag a="2""#, 3))
         );
         assert_eq!(
             de.next().unwrap(),
             CData(BytesCData::from_str("cdata content"))
         );
-        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"tag")));
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("tag")));
 
         assert_eq!(
             de.next().unwrap(),
-            Start(BytesStart::borrowed(b"self-closed", 11))
+            Start(BytesStart::borrowed_name("self-closed"))
         );
         assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
-        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed(b"root")));
+        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
         assert_eq!(de.next().unwrap(), Eof);
     }
 
@@ -1402,17 +1387,17 @@ mod tests {
             events,
             vec![
                 Start(BytesStart::borrowed(
-                    br#"item name="hello" source="world.rs""#,
+                    r#"item name="hello" source="world.rs""#,
                     4
                 )),
                 Text(BytesText::from_escaped_str("Some text")),
-                End(BytesEnd::borrowed(b"item")),
-                Start(BytesStart::borrowed(b"item2", 5)),
-                End(BytesEnd::borrowed(b"item2")),
-                Start(BytesStart::borrowed(b"item3", 5)),
-                End(BytesEnd::borrowed(b"item3")),
-                Start(BytesStart::borrowed(br#"item4 value="world" "#, 5)),
-                End(BytesEnd::borrowed(b"item4")),
+                End(BytesEnd::borrowed("item")),
+                Start(BytesStart::borrowed("item2", 5)),
+                End(BytesEnd::borrowed("item2")),
+                Start(BytesStart::borrowed("item3", 5)),
+                End(BytesEnd::borrowed("item3")),
+                Start(BytesStart::borrowed(r#"item4 value="world" "#, 5)),
+                End(BytesEnd::borrowed("item4")),
             ]
         )
     }
@@ -1432,7 +1417,7 @@ mod tests {
 
         assert_eq!(
             reader.next().unwrap(),
-            DeEvent::Start(BytesStart::borrowed(b"item ", 4))
+            DeEvent::Start(BytesStart::borrowed("item ", 4))
         );
         reader.read_to_end(QName(b"item")).unwrap();
         assert_eq!(reader.next().unwrap(), DeEvent::Eof);

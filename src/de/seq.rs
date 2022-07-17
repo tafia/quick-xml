@@ -134,7 +134,7 @@ where
 
 #[test]
 fn test_not_in() {
-    let tag = BytesStart::borrowed_name(b"tag");
+    let tag = BytesStart::borrowed_name("tag");
 
     assert_eq!(not_in(&[], &tag, Decoder::utf8()).unwrap(), true);
     assert_eq!(

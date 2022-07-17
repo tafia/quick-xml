@@ -635,13 +635,13 @@ impl<R> Reader<R> {
                         mismatch_err(expected, name, &mut self.buf_position)
                     } else {
                         self.opened_buffer.truncate(start);
-                        Ok(Event::End(BytesEnd::borrowed(name)))
+                        Ok(Event::End(BytesEnd::wrap(name.into())))
                     }
                 }
                 None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
             }
         } else {
-            Ok(Event::End(BytesEnd::borrowed(name)))
+            Ok(Event::End(BytesEnd::wrap(name.into())))
         }
     }
 
@@ -651,7 +651,7 @@ impl<R> Reader<R> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+                let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -677,7 +677,7 @@ impl<R> Reader<R> {
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
-        Ok(Event::End(BytesEnd::owned(name)))
+        Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
@@ -692,16 +692,16 @@ impl<R> Reader<R> {
                 self.tag_state = TagState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..end]);
-                Ok(Event::Start(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Start(BytesStart::wrap(&buf[..len - 1], end)))
             } else {
-                Ok(Event::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Empty(BytesStart::wrap(&buf[..len - 1], end)))
             }
         } else {
             if self.check_end_names {
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
-            Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
+            Ok(Event::Start(BytesStart::wrap(buf, name_end)))
         }
     }
 }
@@ -1851,7 +1851,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
+                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed("xml ", 3)))
                     );
                 }
 
@@ -1881,7 +1881,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Start(BytesStart::borrowed_name(b"tag"))
+                        Event::Start(BytesStart::borrowed_name("tag"))
                     );
                 }
 
@@ -1894,7 +1894,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::End(BytesEnd::borrowed(b"tag"))
+                        Event::End(BytesEnd::borrowed("tag"))
                     );
                 }
 
@@ -1904,7 +1904,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                        Event::Empty(BytesStart::borrowed_name("tag"))
                     );
                 }
 
@@ -1915,7 +1915,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                        Event::Empty(BytesStart::borrowed_name("tag"))
                     );
 
                     assert_eq!(

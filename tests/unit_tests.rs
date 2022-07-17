@@ -319,12 +319,12 @@ fn test_write_attrs() -> Result<()> {
             Start(elem) => {
                 let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
-                let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
+                let mut elem = BytesStart::owned_name("copy");
                 elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
-            End(_) => End(BytesEnd::borrowed(b"copy")),
+            End(_) => End(BytesEnd::borrowed("copy")),
             e => e,
         };
         assert!(writer.write_event(event).is_ok());
