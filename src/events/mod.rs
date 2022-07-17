@@ -517,9 +517,9 @@ impl<'a> BytesDecl<'a> {
     /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
     /// the double quote character is not allowed in any of the attribute values.
     pub fn new(
-        version: &[u8],
-        encoding: Option<&[u8]>,
-        standalone: Option<&[u8]>,
+        version: &str,
+        encoding: Option<&str>,
+        standalone: Option<&str>,
     ) -> BytesDecl<'static> {
         // Compute length of the buffer based on supplied attributes
         // ' encoding=""'   => 12
@@ -535,21 +535,21 @@ impl<'a> BytesDecl<'a> {
             0
         };
         // 'xml version=""' => 14
-        let mut buf = Vec::with_capacity(14 + encoding_attr_len + standalone_attr_len);
+        let mut buf = String::with_capacity(14 + encoding_attr_len + standalone_attr_len);
 
-        buf.extend_from_slice(b"xml version=\"");
-        buf.extend_from_slice(version);
+        buf.push_str("xml version=\"");
+        buf.push_str(version);
 
         if let Some(encoding_val) = encoding {
-            buf.extend_from_slice(b"\" encoding=\"");
-            buf.extend_from_slice(encoding_val);
+            buf.push_str("\" encoding=\"");
+            buf.push_str(encoding_val);
         }
 
         if let Some(standalone_val) = standalone {
-            buf.extend_from_slice(b"\" standalone=\"");
-            buf.extend_from_slice(standalone_val);
+            buf.push_str("\" standalone=\"");
+            buf.push_str(standalone_val);
         }
-        buf.push(b'"');
+        buf.push('"');
 
         BytesDecl {
             content: BytesStart::owned(buf, 3),
