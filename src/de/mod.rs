@@ -1405,7 +1405,7 @@ mod tests {
                     br#"item name="hello" source="world.rs""#,
                     4
                 )),
-                Text(BytesText::from_escaped(b"Some text".as_ref())),
+                Text(BytesText::from_escaped_str("Some text")),
                 End(BytesEnd::borrowed(b"item")),
                 Start(BytesStart::borrowed(b"item2", 5)),
                 End(BytesEnd::borrowed(b"item2")),
