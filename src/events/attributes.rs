@@ -143,7 +143,10 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     fn from(val: (&'a str, &'a str)) -> Attribute<'a> {
         Attribute {
             key: QName(val.0.as_bytes()),
-            value: escape(val.1),
+            value: match escape(val.1) {
+                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+            },
         }
     }
 }

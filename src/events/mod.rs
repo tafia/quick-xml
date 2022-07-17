@@ -695,7 +695,10 @@ impl<'a> BytesText<'a> {
     #[inline]
     pub fn from_plain_str(content: &'a str) -> Self {
         Self {
-            content: escape(content),
+            content: match escape(content) {
+                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+            },
         }
     }
 
@@ -897,8 +900,9 @@ impl<'a> BytesCData<'a> {
     pub fn escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
         Ok(BytesText::from_escaped(match escape(&decoded) {
+            // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
         }))
     }
 
@@ -918,8 +922,9 @@ impl<'a> BytesCData<'a> {
     pub fn partial_escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
         Ok(BytesText::from_escaped(match partial_escape(&decoded) {
+            // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
-            Cow::Owned(escaped) => Cow::Owned(escaped),
+            Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
         }))
     }
 

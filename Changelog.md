@@ -134,7 +134,7 @@
   scheme, for example, HEX or Base64
 - [#421]: All unescaping functions now accepts and returns strings instead of byte slices
 
-- [#423]: All escaping functions now accepts strings instead of byte slices
+- [#423]: All escaping functions now accepts and returns strings instead of byte slices
 - [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
   but since now escaping works on strings. Use `BytesText::from_plain_str` instead
 
