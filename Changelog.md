@@ -134,6 +134,10 @@
   scheme, for example, HEX or Base64
 - [#421]: All unescaping functions now accepts and returns strings instead of byte slices
 
+- [#423]: All escaping functions now accepts strings instead of byte slices
+- [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
+  but since now escaping works on strings. Use `BytesText::from_plain_str` instead
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -162,6 +166,7 @@
 [#416]: https://github.com/tafia/quick-xml/pull/416
 [#418]: https://github.com/tafia/quick-xml/pull/418
 [#421]: https://github.com/tafia/quick-xml/pull/421
+[#423]: https://github.com/tafia/quick-xml/pull/423
 
 ## 0.23.0 -- 2022-05-08
 
