@@ -48,7 +48,7 @@ impl<R: BufRead> Reader<R> {
     /// loop {
     ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(ref e)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
+    ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
@@ -207,7 +207,7 @@ impl<R: BufRead> Reader<R> {
         let s = match self.read_event_into(buf) {
             Err(e) => return Err(e),
 
-            Ok(Event::Text(e)) => e.decode_and_unescape(self)?.into_owned(),
+            Ok(Event::Text(e)) => e.unescape()?.into_owned(),
             Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
             Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
             _ => return Err(Error::TextNotFound),

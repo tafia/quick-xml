@@ -29,6 +29,8 @@
 //!
 //! See [`Writer`] for further information.
 //!
+//! [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
+//! [`Reader`]: crate::reader::Reader
 //! [`Writer`]: crate::writer::Writer
 //! [`Event`]: crate::events::Event
 
@@ -44,7 +46,7 @@ use std::str::from_utf8;
 use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
-use crate::reader::{Decoder, Reader};
+use crate::reader::Decoder;
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 
@@ -84,9 +86,9 @@ impl<'a> BytesStartText<'a> {
     ///
     /// This method does not unescapes content, because no escape sequences can
     /// appeared in the BOM or in the text before the first tag.
-    pub fn decode_with_bom_removal(&self, decoder: Decoder) -> Result<String> {
+    pub fn decode_with_bom_removal(&self) -> Result<String> {
         //TODO: Fix lifetime issue - it should be possible to borrow string
-        let decoded = decoder.decode_with_bom_removal(&*self)?;
+        let decoded = self.content.decoder.decode_with_bom_removal(&*self)?;
 
         Ok(decoded.to_string())
     }
@@ -758,59 +760,23 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Decodes using UTF-8 then unescapes the content of the event.
-    ///
-    /// Searches for '&' into content and try to escape the coded character if possible
-    /// returns Malformed error with index within element if '&' is not followed by ';'
-    ///
-    /// See also [`unescape_with()`](Self::unescape_with)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape(&self) -> Result<Cow<str>> {
-        self.unescape_with(|_| None)
-    }
-
-    /// Decodes using UTF-8 then unescapes the content of the event with custom entities.
-    ///
-    /// Searches for '&' into content and try to escape the coded character if possible
-    /// returns Malformed error with index within element if '&' is not followed by ';'
-    /// A fallback resolver for additional custom entities can be provided via `resolve_entity`.
-    ///
-    /// See also [`unescape()`](Self::unescape)
-    ///
-    /// This method is available only if `encoding` feature is **not** enabled.
-    #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape_with<'entity>(
-        &self,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<str>> {
-        // from_utf8 should never fail because content is always UTF-8 encoded
-        Ok(unescape_with(from_utf8(&self.content)?, resolve_entity)?)
-    }
-
     /// Decodes then unescapes the content of the event.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn decode_and_unescape<B>(&self, reader: &Reader<B>) -> Result<Cow<str>> {
-        self.decode_and_unescape_with(reader, |_| None)
+    pub fn unescape(&self) -> Result<Cow<str>> {
+        self.unescape_with(|_| None)
     }
 
     /// Decodes then unescapes the content of the event with custom entities.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    ///
-    /// # Pre-condition
-    ///
-    /// The implementation of `resolve_entity` is expected to operate over UTF-8 inputs.
-    pub fn decode_and_unescape_with<'entity, B>(
+    pub fn unescape_with<'entity>(
         &self,
-        reader: &Reader<B>,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
     ) -> Result<Cow<str>> {
-        let decoded = reader.decoder().decode(&*self)?;
+        let decoded = self.decoder.decode(&*self)?;
 
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
@@ -820,15 +786,15 @@ impl<'a> BytesText<'a> {
     }
 
     /// Gets content of this text buffer in the specified encoding and optionally
-    /// unescapes it. Unlike [`Self::decode_and_unescape`] & Co., the lifetime
+    /// unescapes it. Unlike [`Self::unescape`] & Co., the lifetime
     /// of the returned `Cow` is bound to the original buffer / input
     #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, decoder: Decoder, unescape: bool) -> Result<Cow<'a, str>> {
+    pub(crate) fn decode(&self, unescape: bool) -> Result<Cow<'a, str>> {
         //TODO: too many copies, can be optimized
         let text = match &self.content {
-            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
+            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
+            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
         };
         let text = if unescape {
             //FIXME: need to take into account entities defined in the document
@@ -930,8 +896,8 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     /// | `'`       | `&apos;`
     /// | `"`       | `&quot;`
-    pub fn escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
-        let decoded = self.decode(decoder)?;
+    pub fn escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match escape(&decoded) {
                 // Because result is borrowed, no replacements was done and we can use original content
@@ -955,8 +921,8 @@ impl<'a> BytesCData<'a> {
     /// | `<`       | `&lt;`
     /// | `>`       | `&gt;`
     /// | `&`       | `&amp;`
-    pub fn partial_escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
-        let decoded = self.decode(decoder)?;
+    pub fn partial_escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match partial_escape(&decoded) {
                 // Because result is borrowed, no replacements was done and we can use original content
@@ -968,11 +934,11 @@ impl<'a> BytesCData<'a> {
     }
 
     /// Gets content of this text buffer in the specified encoding
-    pub(crate) fn decode(&self, decoder: Decoder) -> Result<Cow<'a, str>> {
+    pub(crate) fn decode(&self) -> Result<Cow<'a, str>> {
         Ok(match &self.content {
-            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
+            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
+            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
         })
     }
 }
@@ -996,6 +962,8 @@ impl<'a> Deref for BytesCData<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Event emitted by [`Reader::read_event_into`].
+///
+/// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
     /// Text that appeared before the first opening tag or an [XML declaration].
@@ -1044,6 +1012,7 @@ pub enum Event<'a> {
     ///
     /// [XML declaration]: Event::Decl
     /// [std]: https://www.w3.org/TR/xml11/#NT-document
+    /// [`Reader`]: crate::reader::Reader
     /// [`Writer`]: crate::writer::Writer
     StartText(BytesStartText<'a>),
     /// Start tag (with attributes) `<tag attr="value">`.

@@ -506,7 +506,7 @@ fn test_escaped_content() {
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
                 from_utf8(&*e)
             );
-            match e.decode_and_unescape(&r) {
+            match e.unescape() {
                 Ok(c) => assert_eq!(c, "<test>"),
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
@@ -595,7 +595,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
         match reader.read_event()? {
             Eof => break,
             Text(e) => {
-                let t = e.decode_and_unescape(&reader).unwrap();
+                let t = e.unescape().unwrap();
                 assert!(writer
                     .write_event(Text(BytesText::from_plain_str(&t)))
                     .is_ok());
@@ -737,7 +737,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -760,7 +760,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -778,7 +778,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -798,7 +798,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }

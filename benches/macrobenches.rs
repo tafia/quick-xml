@@ -28,7 +28,7 @@ fn parse_document(doc: &[u8]) -> XmlResult<()> {
                 }
             }
             Event::Text(e) => {
-                criterion::black_box(e.decode_and_unescape(&r)?);
+                criterion::black_box(e.unescape()?);
             }
             Event::CData(e) => {
                 criterion::black_box(e.into_inner());

@@ -60,9 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Event::Text(ref e)) => {
                 println!(
                     "text value: {}",
-                    e.decode_and_unescape_with(&reader, |ent| custom_entities
-                        .get(ent)
-                        .map(|s| s.as_str()))
+                    e.unescape_with(|ent| custom_entities.get(ent).map(|s| s.as_str()))
                         .unwrap()
                 );
             }

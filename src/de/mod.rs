@@ -612,16 +612,15 @@ where
         unescape: bool,
         allow_start: bool,
     ) -> Result<Cow<'de, str>, DeError> {
-        let decoder = self.reader.decoder();
         match self.next()? {
-            DeEvent::Text(e) => Ok(e.decode(decoder, unescape)?),
-            DeEvent::CData(e) => Ok(e.decode(decoder)?),
+            DeEvent::Text(e) => Ok(e.decode(unescape)?),
+            DeEvent::CData(e) => Ok(e.decode()?),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) => t.decode(decoder, unescape)?,
-                    DeEvent::CData(t) => t.decode(decoder)?,
+                    DeEvent::Text(t) => t.decode(unescape)?,
+                    DeEvent::CData(t) => t.decode()?,
                     DeEvent::Start(s) => {
                         return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
                     }
