@@ -171,27 +171,30 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// [`with_checks(false)`]: Self::with_checks
 #[derive(Clone, Debug)]
 pub struct Attributes<'a> {
-    /// slice of `Element` corresponding to attributes
+    /// Slice of `BytesStart` corresponding to attributes
     bytes: &'a [u8],
     /// Iterator state, independent from the actual source of bytes
     state: IterState,
 }
 
 impl<'a> Attributes<'a> {
-    /// Creates a new attribute iterator from a buffer.
-    pub fn new(buf: &'a [u8], pos: usize) -> Self {
+    /// Internal constructor, used by `BytesStart`. Supplies data in reader's encoding
+    #[inline]
+    pub(crate) fn wrap(buf: &'a [u8], pos: usize, html: bool) -> Self {
         Self {
             bytes: buf,
-            state: IterState::new(pos, false),
+            state: IterState::new(pos, html),
         }
     }
 
+    /// Creates a new attribute iterator from a buffer.
+    pub fn new(buf: &'a str, pos: usize) -> Self {
+        Self::wrap(buf.as_bytes(), pos, false)
+    }
+
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
-    pub fn html(buf: &'a [u8], pos: usize) -> Self {
-        Self {
-            bytes: buf,
-            state: IterState::new(pos, true),
-        }
+    pub fn html(buf: &'a str, pos: usize) -> Self {
+        Self::wrap(buf.as_bytes(), pos, true)
     }
 
     /// Changes whether attributes should be checked for uniqueness.
@@ -785,7 +788,7 @@ mod xml {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::new(br#"tag key='value'"#, 3);
+            let mut iter = Attributes::new(r#"tag key='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -801,7 +804,7 @@ mod xml {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::new(br#"tag key="value""#, 3);
+            let mut iter = Attributes::new(r#"tag key="value""#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -817,8 +820,8 @@ mod xml {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::new(br#"tag key=value"#, 3);
-            //                                 0       ^ = 8
+            let mut iter = Attributes::new(r#"tag key=value"#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(8))));
             assert_eq!(iter.next(), None);
@@ -828,8 +831,8 @@ mod xml {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::new(br#"tag key"#, 3);
-            //                                 0      ^ = 7
+            let mut iter = Attributes::new(r#"tag key"#, 3);
+            //                                0      ^ = 7
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(7))));
             assert_eq!(iter.next(), None);
@@ -841,7 +844,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::new(br#"tag 'key'='value'"#, 3);
+            let mut iter = Attributes::new(r#"tag 'key'='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -859,7 +862,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::new(br#"tag key&jey='value'"#, 3);
+            let mut iter = Attributes::new(r#"tag key&jey='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -875,8 +878,8 @@ mod xml {
         /// Attribute value is missing after `=`
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::new(br#"tag key="#, 3);
-            //                                 0       ^ = 8
+            let mut iter = Attributes::new(r#"tag key="#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(8))));
             assert_eq!(iter.next(), None);
@@ -892,7 +895,7 @@ mod xml {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::new(br#"tag key='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::new(r#"tag key='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -915,7 +918,7 @@ mod xml {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::new(br#"tag key="value" regular='attribute'"#, 3);
+            let mut iter = Attributes::new(r#"tag key="value" regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -938,8 +941,8 @@ mod xml {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::new(br#"tag key=value regular='attribute'"#, 3);
-            //                                 0       ^ = 8
+            let mut iter = Attributes::new(r#"tag key=value regular='attribute'"#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(8))));
             // check error recovery
@@ -957,8 +960,8 @@ mod xml {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::new(br#"tag key regular='attribute'"#, 3);
-            //                                 0       ^ = 8
+            let mut iter = Attributes::new(r#"tag key regular='attribute'"#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(8))));
             // check error recovery
@@ -978,7 +981,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::new(br#"tag 'key'='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::new(r#"tag 'key'='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1003,7 +1006,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::new(br#"tag key&jey='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::new(r#"tag key&jey='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1026,8 +1029,8 @@ mod xml {
         /// Attribute value is missing after `=`.
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::new(br#"tag key= regular='attribute'"#, 3);
-            //                                 0        ^ = 9
+            let mut iter = Attributes::new(r#"tag key= regular='attribute'"#, 3);
+            //                                0        ^ = 9
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
             // Because we do not check validity of keys and values during parsing,
@@ -1038,8 +1041,8 @@ mod xml {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::new(br#"tag key= regular= 'attribute'"#, 3);
-            //                                 0        ^ = 9               ^ = 29
+            let mut iter = Attributes::new(r#"tag key= regular= 'attribute'"#, 3);
+            //                                0        ^ = 9               ^ = 29
 
             // In that case "regular=" considered as unquoted value
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
@@ -1051,8 +1054,8 @@ mod xml {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::new(br#"tag key= regular ='attribute'"#, 3);
-            //                                 0        ^ = 9               ^ = 29
+            let mut iter = Attributes::new(r#"tag key= regular ='attribute'"#, 3);
+            //                                0        ^ = 9               ^ = 29
 
             // In that case "regular" considered as unquoted value
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
@@ -1064,8 +1067,8 @@ mod xml {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::new(br#"tag key= regular = 'attribute'"#, 3);
-            //                                 0        ^ = 9     ^ = 19     ^ = 30
+            let mut iter = Attributes::new(r#"tag key= regular = 'attribute'"#, 3);
+            //                                0        ^ = 9     ^ = 19     ^ = 30
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(9))));
             // In that case second "=" considered as a key, because we do not check
@@ -1087,7 +1090,7 @@ mod xml {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::new(br#"tag key = 'value' "#, 3);
+            let mut iter = Attributes::new(r#"tag key = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1103,7 +1106,7 @@ mod xml {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::new(br#"tag key = "value" "#, 3);
+            let mut iter = Attributes::new(r#"tag key = "value" "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1119,8 +1122,8 @@ mod xml {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::new(br#"tag key = value "#, 3);
-            //                                 0         ^ = 10
+            let mut iter = Attributes::new(r#"tag key = value "#, 3);
+            //                                0         ^ = 10
 
             assert_eq!(iter.next(), Some(Err(AttrError::UnquotedValue(10))));
             assert_eq!(iter.next(), None);
@@ -1130,8 +1133,8 @@ mod xml {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::new(br#"tag key "#, 3);
-            //                                 0       ^ = 8
+            let mut iter = Attributes::new(r#"tag key "#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedEq(8))));
             assert_eq!(iter.next(), None);
@@ -1143,7 +1146,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::new(br#"tag 'key' = 'value' "#, 3);
+            let mut iter = Attributes::new(r#"tag 'key' = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1161,7 +1164,7 @@ mod xml {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::new(br#"tag key&jey = 'value' "#, 3);
+            let mut iter = Attributes::new(r#"tag key&jey = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1177,8 +1180,8 @@ mod xml {
         /// Attribute value is missing after `=`
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::new(br#"tag key = "#, 3);
-            //                                 0         ^ = 10
+            let mut iter = Attributes::new(r#"tag key = "#, 3);
+            //                                0         ^ = 10
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(10))));
             assert_eq!(iter.next(), None);
@@ -1198,8 +1201,8 @@ mod xml {
             /// Attribute have a value enclosed in single quotes
             #[test]
             fn single_quoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key='dup' another=''"#, 3);
-                //                                 0   ^ = 4       ^ = 16
+                let mut iter = Attributes::new(r#"tag key='value' key='dup' another=''"#, 3);
+                //                                0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -1223,8 +1226,8 @@ mod xml {
             /// Attribute have a value enclosed in double quotes
             #[test]
             fn double_quoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key="dup" another=''"#, 3);
-                //                                 0   ^ = 4       ^ = 16
+                let mut iter = Attributes::new(r#"tag key='value' key="dup" another=''"#, 3);
+                //                                0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -1248,8 +1251,8 @@ mod xml {
             /// Attribute have a value, not enclosed in quotes
             #[test]
             fn unquoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key=dup another=''"#, 3);
-                //                                 0   ^ = 4       ^ = 16
+                let mut iter = Attributes::new(r#"tag key='value' key=dup another=''"#, 3);
+                //                                0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -1273,8 +1276,8 @@ mod xml {
             /// Only attribute key is present
             #[test]
             fn key_only() {
-                let mut iter = Attributes::new(br#"tag key='value' key another=''"#, 3);
-                //                                 0                   ^ = 20
+                let mut iter = Attributes::new(r#"tag key='value' key another=''"#, 3);
+                //                                0                   ^ = 20
 
                 assert_eq!(
                     iter.next(),
@@ -1304,7 +1307,7 @@ mod xml {
             /// Attribute have a value enclosed in single quotes
             #[test]
             fn single_quoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key='dup' another=''"#, 3);
+                let mut iter = Attributes::new(r#"tag key='value' key='dup' another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -1335,7 +1338,7 @@ mod xml {
             /// Attribute have a value enclosed in double quotes
             #[test]
             fn double_quoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key="dup" another=''"#, 3);
+                let mut iter = Attributes::new(r#"tag key='value' key="dup" another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -1366,8 +1369,8 @@ mod xml {
             /// Attribute have a value, not enclosed in quotes
             #[test]
             fn unquoted() {
-                let mut iter = Attributes::new(br#"tag key='value' key=dup another=''"#, 3);
-                //                                 0                   ^ = 20
+                let mut iter = Attributes::new(r#"tag key='value' key=dup another=''"#, 3);
+                //                                0                   ^ = 20
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -1392,8 +1395,8 @@ mod xml {
             /// Only attribute key is present
             #[test]
             fn key_only() {
-                let mut iter = Attributes::new(br#"tag key='value' key another=''"#, 3);
-                //                                 0                   ^ = 20
+                let mut iter = Attributes::new(r#"tag key='value' key another=''"#, 3);
+                //                                0                   ^ = 20
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -1419,7 +1422,7 @@ mod xml {
 
     #[test]
     fn mixed_quote() {
-        let mut iter = Attributes::new(br#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
+        let mut iter = Attributes::new(r#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
 
         assert_eq!(
             iter.next(),
@@ -1472,7 +1475,7 @@ mod html {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::html(br#"tag key='value'"#, 3);
+            let mut iter = Attributes::html(r#"tag key='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1488,7 +1491,7 @@ mod html {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::html(br#"tag key="value""#, 3);
+            let mut iter = Attributes::html(r#"tag key="value""#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1504,7 +1507,7 @@ mod html {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::html(br#"tag key=value"#, 3);
+            let mut iter = Attributes::html(r#"tag key=value"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1520,7 +1523,7 @@ mod html {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::html(br#"tag key"#, 3);
+            let mut iter = Attributes::html(r#"tag key"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1538,7 +1541,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::html(br#"tag 'key'='value'"#, 3);
+            let mut iter = Attributes::html(r#"tag 'key'='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1556,7 +1559,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::html(br#"tag key&jey='value'"#, 3);
+            let mut iter = Attributes::html(r#"tag key&jey='value'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1572,8 +1575,8 @@ mod html {
         /// Attribute value is missing after `=`
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::html(br#"tag key="#, 3);
-            //                                  0       ^ = 8
+            let mut iter = Attributes::html(r#"tag key="#, 3);
+            //                                0       ^ = 8
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(8))));
             assert_eq!(iter.next(), None);
@@ -1589,7 +1592,7 @@ mod html {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::html(br#"tag key='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1612,7 +1615,7 @@ mod html {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::html(br#"tag key="value" regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key="value" regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1635,7 +1638,7 @@ mod html {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::html(br#"tag key=value regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key=value regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1658,7 +1661,7 @@ mod html {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::html(br#"tag key regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1683,7 +1686,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::html(br#"tag 'key'='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag 'key'='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1708,7 +1711,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::html(br#"tag key&jey='value' regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key&jey='value' regular='attribute'"#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1731,7 +1734,7 @@ mod html {
         /// Attribute value is missing after `=`
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::html(br#"tag key= regular='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key= regular='attribute'"#, 3);
 
             // Because we do not check validity of keys and values during parsing,
             // "regular='attribute'" is considered as unquoted attribute value
@@ -1747,7 +1750,7 @@ mod html {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::html(br#"tag key= regular= 'attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key= regular= 'attribute'"#, 3);
 
             // Because we do not check validity of keys and values during parsing,
             // "regular=" is considered as unquoted attribute value
@@ -1772,7 +1775,7 @@ mod html {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::html(br#"tag key= regular ='attribute'"#, 3);
+            let mut iter = Attributes::html(r#"tag key= regular ='attribute'"#, 3);
 
             // Because we do not check validity of keys and values during parsing,
             // "regular" is considered as unquoted attribute value
@@ -1797,8 +1800,8 @@ mod html {
 
             ////////////////////////////////////////////////////////////////////
 
-            let mut iter = Attributes::html(br#"tag key= regular = 'attribute'"#, 3);
-            //                                  0        ^ = 9     ^ = 19     ^ = 30
+            let mut iter = Attributes::html(r#"tag key= regular = 'attribute'"#, 3);
+            //                                 0        ^ = 9     ^ = 19     ^ = 30
 
             // Because we do not check validity of keys and values during parsing,
             // "regular" is considered as unquoted attribute value
@@ -1840,7 +1843,7 @@ mod html {
         /// Attribute have a value enclosed in single quotes
         #[test]
         fn single_quoted() {
-            let mut iter = Attributes::html(br#"tag key = 'value' "#, 3);
+            let mut iter = Attributes::html(r#"tag key = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1856,7 +1859,7 @@ mod html {
         /// Attribute have a value enclosed in double quotes
         #[test]
         fn double_quoted() {
-            let mut iter = Attributes::html(br#"tag key = "value" "#, 3);
+            let mut iter = Attributes::html(r#"tag key = "value" "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1872,7 +1875,7 @@ mod html {
         /// Attribute have a value, not enclosed in quotes
         #[test]
         fn unquoted() {
-            let mut iter = Attributes::html(br#"tag key = value "#, 3);
+            let mut iter = Attributes::html(r#"tag key = value "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1888,7 +1891,7 @@ mod html {
         /// Only attribute key is present
         #[test]
         fn key_only() {
-            let mut iter = Attributes::html(br#"tag key "#, 3);
+            let mut iter = Attributes::html(r#"tag key "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1906,7 +1909,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_start_invalid() {
-            let mut iter = Attributes::html(br#"tag 'key' = 'value' "#, 3);
+            let mut iter = Attributes::html(r#"tag 'key' = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1924,7 +1927,7 @@ mod html {
         /// that invalid attribute will be returned
         #[test]
         fn key_contains_invalid() {
-            let mut iter = Attributes::html(br#"tag key&jey = 'value' "#, 3);
+            let mut iter = Attributes::html(r#"tag key&jey = 'value' "#, 3);
 
             assert_eq!(
                 iter.next(),
@@ -1940,8 +1943,8 @@ mod html {
         /// Attribute value is missing after `=`
         #[test]
         fn missed_value() {
-            let mut iter = Attributes::html(br#"tag key = "#, 3);
-            //                                  0         ^ = 10
+            let mut iter = Attributes::html(r#"tag key = "#, 3);
+            //                                 0         ^ = 10
 
             assert_eq!(iter.next(), Some(Err(AttrError::ExpectedValue(10))));
             assert_eq!(iter.next(), None);
@@ -1961,8 +1964,8 @@ mod html {
             /// Attribute have a value enclosed in single quotes
             #[test]
             fn single_quoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key='dup' another=''"#, 3);
-                //                                  0   ^ = 4       ^ = 16
+                let mut iter = Attributes::html(r#"tag key='value' key='dup' another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -1986,8 +1989,8 @@ mod html {
             /// Attribute have a value enclosed in double quotes
             #[test]
             fn double_quoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key="dup" another=''"#, 3);
-                //                                  0   ^ = 4       ^ = 16
+                let mut iter = Attributes::html(r#"tag key='value' key="dup" another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -2011,8 +2014,8 @@ mod html {
             /// Attribute have a value, not enclosed in quotes
             #[test]
             fn unquoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key=dup another=''"#, 3);
-                //                                  0   ^ = 4       ^ = 16
+                let mut iter = Attributes::html(r#"tag key='value' key=dup another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -2036,8 +2039,8 @@ mod html {
             /// Only attribute key is present
             #[test]
             fn key_only() {
-                let mut iter = Attributes::html(br#"tag key='value' key another=''"#, 3);
-                //                                  0   ^ = 4       ^ = 16
+                let mut iter = Attributes::html(r#"tag key='value' key another=''"#, 3);
+                //                                 0   ^ = 4       ^ = 16
 
                 assert_eq!(
                     iter.next(),
@@ -2067,7 +2070,7 @@ mod html {
             /// Attribute have a value enclosed in single quotes
             #[test]
             fn single_quoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key='dup' another=''"#, 3);
+                let mut iter = Attributes::html(r#"tag key='value' key='dup' another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -2098,7 +2101,7 @@ mod html {
             /// Attribute have a value enclosed in double quotes
             #[test]
             fn double_quoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key="dup" another=''"#, 3);
+                let mut iter = Attributes::html(r#"tag key='value' key="dup" another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -2129,7 +2132,7 @@ mod html {
             /// Attribute have a value, not enclosed in quotes
             #[test]
             fn unquoted() {
-                let mut iter = Attributes::html(br#"tag key='value' key=dup another=''"#, 3);
+                let mut iter = Attributes::html(r#"tag key='value' key=dup another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -2160,7 +2163,7 @@ mod html {
             /// Only attribute key is present
             #[test]
             fn key_only() {
-                let mut iter = Attributes::html(br#"tag key='value' key another=''"#, 3);
+                let mut iter = Attributes::html(r#"tag key='value' key another=''"#, 3);
                 iter.with_checks(false);
 
                 assert_eq!(
@@ -2192,7 +2195,7 @@ mod html {
 
     #[test]
     fn mixed_quote() {
-        let mut iter = Attributes::html(br#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
+        let mut iter = Attributes::html(r#"tag a='a' b = "b" c='cc"cc' d="dd'dd""#, 3);
 
         assert_eq!(
             iter.next(),

@@ -154,7 +154,7 @@
   because writer anyway works in UTF-8 only
 - [#428]: Removed `BytesCData::new()`. Use constructors from strings instead,
   because writer anyway works in UTF-8 only
-- [#428]: Changed the event constructors to accept an `&str` slices instead of `&[u8]` slices.
+- [#428]: Changed the event and `Attributes` constructors to accept a `&str` slices instead of `&[u8]` slices.
   Handmade events has always been assumed to store their content UTF-8 encoded.
 
 ### New Tests

@@ -312,12 +312,12 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::new(&self.buf, self.name_len)
+        Attributes::wrap(&self.buf, self.name_len, false)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes {
-        Attributes::html(self, self.name_len)
+        Attributes::wrap(&self.buf, self.name_len, true)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
