@@ -1933,7 +1933,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::CData(BytesCData::from_str(""))
+                        Event::CData(BytesCData::new(""))
                     );
                 }
 

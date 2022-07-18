@@ -159,6 +159,12 @@
 - [#428]: Removed `Decoder` parameter from `_and_decode` versions of functions for
   `BytesText` (remember, that those functions was renamed in #415).
 
+- [#431]: Changed event constructors:
+  |Old names                                         |New name
+  |--------------------------------------------------|----------------------------------------------
+  |`BytesCData::new(impl Into<Cow<[u8]>>)`           |`BytesCData::new(impl Into<Cow<str>>)`
+  |`BytesCData::from_str(&str)`                      |_(as above)_
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -190,6 +196,7 @@
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
 [#428]: https://github.com/tafia/quick-xml/pull/428
+[#431]: https://github.com/tafia/quick-xml/pull/431
 [#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
 

@@ -855,8 +855,8 @@ impl<'a> BytesCData<'a> {
 
     /// Creates a new `BytesCData` from a string
     #[inline]
-    pub fn from_str(content: &'a str) -> Self {
-        Self::wrap(content.as_bytes(), Decoder::utf8())
+    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -1101,6 +1101,14 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[inline]
+fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
+    match content.into() {
+        Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+        Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+    }
+}
 
 #[cfg(test)]
 mod test {

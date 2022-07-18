@@ -1305,10 +1305,7 @@ mod tests {
             de.next().unwrap(),
             Start(BytesStart::borrowed(r#"tag a="2""#, 3))
         );
-        assert_eq!(
-            de.next().unwrap(),
-            CData(BytesCData::from_str("cdata content"))
-        );
+        assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
         assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("tag")));
 
         assert_eq!(
