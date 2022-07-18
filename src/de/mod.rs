@@ -1053,8 +1053,8 @@ mod tests {
                     Start(BytesStart::new("inner")),
                     Text(BytesText::from_escaped_str("text")),
                     Start(BytesStart::new("inner")),
-                    End(BytesEnd::borrowed("inner")),
-                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::new("inner")),
+                    End(BytesEnd::new("inner")),
                 ]
             );
 
@@ -1067,7 +1067,7 @@ mod tests {
             //   <target/>
             // </root>
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("next")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("next")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("next")));
 
             // We finish writing. Next call to `next()` should start replay that messages:
             //
@@ -1087,8 +1087,8 @@ mod tests {
                     Start(BytesStart::new("inner")),
                     Text(BytesText::from_escaped_str("text")),
                     Start(BytesStart::new("inner")),
-                    End(BytesEnd::borrowed("inner")),
-                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::new("inner")),
+                    End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
@@ -1100,8 +1100,8 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("inner")),
-                    End(BytesEnd::borrowed("inner")),
-                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::new("inner")),
+                    End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(
@@ -1114,7 +1114,7 @@ mod tests {
             );
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("inner")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
 
             // We finish writing. Next call to `next()` should start replay messages:
             //
@@ -1130,7 +1130,7 @@ mod tests {
                 de.read,
                 vec![
                     Text(BytesText::from_escaped_str("text")),
-                    End(BytesEnd::borrowed("inner")),
+                    End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
@@ -1138,10 +1138,10 @@ mod tests {
                 de.next().unwrap(),
                 Text(BytesText::from_escaped_str("text"))
             );
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("inner")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("target")));
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
         }
 
         /// Checks that `read_to_end()` behaves correctly after `skip()`
@@ -1176,8 +1176,8 @@ mod tests {
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped_str("text")),
                     Start(BytesStart::new("skip")),
-                    End(BytesEnd::borrowed("skip")),
-                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::new("skip")),
+                    End(BytesEnd::new("skip")),
                 ]
             );
 
@@ -1197,8 +1197,8 @@ mod tests {
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped_str("text")),
                     Start(BytesStart::new("skip")),
-                    End(BytesEnd::borrowed("skip")),
-                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::new("skip")),
+                    End(BytesEnd::new("skip")),
                 ]
             );
 
@@ -1219,8 +1219,8 @@ mod tests {
                     Start(BytesStart::new("skip")),
                     Text(BytesText::from_escaped_str("text")),
                     Start(BytesStart::new("skip")),
-                    End(BytesEnd::borrowed("skip")),
-                    End(BytesEnd::borrowed("skip")),
+                    End(BytesEnd::new("skip")),
+                    End(BytesEnd::new("skip")),
                 ]
             );
             assert_eq!(de.write, vec![]);
@@ -1228,7 +1228,7 @@ mod tests {
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("skip")));
             de.read_to_end(QName(b"skip")).unwrap();
 
-            assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
         }
 
         /// Checks that limiting buffer size works correctly
@@ -1291,12 +1291,12 @@ mod tests {
             Start(BytesStart::from_content(r#"tag a="2""#, 3))
         );
         assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
-        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("tag")));
+        assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
         assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
         assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
-        assert_eq!(de.next().unwrap(), End(BytesEnd::borrowed("root")));
+        assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
         assert_eq!(de.next().unwrap(), Eof);
     }
 
@@ -1369,13 +1369,13 @@ mod tests {
                     4
                 )),
                 Text(BytesText::from_escaped_str("Some text")),
-                End(BytesEnd::borrowed("item")),
+                End(BytesEnd::new("item")),
                 Start(BytesStart::from_content("item2", 5)),
-                End(BytesEnd::borrowed("item2")),
+                End(BytesEnd::new("item2")),
                 Start(BytesStart::from_content("item3", 5)),
-                End(BytesEnd::borrowed("item3")),
+                End(BytesEnd::new("item3")),
                 Start(BytesStart::from_content(r#"item4 value="world" "#, 5)),
-                End(BytesEnd::borrowed("item4")),
+                End(BytesEnd::new("item4")),
             ]
         )
     }

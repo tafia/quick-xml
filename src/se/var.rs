@@ -54,7 +54,7 @@ where
         if let Some(tag) = self.parent.root_tag {
             self.parent
                 .writer
-                .write_event(Event::End(BytesEnd::borrowed(tag)))?;
+                .write_event(Event::End(BytesEnd::new(tag)))?;
         }
         Ok(())
     }

@@ -324,7 +324,7 @@ fn test_write_attrs() -> Result<()> {
                 elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
-            End(_) => End(BytesEnd::borrowed("copy")),
+            End(_) => End(BytesEnd::new("copy")),
             e => e,
         };
         assert!(writer.write_event(event).is_ok());

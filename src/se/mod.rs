@@ -127,7 +127,7 @@ impl<'r, W: Write> Serializer<'r, W> {
             .write_event(Event::Start(BytesStart::new(tag_name)))?;
         value.serialize(&mut *self)?;
         self.writer
-            .write_event(Event::End(BytesEnd::borrowed(tag_name)))?;
+            .write_event(Event::End(BytesEnd::new(tag_name)))?;
         Ok(())
     }
 }

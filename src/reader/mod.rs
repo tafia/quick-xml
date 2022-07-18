@@ -1897,7 +1897,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::End(BytesEnd::borrowed("tag"))
+                        Event::End(BytesEnd::new("tag"))
                     );
                 }
 

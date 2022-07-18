@@ -606,18 +606,8 @@ impl<'a> BytesEnd<'a> {
 
     /// Creates a new `BytesEnd` borrowing a slice
     #[inline]
-    pub fn borrowed(name: &'a str) -> BytesEnd<'a> {
-        BytesEnd {
-            name: Cow::Borrowed(name.as_bytes()),
-        }
-    }
-
-    /// Creates a new `BytesEnd` owning its name
-    #[inline]
-    pub fn owned(name: String) -> BytesEnd<'static> {
-        BytesEnd {
-            name: Cow::Owned(name.into_bytes()),
-        }
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        Self::wrap(str_cow_to_bytes(name))
     }
 
     /// Converts the event into an owned event.
