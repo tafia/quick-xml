@@ -129,13 +129,12 @@
 
 - [#415]: Changed custom entity unescaping API to accept closures rather than a mapping of entity to
   replacement text. This avoids needing to allocate a map and provides the user with more flexibility.
-- [#415]: Renamed many functions following the pattern `unescape_and_decode*` to `decode_and_unescape*`
-  to better communicate their function. Renamed functions following the pattern `*_with_custom_entities`
-  to `decode_and_unescape_with` to be more consistent across the API.
-- [#415]: `BytesText::escaped()` renamed to `BytesText::escape()`, `BytesText::unescaped()` renamed to
-  `BytesText::unescape()`, `BytesText::unescaped_with()` renamed to `BytesText::unescape_with()`,
-  `Attribute::escaped_value()` renamed to `Attribute::escape_value()`, and `Attribute::escaped_value_with()`
-  renamed to `Attribute::escape_value_with()` for consistency across the API.
+- [#415]: Renamed functions for consistency across the API:
+  |Old Name                |New Name
+  |------------------------|-------------------------------------------
+  |`*_with_custom_entities`|`*_with`
+  |`BytesText::unescaped()`|`BytesText::unescape()`
+  |`Attribute::unescaped_*`|`Attribute::unescape_*`
 
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
@@ -149,6 +148,8 @@
 - [#423]: All escaping functions now accepts and returns strings instead of byte slices
 - [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
   but since now escaping works on strings. Use `BytesText::from_plain_str` instead
+
+- [#428]: Removed `BytesText::escaped()`. Use `.as_ref()` provided by `Deref` impl instead.
 
 ### New Tests
 
@@ -180,6 +181,7 @@
 [#418]: https://github.com/tafia/quick-xml/pull/418
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
+[#428]: https://github.com/tafia/quick-xml/pull/428
 [#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
 

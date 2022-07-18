@@ -786,11 +786,6 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Gets escaped content.
-    pub fn escape(&self) -> &[u8] {
-        self.content.as_ref()
-    }
-
     /// Gets content of this text buffer in the specified encoding and optionally
     /// unescapes it. Unlike [`Self::decode_and_unescape`] & Co., the lifetime
     /// of the returned `Cow` is bound to the original buffer / input
