@@ -1051,7 +1051,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -1085,7 +1085,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -1109,7 +1109,7 @@ mod tests {
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                 ]
             );
 
@@ -1129,15 +1129,12 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(
-                de.next().unwrap(),
-                Text(BytesText::from_escaped_str("text"))
-            );
+            assert_eq!(de.next().unwrap(), Text(BytesText::from_escaped("text")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
@@ -1174,7 +1171,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -1195,7 +1192,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -1217,7 +1214,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped_str("text")),
+                    Text(BytesText::from_escaped("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -1368,7 +1365,7 @@ mod tests {
                     r#"item name="hello" source="world.rs""#,
                     4
                 )),
-                Text(BytesText::from_escaped_str("Some text")),
+                Text(BytesText::from_escaped("Some text")),
                 End(BytesEnd::new("item")),
                 Start(BytesStart::from_content("item2", 5)),
                 End(BytesEnd::new("item2")),

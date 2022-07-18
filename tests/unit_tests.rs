@@ -596,9 +596,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
             Eof => break,
             Text(e) => {
                 let t = e.unescape().unwrap();
-                assert!(writer
-                    .write_event(Text(BytesText::from_plain_str(&t)))
-                    .is_ok());
+                assert!(writer.write_event(Text(BytesText::new(&t))).is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
         }

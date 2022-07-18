@@ -102,9 +102,9 @@ impl<'r, W: Write> Serializer<'r, W> {
     ) -> Result<(), DeError> {
         let value = value.to_string();
         let event = if escaped {
-            BytesText::from_escaped_str(&value)
+            BytesText::from_escaped(&value)
         } else {
-            BytesText::from_plain_str(&value)
+            BytesText::new(&value)
         };
         self.writer.write_event(Event::Text(event))?;
         Ok(())

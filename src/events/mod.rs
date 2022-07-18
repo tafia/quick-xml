@@ -683,27 +683,15 @@ impl<'a> BytesText<'a> {
 
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
-    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(
-            match content.into() {
-                Cow::Owned(o) => Cow::Owned(o.into_bytes()),
-                Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
-            },
-            Decoder::utf8(),
-        )
+    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
     }
 
     /// Creates a new `BytesText` from a string. The string is expected not to
     /// be escaped.
     #[inline]
-    pub fn from_plain_str(content: &'a str) -> Self {
-        Self {
-            content: match escape(content) {
-                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
-                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
-            },
-            decoder: Decoder::utf8(),
-        }
+    pub fn new(content: &'a str) -> Self {
+        Self::from_escaped(escape(content))
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if

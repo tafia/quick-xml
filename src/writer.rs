@@ -193,7 +193,7 @@ impl<W: Write> Writer<W> {
     /// // writes <tag attr1="value1" attr2="value2">with some text inside</tag>
     /// writer.create_element("tag")
     ///     .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter())  // or add attributes from an iterator
-    ///     .write_text_content(BytesText::from_plain_str("with some text inside"))?;
+    ///     .write_text_content(BytesText::new("with some text inside"))?;
     ///
     /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
     /// writer.create_element("tag")
@@ -203,7 +203,7 @@ impl<W: Write> Writer<W> {
     ///             writer
     ///                 .create_element("fruit")
     ///                 .with_attribute(("quantity", quant.to_string().as_str()))
-    ///                 .write_text_content(BytesText::from_plain_str(item))?;
+    ///                 .write_text_content(BytesText::new(item))?;
     ///         }
     ///         Ok(())
     ///     })?;
@@ -417,7 +417,7 @@ mod indentation {
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let text = BytesText::from_plain_str("text");
+        let text = BytesText::new("text");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -443,7 +443,7 @@ mod indentation {
         let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let text = BytesText::from_plain_str("text");
+        let text = BytesText::new("text");
         let inner = BytesStart::new("inner");
 
         writer
@@ -528,7 +528,7 @@ mod indentation {
             .create_element("paired")
             .with_attribute(("attr1", "value1"))
             .with_attribute(("attr2", "value2"))
-            .write_text_content(BytesText::from_plain_str("text"))
+            .write_text_content(BytesText::new("text"))
             .expect("failure");
 
         assert_eq!(
@@ -552,7 +552,7 @@ mod indentation {
                     writer
                         .create_element("fruit")
                         .with_attribute(("quantity", quant.to_string().as_str()))
-                        .write_text_content(BytesText::from_plain_str(item))?;
+                        .write_text_content(BytesText::new(item))?;
                 }
                 writer
                     .create_element("inner")
