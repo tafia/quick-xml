@@ -10,24 +10,23 @@ use std::io::Write;
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// # use pretty_assertions::assert_eq;
-/// use quick_xml::{Reader, Writer};
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
+/// use quick_xml::{Reader, Writer};
 /// use std::io::Cursor;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 /// let mut reader = Reader::from_str(xml);
 /// reader.trim_text(true);
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
-/// let mut buf = Vec::new();
 /// loop {
-///     match reader.read_event_into(&mut buf) {
-///         Ok(Event::Start(ref e)) if e.name().as_ref() == b"this_tag" => {
+///     match reader.read_event() {
+///         Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
-///             let mut elem = BytesStart::owned(b"my_elem".to_vec(), "my_elem".len());
+///             let mut elem = BytesStart::owned_name(b"my_elem".to_vec());
 ///
 ///             // collect existing attributes
 ///             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -38,15 +37,14 @@ use std::io::Write;
 ///             // writes the event to the writer
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
-///         Ok(Event::End(ref e)) if e.name().as_ref() == b"this_tag" => {
+///         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
 ///             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
-///         Ok(e) => assert!(writer.write_event(&e).is_ok()),
-///         Err(e) => panic!("{}", e),
+///         Ok(e) => assert!(writer.write_event(e).is_ok()),
+///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
 ///     }
-///     buf.clear();
 /// }
 ///
 /// let result = writer.into_inner().into_inner();

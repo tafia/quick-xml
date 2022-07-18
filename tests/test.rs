@@ -10,17 +10,15 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_sample() {
     let src: &[u8] = include_bytes!("documents/sample_rss.xml");
-    let mut buf = Vec::new();
-    let mut r = Reader::from_reader(src);
+    let mut r = Reader::from_bytes(src);
     let mut count = 0;
     loop {
-        match r.read_event_into(&mut buf).unwrap() {
+        match r.read_event().unwrap() {
             Start(_) => count += 1,
             Decl(e) => println!("{:?}", e.version()),
             Eof => break,
             _ => (),
         }
-        buf.clear();
     }
     println!("{}", count);
 }
@@ -28,10 +26,9 @@ fn test_sample() {
 #[test]
 fn test_attributes_empty() {
     let src = b"<a att1='a' att2='b'/>";
-    let mut r = Reader::from_reader(src as &[u8]);
+    let mut r = Reader::from_bytes(src);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -59,8 +56,7 @@ fn test_attribute_equal() {
     let src = b"<a att1=\"a=b\"/>";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
-    match r.read_event_into(&mut buf) {
+    match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
             assert_eq!(
@@ -81,9 +77,8 @@ fn test_comment_starting_with_gt() {
     let src = b"<a /><!-->-->";
     let mut r = Reader::from_reader(src as &[u8]);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
     loop {
-        match r.read_event_into(&mut buf) {
+        match r.read_event() {
             Ok(Comment(e)) => {
                 assert_eq!(e.as_ref(), b">");
                 break;
@@ -97,12 +92,11 @@ fn test_comment_starting_with_gt() {
 #[test]
 #[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
-    let src: &[u8] = include_bytes!("documents/opennews_all.rss");
-    let mut r = Reader::from_reader(src as &[u8]);
+    let src = include_bytes!("documents/opennews_all.rss");
+    let mut r = Reader::from_bytes(src);
     r.trim_text(true).expand_empty_elements(false);
-    let mut buf = Vec::new();
     loop {
-        match r.read_event_into(&mut buf) {
+        match r.read_event() {
             Ok(Text(e)) => {
                 e.decode_and_unescape(&r).unwrap();
             }
@@ -135,13 +129,11 @@ fn test_issue94() {
 </Run>"#;
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
-    let mut buf = vec![];
     loop {
-        match reader.read_event_into(&mut buf) {
+        match reader.read_event() {
             Ok(Eof) | Err(..) => break,
-            _ => buf.clear(),
+            _ => (),
         }
-        buf.clear();
     }
 }
 
@@ -212,20 +204,16 @@ fn test_trim() {
 fn test_clone_reader() {
     let mut reader = Reader::from_str("<tag>text</tag>");
     reader.trim_text(true);
-    let mut buf = Vec::new();
 
-    assert!(matches!(
-        reader.read_event_into(&mut buf).unwrap(),
-        Start(_)
-    ));
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
 
     let mut cloned = reader.clone();
 
-    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(reader.read_event_into(&mut buf).unwrap(), End(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
 
-    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), Text(_)));
-    assert!(matches!(cloned.read_event_into(&mut buf).unwrap(), End(_)));
+    assert!(matches!(cloned.read_event().unwrap(), Text(_)));
+    assert!(matches!(cloned.read_event().unwrap(), End(_)));
 }
 
 #[cfg(feature = "serialize")]

@@ -27,12 +27,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = Reader::from_str(DATA);
     reader.trim_text(true);
 
-    let mut buf = Vec::new();
     let mut custom_entities: HashMap<String, String> = HashMap::new();
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;
 
     loop {
-        match reader.read_event_into(&mut buf) {
+        match reader.read_event() {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(&e) {
                     custom_entities.insert(
