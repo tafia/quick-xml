@@ -675,7 +675,7 @@ pub struct BytesText<'a> {
 impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from an escaped byte sequence.
     #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
         Self {
             content: content.into(),
         }
@@ -684,7 +684,7 @@ impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
     pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::from_escaped(match content.into() {
+        Self::wrap(match content.into() {
             Cow::Owned(o) => Cow::Owned(o.into_bytes()),
             Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
         })
@@ -894,7 +894,7 @@ impl<'a> BytesCData<'a> {
     /// | `"`       | `&quot;`
     pub fn escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
-        Ok(BytesText::from_escaped(match escape(&decoded) {
+        Ok(BytesText::wrap(match escape(&decoded) {
             // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
             Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
@@ -916,7 +916,7 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     pub fn partial_escape(self, decoder: Decoder) -> Result<BytesText<'a>> {
         let decoded = self.decode(decoder)?;
-        Ok(BytesText::from_escaped(match partial_escape(&decoded) {
+        Ok(BytesText::wrap(match partial_escape(&decoded) {
             // Because result is borrowed, no replacements was done and we can use original content
             Cow::Borrowed(_) => self.content,
             Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),

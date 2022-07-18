@@ -514,9 +514,9 @@ impl<R> Reader<R> {
                 };
 
                 Ok(if first {
-                    Event::StartText(BytesText::from_escaped(content).into())
+                    Event::StartText(BytesText::wrap(content).into())
                 } else {
-                    Event::Text(BytesText::from_escaped(content))
+                    Event::Text(BytesText::wrap(content))
                 })
             }
             Ok(None) => Ok(Event::Eof),
@@ -587,7 +587,7 @@ impl<R> Reader<R> {
                         return Err(Error::UnexpectedToken("--".to_string()));
                     }
                 }
-                Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
+                Ok(Event::Comment(BytesText::wrap(&buf[3..len - 2])))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
                 Ok(Event::CData(BytesCData::new(&buf[8..])))
@@ -598,7 +598,7 @@ impl<R> Reader<R> {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or_else(|| len - 8);
                 debug_assert!(start < len - 8, "DocType must have a name");
-                Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
+                Ok(Event::DocType(BytesText::wrap(&buf[8 + start..])))
             }
             _ => Err(bang_type.to_err()),
         }
@@ -663,7 +663,7 @@ impl<R> Reader<R> {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
+                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1])))
             }
         } else {
             self.buf_position -= len;
