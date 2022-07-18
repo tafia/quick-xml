@@ -152,6 +152,8 @@
 - [#428]: Removed `BytesText::escaped()`. Use `.as_ref()` provided by `Deref` impl instead.
 - [#428]: Removed `BytesText::from_escaped()`. Use constructors from strings instead,
   because writer anyway works in UTF-8 only
+- [#428]: Removed `BytesCData::new()`. Use constructors from strings instead,
+  because writer anyway works in UTF-8 only
 
 ### New Tests
 

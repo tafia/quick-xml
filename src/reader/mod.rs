@@ -590,7 +590,7 @@ impl<R> Reader<R> {
                 Ok(Event::Comment(BytesText::wrap(&buf[3..len - 2])))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
-                Ok(Event::CData(BytesCData::new(&buf[8..])))
+                Ok(Event::CData(BytesCData::wrap(&buf[8..])))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 let start = buf[8..]

@@ -845,7 +845,7 @@ pub struct BytesCData<'a> {
 impl<'a> BytesCData<'a> {
     /// Creates a new `BytesCData` from a byte sequence.
     #[inline]
-    pub fn new<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C) -> Self {
         Self {
             content: content.into(),
         }
@@ -854,7 +854,7 @@ impl<'a> BytesCData<'a> {
     /// Creates a new `BytesCData` from a string
     #[inline]
     pub fn from_str(content: &'a str) -> Self {
-        Self::new(content.as_bytes())
+        Self::wrap(content.as_bytes())
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
