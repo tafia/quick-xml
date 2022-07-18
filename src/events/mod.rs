@@ -138,49 +138,30 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Creates a new `BytesStart` from the given content (name + attributes).
-    ///
-    /// # Warning
-    ///
-    /// `&content[..name_len]` is not checked to be a valid name
-    #[inline]
-    pub fn borrowed(content: &'a str, name_len: usize) -> Self {
-        BytesStart {
-            buf: Cow::Borrowed(content.as_bytes()),
-            name_len,
-        }
-    }
-
     /// Creates a new `BytesStart` from the given name.
     ///
     /// # Warning
     ///
     /// `name` is not checked to be a valid name
     #[inline]
-    pub fn borrowed_name(name: &'a str) -> BytesStart<'a> {
-        Self::borrowed(name, name.len())
-    }
-
-    /// Creates a new `BytesStart` from the given content (name + attributes)
-    ///
-    /// Owns its contents.
-    #[inline]
-    pub fn owned<C: Into<String>>(content: C, name_len: usize) -> BytesStart<'static> {
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        let buf = str_cow_to_bytes(name);
         BytesStart {
-            buf: Cow::Owned(content.into().into_bytes()),
-            name_len,
+            name_len: buf.len(),
+            buf,
         }
     }
 
-    /// Creates a new `BytesStart` from the given name
+    /// Creates a new `BytesStart` from the given content (name + attributes).
     ///
-    /// Owns its contents.
+    /// # Warning
+    ///
+    /// `&content[..name_len]` is not checked to be a valid name
     #[inline]
-    pub fn owned_name<C: Into<String>>(name: C) -> BytesStart<'static> {
-        let content = name.into().into_bytes();
+    pub fn from_content<C: Into<Cow<'a, str>>>(content: C, name_len: usize) -> Self {
         BytesStart {
-            name_len: content.len(),
-            buf: Cow::Owned(content),
+            buf: str_cow_to_bytes(content),
+            name_len,
         }
     }
 
@@ -393,35 +374,35 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
     /// assert_eq!(
     ///     decl.version().unwrap(),
     ///     Cow::Borrowed(b"1.1".as_ref())
     /// );
     ///
     /// // <?xml version='1.0' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.0' version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
     /// assert_eq!(
     ///     decl.version().unwrap(),
     ///     Cow::Borrowed(b"1.0".as_ref())
     /// );
     ///
     /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='utf-8' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8' version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed("", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content("", 0));
     /// match decl.version() {
     ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
     ///     _ => assert!(false),
@@ -461,18 +442,18 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
     /// assert!(decl.encoding().is_none());
     ///
     /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
     /// match decl.encoding() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='something_WRONG' encoding='utf-8'", 0));
     /// match decl.encoding() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
     ///     _ => assert!(false),
@@ -503,18 +484,18 @@ impl<'a> BytesDecl<'a> {
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
     /// assert!(decl.standalone().is_none());
     ///
     /// // <?xml standalone='yes'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='yes'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='yes'", 0));
     /// match decl.standalone() {
     ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='something_WRONG' encoding='utf-8'", 0));
     /// match decl.standalone() {
     ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
     ///     _ => assert!(false),
@@ -572,7 +553,7 @@ impl<'a> BytesDecl<'a> {
         buf.push('"');
 
         BytesDecl {
-            content: BytesStart::owned(buf, 3),
+            content: BytesStart::from_content(buf, 3),
         }
     }
 
@@ -1117,14 +1098,14 @@ mod test {
 
     #[test]
     fn bytestart_create() {
-        let b = BytesStart::owned_name("test");
+        let b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), QName(b"test"));
     }
 
     #[test]
     fn bytestart_set_name() {
-        let mut b = BytesStart::owned_name("test");
+        let mut b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), QName(b"test"));
         assert_eq!(b.attributes_raw(), b"");
@@ -1138,7 +1119,7 @@ mod test {
 
     #[test]
     fn bytestart_clear_attributes() {
-        let mut b = BytesStart::owned_name("test");
+        let mut b = BytesStart::new("test");
         b.push_attribute(("x", "y\"z"));
         b.push_attribute(("x", "y\"z"));
         b.clear_attributes();

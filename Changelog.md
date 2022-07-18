@@ -162,6 +162,10 @@
 - [#431]: Changed event constructors:
   |Old names                                         |New name
   |--------------------------------------------------|----------------------------------------------
+  |`BytesStart::owned_name(impl Into<Vec<u8>>)`      |`BytesStart::new(impl Into<Cow<str>>)`
+  |`BytesStart::borrowed_name(&[u8])`                |_(as above)_
+  |`BytesStart::owned(impl Into<Vec<u8>>, usize)`    |`BytesStart::from_content(impl Into<Cow<str>>, usize)`
+  |`BytesStart::borrowed(&[u8], usize)`              |_(as above)_
   |`BytesCData::new(impl Into<Cow<[u8]>>)`           |`BytesCData::new(impl Into<Cow<str>>)`
   |`BytesCData::from_str(&str)`                      |_(as above)_
 

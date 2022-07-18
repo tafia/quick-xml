@@ -102,7 +102,7 @@ where
     pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
         Struct {
             parent,
-            attrs: BytesStart::borrowed_name(name),
+            attrs: BytesStart::new(name),
             children: Vec::new(),
             buffer: Vec::new(),
         }

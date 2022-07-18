@@ -26,7 +26,7 @@ use std::io::Write;
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
-///             let mut elem = BytesStart::owned_name("my_elem");
+///             let mut elem = BytesStart::new("my_elem");
 ///
 ///             // collect existing attributes
 ///             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -217,7 +217,7 @@ impl<W: Write> Writer<W> {
     {
         ElementWriter {
             writer: self,
-            start_tag: BytesStart::borrowed_name(name.as_ref()),
+            start_tag: BytesStart::new(name.as_ref()),
         }
     }
 }
@@ -347,7 +347,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let tag = BytesStart::borrowed_name("self-closed")
+        let tag = BytesStart::new("self-closed")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         writer
             .write_event(Event::Empty(tag))
@@ -364,7 +364,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
         writer
@@ -386,10 +386,10 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let inner = BytesStart::borrowed_name("inner");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -414,7 +414,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
         let text = BytesText::from_plain_str("text");
@@ -440,11 +440,11 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
         let text = BytesText::from_plain_str("text");
-        let inner = BytesStart::borrowed_name("inner");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -471,10 +471,10 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let inner = BytesStart::borrowed_name("inner");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))

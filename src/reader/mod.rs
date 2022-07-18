@@ -1854,7 +1854,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed("xml ", 3)))
+                        Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3)))
                     );
                 }
 
@@ -1884,7 +1884,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Start(BytesStart::borrowed_name("tag"))
+                        Event::Start(BytesStart::new("tag"))
                     );
                 }
 
@@ -1907,7 +1907,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name("tag"))
+                        Event::Empty(BytesStart::new("tag"))
                     );
                 }
 
@@ -1918,7 +1918,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name("tag"))
+                        Event::Empty(BytesStart::new("tag"))
                     );
 
                     assert_eq!(

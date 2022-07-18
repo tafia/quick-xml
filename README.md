@@ -80,7 +80,7 @@ loop {
 
             // crates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
-            let mut elem = BytesStart::owned_name("my_elem");
+            let mut elem = BytesStart::new("my_elem");
 
             // collect existing attributes
             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
