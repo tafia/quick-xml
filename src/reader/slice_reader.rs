@@ -10,7 +10,7 @@ use encoding_rs::UTF_8;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
+use crate::reader::{is_whitespace, BangType, ReadElementState, Reader};
 
 use memchr;
 
@@ -197,28 +197,31 @@ impl<'a> Reader<&'a [u8]> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
-/// that will be borrowed by events. This implementation provides a zero-copy deserialization
-impl<'a> XmlSource<'a, ()> for &'a [u8] {
+/// A struct for handling reading functions based on reading from a byte slice.
+#[derive(Debug, Clone, Copy)]
+pub struct SliceReader<'buf>(&'buf [u8]);
+
+/// Private reading functions for a [`SliceReader`].
+impl<'buf> SliceReader<'buf> {
     fn read_bytes_until(
         &mut self,
         byte: u8,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
+    ) -> Result<Option<&'buf [u8]>> {
+        if self.0.is_empty() {
             return Ok(None);
         }
 
-        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
+        Ok(Some(if let Some(i) = memchr::memchr(byte, self.0) {
             *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
+            let bytes = &self.0[..i];
+            self.0 = &self.0[i + 1..];
             bytes
         } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
+            *position += self.0.len();
+            let bytes = &self.0[..];
+            self.0 = &[];
             bytes
         }))
     }
@@ -227,16 +230,16 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         &mut self,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<(BangType, &'a [u8])>> {
+    ) -> Result<Option<(BangType, &'buf [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
-        debug_assert_eq!(self[0], b'!');
+        debug_assert_eq!(self.0[0], b'!');
 
-        let bang_type = BangType::new(self[1..].first().copied())?;
+        let bang_type = BangType::new(self.0[1..].first().copied())?;
 
-        if let Some((bytes, i)) = bang_type.parse(self, 0) {
+        if let Some((bytes, i)) = bang_type.parse(self.0, 0) {
             *position += i;
-            *self = &self[i..];
+            self.0 = &self.0[i..];
             return Ok(Some((bang_type, bytes)));
         }
 
@@ -245,16 +248,16 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(bang_type.to_err())
     }
 
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
+    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'buf [u8]>> {
+        if self.0.is_empty() {
             return Ok(None);
         }
 
         let mut state = ReadElementState::Elem;
 
-        if let Some((bytes, i)) = state.change(self) {
+        if let Some((bytes, i)) = state.change(self.0) {
             *position += i;
-            *self = &self[i..];
+            self.0 = &self.0[i..];
             return Ok(Some(bytes));
         }
 
@@ -267,17 +270,18 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
         let whitespaces = self
+            .0
             .iter()
             .position(|b| !is_whitespace(*b))
-            .unwrap_or(self.len());
+            .unwrap_or(self.0.len());
         *position += whitespaces;
-        *self = &self[whitespaces..];
+        self.0 = &self.0[whitespaces..];
         Ok(())
     }
 
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
+        if self.0.first() == Some(&byte) {
+            self.0 = &self.0[1..];
             *position += 1;
             Ok(true)
         } else {
@@ -286,6 +290,6 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     fn peek_one(&mut self) -> Result<Option<u8>> {
-        Ok(self.first().copied())
+        Ok(self.0.first().copied())
     }
 }

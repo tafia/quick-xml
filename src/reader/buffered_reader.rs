@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
+use crate::reader::{is_whitespace, BangType, ReadElementState, Reader};
 
 use memchr;
 
@@ -290,22 +290,25 @@ impl Reader<BufReader<File>> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
-/// `Vec<u8>` as buffer that will be borrowed by events.
-impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
+/// A struct for handling reading functions based on reading from a [`BufRead`].
+#[derive(Debug, Clone)]
+pub struct BufferedReader<R: BufRead>(R);
+
+/// Private reading functions.
+impl<R: BufRead> BufferedReader<R> {
     #[inline]
-    fn read_bytes_until(
+    fn read_bytes_until<'buf>(
         &mut self,
         byte: u8,
-        buf: &'b mut Vec<u8>,
+        buf: &'buf mut Vec<u8>,
         position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
+    ) -> Result<Option<&'buf [u8]>> {
         let mut read = 0;
         let mut done = false;
         let start = buf.len();
         while !done {
             let used = {
-                let available = match self.fill_buf() {
+                let available = match self.0.fill_buf() {
                     Ok(n) if n.is_empty() => break,
                     Ok(n) => n,
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
@@ -327,7 +330,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
                     }
                 }
             };
-            self.consume(used);
+            self.0.consume(used);
             read += used;
         }
         *position += read;
@@ -339,22 +342,22 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
         }
     }
 
-    fn read_bang_element(
+    fn read_bang_element<'buf>(
         &mut self,
-        buf: &'b mut Vec<u8>,
+        buf: &'buf mut Vec<u8>,
         position: &mut usize,
-    ) -> Result<Option<(BangType, &'b [u8])>> {
+    ) -> Result<Option<(BangType, &'buf [u8])>> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         let start = buf.len();
         let mut read = 1;
         buf.push(b'!');
-        self.consume(1);
+        self.0.consume(1);
 
         let bang_type = BangType::new(self.peek_one()?)?;
 
         loop {
-            match self.fill_buf() {
+            match self.0.fill_buf() {
                 // Note: Do not update position, so the error points to
                 // somewhere sane rather than at the EOF
                 Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
@@ -362,7 +365,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
                     if let Some((consumed, used)) = bang_type.parse(available, read) {
                         buf.extend_from_slice(consumed);
 
-                        self.consume(used);
+                        self.0.consume(used);
                         read += used;
 
                         *position += read;
@@ -371,7 +374,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
                         buf.extend_from_slice(available);
 
                         let used = available.len();
-                        self.consume(used);
+                        self.0.consume(used);
                         read += used;
                     }
                 }
@@ -391,23 +394,23 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     }
 
     #[inline]
-    fn read_element(
+    fn read_element<'buf>(
         &mut self,
-        buf: &'b mut Vec<u8>,
+        buf: &'buf mut Vec<u8>,
         position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
+    ) -> Result<Option<&'buf [u8]>> {
         let mut state = ReadElementState::Elem;
         let mut read = 0;
 
         let start = buf.len();
         loop {
-            match self.fill_buf() {
+            match self.0.fill_buf() {
                 Ok(n) if n.is_empty() => break,
                 Ok(available) => {
                     if let Some((consumed, used)) = state.change(available) {
                         buf.extend_from_slice(consumed);
 
-                        self.consume(used);
+                        self.0.consume(used);
                         read += used;
 
                         *position += read;
@@ -416,7 +419,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
                         buf.extend_from_slice(available);
 
                         let used = available.len();
-                        self.consume(used);
+                        self.0.consume(used);
                         read += used;
                     }
                 }
@@ -439,11 +442,11 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     /// character or EOF.
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
         loop {
-            break match self.fill_buf() {
+            break match self.0.fill_buf() {
                 Ok(n) => {
                     let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
                     if count > 0 {
-                        self.consume(count);
+                        self.0.consume(count);
                         *position += count;
                         continue;
                     } else {
@@ -462,7 +465,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
         match self.peek_one()? {
             Some(b) if b == byte => {
                 *position += 1;
-                self.consume(1);
+                self.0.consume(1);
                 Ok(true)
             }
             _ => Ok(false),
@@ -473,7 +476,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     /// will still include it. On EOF, return None.
     fn peek_one(&mut self) -> Result<Option<u8>> {
         loop {
-            break match self.fill_buf() {
+            break match self.0.fill_buf() {
                 Ok(n) if n.is_empty() => Ok(None),
                 Ok(n) => Ok(Some(n[0])),
                 Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
