@@ -38,6 +38,9 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
+// Enable feature requirements in the docs from 1.57
+// See https://stackoverflow.com/questions/61417452
+#![cfg_attr(docs_rs, feature(doc_auto_cfg))]
 
 #[cfg(feature = "serialize")]
 pub mod de;
