@@ -85,7 +85,7 @@ fn read_namespaced_event(c: &mut Criterion) {
             let mut buf = Vec::new();
             let mut ns_buf = Vec::new();
             loop {
-                match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+                match r.read_namespaced_event(&mut ns_buf) {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),
@@ -109,7 +109,7 @@ fn read_namespaced_event(c: &mut Criterion) {
             let mut buf = Vec::new();
             let mut ns_buf = Vec::new();
             loop {
-                match r.read_namespaced_event(&mut buf, &mut ns_buf) {
+                match r.read_namespaced_event(&mut ns_buf) {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),

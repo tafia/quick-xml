@@ -362,19 +362,17 @@ fn test(input: &str, output: &str, trim: bool) {
 
 #[track_caller]
 fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
-    let mut reader = Reader::from_reader(input);
+    let mut reader = Reader::from_bytes(input);
     reader
         .trim_text(trim)
         .check_comments(true)
         .expand_empty_elements(false);
 
     let mut spec_lines = SpecIter(output).enumerate();
-    let mut buf = Vec::new();
     let mut ns_buffer = Vec::new();
 
     loop {
-        buf.clear();
-        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+        let event = reader.read_namespaced_event(&mut ns_buffer);
         let line = xmlrs_display(event, reader.decoder());
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {

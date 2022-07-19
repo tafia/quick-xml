@@ -729,6 +729,49 @@ impl<R> Reader<R> {
             Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
         }
     }
+
+    fn resolve_namespaced_event_inner<'b, 'ns>(
+        &mut self,
+        event: Result<Event<'b>>,
+        namespace_buffer: &'ns mut Vec<u8>,
+    ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
+        match event {
+            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
+            Ok(Event::Start(e)) => {
+                self.ns_resolver.push(&e, namespace_buffer);
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::Start(e),
+                ))
+            }
+            Ok(Event::Empty(e)) => {
+                // For empty elements we need to 'artificially' keep the namespace scope on the
+                // stack until the next `next()` call occurs.
+                // Otherwise the caller has no chance to use `resolve` in the context of the
+                // namespace declarations that are 'in scope' for the empty element alone.
+                // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
+                self.ns_resolver.push(&e, namespace_buffer);
+                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::Empty(e),
+                ))
+            }
+            Ok(Event::End(e)) => {
+                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), namespace_buffer),
+                    Event::End(e),
+                ))
+            }
+            Ok(e) => Ok((ResolveResult::Unbound, e)),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 /// Represents an input for a reader that can return borrowed data.
