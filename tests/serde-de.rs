@@ -3922,6 +3922,12 @@ mod flatten_struct {
 mod enum_ {
     use super::*;
 
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Nested {
+        //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+        float: String,
+    }
+
     mod externally_tagged {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -3945,12 +3951,6 @@ mod enum_ {
                 nested: Nested,
                 string: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
@@ -4118,12 +4118,6 @@ mod enum_ {
         #[derive(Debug, Deserialize, PartialEq)]
         struct NewtypeContent {
             value: bool,
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         mod unit {
@@ -4304,12 +4298,6 @@ mod enum_ {
                 nested: Nested,
                 string: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
@@ -4522,12 +4510,6 @@ mod enum_ {
                 // will have no difference from `Struct` variant
                 string2: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
