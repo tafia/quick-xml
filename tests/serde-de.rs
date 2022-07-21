@@ -110,48 +110,6 @@ fn nested_collection() {
     );
 }
 
-#[test]
-fn collection_of_enums() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    enum MyEnum {
-        A(String),
-        B { name: String, flag: bool },
-        C,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct MyEnums {
-        // TODO: This should be #[serde(flatten)], but right now serde don't support flattening of sequences
-        // See https://github.com/serde-rs/serde/issues/1905
-        #[serde(rename = "$value")]
-        items: Vec<MyEnum>,
-    }
-
-    let s = r#"
-    <enums>
-        <A>test</A>
-        <B name="hello" flag="t" />
-        <C />
-    </enums>
-    "#;
-
-    let project: MyEnums = from_str(s).unwrap();
-
-    assert_eq!(
-        project,
-        MyEnums {
-            items: vec![
-                MyEnum::A("test".to_string()),
-                MyEnum::B {
-                    name: "hello".to_string(),
-                    flag: true,
-                },
-                MyEnum::C,
-            ],
-        }
-    );
-}
-
 /// Test for https://github.com/tafia/quick-xml/issues/231
 #[test]
 fn implicit_value() {
