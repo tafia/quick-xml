@@ -43,36 +43,6 @@ fn string_borrow() {
     assert_eq!(borrowed_item.text, "Hello world");
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct Item {
-    name: String,
-    source: String,
-}
-
-#[test]
-fn multiple_roots_attributes() {
-    let item: Vec<Item> = from_str(
-        r#"
-            <item name="hello1" source="world1.rs" />
-            <item name="hello2" source="world2.rs" />
-        "#,
-    )
-    .unwrap();
-    assert_eq!(
-        item,
-        vec![
-            Item {
-                name: "hello1".to_string(),
-                source: "world1.rs".to_string(),
-            },
-            Item {
-                name: "hello2".to_string(),
-                source: "world2.rs".to_string(),
-            },
-        ]
-    );
-}
-
 /// Test for https://github.com/tafia/quick-xml/issues/231
 #[test]
 fn implicit_value() {
