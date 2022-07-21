@@ -73,43 +73,6 @@ fn multiple_roots_attributes() {
     );
 }
 
-#[test]
-fn nested_collection() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Project {
-        name: String,
-
-        #[serde(rename = "item", default)]
-        items: Vec<Item>,
-    }
-
-    let project: Project = from_str(
-        r#"
-        <project name="my_project">
-            <item name="hello1" source="world1.rs" />
-            <item name="hello2" source="world2.rs" />
-        </project>
-        "#,
-    )
-    .unwrap();
-    assert_eq!(
-        project,
-        Project {
-            name: "my_project".to_string(),
-            items: vec![
-                Item {
-                    name: "hello1".to_string(),
-                    source: "world1.rs".to_string(),
-                },
-                Item {
-                    name: "hello2".to_string(),
-                    source: "world2.rs".to_string(),
-                },
-            ],
-        }
-    );
-}
-
 /// Test for https://github.com/tafia/quick-xml/issues/231
 #[test]
 fn implicit_value() {
