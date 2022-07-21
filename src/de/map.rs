@@ -298,7 +298,13 @@ where
                     };
                     key.map(Some)
                 }
-                _ => Ok(None),
+                // Stop iteration after reaching a closing tag
+                DeEvent::End(e) if e.name() == self.start.name() => Ok(None),
+                // This is a unmatched closing tag, so the XML is invalid
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                // We cannot get `Eof` legally, because we always inside of the
+                // opened tag `self.start`
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
             }
         }
     }

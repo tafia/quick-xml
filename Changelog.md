@@ -58,6 +58,7 @@
 - [#421]: Fixed unknown bug in serde deserialization of externally tagged enums
   when an enum variant represented as a `Text` event (i.e. `<xml>tag</xml>`)
   and a document encoding is not an UTF-8
+- [#434]: Fixed incorrect error generated in some cases by serde deserializer
 
 ### Misc Changes
 
@@ -158,6 +159,7 @@
 - [#363]: Add tests for `Reader::read_event_impl` to ensure that proper events generated for corresponding inputs
 - [#407]: Improved benchmark suite to cover whole-document parsing, escaping and unescaping text
 - [#418]: Parameterized macrobenchmarks and comparative benchmarks, added throughput measurements via criterion
+- [#434]: Added more tests for serde deserialier
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
@@ -178,6 +180,7 @@
 [#418]: https://github.com/tafia/quick-xml/pull/418
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
+[#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
 
 ## 0.23.0 -- 2022-05-08
