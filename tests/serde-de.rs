@@ -3480,6 +3480,18 @@ macro_rules! maplike_errors {
         mod non_closed {
             use super::*;
 
+            /// For struct we expect that error about not closed tag appears
+            /// earlier than error about missing fields
+            #[test]
+            fn missing_field() {
+                let data = from_str::<$type>(r#"<root>"#);
+
+                match data {
+                    Err(DeError::UnexpectedEof) => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                }
+            }
+
             #[test]
             fn attributes() {
                 let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
@@ -3514,6 +3526,18 @@ macro_rules! maplike_errors {
         mod mismatched_end {
             use super::*;
             use quick_xml::Error::EndEventMismatch;
+
+            /// For struct we expect that error about mismatched tag appears
+            /// earlier than error about missing fields
+            #[test]
+            fn missing_field() {
+                let data = from_str::<$type>(r#"<root></mismatched>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                }
+            }
 
             #[test]
             fn attributes() {
