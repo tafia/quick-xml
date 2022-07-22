@@ -137,6 +137,9 @@
 - [#423]: All escaping functions now accepts and returns strings instead of byte slices
 - [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
   but since now escaping works on strings. Use `BytesText::from_plain_str` instead
+- [#425]: Split the internal implementation of `Reader` into multiple files to better separate the
+  buffered and unbuffered implementations. The buffered methods, e.g. `read_event_into(&mut buf)`,
+  will no longer be available when reading from a slice.
 
 ### New Tests
 
@@ -167,6 +170,7 @@
 [#418]: https://github.com/tafia/quick-xml/pull/418
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
+[#425]: https://github.com/tafia/quick-xml/pull/425
 
 ## 0.23.0 -- 2022-05-08
 
