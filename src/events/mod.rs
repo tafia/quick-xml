@@ -352,6 +352,53 @@ pub struct BytesDecl<'a> {
 }
 
 impl<'a> BytesDecl<'a> {
+    /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
+    /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
+    /// attribute.
+    ///
+    /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
+    /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
+    /// the double quote character is not allowed in any of the attribute values.
+    pub fn new(
+        version: &str,
+        encoding: Option<&str>,
+        standalone: Option<&str>,
+    ) -> BytesDecl<'static> {
+        // Compute length of the buffer based on supplied attributes
+        // ' encoding=""'   => 12
+        let encoding_attr_len = if let Some(xs) = encoding {
+            12 + xs.len()
+        } else {
+            0
+        };
+        // ' standalone=""' => 14
+        let standalone_attr_len = if let Some(xs) = standalone {
+            14 + xs.len()
+        } else {
+            0
+        };
+        // 'xml version=""' => 14
+        let mut buf = String::with_capacity(14 + encoding_attr_len + standalone_attr_len);
+
+        buf.push_str("xml version=\"");
+        buf.push_str(version);
+
+        if let Some(encoding_val) = encoding {
+            buf.push_str("\" encoding=\"");
+            buf.push_str(encoding_val);
+        }
+
+        if let Some(standalone_val) = standalone {
+            buf.push_str("\" standalone=\"");
+            buf.push_str(standalone_val);
+        }
+        buf.push('"');
+
+        BytesDecl {
+            content: BytesStart::from_content(buf, 3),
+        }
+    }
+
     /// Creates a `BytesDecl` from a `BytesStart`
     pub fn from_start(start: BytesStart<'a>) -> Self {
         Self { content: start }
@@ -508,53 +555,6 @@ impl<'a> BytesDecl<'a> {
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
             .transpose()
-    }
-
-    /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
-    /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
-    /// attribute.
-    ///
-    /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
-    /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
-    /// the double quote character is not allowed in any of the attribute values.
-    pub fn new(
-        version: &str,
-        encoding: Option<&str>,
-        standalone: Option<&str>,
-    ) -> BytesDecl<'static> {
-        // Compute length of the buffer based on supplied attributes
-        // ' encoding=""'   => 12
-        let encoding_attr_len = if let Some(xs) = encoding {
-            12 + xs.len()
-        } else {
-            0
-        };
-        // ' standalone=""' => 14
-        let standalone_attr_len = if let Some(xs) = standalone {
-            14 + xs.len()
-        } else {
-            0
-        };
-        // 'xml version=""' => 14
-        let mut buf = String::with_capacity(14 + encoding_attr_len + standalone_attr_len);
-
-        buf.push_str("xml version=\"");
-        buf.push_str(version);
-
-        if let Some(encoding_val) = encoding {
-            buf.push_str("\" encoding=\"");
-            buf.push_str(encoding_val);
-        }
-
-        if let Some(standalone_val) = standalone {
-            buf.push_str("\" standalone=\"");
-            buf.push_str(standalone_val);
-        }
-        buf.push('"');
-
-        BytesDecl {
-            content: BytesStart::from_content(buf, 3),
-        }
     }
 
     /// Gets the decoder struct
