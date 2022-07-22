@@ -54,6 +54,9 @@ use attributes::{Attribute, Attributes};
 ///
 /// In well-formed XML it could contain a Byte-Order-Mark (BOM). If this event
 /// contains something else except BOM, the XML should be considered ill-formed.
+///
+/// This is a reader-only event. If you need to write a text before the first tag,
+/// use the [`BytesText`] event.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BytesStartText<'a> {
     content: BytesText<'a>,
@@ -142,7 +145,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Warning
     ///
-    /// `name` is not checked to be a valid name
+    /// `name` must be a valid name.
     #[inline]
     pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
         let buf = str_cow_to_bytes(name);
@@ -156,7 +159,9 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Warning
     ///
-    /// `&content[..name_len]` is not checked to be a valid name
+    /// `&content[..name_len]` must be a valid name, and the remainder of `content`
+    /// must be correctly-formed attributes. Neither are checked, it is possible
+    /// to generate invalid XML if `content` or `name_len` are incorrect.
     #[inline]
     pub fn from_content<C: Into<Cow<'a, str>>>(content: C, name_len: usize) -> Self {
         BytesStart {
@@ -236,7 +241,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Warning
     ///
-    /// `name` is not checked to be a valid name
+    /// `name` must be a valid name.
     pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
         let bytes = self.buf.to_mut();
         bytes.splice(..self.name_len, name.iter().cloned());
@@ -604,7 +609,11 @@ impl<'a> BytesEnd<'a> {
         BytesEnd { name }
     }
 
-    /// Creates a new `BytesEnd` borrowing a slice
+    /// Creates a new `BytesEnd` borrowing a slice.
+    ///
+    /// # Warning
+    ///
+    /// `name` must be a valid name.
     #[inline]
     pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
         Self::wrap(str_cow_to_bytes(name))
@@ -812,7 +821,11 @@ impl<'a> BytesCData<'a> {
         }
     }
 
-    /// Creates a new `BytesCData` from a string
+    /// Creates a new `BytesCData` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` must not contain the `]]>` sequence.
     #[inline]
     pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
         Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
