@@ -147,6 +147,8 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         _buf: (),
         position: &mut usize,
     ) -> Result<Option<&'a [u8]>> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
         if self.is_empty() {
             return Ok(None);
         }
@@ -217,6 +219,8 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
         if self.first() == Some(&byte) {
             *self = &self[1..];
             *position += 1;
