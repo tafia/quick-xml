@@ -458,6 +458,9 @@ impl<R: BufRead> BufferedReader<R> {
         buf: &'buf mut Vec<u8>,
         position: &mut usize,
     ) -> Result<Option<&'buf [u8]>> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
+
         let mut read = 0;
         let mut done = false;
         let start = buf.len();
@@ -617,6 +620,9 @@ impl<R: BufRead> BufferedReader<R> {
     /// Consume and discard one character if it matches the given byte. Return
     /// true if it matched.
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
+
         match self.peek_one()? {
             Some(b) if b == byte => {
                 *position += 1;

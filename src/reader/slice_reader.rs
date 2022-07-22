@@ -378,6 +378,9 @@ impl<'buf> InnerReader for SliceReader<'buf> {
 /// Private reading functions for a [`SliceReader`].
 impl<'buf> SliceReader<'buf> {
     fn read_bytes_until(&mut self, byte: u8, position: &mut usize) -> Result<Option<&'buf [u8]>> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
+
         if self.0.is_empty() {
             return Ok(None);
         }
@@ -448,6 +451,9 @@ impl<'buf> SliceReader<'buf> {
     }
 
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        // search byte must be within the ascii range
+        debug_assert!(byte.is_ascii());
+
         if self.0.first() == Some(&byte) {
             self.0 = &self.0[1..];
             *position += 1;
