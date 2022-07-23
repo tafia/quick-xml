@@ -4,9 +4,9 @@
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
 use crate::de::{deserialize_bool, str2bool};
+use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use crate::reader::Decoder;
 use memchr::memchr;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};

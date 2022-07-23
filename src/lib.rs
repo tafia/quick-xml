@@ -44,6 +44,7 @@
 
 #[cfg(feature = "serialize")]
 pub mod de;
+pub mod encoding;
 mod errors;
 mod escapei;
 pub mod escape {
@@ -62,8 +63,9 @@ pub mod utils;
 mod writer;
 
 // reexports
+pub use crate::encoding::Decoder;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};
-pub use crate::reader::{Decoder, NsReader, Reader};
+pub use crate::reader::{NsReader, Reader};
 pub use crate::writer::{ElementWriter, Writer};
