@@ -27,6 +27,13 @@
   the XML declared encoding and always use UTF-8
 - [#416]: Add `borrow()` methods in all event structs which allows to get
   a borrowed version of any event
+- [#437]: Split out namespace reading functionality to a dedicated `NsReader`, namely:
+  |Old function in `Reader`|New function in `NsReader`
+  |------------------------|--------------------------
+  |`read_namespaced_event` |`read_namespaced_event`
+  |`event_namespace`       |`event_namespace`
+  |`attribute_namespace`   |`attribute_namespace`
+
 
 ### Bug Fixes
 
@@ -167,6 +174,7 @@
 [#418]: https://github.com/tafia/quick-xml/pull/418
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
+[#437]: https://github.com/tafia/quick-xml/pull/437
 
 ## 0.23.0 -- 2022-05-08
 

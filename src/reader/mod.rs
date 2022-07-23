@@ -8,12 +8,14 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 
 use memchr;
 
 mod buffered_reader;
+mod ns_reader;
 mod slice_reader;
+
+pub use ns_reader::NsReader;
 
 /// Possible reader states. The state transition diagram (`true` and `false` shows
 /// value of [`Reader::expand_empty_elements()`] option):
@@ -111,6 +113,9 @@ impl EncodingRef {
 ///
 /// Consumes bytes and streams XML [`Event`]s.
 ///
+/// This reader does not manage namespace declarations and not able to resolve
+/// prefixes. If you want these features, use the [`NsReader`].
+///
 /// # Examples
 ///
 /// ```
@@ -156,6 +161,8 @@ impl EncodingRef {
 ///     buf.clear();
 /// }
 /// ```
+///
+/// [`NsReader`]: crate::reader::NsReader
 #[derive(Clone)]
 pub struct Reader<R> {
     /// reader
@@ -198,13 +205,6 @@ pub struct Reader<R> {
     /// for that field for details
     opened_starts: Vec<usize>,
 
-    /// A buffer to manage namespaces
-    ns_resolver: NamespaceResolver,
-    /// For `Empty` events keep the 'scope' of the namespace on the stack artificially. That way, the
-    /// consumer has a chance to use `resolve` in the context of the empty element. We perform the
-    /// pop as the first operation in the next `next()` call.
-    pending_pop: bool,
-
     #[cfg(feature = "encoding")]
     /// Reference to the encoding used to read an XML
     encoding: EncodingRef,
@@ -226,9 +226,6 @@ impl<R> Reader<R> {
             check_end_names: true,
             buf_position: 0,
             check_comments: false,
-
-            ns_resolver: NamespaceResolver::default(),
-            pending_pop: false,
 
             #[cfg(feature = "encoding")]
             encoding: EncodingRef::Implicit(UTF_8),
@@ -415,48 +412,6 @@ impl<R> Reader<R> {
         } else {
             self.buf_position
         }
-    }
-
-    /// Resolves a potentially qualified **event name** into (namespace name, local name).
-    ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
-    ///
-    /// *Unqualified* event inherits the current *default namespace*.
-    ///
-    /// # Lifetimes
-    ///
-    /// - `'n`: lifetime of an element name
-    /// - `'ns`: lifetime of a namespaces buffer, where all found namespaces are stored
-    #[inline]
-    pub fn event_namespace<'n, 'ns>(
-        &self,
-        name: QName<'n>,
-        namespace_buffer: &'ns [u8],
-    ) -> (ResolveResult<'ns>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, namespace_buffer, true)
-    }
-
-    /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
-    ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
-    ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
-    ///
-    /// # Lifetimes
-    ///
-    /// - `'n`: lifetime of an attribute
-    /// - `'ns`: lifetime of a namespaces buffer, where all found namespaces are stored
-    #[inline]
-    pub fn attribute_namespace<'n, 'ns>(
-        &self,
-        name: QName<'n>,
-        namespace_buffer: &'ns [u8],
-    ) -> (ResolveResult<'ns>, LocalName<'n>) {
-        self.ns_resolver.resolve(name, namespace_buffer, false)
     }
 
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
@@ -730,6 +685,8 @@ impl<R> Reader<R> {
         }
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Represents an input for a reader that can return borrowed data.
 ///

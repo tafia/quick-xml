@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::errors::{Error, Result};
 use crate::events::Event;
-use crate::name::{QName, ResolveResult};
+use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
 
 use memchr;
@@ -61,102 +61,6 @@ impl<R: BufRead> Reader<R> {
     #[inline]
     pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         self.read_event_impl(buf)
-    }
-
-    /// Reads the next event and resolves its namespace (if applicable).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::str::from_utf8;
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    /// use quick_xml::name::ResolveResult::*;
-    ///
-    /// let xml = r#"<x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
-    ///                 <y:tag2><!--Test comment-->Test</y:tag2>
-    ///                 <y:tag2>Test 2</y:tag2>
-    ///             </x:tag1>"#;
-    /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
-    /// let mut count = 0;
-    /// let mut buf = Vec::new();
-    /// let mut ns_buf = Vec::new();
-    /// let mut txt = Vec::new();
-    /// loop {
-    ///     match reader.read_namespaced_event(&mut buf, &mut ns_buf) {
-    ///         Ok((Bound(ns), Event::Start(e))) => {
-    ///             count += 1;
-    ///             match (ns.as_ref(), e.local_name().as_ref()) {
-    ///                 (b"www.xxxx", b"tag1") => (),
-    ///                 (b"www.yyyy", b"tag2") => (),
-    ///                 (ns, n) => panic!("Namespace and local name mismatch"),
-    ///             }
-    ///             println!("Resolved namespace: {:?}", ns);
-    ///         }
-    ///         Ok((Unbound, Event::Start(_))) => {
-    ///             panic!("Element not in any namespace")
-    ///         },
-    ///         Ok((Unknown(p), Event::Start(_))) => {
-    ///             panic!("Undeclared namespace prefix {:?}", String::from_utf8(p))
-    ///         }
-    ///         Ok((_, Event::Text(e))) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
-    ///         },
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-    ///         Ok((_, Event::Eof)) => break,
-    ///         _ => (),
-    ///     }
-    ///     buf.clear();
-    /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
-    /// ```
-    pub fn read_namespaced_event<'b, 'ns>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        namespace_buffer: &'ns mut Vec<u8>,
-    ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
-        if self.pending_pop {
-            self.ns_resolver.pop(namespace_buffer);
-        }
-        self.pending_pop = false;
-        match self.read_event_into(buf) {
-            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
-            Ok(Event::Start(e)) => {
-                self.ns_resolver.push(&e, namespace_buffer);
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::Start(e),
-                ))
-            }
-            Ok(Event::Empty(e)) => {
-                // For empty elements we need to 'artificially' keep the namespace scope on the
-                // stack until the next `next()` call occurs.
-                // Otherwise the caller has no chance to use `resolve` in the context of the
-                // namespace declarations that are 'in scope' for the empty element alone.
-                // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
-                self.ns_resolver.push(&e, namespace_buffer);
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::Empty(e),
-                ))
-            }
-            Ok(Event::End(e)) => {
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), namespace_buffer),
-                    Event::End(e),
-                ))
-            }
-            Ok(e) => Ok((ResolveResult::Unbound, e)),
-            Err(e) => Err(e),
-        }
     }
 
     /// Reads until end element is found using provided buffer as intermediate

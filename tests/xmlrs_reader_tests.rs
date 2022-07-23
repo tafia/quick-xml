@@ -1,7 +1,7 @@
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
-use quick_xml::{Decoder, Reader};
+use quick_xml::{Decoder, NsReader};
 use std::str::from_utf8;
 
 #[test]
@@ -362,7 +362,7 @@ fn test(input: &str, output: &str, trim: bool) {
 
 #[track_caller]
 fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
-    let mut reader = Reader::from_reader(input);
+    let mut reader = NsReader::from_bytes(input);
     reader
         .trim_text(trim)
         .check_comments(true)
@@ -370,12 +370,11 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
 
     let mut spec_lines = SpecIter(output).enumerate();
     let mut buf = Vec::new();
-    let mut ns_buffer = Vec::new();
 
     let mut decoder = reader.decoder();
     loop {
         buf.clear();
-        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
+        let event = reader.read_namespaced_event(&mut buf);
         let line = match event {
             Ok((_, Event::StartText(_))) => {
                 // BOM could change decoder
