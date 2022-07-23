@@ -9,8 +9,8 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_sample() {
-    let src: &[u8] = include_bytes!("documents/sample_rss.xml");
-    let mut r = Reader::from_bytes(src);
+    let src: &str = include_str!("documents/sample_rss.xml");
+    let mut r = Reader::from_str(src);
     let mut count = 0;
     loop {
         match r.read_event().unwrap() {
@@ -25,8 +25,8 @@ fn test_sample() {
 
 #[test]
 fn test_attributes_empty() {
-    let src = b"<a att1='a' att2='b'/>";
-    let mut r = Reader::from_bytes(src);
+    let src = "<a att1='a' att2='b'/>";
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     match r.read_event() {
         Ok(Empty(e)) => {
@@ -96,9 +96,10 @@ fn test_comment_starting_with_gt() {
 fn test_koi8_r_encoding() {
     let src = include_bytes!("documents/opennews_all.rss");
     let mut r = Reader::from_bytes(src);
+    let mut buf = Vec::new();
     r.trim_text(true).expand_empty_elements(false);
     loop {
-        match r.read_event() {
+        match r.read_event_into(&mut buf) {
             Ok(Text(e)) => {
                 e.decode_and_unescape(&r).unwrap();
             }

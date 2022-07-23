@@ -306,8 +306,8 @@ where
 }
 
 /// Deserialize from a reader. This method will do internal copies of data
-/// readed from `reader`. If you want have a `&[u8]` or `&str` input and want
-/// to borrow as much as possible, use [`from_slice`] or [`from_str`]
+/// readed from `reader`. If you want have a `&str` input and want
+/// to borrow as much as possible, use [`from_str`]
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
     R: BufRead,
@@ -685,17 +685,7 @@ where
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
     pub fn from_str(s: &'de str) -> Self {
-        Self::from_borrowing_reader(Reader::from_str(s))
-    }
-
-    /// Create new deserializer that will borrow data from the specified byte array
-    pub fn from_slice(bytes: &'de [u8]) -> Self {
-        Self::from_borrowing_reader(Reader::from_bytes(bytes))
-    }
-
-    /// Create new deserializer that will borrow data from the specified borrowing reader
-    #[inline]
-    fn from_borrowing_reader(mut reader: Reader<crate::SliceReader<'de>>) -> Self {
+        let mut reader = Reader::from_str(s);
         reader
             .expand_empty_elements(true)
             .check_end_names(true)
@@ -723,6 +713,13 @@ where
             reader,
             buf: Vec::new(),
         })
+    }
+}
+
+impl<'de> Deserializer<'de, IoReader<&'de [u8]>> {
+    /// Create new deserializer that will borrow data from the specified byte array
+    pub fn from_slice(bytes: &'de [u8]) -> Self {
+        Self::from_reader(bytes)
     }
 }
 
@@ -970,10 +967,10 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     }
 }
 
-/// XML input source that reads from a slice of bytes and can borrow from it.
+/// XML input source that reads from a `&str` and can borrow from it.
 ///
 /// You cannot create it, it is created automatically when you call
-/// [`Deserializer::from_str`] or [`Deserializer::from_slice`]
+/// [`Deserializer::from_str`]
 pub struct SliceReader<'de> {
     reader: Reader<crate::SliceReader<'de>>,
 }
@@ -1025,8 +1022,8 @@ mod tests {
         /// Checks that `peek()` and `read()` behaves correctly after `skip()`
         #[test]
         fn read_and_peek() {
-            let mut de = Deserializer::from_slice(
-                br#"
+            let mut de = Deserializer::from_str(
+                r#"
                 <root>
                     <inner>
                         text
@@ -1166,8 +1163,8 @@ mod tests {
         /// Checks that `read_to_end()` behaves correctly after `skip()`
         #[test]
         fn read_to_end() {
-            let mut de = Deserializer::from_slice(
-                br#"
+            let mut de = Deserializer::from_str(
+                r#"
                 <root>
                     <skip>
                         text
@@ -1270,8 +1267,8 @@ mod tests {
                 item: Vec<()>,
             }
 
-            let mut de = Deserializer::from_slice(
-                br#"
+            let mut de = Deserializer::from_str(
+                r#"
                 <any-name>
                     <item/>
                     <another-item>
@@ -1296,8 +1293,8 @@ mod tests {
     fn read_to_end() {
         use crate::de::DeEvent::*;
 
-        let mut de = Deserializer::from_slice(
-            br#"
+        let mut de = Deserializer::from_str(
+            r#"
             <root>
                 <tag a="1"><tag>text</tag>content</tag>
                 <tag a="2"><![CDATA[cdata content]]></tag>
@@ -1343,15 +1340,14 @@ mod tests {
             <item name="hello" source="world.rs">Some text</item>
             <item2/>
             <item3 value="world" />
-    	"##
-        .as_bytes();
+    	"##;
 
         let mut reader1 = IoReader {
-            reader: Reader::from_reader(s),
+            reader: Reader::from_reader(s.as_bytes()),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
-            reader: Reader::from_bytes(s),
+            reader: Reader::from_str(s),
         };
 
         loop {
@@ -1373,11 +1369,10 @@ mod tests {
             <item2></item2>
             <item3/>
             <item4 value="world" />
-        "##
-        .as_bytes();
+        "##;
 
         let mut reader = SliceReader {
-            reader: Reader::from_bytes(s),
+            reader: Reader::from_str(s),
         };
 
         reader

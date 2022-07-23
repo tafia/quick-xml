@@ -12,7 +12,7 @@ use crate::name::{QName, ResolveResult};
 use crate::{Error, Result};
 
 #[cfg(feature = "encoding")]
-use crate::reader::{detect_encoding, EncodingRef};
+use crate::reader::EncodingRef;
 use crate::reader::{is_whitespace, BangType, InnerReader, ReadElementState, Reader, TagState};
 
 /// Private functions for a [`Reader`] based on a [`SliceReader`].
@@ -52,13 +52,6 @@ impl<'buf> Reader<SliceReader<'buf>> {
 
         match self.reader.read_bytes_until(b'<', &mut self.buf_position) {
             Ok(Some(bytes)) => {
-                #[cfg(feature = "encoding")]
-                if first && self.encoding.can_be_refined() {
-                    if let Some(encoding) = detect_encoding(bytes) {
-                        self.encoding = EncodingRef::BomDetected(encoding);
-                    }
-                }
-
                 let content = if self.trim_text_end {
                     // Skip the ending '<
                     let len = bytes
@@ -131,11 +124,6 @@ impl<'buf> Reader<SliceReader<'buf>> {
         }
 
         reader
-    }
-
-    /// Creates an XML reader from a slice of bytes.
-    pub fn from_bytes(s: &'buf [u8]) -> Self {
-        Self::from_reader_internal(SliceReader(s))
     }
 }
 
@@ -473,17 +461,12 @@ mod test {
     use super::*;
     use crate::reader::test::check;
 
-    fn input_from_bytes<'buf>(bytes: &'buf [u8]) -> SliceReader<'buf> {
-        SliceReader(bytes)
+    fn input_from_str<'buf>(s: &'buf str) -> SliceReader<'buf> {
+        SliceReader(s.as_bytes())
     }
 
     fn reader_from_str<'buf>(s: &'buf str) -> Reader<SliceReader<'buf>> {
         Reader::from_str(s)
-    }
-
-    #[allow(dead_code)]
-    fn reader_from_bytes<'buf>(s: &'buf [u8]) -> Reader<SliceReader<'buf>> {
-        Reader::from_bytes(s)
     }
 
     check!();

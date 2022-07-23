@@ -3,23 +3,23 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use quick_xml::Result as XmlResult;
 
-static RPM_PRIMARY: &[u8] = include_bytes!("../tests/documents/rpm_primary.xml");
-static RPM_PRIMARY2: &[u8] = include_bytes!("../tests/documents/rpm_primary2.xml");
-static RPM_FILELISTS: &[u8] = include_bytes!("../tests/documents/rpm_filelists.xml");
-static RPM_OTHER: &[u8] = include_bytes!("../tests/documents/rpm_other.xml");
-static LIBREOFFICE_DOCUMENT: &[u8] = include_bytes!("../tests/documents/libreoffice_document.fodt");
-static DOCUMENT: &[u8] = include_bytes!("../tests/documents/document.xml");
-static TEST_WRITER_INDENT: &[u8] = include_bytes!("../tests/documents/test_writer_indent.xml");
-static SAMPLE_1: &[u8] = include_bytes!("../tests/documents/sample_1.xml");
-static LINESCORE: &[u8] = include_bytes!("../tests/documents/linescore.xml");
-static SAMPLE_RSS: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
-static SAMPLE_NS: &[u8] = include_bytes!("../tests/documents/sample_ns.xml");
-static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
+static RPM_PRIMARY: &str = include_str!("../tests/documents/rpm_primary.xml");
+static RPM_PRIMARY2: &str = include_str!("../tests/documents/rpm_primary2.xml");
+static RPM_FILELISTS: &str = include_str!("../tests/documents/rpm_filelists.xml");
+static RPM_OTHER: &str = include_str!("../tests/documents/rpm_other.xml");
+static LIBREOFFICE_DOCUMENT: &str = include_str!("../tests/documents/libreoffice_document.fodt");
+static DOCUMENT: &str = include_str!("../tests/documents/document.xml");
+static TEST_WRITER_INDENT: &str = include_str!("../tests/documents/test_writer_indent.xml");
+static SAMPLE_1: &str = include_str!("../tests/documents/sample_1.xml");
+static LINESCORE: &str = include_str!("../tests/documents/linescore.xml");
+static SAMPLE_RSS: &str = include_str!("../tests/documents/sample_rss.xml");
+static SAMPLE_NS: &str = include_str!("../tests/documents/sample_ns.xml");
+static PLAYERS: &str = include_str!("../tests/documents/players.xml");
 
 // TODO: read the namespaces too
 // TODO: use fully normalized attribute values
-fn parse_document(doc: &[u8]) -> XmlResult<()> {
-    let mut r = Reader::from_bytes(doc);
+fn parse_document(doc: &str) -> XmlResult<()> {
+    let mut r = Reader::from_str(doc);
     loop {
         match r.read_event()? {
             Event::Start(e) | Event::Empty(e) => {

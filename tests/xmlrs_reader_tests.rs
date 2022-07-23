@@ -369,10 +369,11 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
         .expand_empty_elements(false);
 
     let mut spec_lines = SpecIter(output).enumerate();
+    let mut event_buffer = Vec::new();
     let mut ns_buffer = Vec::new();
 
     loop {
-        let event = reader.read_namespaced_event(&mut ns_buffer);
+        let event = reader.read_namespaced_event_into(&mut event_buffer, &mut ns_buffer);
         let line = xmlrs_display(event, reader.decoder());
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {

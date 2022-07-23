@@ -138,8 +138,12 @@
 - [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
   but since now escaping works on strings. Use `BytesText::from_plain_str` instead
 - [#425]: Split the internal implementation of `Reader` into multiple files to better separate the
-  buffered and unbuffered implementations. The buffered methods, e.g. `read_event_into(&mut buf)`,
+  buffered and unbuffered implementations. The unbuffered methods, e.g. `read_event()`,
   will no longer be available when reading from a slice.
+- [#436]: When using `Reader` with raw bytes, a buffered parsing implementation will always be used.
+  If using `Reader::from_str()`, the reader will borrow directly from the `&str`. If you have a byte
+  array known to be valid UTF-8, it is recommended to convert it to `&str` first, which will enable
+  the unbuffered (borrowing) implementation.
 
 ### New Tests
 
@@ -171,6 +175,7 @@
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
 [#425]: https://github.com/tafia/quick-xml/pull/425
+[#436]: https://github.com/tafia/quick-xml/pull/430
 
 ## 0.23.0 -- 2022-05-08
 

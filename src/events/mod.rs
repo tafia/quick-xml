@@ -983,8 +983,9 @@ pub enum Event<'a> {
     /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>";
     /// let mut reader = Reader::from_bytes(xml);
     /// let mut events_processed = 0;
+    /// let mut event_buffer = Vec::new();
     /// loop {
-    ///     match reader.read_event() {
+    ///     match reader.read_event_into(&mut event_buffer) {
     ///         Ok(Event::StartText(e)) => {
     ///             assert_eq!(events_processed, 0);
     ///             // Content contains BOM

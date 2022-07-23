@@ -961,7 +961,7 @@ mod test {
     macro_rules! check {
         ($(let mut $buf:ident = $init:expr;)?) => {
             mod read_bytes_until {
-                use super::input_from_bytes;
+                use super::input_from_str;
                 // Use Bytes for printing bytes as strings for ASCII range
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
@@ -971,7 +971,7 @@ mod test {
                 fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"".as_ref());
+                    let mut input = input_from_str("".as_ref());
                     //                ^= 0
 
                     assert_eq!(
@@ -990,7 +990,7 @@ mod test {
                 fn non_existent() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"abcdef".as_ref());
+                    let mut input = input_from_str("abcdef".as_ref());
                     //                      ^= 6
 
                     assert_eq!(
@@ -1010,7 +1010,7 @@ mod test {
                 fn at_the_start() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"*abcdef".as_ref());
+                    let mut input = input_from_str("*abcdef".as_ref());
                     //                 ^= 1
 
                     assert_eq!(
@@ -1030,7 +1030,7 @@ mod test {
                 fn inside() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"abc*def".as_ref());
+                    let mut input = input_from_str("abc*def".as_ref());
                     //                    ^= 4
 
                     assert_eq!(
@@ -1050,7 +1050,7 @@ mod test {
                 fn in_the_end() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"abcdef*".as_ref());
+                    let mut input = input_from_str("abcdef*".as_ref());
                     //                       ^= 7
 
                     assert_eq!(
@@ -1065,10 +1065,10 @@ mod test {
             }
 
             mod read_bang_element {
-                use super::input_from_bytes;
+                use super::input_from_str;
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
-                    use super::input_from_bytes;
+                    use super::input_from_str;
                     use crate::errors::Error;
                     use crate::reader::BangType;
                     use crate::utils::Bytes;
@@ -1081,7 +1081,7 @@ mod test {
                     fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"![]]>other content".as_ref());
+                        let mut input = input_from_str("![]]>other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1101,7 +1101,7 @@ mod test {
                     fn not_closed() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"![CDATA[other content".as_ref());
+                        let mut input = input_from_str("![CDATA[other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1120,7 +1120,7 @@ mod test {
                     fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"![CDATA[]]>other content".as_ref());
+                        let mut input = input_from_str("![CDATA[]]>other content".as_ref());
                         //                           ^= 11
 
                         assert_eq!(
@@ -1140,7 +1140,7 @@ mod test {
                     fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref());
+                        let mut input = input_from_str("![CDATA[cdata]] ]>content]]>other content]]>".as_ref());
                         //                                            ^= 28
 
                         assert_eq!(
@@ -1171,7 +1171,7 @@ mod test {
                 ///
                 /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
                 mod comment {
-                    use super::input_from_bytes;
+                    use super::input_from_str;
                     use crate::errors::Error;
                     use crate::reader::BangType;
                     use crate::utils::Bytes;
@@ -1182,7 +1182,7 @@ mod test {
                     fn not_properly_start() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!- -->other content".as_ref());
+                        let mut input = input_from_str("!- -->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1200,7 +1200,7 @@ mod test {
                     fn not_properly_end() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!->other content".as_ref());
+                        let mut input = input_from_str("!->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1218,7 +1218,7 @@ mod test {
                     fn not_closed1() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!--other content".as_ref());
+                        let mut input = input_from_str("!--other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1236,7 +1236,7 @@ mod test {
                     fn not_closed2() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!-->other content".as_ref());
+                        let mut input = input_from_str("!-->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1254,7 +1254,7 @@ mod test {
                     fn not_closed3() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!--->other content".as_ref());
+                        let mut input = input_from_str("!--->other content".as_ref());
                         //                ^= 0
 
                         match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1272,7 +1272,7 @@ mod test {
                     fn empty() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!---->other content".as_ref());
+                        let mut input = input_from_str("!---->other content".as_ref());
                         //                      ^= 6
 
                         assert_eq!(
@@ -1289,7 +1289,7 @@ mod test {
                     fn with_content() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"!--->comment<--->other content".as_ref());
+                        let mut input = input_from_str("!--->comment<--->other content".as_ref());
                         //                                 ^= 17
 
                         assert_eq!(
@@ -1305,9 +1305,9 @@ mod test {
 
                 /// Checks that reading DOCTYPE definition works correctly
                 mod doctype {
-                    use super::input_from_bytes;
+                    use super::input_from_str;
                     mod uppercase {
-                        use super::input_from_bytes;
+                        use super::input_from_str;
                         use crate::errors::Error;
                         use crate::reader::BangType;
                         use crate::utils::Bytes;
@@ -1317,7 +1317,7 @@ mod test {
                         fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!D other content".as_ref());
+                            let mut input = input_from_str("!D other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1335,7 +1335,7 @@ mod test {
                         fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!DOCTYPEother content".as_ref());
+                            let mut input = input_from_str("!DOCTYPEother content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1353,7 +1353,7 @@ mod test {
                         fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!DOCTYPE>other content".as_ref());
+                            let mut input = input_from_str("!DOCTYPE>other content".as_ref());
                             //                         ^= 9
 
                             assert_eq!(
@@ -1370,7 +1370,7 @@ mod test {
                         fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!DOCTYPE other content".as_ref());
+                            let mut input = input_from_str("!DOCTYPE other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1386,7 +1386,7 @@ mod test {
                     }
 
                     mod lowercase {
-                        use super::input_from_bytes;
+                        use super::input_from_str;
                         use crate::errors::Error;
                         use crate::reader::BangType;
                         use crate::utils::Bytes;
@@ -1396,7 +1396,7 @@ mod test {
                         fn not_properly_start() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!d other content".as_ref());
+                            let mut input = input_from_str("!d other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1414,7 +1414,7 @@ mod test {
                         fn without_space() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!doctypeother content".as_ref());
+                            let mut input = input_from_str("!doctypeother content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1432,7 +1432,7 @@ mod test {
                         fn empty() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!doctype>other content".as_ref());
+                            let mut input = input_from_str("!doctype>other content".as_ref());
                             //                         ^= 9
 
                             assert_eq!(
@@ -1449,7 +1449,7 @@ mod test {
                         fn not_closed() {
                             $(let mut $buf = $init;)?
                             let mut position = 0;
-                            let mut input = input_from_bytes(b"!doctype other content".as_ref());
+                            let mut input = input_from_str("!doctype other content".as_ref());
                             //                ^= 0
 
                             match input.read_bang_element($(&mut $buf, )? &mut position) {
@@ -1467,7 +1467,7 @@ mod test {
             }
 
             mod read_element {
-                use super::input_from_bytes;
+                use super::input_from_str;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -1476,7 +1476,7 @@ mod test {
                 fn empty() {
                     $(let mut $buf = $init;)?
                     let mut position = 0;
-                    let mut input = input_from_bytes(b"".as_ref());
+                    let mut input = input_from_str("".as_ref());
                     //                ^= 0
 
                     assert_eq!(input.read_element($(&mut $buf, )? &mut position).unwrap().map(Bytes), None);
@@ -1484,7 +1484,7 @@ mod test {
                 }
 
                 mod open {
-                    use super::input_from_bytes;
+                    use super::input_from_str;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1492,7 +1492,7 @@ mod test {
                     fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b">".as_ref());
+                        let mut input = input_from_str(">".as_ref());
                         //                 ^= 1
 
                         assert_eq!(
@@ -1506,7 +1506,7 @@ mod test {
                     fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"tag>".as_ref());
+                        let mut input = input_from_str("tag>".as_ref());
                         //                    ^= 4
 
                         assert_eq!(
@@ -1520,7 +1520,7 @@ mod test {
                     fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b":>".as_ref());
+                        let mut input = input_from_str(":>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
@@ -1534,7 +1534,7 @@ mod test {
                     fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b":tag>".as_ref());
+                        let mut input = input_from_str(":tag>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
@@ -1548,7 +1548,7 @@ mod test {
                     fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref());
+                        let mut input = input_from_str(r#"tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref());
                         //                                                        ^= 38
 
                         assert_eq!(
@@ -1560,7 +1560,7 @@ mod test {
                 }
 
                 mod self_closed {
-                    use super::input_from_bytes;
+                    use super::input_from_str;
                     use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
@@ -1568,7 +1568,7 @@ mod test {
                     fn empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"/>".as_ref());
+                        let mut input = input_from_str("/>".as_ref());
                         //                  ^= 2
 
                         assert_eq!(
@@ -1582,7 +1582,7 @@ mod test {
                     fn normal() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b"tag/>".as_ref());
+                        let mut input = input_from_str("tag/>".as_ref());
                         //                     ^= 5
 
                         assert_eq!(
@@ -1596,7 +1596,7 @@ mod test {
                     fn empty_ns_empty_tag() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b":/>".as_ref());
+                        let mut input = input_from_str(":/>".as_ref());
                         //                   ^= 3
 
                         assert_eq!(
@@ -1610,7 +1610,7 @@ mod test {
                     fn empty_ns() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(b":tag/>".as_ref());
+                        let mut input = input_from_str(":tag/>".as_ref());
                         //                      ^= 6
 
                         assert_eq!(
@@ -1624,7 +1624,7 @@ mod test {
                     fn with_attributes() {
                         $(let mut $buf = $init;)?
                         let mut position = 0;
-                        let mut input = input_from_bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref());
+                        let mut input = input_from_str(r#"tag  attr-1="/>"  attr2  =  '/>'  3attr/>"#.as_ref());
                         //                                                           ^= 41
 
                         assert_eq!(
@@ -1839,51 +1839,6 @@ mod test {
                         reader.read_event_impl($(&mut $buf)?).unwrap(),
                         Event::Eof
                     );
-                }
-            }
-
-            #[cfg(feature = "encoding")]
-            mod encoding {
-                use super::reader_from_bytes;
-                use crate::events::Event;
-                use encoding_rs::{UTF_8, UTF_16LE, WINDOWS_1251};
-
-                mod bytes {
-                    use super::reader_from_bytes;
-                    use super::*;
-                    use pretty_assertions::assert_eq;
-
-                    /// Checks that encoding is detected by BOM and changed after XML declaration
-                    #[test]
-                    fn bom_detected() {
-                        let mut reader = reader_from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
-                        $(let mut $buf = $init;)?
-
-                        assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
-                        assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
-
-                        assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
-                    }
-
-                    /// Checks that encoding is changed by XML declaration, but only once
-                    #[test]
-                    fn xml_declaration() {
-                        let mut reader = reader_from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
-                        $(let mut $buf = $init;)?
-
-                        assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        reader.read_event_impl($(&mut $buf)?).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        assert_eq!(reader.read_event_impl($(&mut $buf)?).unwrap(), Event::Eof);
-                    }
                 }
             }
         };

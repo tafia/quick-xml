@@ -138,9 +138,9 @@ fn default_namespace_reset() {
 /// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.
 #[test]
 fn attributes_empty_ns() {
-    let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
+    let src = "<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
-    let mut r = Reader::from_bytes(src);
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     let mut ns_buf = Vec::new();
 
@@ -178,9 +178,9 @@ fn attributes_empty_ns() {
 /// The code path for namespace handling is slightly different for `Empty` vs. `Start+End`.
 #[test]
 fn attributes_empty_ns_expanded() {
-    let src = b"<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
+    let src = "<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
-    let mut r = Reader::from_bytes(src);
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(true);
     let mut ns_buf = Vec::new();
     {
@@ -221,9 +221,9 @@ fn attributes_empty_ns_expanded() {
 
 #[test]
 fn default_ns_shadowing_empty() {
-    let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
+    let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
-    let mut r = Reader::from_bytes(src);
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     let mut ns_buf = Vec::new();
 
@@ -279,9 +279,9 @@ fn default_ns_shadowing_empty() {
 
 #[test]
 fn default_ns_shadowing_expanded() {
-    let src = b"<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
+    let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
-    let mut r = Reader::from_bytes(src);
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(true);
     let mut ns_buf = Vec::new();
 

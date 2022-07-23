@@ -5,8 +5,8 @@ use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::Reader;
 
-static SAMPLE: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
-static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
+static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
+static PLAYERS: &str = include_str!("../tests/documents/players.xml");
 
 static LOREM_IPSUM_TEXT: &str =
 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
@@ -29,7 +29,7 @@ fn read_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_event");
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
             loop {
@@ -48,7 +48,7 @@ fn read_event(c: &mut Criterion) {
 
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
@@ -75,7 +75,7 @@ fn read_namespaced_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_namespaced_event");
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
             let mut ns_buf = Vec::new();
@@ -95,7 +95,7 @@ fn read_namespaced_event(c: &mut Criterion) {
 
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
@@ -121,9 +121,9 @@ fn read_namespaced_event(c: &mut Criterion) {
 fn one_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("One event");
     group.bench_function("StartText", |b| {
-        let src = "Hello world!".repeat(512 / 12).into_bytes();
+        let src = "Hello world!".repeat(512 / 12);
         b.iter(|| {
-            let mut r = Reader::from_bytes(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false).check_comments(false);
             match r.read_event() {
@@ -136,9 +136,9 @@ fn one_event(c: &mut Criterion) {
     });
 
     group.bench_function("Start", |b| {
-        let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5)).into_bytes();
+        let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_bytes(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
@@ -153,9 +153,9 @@ fn one_event(c: &mut Criterion) {
     });
 
     group.bench_function("Comment", |b| {
-        let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5)).into_bytes();
+        let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_bytes(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
@@ -170,9 +170,9 @@ fn one_event(c: &mut Criterion) {
     });
 
     group.bench_function("CData", |b| {
-        let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5)).into_bytes();
+        let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_bytes(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
@@ -193,7 +193,7 @@ fn attributes(c: &mut Criterion) {
     let mut group = c.benchmark_group("attributes");
     group.bench_function("with_checks = true", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
             loop {
@@ -214,7 +214,7 @@ fn attributes(c: &mut Criterion) {
 
     group.bench_function("with_checks = false", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
             loop {
@@ -235,7 +235,7 @@ fn attributes(c: &mut Criterion) {
 
     group.bench_function("try_get_attribute", |b| {
         b.iter(|| {
-            let mut r = Reader::from_bytes(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
             loop {

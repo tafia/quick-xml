@@ -787,11 +787,11 @@ mod decode_with_bom_removal {
     fn removes_utf16be_bom() {
         let mut reader = Reader::from_bytes(include_bytes!("./documents/utf16be.xml"));
         reader.trim_text(true);
-
+        let mut event_buffer = Vec::new();
         let mut txt = Vec::new();
 
         loop {
-            match reader.read_event() {
+            match reader.read_event_into(&mut event_buffer) {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
                 Ok(Eof) => break,
                 _ => (),
@@ -805,11 +805,11 @@ mod decode_with_bom_removal {
     fn removes_utf16le_bom() {
         let mut reader = Reader::from_bytes(include_bytes!("./documents/utf16le.xml"));
         reader.trim_text(true);
-
+        let mut event_buffer = Vec::new();
         let mut txt = Vec::new();
 
         loop {
-            match reader.read_event() {
+            match reader.read_event_into(&mut event_buffer) {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
                 Ok(Eof) => break,
                 _ => (),

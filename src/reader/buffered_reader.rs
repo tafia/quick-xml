@@ -406,6 +406,14 @@ impl Reader<BufferedReader<BufReader<File>>> {
     }
 }
 
+/// Builder for reading from any [`&[u8]`].
+impl<'buf> Reader<BufferedReader<&'buf [u8]>> {
+    /// Creates an XML reader from any type implementing [`BufRead`].
+    pub fn from_bytes(s: &'buf [u8]) -> Self {
+        Self::from_reader_internal(BufferedReader(s))
+    }
+}
+
 /// Builder for reading from any [`BufRead`].
 impl<R: BufRead> Reader<BufferedReader<R>> {
     /// Creates an XML reader from any type implementing [`BufRead`].
@@ -652,8 +660,8 @@ mod test {
     use super::*;
     use crate::reader::test::check;
 
-    fn input_from_bytes(bytes: &[u8]) -> BufferedReader<&[u8]> {
-        BufferedReader(bytes)
+    fn input_from_str(s: &str) -> BufferedReader<&[u8]> {
+        BufferedReader(s.as_bytes())
     }
 
     fn reader_from_str(s: &str) -> Reader<BufferedReader<&[u8]>> {
@@ -661,8 +669,54 @@ mod test {
     }
 
     #[allow(dead_code)]
-    fn reader_from_bytes(s: &[u8]) -> Reader<BufferedReader<&[u8]>> {
-        Reader::from_reader_internal(BufferedReader(s))
+    fn reader_from_bytes(bytes: &[u8]) -> Reader<BufferedReader<&[u8]>> {
+        Reader::from_reader_internal(BufferedReader(bytes))
+    }
+
+    #[cfg(feature = "encoding")]
+    mod encoding {
+        use super::reader_from_bytes;
+        use crate::events::Event;
+        use encoding_rs::{UTF_16LE, UTF_8, WINDOWS_1251};
+
+        mod bytes {
+            use super::reader_from_bytes;
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// Checks that encoding is detected by BOM and changed after XML declaration
+            #[test]
+            fn bom_detected() {
+                let mut reader = reader_from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
+                let mut buf = Vec::new();
+
+                assert_eq!(reader.decoder().encoding(), UTF_8);
+                reader.read_event_impl(&mut buf).unwrap();
+                assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                reader.read_event_impl(&mut buf).unwrap();
+                assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
+
+                assert_eq!(reader.read_event_impl(&mut buf).unwrap(), Event::Eof);
+            }
+
+            /// Checks that encoding is changed by XML declaration, but only once
+            #[test]
+            fn xml_declaration() {
+                let mut reader =
+                    reader_from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
+                let mut buf = Vec::new();
+
+                assert_eq!(reader.decoder().encoding(), UTF_8);
+                reader.read_event_impl(&mut buf).unwrap();
+                assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                reader.read_event_impl(&mut buf).unwrap();
+                assert_eq!(reader.decoder().encoding(), UTF_16LE);
+
+                assert_eq!(reader.read_event_impl(&mut buf).unwrap(), Event::Eof);
+            }
+        }
     }
 
     check!(let mut buf = Vec::new(););
