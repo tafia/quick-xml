@@ -127,6 +127,99 @@ macro_rules! configure_methods {
     };
 }
 
+macro_rules! read_event_impl {
+    (
+        $self:ident, $buf:ident
+    ) => {{
+        let event = match $self.parser.state {
+            ParseState::Init => $self.read_until_open($buf, true),
+            ParseState::ClosedTag => $self.read_until_open($buf, false),
+            ParseState::OpenedTag => $self.read_until_close($buf),
+            ParseState::Empty => $self.parser.close_expanded_empty(),
+            ParseState::Exit => return Ok(Event::Eof),
+        };
+        match event {
+            Err(_) | Ok(Event::Eof) => $self.parser.state = ParseState::Exit,
+            _ => {}
+        }
+        event
+    }};
+}
+
+macro_rules! read_until_open {
+    (
+        $self:ident, $buf:ident, $first:ident
+    ) => {{
+        $self.parser.state = ParseState::OpenedTag;
+
+        if $self.parser.trim_text_start {
+            $self.reader.skip_whitespace(&mut $self.parser.offset)?;
+        }
+
+        // If we already at the `<` symbol, do not try to return an empty Text event
+        if $self.reader.skip_one(b'<', &mut $self.parser.offset)? {
+            return $self.read_event_impl($buf);
+        }
+
+        match $self
+            .reader
+            .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
+        {
+            Ok(Some(bytes)) => $self.parser.read_text(bytes, $first),
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
+    }};
+}
+
+macro_rules! read_until_close {
+    (
+        $self:ident, $buf:ident
+    ) => {{
+        $self.parser.state = ParseState::ClosedTag;
+
+        match $self.reader.peek_one() {
+            // `<!` - comment, CDATA or DOCTYPE declaration
+            Ok(Some(b'!')) => match $self
+                .reader
+                .read_bang_element($buf, &mut $self.parser.offset)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some((bang_type, bytes))) => $self.parser.read_bang(bang_type, bytes),
+                Err(e) => Err(e),
+            },
+            // `</` - closing tag
+            Ok(Some(b'/')) => match $self
+                // Comment for prevent formatting
+                .reader
+                .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => $self.parser.read_end(bytes),
+                Err(e) => Err(e),
+            },
+            // `<?` - processing instruction
+            Ok(Some(b'?')) => match $self
+                // Comment for prevent formatting
+                .reader
+                .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => $self.parser.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
+            // `<...` - opening or self-closed tag
+            Ok(Some(_)) => match $self.reader.read_element($buf, &mut $self.parser.offset) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => $self.parser.read_start(bytes),
+                Err(e) => Err(e),
+            },
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
+    }};
+}
+
 /// Generalization of `read_to_end` method for buffered and borrowed readers
 macro_rules! read_to_end {
     (
@@ -435,18 +528,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        let event = match self.parser.state {
-            ParseState::Init => self.read_until_open(buf, true),
-            ParseState::ClosedTag => self.read_until_open(buf, false),
-            ParseState::OpenedTag => self.read_until_close(buf),
-            ParseState::Empty => self.parser.close_expanded_empty(),
-            ParseState::Exit => return Ok(Event::Eof),
-        };
-        match event {
-            Err(_) | Ok(Event::Eof) => self.parser.state = ParseState::Exit,
-            _ => {}
-        }
-        event
+        read_event_impl!(self, buf)
     }
 
     /// Read until '<' is found and moves reader to an `OpenedTag` state.
@@ -456,25 +538,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        self.parser.state = ParseState::OpenedTag;
-
-        if self.parser.trim_text_start {
-            self.reader.skip_whitespace(&mut self.parser.offset)?;
-        }
-
-        // If we already at the `<` symbol, do not try to return an empty Text event
-        if self.reader.skip_one(b'<', &mut self.parser.offset)? {
-            return self.read_event_impl(buf);
-        }
-
-        match self
-            .reader
-            .read_bytes_until(b'<', buf, &mut self.parser.offset)
-        {
-            Ok(Some(bytes)) => self.parser.read_text(bytes, first),
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
+        read_until_open!(self, buf, first)
     }
 
     /// Private function to read until `>` is found. This function expects that
@@ -483,42 +547,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        self.parser.state = ParseState::ClosedTag;
-
-        match self.reader.peek_one() {
-            // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.parser.offset) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => self.parser.read_bang(bang_type, bytes),
-                Err(e) => Err(e),
-            },
-            // `</` - closing tag
-            Ok(Some(b'/')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.parser.offset)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.parser.read_end(bytes),
-                Err(e) => Err(e),
-            },
-            // `<?` - processing instruction
-            Ok(Some(b'?')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.parser.offset)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.parser.read_question_mark(bytes),
-                Err(e) => Err(e),
-            },
-            // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.parser.offset) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.parser.read_start(bytes),
-                Err(e) => Err(e),
-            },
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
+        read_until_close!(self, buf)
     }
 }
 
