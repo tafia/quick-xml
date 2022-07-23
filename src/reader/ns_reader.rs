@@ -29,6 +29,7 @@ pub struct NsReader<R> {
     pending_pop: bool,
 }
 
+/// Private methods
 impl<R> NsReader<R> {
     #[inline]
     fn new(reader: Reader<R>) -> Self {
@@ -37,6 +38,46 @@ impl<R> NsReader<R> {
             buffer: Vec::new(),
             ns_resolver: NamespaceResolver::default(),
             pending_pop: false,
+        }
+    }
+
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
+    where
+        R: XmlSource<'i, B>,
+    {
+        if self.pending_pop {
+            self.ns_resolver.pop(&mut self.buffer);
+            self.pending_pop = false;
+        }
+        match self.reader.read_event_impl(buf) {
+            Ok(Event::Start(e)) => {
+                self.ns_resolver.push(&e, &mut self.buffer);
+                Ok((
+                    self.ns_resolver.find(e.name(), &mut self.buffer),
+                    Event::Start(e),
+                ))
+            }
+            Ok(Event::Empty(e)) => {
+                self.ns_resolver.push(&e, &mut self.buffer);
+                // notify next `read_event_impl()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), &mut self.buffer),
+                    Event::Empty(e),
+                ))
+            }
+            Ok(Event::End(e)) => {
+                // notify next `read_event_impl()` invocation that it needs to pop this
+                // namespace scope
+                self.pending_pop = true;
+                Ok((
+                    self.ns_resolver.find(e.name(), &mut self.buffer),
+                    Event::End(e),
+                ))
+            }
+            Ok(e) => Ok((ResolveResult::Unbound, e)),
+            Err(e) => Err(e),
         }
     }
 }
@@ -130,49 +171,6 @@ impl<R: BufRead> NsReader<R> {
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
         self.read_event_impl(buf)
-    }
-}
-
-/// Private methods
-impl<R> NsReader<R> {
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
-    where
-        R: XmlSource<'i, B>,
-    {
-        if self.pending_pop {
-            self.ns_resolver.pop(&mut self.buffer);
-            self.pending_pop = false;
-        }
-        match self.reader.read_event_impl(buf) {
-            Ok(Event::Start(e)) => {
-                self.ns_resolver.push(&e, &mut self.buffer);
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::Start(e),
-                ))
-            }
-            Ok(Event::Empty(e)) => {
-                self.ns_resolver.push(&e, &mut self.buffer);
-                // notify next `read_event_impl()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::Empty(e),
-                ))
-            }
-            Ok(Event::End(e)) => {
-                // notify next `read_event_impl()` invocation that it needs to pop this
-                // namespace scope
-                self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::End(e),
-                ))
-            }
-            Ok(e) => Ok((ResolveResult::Unbound, e)),
-            Err(e) => Err(e),
-        }
     }
 }
 
