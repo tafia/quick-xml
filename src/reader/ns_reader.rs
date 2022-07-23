@@ -6,7 +6,7 @@
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::path::Path;
 
 use crate::errors::Result;
@@ -38,6 +38,8 @@ impl<R> NsReader<R> {
     pub fn from_reader(reader: R) -> Self {
         Self::new(Reader::from_reader(reader))
     }
+
+    configure_methods!(reader);
 }
 
 /// Private methods
@@ -113,6 +115,11 @@ impl<R> NsReader<R> {
     #[inline]
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
+    }
+
+    /// Gets a mutable reference to the underlying reader.
+    pub fn get_mut(&mut self) -> &mut R {
+        self.reader.get_mut()
     }
 
     /// Resolves a potentially qualified **element name** or **attribute name**
@@ -403,6 +410,100 @@ impl<R: BufRead> NsReader<R> {
     ) -> Result<(ResolveResult, Event<'b>)> {
         self.read_resolved_event_impl(buf)
     }
+
+    /// Reads until end element is found using provided buffer as intermediate
+    /// storage for events content. This function is supposed to be called after
+    /// you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements have the same name
+    /// ("the same" means that their local names are the same and their prefixes
+    /// resolves to the same namespace).
+    ///
+    /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// If your reader created from a string slice or byte array slice, it is
+    /// better to use [`read_to_end()`] method, because it will not copy bytes
+    /// into intermediate buffer.
+    ///
+    /// The provided `buf` buffer will be filled only by one event content at time.
+    /// Before reading of each event the buffer will be cleared. If you know an
+    /// appropriate size of each event, you can preallocate the buffer to reduce
+    /// number of reallocations.
+    ///
+    /// The `ns` and `end` parameters should contain namespace and name of the
+    /// end element _in the reader encoding_. It is good practice to always get
+    /// that parameters using [`BytesStart::to_end()`] method.
+    ///
+    /// # Namespaces
+    ///
+    /// Unlike [`Reader::read_to_end_into()`], this method resolves namespace
+    /// prefixes, so the names that are not equals literally (for example,
+    /// `a:name` and `b:name`) could be considered equal if prefixes resolved to
+    /// the same namespace.
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::name::{Namespace, ResolveResult};
+    /// use quick_xml::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <outer xmlns="namespace 1">
+    ///         <inner xmlns="namespace 2">
+    ///             <outer></outer>
+    ///         </inner>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <p:outer xmlns:p="ns"></p:outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    /// let mut buf = Vec::new();
+    ///
+    /// let ns = Namespace(b"namespace 1");
+    /// let start = BytesStart::borrowed(br#"outer xmlns="namespace 1""#, 5);
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(
+    ///     reader.read_resolved_event_into(&mut buf).unwrap(),
+    ///     (ResolveResult::Bound(ns), Event::Start(start))
+    /// );
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(
+    ///     reader.read_resolved_event_into(&mut buf).unwrap(),
+    ///     (ResolveResult::Unbound, Event::Eof)
+    /// );
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
+    /// [`read_to_end()`]: Self::read_to_end
+    /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    #[inline]
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
+        // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
+        // match literally the start name. See `Self::check_end_names` documentation
+        self.reader.read_to_end_into(end, buf)
+    }
 }
 
 impl NsReader<BufReader<File>> {
@@ -541,6 +642,89 @@ impl<'i> NsReader<&'i [u8]> {
     pub fn read_resolved_event(&mut self) -> Result<(ResolveResult, Event<'i>)> {
         self.read_resolved_event_impl(())
     }
+
+    /// Reads until end element is found. This function is supposed to be called
+    /// after you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements have the same name
+    /// ("the same" means that their local names are the same and their prefixes
+    /// resolves to the same namespace).
+    ///
+    /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
+    /// will be returned. In particularly, that error will be returned if you call
+    /// this method without consuming the corresponding [`Start`] event first.
+    ///
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
+    ///
+    /// # Namespaces
+    ///
+    /// Unlike [`Reader::read_to_end()`], this method resolves namespace
+    /// prefixes, so the names that are not equals literally (for example,
+    /// `a:name` and `b:name`) could be considered equal if prefixes resolved to
+    /// the same namespace.
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can skip XML content after you read the
+    /// start event.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::name::{Namespace, ResolveResult};
+    /// use quick_xml::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <outer xmlns="namespace 1">
+    ///         <inner xmlns="namespace 2">
+    ///             <outer></outer>
+    ///         </inner>
+    ///         <inner>
+    ///             <inner></inner>
+    ///             <inner/>
+    ///             <outer></outer>
+    ///             <p:outer xmlns:p="ns"></p:outer>
+    ///             <outer/>
+    ///         </inner>
+    ///     </outer>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let ns = Namespace(b"namespace 1");
+    /// let start = BytesStart::borrowed(br#"outer xmlns="namespace 1""#, 5);
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(
+    ///     reader.read_resolved_event().unwrap(),
+    ///     (ResolveResult::Bound(ns), Event::Start(start))
+    /// );
+    ///
+    /// //...then, we could skip all events to the corresponding end event.
+    /// // This call will correctly handle nested <outer> elements.
+    /// // Note, however, that this method does not handle namespaces.
+    /// reader.read_to_end(end.name()).unwrap();
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(
+    ///     reader.read_resolved_event().unwrap(),
+    ///     (ResolveResult::Unbound, Event::Eof)
+    /// );
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`End`]: Event::End
+    /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
+    /// [`read_to_end()`]: Self::read_to_end
+    /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    #[inline]
+    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
+        // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
+        // match literally the start name. See `Self::check_end_names` documentation
+        self.reader.read_to_end(end)
+    }
 }
 
 impl<R> Deref for NsReader<R> {
@@ -549,12 +733,5 @@ impl<R> Deref for NsReader<R> {
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.reader
-    }
-}
-
-impl<R> DerefMut for NsReader<R> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.reader
     }
 }

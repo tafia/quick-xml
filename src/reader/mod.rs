@@ -11,6 +11,109 @@ use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Even
 
 use memchr;
 
+macro_rules! configure_methods {
+    ($($holder:ident)?) => {
+        /// Changes whether empty elements should be split into an `Open` and a `Close` event.
+        ///
+        /// When set to `true`, all [`Empty`] events produced by a self-closing tag like `<tag/>` are
+        /// expanded into a [`Start`] event followed by an [`End`] event. When set to `false` (the
+        /// default), those tags are represented by an [`Empty`] event instead.
+        ///
+        /// Note, that setting this to `true` will lead to additional allocates that
+        /// needed to store tag name for an [`End`] event. There is no additional
+        /// allocation, however, if [`Self::check_end_names()`] is also set.
+        ///
+        /// (`false` by default)
+        ///
+        /// [`Empty`]: Event::Empty
+        /// [`Start`]: Event::Start
+        /// [`End`]: Event::End
+        pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .expand_empty_elements = val;
+            self
+        }
+
+        /// Changes whether whitespace before and after character data should be removed.
+        ///
+        /// When set to `true`, all [`Text`] events are trimmed. If they are empty, no event will be
+        /// pushed.
+        ///
+        /// (`false` by default)
+        ///
+        /// [`Text`]: Event::Text
+        pub fn trim_text(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .trim_text_start = val;
+            self $(.$holder)? .trim_text_end = val;
+            self
+        }
+
+        /// Changes whether whitespace after character data should be removed.
+        ///
+        /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
+        ///
+        /// (`false` by default)
+        ///
+        /// [`Text`]: Event::Text
+        pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .trim_text_end = val;
+            self
+        }
+
+        /// Changes whether trailing whitespaces after the markup name are trimmed in closing tags
+        /// `</a >`.
+        ///
+        /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
+        ///
+        /// Note that if set to `false` and `check_end_names` is true the comparison of markup names is
+        /// going to fail erronously if a closing tag contains trailing whitespaces.
+        ///
+        /// (`true` by default)
+        ///
+        /// [`End`]: Event::End
+        pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .trim_markup_names_in_closing_tags = val;
+            self
+        }
+
+        /// Changes whether mismatched closing tag names should be detected.
+        ///
+        /// When set to `false`, it won't check if a closing tag matches the corresponding opening tag.
+        /// For example, `<mytag></different_tag>` will be permitted.
+        ///
+        /// If the XML is known to be sane (already processed, etc.) this saves extra time.
+        ///
+        /// Note that the emitted [`End`] event will not be modified if this is disabled, ie. it will
+        /// contain the data of the mismatched end tag.
+        ///
+        /// Note, that setting this to `true` will lead to additional allocates that
+        /// needed to store tag name for an [`End`] event. There is no additional
+        /// allocation, however, if [`Self::expand_empty_elements()`] is also set.
+        ///
+        /// (`true` by default)
+        ///
+        /// [`End`]: Event::End
+        pub fn check_end_names(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .check_end_names = val;
+            self
+        }
+
+        /// Changes whether comments should be validated.
+        ///
+        /// When set to `true`, every [`Comment`] event will be checked for not containing `--`, which
+        /// is not allowed in XML comments. Most of the time we don't want comments at all so we don't
+        /// really care about comment correctness, thus the default value is `false` to improve
+        /// performance.
+        ///
+        /// (`false` by default)
+        ///
+        /// [`Comment`]: Event::Comment
+        pub fn check_comments(&mut self, val: bool) -> &mut Self {
+            self $(.$holder)? .check_comments = val;
+            self
+        }
+    };
+}
+
 mod buffered_reader;
 mod ns_reader;
 mod slice_reader;
@@ -232,104 +335,7 @@ impl<R> Reader<R> {
         }
     }
 
-    /// Changes whether empty elements should be split into an `Open` and a `Close` event.
-    ///
-    /// When set to `true`, all [`Empty`] events produced by a self-closing tag like `<tag/>` are
-    /// expanded into a [`Start`] event followed by an [`End`] event. When set to `false` (the
-    /// default), those tags are represented by an [`Empty`] event instead.
-    ///
-    /// Note, that setting this to `true` will lead to additional allocates that
-    /// needed to store tag name for an [`End`] event. There is no additional
-    /// allocation, however, if [`Self::check_end_names()`] is also set.
-    ///
-    /// (`false` by default)
-    ///
-    /// [`Empty`]: Event::Empty
-    /// [`Start`]: Event::Start
-    /// [`End`]: Event::End
-    pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
-        self.expand_empty_elements = val;
-        self
-    }
-
-    /// Changes whether whitespace before and after character data should be removed.
-    ///
-    /// When set to `true`, all [`Text`] events are trimmed. If they are empty, no event will be
-    /// pushed.
-    ///
-    /// (`false` by default)
-    ///
-    /// [`Text`]: Event::Text
-    pub fn trim_text(&mut self, val: bool) -> &mut Self {
-        self.trim_text_start = val;
-        self.trim_text_end = val;
-        self
-    }
-
-    /// Changes whether whitespace after character data should be removed.
-    ///
-    /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
-    ///
-    /// (`false` by default)
-    ///
-    /// [`Text`]: Event::Text
-    pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
-        self.trim_text_end = val;
-        self
-    }
-
-    /// Changes whether trailing whitespaces after the markup name are trimmed in closing tags
-    /// `</a >`.
-    ///
-    /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
-    ///
-    /// Note that if set to `false` and `check_end_names` is true the comparison of markup names is
-    /// going to fail erronously if a closing tag contains trailing whitespaces.
-    ///
-    /// (`true` by default)
-    ///
-    /// [`End`]: Event::End
-    pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
-        self.trim_markup_names_in_closing_tags = val;
-        self
-    }
-
-    /// Changes whether mismatched closing tag names should be detected.
-    ///
-    /// When set to `false`, it won't check if a closing tag matches the corresponding opening tag.
-    /// For example, `<mytag></different_tag>` will be permitted.
-    ///
-    /// If the XML is known to be sane (already processed, etc.) this saves extra time.
-    ///
-    /// Note that the emitted [`End`] event will not be modified if this is disabled, ie. it will
-    /// contain the data of the mismatched end tag.
-    ///
-    /// Note, that setting this to `true` will lead to additional allocates that
-    /// needed to store tag name for an [`End`] event. There is no additional
-    /// allocation, however, if [`Self::expand_empty_elements()`] is also set.
-    ///
-    /// (`true` by default)
-    ///
-    /// [`End`]: Event::End
-    pub fn check_end_names(&mut self, val: bool) -> &mut Self {
-        self.check_end_names = val;
-        self
-    }
-
-    /// Changes whether comments should be validated.
-    ///
-    /// When set to `true`, every [`Comment`] event will be checked for not containing `--`, which
-    /// is not allowed in XML comments. Most of the time we don't want comments at all so we don't
-    /// really care about comment correctness, thus the default value is `false` to improve
-    /// performance.
-    ///
-    /// (`false` by default)
-    ///
-    /// [`Comment`]: Event::Comment
-    pub fn check_comments(&mut self, val: bool) -> &mut Self {
-        self.check_comments = val;
-        self
-    }
+    configure_methods!();
 }
 
 /// Getters
