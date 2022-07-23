@@ -34,8 +34,9 @@
   |                        |`read_resolved_event` -- borrow from input
   |                        |`read_event_into`
   |`read_namespaced_event` |`read_resolved_event_into`
-  |`event_namespace`       |`event_namespace`
-  |`attribute_namespace`   |`attribute_namespace`
+  |                        |`resolve`
+  |`event_namespace`       |`resolve_element`
+  |`attribute_namespace`   |`resolve_attribute`
 
 
 ### Bug Fixes

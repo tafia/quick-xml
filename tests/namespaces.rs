@@ -147,7 +147,7 @@ fn attributes_empty_ns() {
         // we don't care about xmlns attributes for this test
         .filter(|kv| kv.key.as_namespace_binding().is_none())
         .map(|Attribute { key: name, value }| {
-            let (opt_ns, local_name) = r.attribute_namespace(name);
+            let (opt_ns, local_name) = r.resolve_attribute(name);
             (opt_ns, local_name.into_inner(), value)
         });
     assert_eq!(
@@ -186,7 +186,7 @@ fn attributes_empty_ns_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name);
+                let (opt_ns, local_name) = r.resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
         assert_eq!(
@@ -245,7 +245,7 @@ fn default_ns_shadowing_empty() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name);
+                let (opt_ns, local_name) = r.resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not
@@ -301,7 +301,7 @@ fn default_ns_shadowing_expanded() {
             // we don't care about xmlns attributes for this test
             .filter(|kv| kv.key.as_namespace_binding().is_none())
             .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.attribute_namespace(name);
+                let (opt_ns, local_name) = r.resolve_attribute(name);
                 (opt_ns, local_name.into_inner(), value)
             });
         // the attribute should _not_ have a namespace name. The default namespace does not

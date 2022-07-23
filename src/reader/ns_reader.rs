@@ -96,35 +96,169 @@ impl<R> NsReader<R> {
 
 /// Getters
 impl<R> NsReader<R> {
-    /// Resolves a potentially qualified **event name** into (namespace name, local name).
+    /// Resolves a potentially qualified **element name** or **attribute name**
+    /// into (namespace name, local name).
     ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
+    /// *Qualified* names have the form `prefix:local-name` where the `prefix`
+    /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// *Unqualified* event inherits the current *default namespace*.
+    /// The method returns following results depending on the `name` shape,
+    /// `attribute` flag and the presence of the default namespace:
+    ///
+    /// |attribute|`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |---------|-------------|-------------------|-----------------------|------------
+    /// |`true`   |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |Defined      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`false`  |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`false`  |Defined      |`local-name`       |[`Bound`] (default)    |`local-name`
+    /// |`false`  |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    ///
+    /// If you want to clearly indicate that name that you resolve is an element
+    /// or an attribute name, you could use [`resolve_attribute()`] or [`resolve_element()`]
+    /// methods.
     ///
     /// # Lifetimes
     ///
-    /// - `'n`: lifetime of an element name
+    /// - `'n`: lifetime of a name. Returned local name will be bound to the same
+    ///   lifetime as the name in question.
+    /// - returned namespace name will be bound to the reader itself
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
+    /// [`resolve_attribute()`]: Self::resolve_attribute()
+    /// [`resolve_element()`]: Self::resolve_element()
     #[inline]
-    pub fn event_namespace<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+    pub fn resolve<'n>(&self, name: QName<'n>, attribute: bool) -> (ResolveResult, LocalName<'n>) {
+        self.ns_resolver.resolve(name, &self.buffer, !attribute)
+    }
+
+    /// Resolves a potentially qualified **element name** into (namespace name, local name).
+    ///
+    /// *Qualified* element names have the form `prefix:local-name` where the
+    /// `prefix` is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the element
+    /// in question.
+    ///
+    /// *Unqualified* elements inherits the current *default namespace*.
+    ///
+    /// The method returns following results depending on the `name` shape and
+    /// the presence of the default namespace:
+    ///
+    /// |`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |-------------|-------------------|-----------------------|------------
+    /// |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |Defined      |`local-name`       |[`Bound`] (default)    |`local-name`
+    /// |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'n`: lifetime of an element name. Returned local name will be bound
+    ///   to the same lifetime as the name in question.
+    /// - returned namespace name will be bound to the reader itself
+    ///
+    /// # Examples
+    ///
+    /// This example shows how you can resolve qualified name into a namespace.
+    /// Note, that in the code like this you do not need to do that manually,
+    /// because the namespace resolution result returned by the [`read_event()`].
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str("<tag xmlns='root namespace'/>");
+    ///
+    /// match reader.read_event().unwrap() {
+    ///     Event::Empty(e) => assert_eq!(
+    ///         reader.resolve_element(e.name()),
+    ///         (Bound(Namespace(b"root namespace")), QName(b"tag").into())
+    ///     ),
+    ///     _ => unreachable!(),
+    /// }
+    /// ```
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
+    /// [`read_event()`]: Self::read_event
+    #[inline]
+    pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
         self.ns_resolver.resolve(name, &self.buffer, true)
     }
 
     /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
     ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the`prefix` is defined
-    /// on any containing XML element via `xmlns:prefix="the:namespace:uri"`. The namespace prefix
-    /// can be defined on the same element as the attribute in question.
+    /// *Qualified* attribute names have the form `prefix:local-name` where the
+    /// `prefix` is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the attribute
+    /// in question.
     ///
     /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
     ///
+    /// The method returns following results depending on the `name` shape and
+    /// the presence of the default namespace:
+    ///
+    /// |`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |-------------|-------------------|-----------------------|------------
+    /// |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |Defined      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    ///
     /// # Lifetimes
     ///
-    /// - `'n`: lifetime of an attribute
+    /// - `'n`: lifetime of an attribute name. Returned local name will be bound
+    ///   to the same lifetime as the name in question.
+    /// - returned namespace name will be bound to the reader itself
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::events::attributes::Attribute;
+    /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str("
+    ///     <tag one='1'
+    ///          p:two='2'
+    ///          xmlns='root namespace'
+    ///          xmlns:p='other namespace'/>
+    /// ");
+    /// reader.trim_text(true);
+    ///
+    /// match reader.read_event().unwrap() {
+    ///     Event::Empty(e) => {
+    ///         let mut iter = e.attributes();
+    ///
+    ///         // Unlike elements, attributes without explicit namespace
+    ///         // not bound to any namespace
+    ///         let one = iter.next().unwrap().unwrap();
+    ///         assert_eq!(
+    ///             reader.resolve_attribute(one.key),
+    ///             (Unbound, QName(b"one").into())
+    ///         );
+    ///
+    ///         let two = iter.next().unwrap().unwrap();
+    ///         assert_eq!(
+    ///             reader.resolve_attribute(two.key),
+    ///             (Bound(Namespace(b"other namespace")), QName(b"two").into())
+    ///         );
+    ///     }
+    ///     _ => unreachable!(),
+    /// }
+    /// ```
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
-    pub fn attribute_namespace<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+    pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
         self.ns_resolver.resolve(name, &self.buffer, false)
     }
 }
@@ -133,7 +267,7 @@ impl<R: BufRead> NsReader<R> {
     /// Reads the next event into given buffer.
     ///
     /// This method manages namespaces but doesn't resolve them automatically.
-    /// You should call [`event_namespace()`] if you want to get a namespace.
+    /// You should call [`resolve_element()`] if you want to get a namespace.
     ///
     /// You also can use [`read_resolved_event_into()`] instead if you want to resolve
     /// namespace as soon as you get an event.
@@ -161,7 +295,7 @@ impl<R: BufRead> NsReader<R> {
     ///     match reader.read_event_into(&mut buf).unwrap() {
     ///         Event::Start(e) => {
     ///             count += 1;
-    ///             let (ns, local) = reader.event_namespace(e.name());
+    ///             let (ns, local) = reader.resolve_element(e.name());
     ///             match local.as_ref() {
     ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
     ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
@@ -180,7 +314,7 @@ impl<R: BufRead> NsReader<R> {
     /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
     /// ```
     ///
-    /// [`event_namespace()`]: Self::event_namespace
+    /// [`resolve_element()`]: Self::resolve_element
     /// [`read_resolved_event_into()`]: Self::read_resolved_event_into
     #[inline]
     pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
@@ -268,7 +402,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// Reads the next event, borrow its content from the input buffer.
     ///
     /// This method manages namespaces but doesn't resolve them automatically.
-    /// You should call [`event_namespace()`] if you want to get a namespace.
+    /// You should call [`resolve_element()`] if you want to get a namespace.
     ///
     /// You also can use [`read_resolved_event()`] instead if you want to resolve namespace
     /// as soon as you get an event.
@@ -295,7 +429,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///     match reader.read_event().unwrap() {
     ///         Event::Start(e) => {
     ///             count += 1;
-    ///             let (ns, local) = reader.event_namespace(e.name());
+    ///             let (ns, local) = reader.resolve_element(e.name());
     ///             match local.as_ref() {
     ///                 b"tag1" => assert_eq!(ns, Bound(Namespace(b"www.xxxx"))),
     ///                 b"tag2" => assert_eq!(ns, Bound(Namespace(b"www.yyyy"))),
@@ -313,7 +447,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
     /// ```
     ///
-    /// [`event_namespace()`]: Self::event_namespace
+    /// [`resolve_element()`]: Self::resolve_element
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'i>> {

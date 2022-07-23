@@ -274,13 +274,13 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`NsReader::attribute_namespace`],
-/// [`NsReader::event_namespace`], [`NsReader::read_resolved_event`] and
+/// Result of [prefix] resolution which creates by [`NsReader::resolve_attribute`],
+/// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
 /// [`NsReader::read_resolved_event_into`] methods.
 ///
 /// [prefix]: Prefix
-/// [`NsReader::attribute_namespace`]: crate::reader::NsReader::attribute_namespace
-/// [`NsReader::event_namespace`]: crate::reader::NsReader::event_namespace
+/// [`NsReader::resolve_attribute`]: crate::reader::NsReader::resolve_attribute
+/// [`NsReader::resolve_element`]: crate::reader::NsReader::resolve_element
 /// [`NsReader::read_resolved_event`]: crate::reader::NsReader::read_resolved_event
 /// [`NsReader::read_resolved_event_into`]: crate::reader::NsReader::read_resolved_event_into
 #[derive(Clone, PartialEq, Eq, Hash)]
