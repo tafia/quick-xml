@@ -1,6 +1,6 @@
 use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
+use crate::encoding::Decoder;
 use crate::events::BytesStart;
-use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, SeqAccess};
 
 /// Check if tag `start` is included in the `fields` list. `decoder` is used to

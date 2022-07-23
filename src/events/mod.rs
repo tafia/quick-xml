@@ -41,10 +41,11 @@ use std::fmt::{self, Debug, Formatter};
 use std::ops::Deref;
 use std::str::from_utf8;
 
+use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
-use crate::reader::{Decoder, Reader};
+use crate::reader::Reader;
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 

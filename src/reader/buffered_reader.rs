@@ -11,7 +11,9 @@ use crate::name::{QName, ResolveResult};
 use crate::{Error, Result};
 
 #[cfg(feature = "encoding")]
-use crate::reader::{detect_encoding, EncodingRef};
+use crate::encoding::detect_encoding;
+#[cfg(feature = "encoding")]
+use crate::reader::EncodingRef;
 use crate::reader::{is_whitespace, BangType, InnerReader, ReadElementState, Reader, TagState};
 
 /// Private functions for a [`Reader`] based on an [`BufferedReader`].
