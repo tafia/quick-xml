@@ -41,7 +41,7 @@ impl<R> NsReader<R> {
         }
     }
 
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
@@ -52,30 +52,42 @@ impl<R> NsReader<R> {
         match self.reader.read_event_impl(buf) {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, &mut self.buffer);
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::Start(e),
-                ))
+                Ok(Event::Start(e))
             }
             Ok(Event::Empty(e)) => {
                 self.ns_resolver.push(&e, &mut self.buffer);
                 // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::Empty(e),
-                ))
+                Ok(Event::Empty(e))
             }
             Ok(Event::End(e)) => {
                 // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
-                Ok((
-                    self.ns_resolver.find(e.name(), &mut self.buffer),
-                    Event::End(e),
-                ))
+                Ok(Event::End(e))
             }
+            e => e,
+        }
+    }
+
+    fn read_resolved_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
+    where
+        R: XmlSource<'i, B>,
+    {
+        match self.read_event_impl(buf) {
+            Ok(Event::Start(e)) => Ok((
+                self.ns_resolver.find(e.name(), &mut self.buffer),
+                Event::Start(e),
+            )),
+            Ok(Event::Empty(e)) => Ok((
+                self.ns_resolver.find(e.name(), &mut self.buffer),
+                Event::Empty(e),
+            )),
+            Ok(Event::End(e)) => Ok((
+                self.ns_resolver.find(e.name(), &mut self.buffer),
+                Event::End(e),
+            )),
             Ok(e) => Ok((ResolveResult::Unbound, e)),
             Err(e) => Err(e),
         }
@@ -170,7 +182,7 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
-        self.read_event_impl(buf)
+        self.read_resolved_event_impl(buf)
     }
 }
 
