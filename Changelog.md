@@ -27,6 +27,8 @@
   the XML declared encoding and always use UTF-8
 - [#416]: Add `borrow()` methods in all event structs which allows to get
   a borrowed version of any event
+- [#436]: Added utilities `detect_encoding()`, `decode()`, and `decode_with_bom_removal()`
+  under the `quick-xml::encoding` namespace.
 
 ### Bug Fixes
 
