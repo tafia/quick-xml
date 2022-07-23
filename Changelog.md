@@ -37,6 +37,8 @@
   |                        |`resolve`
   |`event_namespace`       |`resolve_element`
   |`attribute_namespace`   |`resolve_attribute`
+- [#439]: Added utilities `detect_encoding()`, `decode()`, and `decode_with_bom_removal()`
+  under the `quick-xml::encoding` namespace.
 
 
 ### Bug Fixes
@@ -209,6 +211,8 @@
 [#431]: https://github.com/tafia/quick-xml/pull/431
 [#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
+[#439]: https://github.com/tafia/quick-xml/pull/439
+
 
 ## 0.23.0 -- 2022-05-08
 

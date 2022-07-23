@@ -7,7 +7,7 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::{Error, Result};
 
-/// Decoder of byte slices to the strings. This is lightweight object that can be copied.
+/// Decoder of byte slices into strings.
 ///
 /// If feature `encoding` is enabled, this encoding taken from the `"encoding"`
 /// XML declaration or assumes UTF-8, if XML has no <?xml ?> declaration, encoding
@@ -60,7 +60,7 @@ impl Decoder {
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
     pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        let bytes = if bytes.starts_with(b"\xEF\xBB\xBF") {
+        let bytes = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
             &bytes[3..]
         } else {
             bytes
@@ -86,13 +86,7 @@ impl Decoder {
     ///
     /// Returns an error in case of malformed sequences in the `bytes`.
     pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        match self
-            .encoding
-            .decode_without_bom_handling_and_without_replacement(bytes)
-        {
-            None => Err(Error::NonDecodable(None)),
-            Some(s) => Ok(s),
-        }
+        decode(bytes, self.encoding)
     }
 
     /// Decodes a slice with BOM removal if it is present in the `bytes` using
@@ -105,57 +99,76 @@ impl Decoder {
     ///
     /// Returns an error in case of malformed sequences in the `bytes`.
     pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        self.decode(self.remove_bom(bytes))
-    }
-    /// Copied from [`Encoding::decode_with_bom_removal`]
-    #[inline]
-    fn remove_bom<'b>(&self, bytes: &'b [u8]) -> &'b [u8] {
-        if self.encoding == UTF_8 && bytes.starts_with(b"\xEF\xBB\xBF") {
-            return &bytes[3..];
-        }
-        if self.encoding == UTF_16LE && bytes.starts_with(b"\xFF\xFE") {
-            return &bytes[2..];
-        }
-        if self.encoding == UTF_16BE && bytes.starts_with(b"\xFE\xFF") {
-            return &bytes[2..];
-        }
-
-        bytes
+        self.decode(remove_bom(bytes, self.encoding))
     }
 }
 
-/// Automatic encoding detection of XML files based using the [recommended algorithm]
-/// (https://www.w3.org/TR/xml11/#sec-guessing)
+/// Decodes the provided bytes using the specified encoding, ignoring the BOM
+/// if it is present in the `bytes`.
+///
+/// Returns an error in case of malformed sequences in the `bytes`.
+#[cfg(feature = "encoding")]
+pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b, str>> {
+    encoding
+        .decode_without_bom_handling_and_without_replacement(bytes)
+        .ok_or(Error::NonDecodable(None))
+}
+
+/// Decodes a slice with an unknown encoding, removing the BOM if it is present
+/// in the bytes.
+///
+/// Returns an error in case of malformed sequences in the `bytes`.
+#[cfg(feature = "encoding")]
+pub fn decode_with_bom_removal<'b>(bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+    if let Some(encoding) = detect_encoding(bytes) {
+        let bytes = remove_bom(bytes, encoding);
+        decode(bytes, encoding)
+    } else {
+        decode(bytes, UTF_8)
+    }
+}
+
+#[cfg(feature = "encoding")]
+fn split_at_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> (&'b [u8], &'b [u8]) {
+    if encoding == UTF_8 && bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        bytes.split_at(3)
+    } else if encoding == UTF_16LE && bytes.starts_with(&[0xFF, 0xFE]) {
+        bytes.split_at(2)
+    } else if encoding == UTF_16BE && bytes.starts_with(&[0xFE, 0xFF]) {
+        bytes.split_at(2)
+    } else {
+        (&[], bytes)
+    }
+}
+
+#[cfg(feature = "encoding")]
+fn remove_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> &'b [u8] {
+    let (_, bytes) = split_at_bom(bytes, encoding);
+    bytes
+}
+
+/// Automatic encoding detection of XML files based using the
+/// [recommended algorithm](https://www.w3.org/TR/xml11/#sec-guessing).
+///
+/// If encoding is detected, `Some` is returned, otherwise `None` is returned.
+///
+/// Because the [`encoding_rs`] crate supports only subset of those encodings, only
+/// the supported subset are detected, which is UTF-8, UTF-16 BE and UTF-16 LE.
 ///
 /// The algorithm suggests examine up to the first 4 bytes to determine encoding
 /// according to the following table:
 ///
 /// | Bytes       |Detected encoding
 /// |-------------|------------------------------------------
-/// |`00 00 FE FF`|UCS-4, big-endian machine (1234 order)
-/// |`FF FE 00 00`|UCS-4, little-endian machine (4321 order)
-/// |`00 00 FF FE`|UCS-4, unusual octet order (2143)
-/// |`FE FF 00 00`|UCS-4, unusual octet order (3412)
 /// |`FE FF ## ##`|UTF-16, big-endian
 /// |`FF FE ## ##`|UTF-16, little-endian
 /// |`EF BB BF`   |UTF-8
 /// |-------------|------------------------------------------
-/// |`00 00 00 3C`|UCS-4 or similar (use declared encoding to find the exact one), in big-endian (1234)
-/// |`3C 00 00 00`|UCS-4 or similar (use declared encoding to find the exact one), in little-endian (4321)
-/// |`00 00 3C 00`|UCS-4 or similar (use declared encoding to find the exact one), in unusual byte orders (2143)
-/// |`00 3C 00 00`|UCS-4 or similar (use declared encoding to find the exact one), in unusual byte orders (3412)
 /// |`00 3C 00 3F`|UTF-16 BE or ISO-10646-UCS-2 BE or similar 16-bit BE (use declared encoding to find the exact one)
 /// |`3C 00 3F 00`|UTF-16 LE or ISO-10646-UCS-2 LE or similar 16-bit LE (use declared encoding to find the exact one)
 /// |`3C 3F 78 6D`|UTF-8, ISO 646, ASCII, some part of ISO 8859, Shift-JIS, EUC, or any other 7-bit, 8-bit, or mixed-width encoding which ensures that the characters of ASCII have their normal positions, width, and values; the actual encoding declaration must be read to detect which of these applies, but since all of these encodings use the same bit patterns for the relevant ASCII characters, the encoding declaration itself may be read reliably
-/// |`4C 6F A7 94`|EBCDIC (in some flavor; the full encoding declaration must be read to tell which code page is in use)
-/// |_Other_      |UTF-8 without an encoding declaration, or else the data stream is mislabeled (lacking a required encoding declaration), corrupt, fragmentary, or enclosed in a wrapper of some kind
-///
-/// Because [`encoding_rs`] crate supported only subset of those encodings, only
-/// supported subset are detected, which is UTF-8, UTF-16 BE and UTF-16 LE.
-///
-/// If encoding is detected, `Some` is returned, otherwise `None` is returned.
 #[cfg(feature = "encoding")]
-pub(crate) fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
+pub fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
     match bytes {
         // with BOM
         _ if bytes.starts_with(&[0xFE, 0xFF]) => Some(UTF_16BE),
@@ -170,3 +183,5 @@ pub(crate) fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
         _ => None,
     }
 }
+
+// TODO: add some tests for functions
