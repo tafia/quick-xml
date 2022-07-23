@@ -65,7 +65,7 @@ macro_rules! configure_methods {
         /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
         ///
         /// Note that if set to `false` and `check_end_names` is true the comparison of markup names is
-        /// going to fail erronously if a closing tag contains trailing whitespaces.
+        /// going to fail erroneously if a closing tag contains trailing whitespaces.
         ///
         /// (`true` by default)
         ///
@@ -76,6 +76,19 @@ macro_rules! configure_methods {
         }
 
         /// Changes whether mismatched closing tag names should be detected.
+        ///
+        /// Note, that start and end tags [should match literally][spec], they cannot
+        /// have different prefixes even if both prefixes resolve to the same namespace.
+        /// The XML
+        ///
+        /// ```xml
+        /// <outer xmlns="namespace" xmlns:p="namespace">
+        /// </p:outer>
+        /// ```
+        ///
+        /// is not valid, even though semantically the start tag is the same as the
+        /// end tag. The reason is that namespaces are an extension of the original
+        /// XML specification (without namespaces) and it should be backward-compatible.
         ///
         /// When set to `false`, it won't check if a closing tag matches the corresponding opening tag.
         /// For example, `<mytag></different_tag>` will be permitted.
@@ -91,6 +104,7 @@ macro_rules! configure_methods {
         ///
         /// (`true` by default)
         ///
+        /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
         /// [`End`]: Event::End
         pub fn check_end_names(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .check_end_names = val;
