@@ -4,8 +4,10 @@
 //! [qualified names]: https://www.w3.org/TR/xml-names11/#dt-qualname
 //! [expanded names]: https://www.w3.org/TR/xml-names11/#dt-expname
 
-use std::io::BufRead;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 use crate::errors::Result;
 use crate::events::Event;
@@ -27,6 +29,15 @@ pub struct NsReader<R> {
     /// event will be processed by the user, so we only mark that we should that
     /// in the next [`Self::read_event_impl()`] call.
     pending_pop: bool,
+}
+
+/// Builder methods
+impl<R> NsReader<R> {
+    /// Creates a `NsReader` that reads from a reader.
+    #[inline]
+    pub fn from_reader(reader: R) -> Self {
+        Self::new(Reader::from_reader(reader))
+    }
 }
 
 /// Private methods
@@ -96,6 +107,14 @@ impl<R> NsReader<R> {
 
 /// Getters
 impl<R> NsReader<R> {
+    /// Consumes `NsReader` returning the underlying reader
+    ///
+    /// See the [`Reader::into_inner`] for examples
+    #[inline]
+    pub fn into_inner(self) -> R {
+        self.reader.into_inner()
+    }
+
     /// Resolves a potentially qualified **element name** or **attribute name**
     /// into (namespace name, local name).
     ///
@@ -383,6 +402,15 @@ impl<R: BufRead> NsReader<R> {
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
         self.read_resolved_event_impl(buf)
+    }
+}
+
+impl NsReader<BufReader<File>> {
+    /// Creates an XML reader from a file path.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        Ok(Self::from_reader(reader))
     }
 }
 
