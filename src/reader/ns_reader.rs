@@ -10,7 +10,7 @@ use std::ops::{Deref, DerefMut};
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::Reader;
+use crate::reader::{Reader, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -25,7 +25,7 @@ pub struct NsReader<R> {
     ns_resolver: NamespaceResolver,
     /// We cannot pop data from the namespace stack until returned `Empty` or `End`
     /// event will be processed by the user, so we only mark that we should that
-    /// in the next [`Self::read_namespaced_event()`] call.
+    /// in the next [`Self::read_event_impl()`] call.
     pending_pop: bool,
 }
 
@@ -129,12 +129,21 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
+        self.read_event_impl(buf)
+    }
+}
+
+/// Private methods
+impl<R> NsReader<R> {
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
+    where
+        R: XmlSource<'i, B>,
+    {
         if self.pending_pop {
             self.ns_resolver.pop(&mut self.buffer);
+            self.pending_pop = false;
         }
-        self.pending_pop = false;
-        match self.reader.read_event_into(buf) {
-            Ok(Event::Eof) => Ok((ResolveResult::Unbound, Event::Eof)),
+        match self.reader.read_event_impl(buf) {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, &mut self.buffer);
                 Ok((
@@ -143,13 +152,8 @@ impl<R: BufRead> NsReader<R> {
                 ))
             }
             Ok(Event::Empty(e)) => {
-                // For empty elements we need to 'artificially' keep the namespace scope on the
-                // stack until the next `next()` call occurs.
-                // Otherwise the caller has no chance to use `resolve` in the context of the
-                // namespace declarations that are 'in scope' for the empty element alone.
-                // Ex: <img rdf:nodeID="abc" xmlns:rdf="urn:the-rdf-uri" />
                 self.ns_resolver.push(&e, &mut self.buffer);
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
@@ -158,7 +162,7 @@ impl<R: BufRead> NsReader<R> {
                 ))
             }
             Ok(Event::End(e)) => {
-                // notify next `read_namespaced_event()` invocation that it needs to pop this
+                // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
                 Ok((
