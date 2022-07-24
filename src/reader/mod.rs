@@ -1793,62 +1793,6 @@ mod test {
                     );
                 }
             }
-
-            #[cfg(feature = "encoding")]
-            mod encoding {
-                use crate::events::Event;
-                use crate::reader::Reader;
-                use encoding_rs::{UTF_8, UTF_16LE, WINDOWS_1251};
-                use pretty_assertions::assert_eq;
-
-                mod bytes {
-                    use super::*;
-                    use pretty_assertions::assert_eq;
-
-                    /// Checks that encoding is detected by BOM and changed after XML declaration
-                    #[test]
-                    fn bom_detected() {
-                        let mut reader = Reader::from_bytes(b"\xFF\xFE<?xml encoding='windows-1251'?>");
-
-                        assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($buf).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        reader.read_event_impl($buf).unwrap();
-                        assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
-
-                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
-                    }
-
-                    /// Checks that encoding is changed by XML declaration, but only once
-                    #[test]
-                    fn xml_declaration() {
-                        let mut reader = Reader::from_bytes(b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>");
-
-                        assert_eq!(reader.decoder().encoding(), UTF_8);
-                        reader.read_event_impl($buf).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        reader.read_event_impl($buf).unwrap();
-                        assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-                        assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
-                    }
-                }
-
-                /// Checks that XML declaration cannot change the encoding from UTF-8 if
-                /// a `Reader` was created using `from_str` method
-                #[test]
-                fn str_always_has_utf8() {
-                    let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
-
-                    assert_eq!(reader.decoder().encoding(), UTF_8);
-                    reader.read_event_impl($buf).unwrap();
-                    assert_eq!(reader.decoder().encoding(), UTF_8);
-
-                    assert_eq!(reader.read_event_impl($buf).unwrap(), Event::Eof);
-                }
-            }
         };
     }
 

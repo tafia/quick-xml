@@ -32,11 +32,6 @@ impl<'a> Reader<&'a [u8]> {
         Self::from_reader(s.as_bytes())
     }
 
-    /// Creates an XML reader from a slice of bytes.
-    pub fn from_bytes(s: &'a [u8]) -> Self {
-        Self::from_reader(s)
-    }
-
     /// Read an event that borrows from the input rather than a buffer.
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'a>> {
@@ -232,5 +227,30 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[cfg(feature = "encoding")]
+    mod encoding {
+        use crate::events::Event;
+        use crate::reader::Reader;
+        use encoding_rs::UTF_8;
+        use pretty_assertions::assert_eq;
+
+        /// Checks that XML declaration cannot change the encoding from UTF-8 if
+        /// a `Reader` was created using `from_str` method
+        #[test]
+        fn str_always_has_utf8() {
+            let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
+
+            assert_eq!(reader.decoder().encoding(), UTF_8);
+            reader.read_event().unwrap();
+            assert_eq!(reader.decoder().encoding(), UTF_8);
+
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
     }
 }

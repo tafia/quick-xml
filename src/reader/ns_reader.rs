@@ -522,12 +522,6 @@ impl<'i> NsReader<&'i [u8]> {
         Self::new(Reader::from_str(s))
     }
 
-    /// Creates an XML reader from a slice of bytes.
-    #[inline]
-    pub fn from_bytes(bytes: &'i [u8]) -> Self {
-        Self::new(Reader::from_bytes(bytes))
-    }
-
     /// Reads the next event, borrow its content from the input buffer.
     ///
     /// This method manages namespaces but doesn't resolve them automatically.

@@ -9,8 +9,8 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_sample() {
-    let src: &[u8] = include_bytes!("documents/sample_rss.xml");
-    let mut r = Reader::from_bytes(src);
+    let src = include_str!("documents/sample_rss.xml");
+    let mut r = Reader::from_str(src);
     let mut count = 0;
     loop {
         match r.read_event().unwrap() {
@@ -25,8 +25,8 @@ fn test_sample() {
 
 #[test]
 fn test_attributes_empty() {
-    let src = b"<a att1='a' att2='b'/>";
-    let mut r = Reader::from_bytes(src);
+    let src = "<a att1='a' att2='b'/>";
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     match r.read_event() {
         Ok(Empty(e)) => {
@@ -53,8 +53,8 @@ fn test_attributes_empty() {
 
 #[test]
 fn test_attribute_equal() {
-    let src = b"<a att1=\"a=b\"/>";
-    let mut r = Reader::from_reader(src as &[u8]);
+    let src = "<a att1=\"a=b\"/>";
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     match r.read_event() {
         Ok(Empty(e)) => {
@@ -74,8 +74,8 @@ fn test_attribute_equal() {
 
 #[test]
 fn test_comment_starting_with_gt() {
-    let src = b"<a /><!-->-->";
-    let mut r = Reader::from_reader(src as &[u8]);
+    let src = "<a /><!-->-->";
+    let mut r = Reader::from_str(src);
     r.trim_text(true).expand_empty_elements(false);
     loop {
         match r.read_event() {
@@ -92,11 +92,12 @@ fn test_comment_starting_with_gt() {
 #[test]
 #[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
-    let src = include_bytes!("documents/opennews_all.rss");
-    let mut r = Reader::from_bytes(src);
+    let src = include_bytes!("documents/opennews_all.rss").as_ref();
+    let mut buf = vec![];
+    let mut r = Reader::from_reader(src);
     r.trim_text(true).expand_empty_elements(false);
     loop {
-        match r.read_event() {
+        match r.read_event_into(&mut buf) {
             Ok(Text(e)) => {
                 e.unescape().unwrap();
             }

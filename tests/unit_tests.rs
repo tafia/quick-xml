@@ -751,13 +751,14 @@ mod decode_with_bom_removal {
     #[cfg(feature = "encoding")]
     #[ignore = "Non-ASCII compatible encodings not properly supported yet. See https://github.com/tafia/quick-xml/issues/158"]
     fn removes_utf16be_bom() {
-        let mut reader = Reader::from_bytes(include_bytes!("./documents/utf16be.xml"));
+        let mut reader = Reader::from_reader(include_bytes!("./documents/utf16be.xml").as_ref());
         reader.trim_text(true);
 
+        let mut buf = Vec::new();
         let mut txt = Vec::new();
 
         loop {
-            match reader.read_event() {
+            match reader.read_event_into(&mut buf) {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
@@ -769,13 +770,13 @@ mod decode_with_bom_removal {
     #[test]
     #[cfg(feature = "encoding")]
     fn removes_utf16le_bom() {
-        let mut reader = Reader::from_bytes(include_bytes!("./documents/utf16le.xml"));
+        let mut reader = Reader::from_reader(include_bytes!("./documents/utf16le.xml").as_ref());
         reader.trim_text(true);
-
+        let mut buf = Vec::new();
         let mut txt = Vec::new();
 
         loop {
-            match reader.read_event() {
+            match reader.read_event_into(&mut buf) {
                 Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),

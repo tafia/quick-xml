@@ -959,11 +959,12 @@ pub enum Event<'a> {
     /// use quick_xml::events::Event;
     ///
     /// // XML in UTF-8 with BOM
-    /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>";
-    /// let mut reader = Reader::from_bytes(xml);
+    /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>".as_ref();
+    /// let mut reader = Reader::from_reader(xml);
+    /// let mut buf = Vec::new();
     /// let mut events_processed = 0;
     /// loop {
-    ///     match reader.read_event() {
+    ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::StartText(e)) => {
     ///             assert_eq!(events_processed, 0);
     ///             // Content contains BOM
