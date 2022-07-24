@@ -5,12 +5,12 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
+use memchr;
+
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
-
-use memchr;
 
 /// This is an implementation of [`Reader`] for reading from a [`BufRead`] as
 /// underlying byte stream.

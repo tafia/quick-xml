@@ -1,9 +1,9 @@
 //! Serde `Deserializer` module
 
 use crate::de::deserialize_bool;
+use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
-use crate::reader::Decoder;
 use serde::de::{DeserializeSeed, EnumAccess, VariantAccess, Visitor};
 use serde::{self, forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;

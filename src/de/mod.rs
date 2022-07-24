@@ -215,10 +215,10 @@ mod var;
 
 pub use crate::errors::serialize::DeError;
 use crate::{
+    encoding::Decoder,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Decoder,
     Reader,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
