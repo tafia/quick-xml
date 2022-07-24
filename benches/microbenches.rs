@@ -5,8 +5,8 @@ use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::{NsReader, Reader};
 
-static SAMPLE: &[u8] = include_bytes!("../tests/documents/sample_rss.xml");
-static PLAYERS: &[u8] = include_bytes!("../tests/documents/players.xml");
+static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
+static PLAYERS: &str = include_str!("../tests/documents/players.xml");
 
 static LOREM_IPSUM_TEXT: &str =
 "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
@@ -29,17 +29,15 @@ fn read_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_event");
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
-            let mut r = Reader::from_reader(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_event_into(&mut buf) {
+                match r.read_event() {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Eof) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(
                 count, 1550,
@@ -50,19 +48,17 @@ fn read_event(c: &mut Criterion) {
 
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
-            let mut r = Reader::from_reader(SAMPLE);
+            let mut r = Reader::from_str(SAMPLE);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_event_into(&mut buf) {
+                match r.read_event() {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                     Ok(Event::Eof) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(
                 count, 1550,
@@ -79,17 +75,15 @@ fn read_resolved_event_into(c: &mut Criterion) {
     let mut group = c.benchmark_group("NsReader::read_resolved_event_into");
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
-            let mut r = NsReader::from_bytes(SAMPLE);
+            let mut r = NsReader::from_str(SAMPLE);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_resolved_event_into(&mut buf) {
+                match r.read_resolved_event() {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(
                 count, 1550,
@@ -100,19 +94,17 @@ fn read_resolved_event_into(c: &mut Criterion) {
 
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
-            let mut r = NsReader::from_bytes(SAMPLE);
+            let mut r = NsReader::from_str(SAMPLE);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_resolved_event_into(&mut buf) {
+                match r.read_resolved_event() {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
                     Ok((_, Event::Eof)) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(
                 count, 1550,
@@ -127,78 +119,66 @@ fn read_resolved_event_into(c: &mut Criterion) {
 fn one_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("One event");
     group.bench_function("StartText", |b| {
-        let src = "Hello world!".repeat(512 / 12).into_bytes();
-        let mut buf = Vec::with_capacity(1024);
+        let src = "Hello world!".repeat(512 / 12);
         b.iter(|| {
-            let mut r = Reader::from_reader(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false).check_comments(false);
-            match r.read_event_into(&mut buf) {
+            match r.read_event() {
                 Ok(Event::StartText(e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
-
-            buf.clear();
 
             assert_eq!(nbtxt, 504);
         })
     });
 
     group.bench_function("Start", |b| {
-        let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5)).into_bytes();
-        let mut buf = Vec::with_capacity(1024);
+        let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_reader(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event_into(&mut buf) {
+            match r.read_event() {
                 Ok(Event::Start(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
-
-            buf.clear();
 
             assert_eq!(nbtxt, 525);
         })
     });
 
     group.bench_function("Comment", |b| {
-        let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5)).into_bytes();
-        let mut buf = Vec::with_capacity(1024);
+        let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_reader(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event_into(&mut buf) {
+            match r.read_event() {
                 Ok(Event::Comment(e)) => nbtxt += e.unescape().unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
-
-            buf.clear();
 
             assert_eq!(nbtxt, 520);
         })
     });
 
     group.bench_function("CData", |b| {
-        let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5)).into_bytes();
-        let mut buf = Vec::with_capacity(1024);
+        let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5));
         b.iter(|| {
-            let mut r = Reader::from_reader(src.as_ref());
+            let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
             r.check_end_names(false)
                 .check_comments(false)
                 .trim_text(true);
-            match r.read_event_into(&mut buf) {
+            match r.read_event() {
                 Ok(Event::CData(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
-
-            buf.clear();
 
             assert_eq!(nbtxt, 518);
         })
@@ -211,12 +191,11 @@ fn attributes(c: &mut Criterion) {
     let mut group = c.benchmark_group("attributes");
     group.bench_function("with_checks = true", |b| {
         b.iter(|| {
-            let mut r = Reader::from_reader(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_event_into(&mut buf) {
+                match r.read_event() {
                     Ok(Event::Empty(e)) => {
                         for attr in e.attributes() {
                             let _attr = attr.unwrap();
@@ -226,7 +205,6 @@ fn attributes(c: &mut Criterion) {
                     Ok(Event::Eof) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(count, 1041);
         })
@@ -234,12 +212,11 @@ fn attributes(c: &mut Criterion) {
 
     group.bench_function("with_checks = false", |b| {
         b.iter(|| {
-            let mut r = Reader::from_reader(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_event_into(&mut buf) {
+                match r.read_event() {
                     Ok(Event::Empty(e)) => {
                         for attr in e.attributes().with_checks(false) {
                             let _attr = attr.unwrap();
@@ -249,7 +226,6 @@ fn attributes(c: &mut Criterion) {
                     Ok(Event::Eof) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(count, 1041);
         })
@@ -257,12 +233,11 @@ fn attributes(c: &mut Criterion) {
 
     group.bench_function("try_get_attribute", |b| {
         b.iter(|| {
-            let mut r = Reader::from_reader(PLAYERS);
+            let mut r = Reader::from_str(PLAYERS);
             r.check_end_names(false).check_comments(false);
             let mut count = criterion::black_box(0);
-            let mut buf = Vec::new();
             loop {
-                match r.read_event_into(&mut buf) {
+                match r.read_event() {
                     Ok(Event::Empty(e)) if e.name() == QName(b"player") => {
                         for name in ["num", "status", "avg"] {
                             if let Some(_attr) = e.try_get_attribute(name).unwrap() {
@@ -277,7 +252,6 @@ fn attributes(c: &mut Criterion) {
                     Ok(Event::Eof) => break,
                     _ => (),
                 }
-                buf.clear();
             }
             assert_eq!(count, 150);
         })
