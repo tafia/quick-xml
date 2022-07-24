@@ -1,7 +1,7 @@
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
-use quick_xml::{Decoder, Reader, Result};
+use quick_xml::{Decoder, NsReader};
 use std::str::from_utf8;
 
 #[test]
@@ -362,20 +362,65 @@ fn test(input: &str, output: &str, trim: bool) {
 
 #[track_caller]
 fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
-    let mut reader = Reader::from_reader(input);
+    let mut reader = NsReader::from_bytes(input);
     reader
         .trim_text(trim)
         .check_comments(true)
         .expand_empty_elements(false);
 
     let mut spec_lines = SpecIter(output).enumerate();
-    let mut buf = Vec::new();
-    let mut ns_buffer = Vec::new();
 
+    let mut decoder = reader.decoder();
     loop {
-        buf.clear();
-        let event = reader.read_namespaced_event(&mut buf, &mut ns_buffer);
-        let line = xmlrs_display(event, reader.decoder());
+        let line = match reader.read_resolved_event() {
+            Ok((_, Event::StartText(_))) => {
+                // BOM could change decoder
+                decoder = reader.decoder();
+                "StartText".to_string()
+            }
+            Ok((_, Event::Decl(e))) => {
+                // Declaration could change decoder
+                decoder = reader.decoder();
+
+                let version_cow = e.version().unwrap();
+                let version = decoder.decode(version_cow.as_ref()).unwrap();
+                let encoding_cow = e.encoding().unwrap().unwrap();
+                let encoding = decoder.decode(encoding_cow.as_ref()).unwrap();
+                format!("StartDocument({}, {})", version, encoding)
+            }
+            Ok((_, Event::PI(e))) => {
+                format!("ProcessingInstruction(PI={})", decoder.decode(&e).unwrap())
+            }
+            Ok((_, Event::DocType(e))) => format!("DocType({})", decoder.decode(&e).unwrap()),
+            Ok((n, Event::Start(e))) => {
+                let name = namespace_name(n, e.name(), decoder);
+                match make_attrs(&e, decoder) {
+                    Ok(attrs) if attrs.is_empty() => format!("StartElement({})", &name),
+                    Ok(attrs) => format!("StartElement({} [{}])", &name, &attrs),
+                    Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
+                }
+            }
+            Ok((n, Event::Empty(e))) => {
+                let name = namespace_name(n, e.name(), decoder);
+                match make_attrs(&e, decoder) {
+                    Ok(attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
+                    Ok(attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
+                    Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
+                }
+            }
+            Ok((n, Event::End(e))) => {
+                let name = namespace_name(n, e.name(), decoder);
+                format!("EndElement({})", name)
+            }
+            Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
+            Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
+            Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
+                Ok(c) => format!("Characters({})", &c),
+                Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
+            },
+            Ok((_, Event::Eof)) => format!("EndDocument"),
+            Err(e) => format!("Error: {}", e),
+        };
         if let Some((n, spec)) = spec_lines.next() {
             if spec.trim() == "EndDocument" {
                 break;
@@ -430,51 +475,6 @@ fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String,
         }
     }
     Ok(atts.join(", "))
-}
-
-fn xmlrs_display(opt_event: Result<(ResolveResult, Event)>, decoder: Decoder) -> String {
-    match opt_event {
-        Ok((_, Event::StartText(_))) => "StartText".to_string(),
-        Ok((n, Event::Start(e))) => {
-            let name = namespace_name(n, e.name(), decoder);
-            match make_attrs(&e, decoder) {
-                Ok(attrs) if attrs.is_empty() => format!("StartElement({})", &name),
-                Ok(attrs) => format!("StartElement({} [{}])", &name, &attrs),
-                Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
-            }
-        }
-        Ok((n, Event::Empty(e))) => {
-            let name = namespace_name(n, e.name(), decoder);
-            match make_attrs(&e, decoder) {
-                Ok(attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
-                Ok(attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
-                Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
-            }
-        }
-        Ok((n, Event::End(e))) => {
-            let name = namespace_name(n, e.name(), decoder);
-            format!("EndElement({})", name)
-        }
-        Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
-        Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
-        Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
-            Ok(c) => format!("Characters({})", &c),
-            Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
-        },
-        Ok((_, Event::Decl(e))) => {
-            let version_cow = e.version().unwrap();
-            let version = decoder.decode(version_cow.as_ref()).unwrap();
-            let encoding_cow = e.encoding().unwrap().unwrap();
-            let encoding = decoder.decode(encoding_cow.as_ref()).unwrap();
-            format!("StartDocument({}, {})", version, encoding)
-        }
-        Ok((_, Event::Eof)) => format!("EndDocument"),
-        Ok((_, Event::PI(e))) => {
-            format!("ProcessingInstruction(PI={})", decoder.decode(&e).unwrap())
-        }
-        Ok((_, Event::DocType(e))) => format!("DocType({})", decoder.decode(&e).unwrap()),
-        Err(e) => format!("Error: {}", e),
-    }
 }
 
 struct SpecIter<'a>(&'a [u8]);

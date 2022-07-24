@@ -274,13 +274,15 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`Reader::attribute_namespace`],
-/// [`Reader::event_namespace`] and [`Reader::read_namespaced_event`] methods.
+/// Result of [prefix] resolution which creates by [`NsReader::resolve_attribute`],
+/// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
+/// [`NsReader::read_resolved_event_into`] methods.
 ///
 /// [prefix]: Prefix
-/// [`Reader::attribute_namespace`]: crate::reader::Reader::attribute_namespace
-/// [`Reader::event_namespace`]: crate::reader::Reader::event_namespace
-/// [`Reader::read_namespaced_event`]: crate::reader::Reader::read_namespaced_event
+/// [`NsReader::resolve_attribute`]: crate::reader::NsReader::resolve_attribute
+/// [`NsReader::resolve_element`]: crate::reader::NsReader::resolve_element
+/// [`NsReader::read_resolved_event`]: crate::reader::NsReader::read_resolved_event
+/// [`NsReader::read_resolved_event_into`]: crate::reader::NsReader::read_resolved_event_into
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ResolveResult<'ns> {
     /// Qualified name does not contain prefix, and resolver does not define
