@@ -80,7 +80,7 @@ loop {
 
             // crates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
-            let mut elem = BytesStart::owned_name("my_elem");
+            let mut elem = BytesStart::new("my_elem");
 
             // collect existing attributes
             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -92,7 +92,7 @@ loop {
             assert!(writer.write_event(Event::Start(elem)).is_ok());
         },
         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
-            assert!(writer.write_event(Event::End(BytesEnd::borrowed("my_elem"))).is_ok());
+            assert!(writer.write_event(Event::End(BytesEnd::new("my_elem"))).is_ok());
         },
         Ok(Event::Eof) => break,
         // we can either move or borrow the event to write, depending on your use-case

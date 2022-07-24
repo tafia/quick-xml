@@ -26,7 +26,7 @@ use std::io::Write;
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
-///             let mut elem = BytesStart::owned_name("my_elem");
+///             let mut elem = BytesStart::new("my_elem");
 ///
 ///             // collect existing attributes
 ///             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -38,7 +38,7 @@ use std::io::Write;
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
 ///         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
-///             assert!(writer.write_event(Event::End(BytesEnd::borrowed("my_elem"))).is_ok());
+///             assert!(writer.write_event(Event::End(BytesEnd::new("my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
@@ -193,7 +193,7 @@ impl<W: Write> Writer<W> {
     /// // writes <tag attr1="value1" attr2="value2">with some text inside</tag>
     /// writer.create_element("tag")
     ///     .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter())  // or add attributes from an iterator
-    ///     .write_text_content(BytesText::from_plain_str("with some text inside"))?;
+    ///     .write_text_content(BytesText::new("with some text inside"))?;
     ///
     /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
     /// writer.create_element("tag")
@@ -203,7 +203,7 @@ impl<W: Write> Writer<W> {
     ///             writer
     ///                 .create_element("fruit")
     ///                 .with_attribute(("quantity", quant.to_string().as_str()))
-    ///                 .write_text_content(BytesText::from_plain_str(item))?;
+    ///                 .write_text_content(BytesText::new(item))?;
     ///         }
     ///         Ok(())
     ///     })?;
@@ -217,7 +217,7 @@ impl<W: Write> Writer<W> {
     {
         ElementWriter {
             writer: self,
-            start_tag: BytesStart::borrowed_name(name.as_ref()),
+            start_tag: BytesStart::new(name.as_ref()),
         }
     }
 }
@@ -347,7 +347,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let tag = BytesStart::borrowed_name("self-closed")
+        let tag = BytesStart::new("self-closed")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         writer
             .write_event(Event::Empty(tag))
@@ -364,7 +364,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
         writer
@@ -386,10 +386,10 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let inner = BytesStart::borrowed_name("inner");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -414,10 +414,10 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let text = BytesText::from_plain_str("text");
+        let text = BytesText::new("text");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -440,11 +440,11 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let text = BytesText::from_plain_str("text");
-        let inner = BytesStart::borrowed_name("inner");
+        let text = BytesText::new("text");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -471,10 +471,10 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let start = BytesStart::borrowed_name("paired")
+        let start = BytesStart::new("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         let end = start.to_end();
-        let inner = BytesStart::borrowed_name("inner");
+        let inner = BytesStart::new("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
@@ -528,7 +528,7 @@ mod indentation {
             .create_element("paired")
             .with_attribute(("attr1", "value1"))
             .with_attribute(("attr2", "value2"))
-            .write_text_content(BytesText::from_plain_str("text"))
+            .write_text_content(BytesText::new("text"))
             .expect("failure");
 
         assert_eq!(
@@ -552,7 +552,7 @@ mod indentation {
                     writer
                         .create_element("fruit")
                         .with_attribute(("quantity", quant.to_string().as_str()))
-                        .write_text_content(BytesText::from_plain_str(item))?;
+                        .write_text_content(BytesText::new(item))?;
                 }
                 writer
                     .create_element("inner")

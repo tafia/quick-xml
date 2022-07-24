@@ -147,7 +147,7 @@
 
 - [#423]: All escaping functions now accepts and returns strings instead of byte slices
 - [#423]: Removed `BytesText::from_plain` because it internally did escaping of a byte array,
-  but since now escaping works on strings. Use `BytesText::from_plain_str` instead
+  but since now escaping works on strings. Use `BytesText::new` instead
 
 - [#428]: Removed `BytesText::escaped()`. Use `.as_ref()` provided by `Deref` impl instead.
 - [#428]: Removed `BytesText::from_escaped()`. Use constructors from strings instead,
@@ -158,6 +158,22 @@
   Handmade events has always been assumed to store their content UTF-8 encoded.
 - [#428]: Removed `Decoder` parameter from `_and_decode` versions of functions for
   `BytesText` (remember, that those functions was renamed in #415).
+
+- [#431]: Changed event constructors:
+  |Old names                                         |New name
+  |--------------------------------------------------|----------------------------------------------
+  |`BytesStart::owned_name(impl Into<Vec<u8>>)`      |`BytesStart::new(impl Into<Cow<str>>)`
+  |`BytesStart::borrowed_name(&[u8])`                |_(as above)_
+  |`BytesStart::owned(impl Into<Vec<u8>>, usize)`    |`BytesStart::from_content(impl Into<Cow<str>>, usize)`
+  |`BytesStart::borrowed(&[u8], usize)`              |_(as above)_
+  |`BytesEnd::owned(Vec<u8>)`                        |`BytesEnd::new(impl Into<Cow<str>>)`
+  |`BytesEnd::borrowed(&[u8])`                       |_(as above)_
+  |`BytesText::from_escaped(impl Into<Cow<[u8]>>)`   |`BytesText::from_escaped(impl Into<Cow<str>>)`
+  |`BytesText::from_escaped_str(impl Into<Cow<str>>)`|_(as above)_
+  |`BytesText::from_plain(&[u8])`                    |`BytesText::new(&str)`
+  |`BytesText::from_plain_str(&str)`                 |_(as above)_
+  |`BytesCData::new(impl Into<Cow<[u8]>>)`           |`BytesCData::new(impl Into<Cow<str>>)`
+  |`BytesCData::from_str(&str)`                      |_(as above)_
 
 ### New Tests
 
@@ -190,6 +206,7 @@
 [#421]: https://github.com/tafia/quick-xml/pull/421
 [#423]: https://github.com/tafia/quick-xml/pull/423
 [#428]: https://github.com/tafia/quick-xml/pull/428
+[#431]: https://github.com/tafia/quick-xml/pull/431
 [#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
 

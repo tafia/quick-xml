@@ -54,7 +54,7 @@ where
         if let Some(tag) = self.parent.root_tag {
             self.parent
                 .writer
-                .write_event(Event::End(BytesEnd::borrowed(tag)))?;
+                .write_event(Event::End(BytesEnd::new(tag)))?;
         }
         Ok(())
     }
@@ -102,7 +102,7 @@ where
     pub fn new(parent: &'w mut Serializer<'r, W>, name: &'r str) -> Self {
         Struct {
             parent,
-            attrs: BytesStart::borrowed_name(name),
+            attrs: BytesStart::new(name),
             children: Vec::new(),
             buffer: Vec::new(),
         }

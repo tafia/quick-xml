@@ -54,6 +54,9 @@ use attributes::{Attribute, Attributes};
 ///
 /// In well-formed XML it could contain a Byte-Order-Mark (BOM). If this event
 /// contains something else except BOM, the XML should be considered ill-formed.
+///
+/// This is a reader-only event. If you need to write a text before the first tag,
+/// use the [`BytesText`] event.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BytesStartText<'a> {
     content: BytesText<'a>,
@@ -138,49 +141,32 @@ impl<'a> BytesStart<'a> {
         }
     }
 
-    /// Creates a new `BytesStart` from the given content (name + attributes).
-    ///
-    /// # Warning
-    ///
-    /// `&content[..name_len]` is not checked to be a valid name
-    #[inline]
-    pub fn borrowed(content: &'a str, name_len: usize) -> Self {
-        BytesStart {
-            buf: Cow::Borrowed(content.as_bytes()),
-            name_len,
-        }
-    }
-
     /// Creates a new `BytesStart` from the given name.
     ///
     /// # Warning
     ///
-    /// `name` is not checked to be a valid name
+    /// `name` must be a valid name.
     #[inline]
-    pub fn borrowed_name(name: &'a str) -> BytesStart<'a> {
-        Self::borrowed(name, name.len())
-    }
-
-    /// Creates a new `BytesStart` from the given content (name + attributes)
-    ///
-    /// Owns its contents.
-    #[inline]
-    pub fn owned<C: Into<String>>(content: C, name_len: usize) -> BytesStart<'static> {
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        let buf = str_cow_to_bytes(name);
         BytesStart {
-            buf: Cow::Owned(content.into().into_bytes()),
-            name_len,
+            name_len: buf.len(),
+            buf,
         }
     }
 
-    /// Creates a new `BytesStart` from the given name
+    /// Creates a new `BytesStart` from the given content (name + attributes).
     ///
-    /// Owns its contents.
+    /// # Warning
+    ///
+    /// `&content[..name_len]` must be a valid name, and the remainder of `content`
+    /// must be correctly-formed attributes. Neither are checked, it is possible
+    /// to generate invalid XML if `content` or `name_len` are incorrect.
     #[inline]
-    pub fn owned_name<C: Into<String>>(name: C) -> BytesStart<'static> {
-        let content = name.into().into_bytes();
+    pub fn from_content<C: Into<Cow<'a, str>>>(content: C, name_len: usize) -> Self {
         BytesStart {
-            name_len: content.len(),
-            buf: Cow::Owned(content),
+            buf: str_cow_to_bytes(content),
+            name_len,
         }
     }
 
@@ -255,7 +241,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// # Warning
     ///
-    /// `name` is not checked to be a valid name
+    /// `name` must be a valid name.
     pub fn set_name(&mut self, name: &[u8]) -> &mut BytesStart<'a> {
         let bytes = self.buf.to_mut();
         bytes.splice(..self.name_len, name.iter().cloned());
@@ -371,164 +357,6 @@ pub struct BytesDecl<'a> {
 }
 
 impl<'a> BytesDecl<'a> {
-    /// Creates a `BytesDecl` from a `BytesStart`
-    pub fn from_start(start: BytesStart<'a>) -> Self {
-        Self { content: start }
-    }
-
-    /// Gets xml version, excluding quotes (`'` or `"`).
-    ///
-    /// According to the [grammar], the version *must* be the first thing in the declaration.
-    /// This method tries to extract the first thing in the declaration and return it.
-    /// In case of multiple attributes value of the first one is returned.
-    ///
-    /// If version is missed in the declaration, or the first thing is not a version,
-    /// [`Error::XmlDeclWithoutVersion`] will be returned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::borrow::Cow;
-    /// use quick_xml::Error;
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
-    /// assert_eq!(
-    ///     decl.version().unwrap(),
-    ///     Cow::Borrowed(b"1.1".as_ref())
-    /// );
-    ///
-    /// // <?xml version='1.0' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(
-    ///     decl.version().unwrap(),
-    ///     Cow::Borrowed(b"1.0".as_ref())
-    /// );
-    ///
-    /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
-    /// match decl.version() {
-    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml encoding='utf-8' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8' version='1.1'", 0));
-    /// match decl.version() {
-    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed("", 0));
-    /// match decl.version() {
-    ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn version(&self) -> Result<Cow<[u8]>> {
-        // The version *must* be the first thing in the declaration.
-        match self.content.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
-            // first attribute was not "version"
-            Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref())?.to_string();
-                Err(Error::XmlDeclWithoutVersion(Some(found)))
-            }
-            // error parsing attributes
-            Some(Err(e)) => Err(e.into()),
-            // no attributes
-            None => Err(Error::XmlDeclWithoutVersion(None)),
-        }
-    }
-
-    /// Gets xml encoding, excluding quotes (`'` or `"`).
-    ///
-    /// Although according to the [grammar] encoding must appear before `"standalone"`
-    /// and after `"version"`, this method does not check that. The first occurrence
-    /// of the attribute will be returned even if there are several. Also, method does
-    /// not restrict symbols that can forming the encoding, so the returned encoding
-    /// name may not correspond to the grammar.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::borrow::Cow;
-    /// use quick_xml::Error;
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
-    /// assert!(decl.encoding().is_none());
-    ///
-    /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='utf-8'", 0));
-    /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" encoding='something_WRONG' encoding='utf-8'", 0));
-    /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        self.content
-            .try_get_attribute("encoding")
-            .map(|a| a.map(|a| a.value))
-            .transpose()
-    }
-
-    /// Gets xml standalone, excluding quotes (`'` or `"`).
-    ///
-    /// Although according to the [grammar] standalone flag must appear after `"version"`
-    /// and `"encoding"`, this method does not check that. The first occurrence of the
-    /// attribute will be returned even if there are several. Also, method does not
-    /// restrict symbols that can forming the value, so the returned flag name may not
-    /// correspond to the grammar.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::borrow::Cow;
-    /// use quick_xml::Error;
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" version='1.1'", 0));
-    /// assert!(decl.standalone().is_none());
-    ///
-    /// // <?xml standalone='yes'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='yes'", 0));
-    /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::borrowed(" standalone='something_WRONG' encoding='utf-8'", 0));
-    /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        self.content
-            .try_get_attribute("standalone")
-            .map(|a| a.map(|a| a.value))
-            .transpose()
-    }
-
     /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
     /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
     /// attribute.
@@ -572,8 +400,166 @@ impl<'a> BytesDecl<'a> {
         buf.push('"');
 
         BytesDecl {
-            content: BytesStart::owned(buf, 3),
+            content: BytesStart::from_content(buf, 3),
         }
+    }
+
+    /// Creates a `BytesDecl` from a `BytesStart`
+    pub fn from_start(start: BytesStart<'a>) -> Self {
+        Self { content: start }
+    }
+
+    /// Gets xml version, excluding quotes (`'` or `"`).
+    ///
+    /// According to the [grammar], the version *must* be the first thing in the declaration.
+    /// This method tries to extract the first thing in the declaration and return it.
+    /// In case of multiple attributes value of the first one is returned.
+    ///
+    /// If version is missed in the declaration, or the first thing is not a version,
+    /// [`Error::XmlDeclWithoutVersion`] will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.1".as_ref())
+    /// );
+    ///
+    /// // <?xml version='1.0' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
+    /// assert_eq!(
+    ///     decl.version().unwrap(),
+    ///     Cow::Borrowed(b"1.0".as_ref())
+    /// );
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='utf-8' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content("", 0));
+    /// match decl.version() {
+    ///     Err(Error::XmlDeclWithoutVersion(None)) => {},
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn version(&self) -> Result<Cow<[u8]>> {
+        // The version *must* be the first thing in the declaration.
+        match self.content.attributes().with_checks(false).next() {
+            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
+            // first attribute was not "version"
+            Some(Ok(a)) => {
+                let found = from_utf8(a.key.as_ref())?.to_string();
+                Err(Error::XmlDeclWithoutVersion(Some(found)))
+            }
+            // error parsing attributes
+            Some(Err(e)) => Err(e.into()),
+            // no attributes
+            None => Err(Error::XmlDeclWithoutVersion(None)),
+        }
+    }
+
+    /// Gets xml encoding, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] encoding must appear before `"standalone"`
+    /// and after `"version"`, this method does not check that. The first occurrence
+    /// of the attribute will be returned even if there are several. Also, method does
+    /// not restrict symbols that can forming the encoding, so the returned encoding
+    /// name may not correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert!(decl.encoding().is_none());
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
+        self.content
+            .try_get_attribute("encoding")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
+    }
+
+    /// Gets xml standalone, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] standalone flag must appear after `"version"`
+    /// and `"encoding"`, this method does not check that. The first occurrence of the
+    /// attribute will be returned even if there are several. Also, method does not
+    /// restrict symbols that can forming the value, so the returned flag name may not
+    /// correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert!(decl.standalone().is_none());
+    ///
+    /// // <?xml standalone='yes'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='yes'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
+        self.content
+            .try_get_attribute("standalone")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
     }
 
     /// Gets the decoder struct
@@ -623,20 +609,14 @@ impl<'a> BytesEnd<'a> {
         BytesEnd { name }
     }
 
-    /// Creates a new `BytesEnd` borrowing a slice
+    /// Creates a new `BytesEnd` borrowing a slice.
+    ///
+    /// # Warning
+    ///
+    /// `name` must be a valid name.
     #[inline]
-    pub fn borrowed(name: &'a str) -> BytesEnd<'a> {
-        BytesEnd {
-            name: Cow::Borrowed(name.as_bytes()),
-        }
-    }
-
-    /// Creates a new `BytesEnd` owning its name
-    #[inline]
-    pub fn owned(name: String) -> BytesEnd<'static> {
-        BytesEnd {
-            name: Cow::Owned(name.into_bytes()),
-        }
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        Self::wrap(str_cow_to_bytes(name))
     }
 
     /// Converts the event into an owned event.
@@ -712,27 +692,15 @@ impl<'a> BytesText<'a> {
 
     /// Creates a new `BytesText` from an escaped string.
     #[inline]
-    pub fn from_escaped_str<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(
-            match content.into() {
-                Cow::Owned(o) => Cow::Owned(o.into_bytes()),
-                Cow::Borrowed(b) => Cow::Borrowed(b.as_bytes()),
-            },
-            Decoder::utf8(),
-        )
+    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
     }
 
     /// Creates a new `BytesText` from a string. The string is expected not to
     /// be escaped.
     #[inline]
-    pub fn from_plain_str(content: &'a str) -> Self {
-        Self {
-            content: match escape(content) {
-                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
-                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
-            },
-            decoder: Decoder::utf8(),
-        }
+    pub fn new(content: &'a str) -> Self {
+        Self::from_escaped(escape(content))
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -853,10 +821,14 @@ impl<'a> BytesCData<'a> {
         }
     }
 
-    /// Creates a new `BytesCData` from a string
+    /// Creates a new `BytesCData` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` must not contain the `]]>` sequence.
     #[inline]
-    pub fn from_str(content: &'a str) -> Self {
-        Self::wrap(content.as_bytes(), Decoder::utf8())
+    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -1102,6 +1074,14 @@ impl<'a> AsRef<Event<'a>> for Event<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#[inline]
+fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
+    match content.into() {
+        Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+        Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1109,14 +1089,14 @@ mod test {
 
     #[test]
     fn bytestart_create() {
-        let b = BytesStart::owned_name("test");
+        let b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), QName(b"test"));
     }
 
     #[test]
     fn bytestart_set_name() {
-        let mut b = BytesStart::owned_name("test");
+        let mut b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
         assert_eq!(b.name(), QName(b"test"));
         assert_eq!(b.attributes_raw(), b"");
@@ -1130,7 +1110,7 @@ mod test {
 
     #[test]
     fn bytestart_clear_attributes() {
-        let mut b = BytesStart::owned_name("test");
+        let mut b = BytesStart::new("test");
         b.push_attribute(("x", "y\"z"));
         b.push_attribute(("x", "y\"z"));
         b.clear_attributes();

@@ -319,12 +319,12 @@ fn test_write_attrs() -> Result<()> {
             Start(elem) => {
                 let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
-                let mut elem = BytesStart::owned_name("copy");
+                let mut elem = BytesStart::new("copy");
                 elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
-            End(_) => End(BytesEnd::borrowed("copy")),
+            End(_) => End(BytesEnd::new("copy")),
             e => e,
         };
         assert!(writer.write_event(event).is_ok());
@@ -596,9 +596,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
             Eof => break,
             Text(e) => {
                 let t = e.unescape().unwrap();
-                assert!(writer
-                    .write_event(Text(BytesText::from_plain_str(&t)))
-                    .is_ok());
+                assert!(writer.write_event(Text(BytesText::new(&t))).is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
         }
