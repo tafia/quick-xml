@@ -43,115 +43,6 @@ fn string_borrow() {
     assert_eq!(borrowed_item.text, "Hello world");
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-struct Item {
-    name: String,
-    source: String,
-}
-
-#[test]
-fn multiple_roots_attributes() {
-    let item: Vec<Item> = from_str(
-        r#"
-            <item name="hello1" source="world1.rs" />
-            <item name="hello2" source="world2.rs" />
-        "#,
-    )
-    .unwrap();
-    assert_eq!(
-        item,
-        vec![
-            Item {
-                name: "hello1".to_string(),
-                source: "world1.rs".to_string(),
-            },
-            Item {
-                name: "hello2".to_string(),
-                source: "world2.rs".to_string(),
-            },
-        ]
-    );
-}
-
-#[test]
-fn nested_collection() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Project {
-        name: String,
-
-        #[serde(rename = "item", default)]
-        items: Vec<Item>,
-    }
-
-    let project: Project = from_str(
-        r#"
-        <project name="my_project">
-            <item name="hello1" source="world1.rs" />
-            <item name="hello2" source="world2.rs" />
-        </project>
-        "#,
-    )
-    .unwrap();
-    assert_eq!(
-        project,
-        Project {
-            name: "my_project".to_string(),
-            items: vec![
-                Item {
-                    name: "hello1".to_string(),
-                    source: "world1.rs".to_string(),
-                },
-                Item {
-                    name: "hello2".to_string(),
-                    source: "world2.rs".to_string(),
-                },
-            ],
-        }
-    );
-}
-
-#[test]
-fn collection_of_enums() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    enum MyEnum {
-        A(String),
-        B { name: String, flag: bool },
-        C,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct MyEnums {
-        // TODO: This should be #[serde(flatten)], but right now serde don't support flattening of sequences
-        // See https://github.com/serde-rs/serde/issues/1905
-        #[serde(rename = "$value")]
-        items: Vec<MyEnum>,
-    }
-
-    let s = r#"
-    <enums>
-        <A>test</A>
-        <B name="hello" flag="t" />
-        <C />
-    </enums>
-    "#;
-
-    let project: MyEnums = from_str(s).unwrap();
-
-    assert_eq!(
-        project,
-        MyEnums {
-            items: vec![
-                MyEnum::A("test".to_string()),
-                MyEnum::B {
-                    name: "hello".to_string(),
-                    flag: true,
-                },
-                MyEnum::C,
-            ],
-        }
-    );
-}
-
 /// Test for https://github.com/tafia/quick-xml/issues/231
 #[test]
 fn implicit_value() {
@@ -3589,6 +3480,18 @@ macro_rules! maplike_errors {
         mod non_closed {
             use super::*;
 
+            /// For struct we expect that error about not closed tag appears
+            /// earlier than error about missing fields
+            #[test]
+            fn missing_field() {
+                let data = from_str::<$type>(r#"<root>"#);
+
+                match data {
+                    Err(DeError::UnexpectedEof) => (),
+                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                }
+            }
+
             #[test]
             fn attributes() {
                 let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
@@ -3623,6 +3526,18 @@ macro_rules! maplike_errors {
         mod mismatched_end {
             use super::*;
             use quick_xml::Error::EndEventMismatch;
+
+            /// For struct we expect that error about mismatched tag appears
+            /// earlier than error about missing fields
+            #[test]
+            fn missing_field() {
+                let data = from_str::<$type>(r#"<root></mismatched>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
+                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                }
+            }
 
             #[test]
             fn attributes() {
@@ -3922,6 +3837,12 @@ mod flatten_struct {
 mod enum_ {
     use super::*;
 
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Nested {
+        //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+        float: String,
+    }
+
     mod externally_tagged {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -3945,12 +3866,6 @@ mod enum_ {
                 nested: Nested,
                 string: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
@@ -4118,12 +4033,6 @@ mod enum_ {
         #[derive(Debug, Deserialize, PartialEq)]
         struct NewtypeContent {
             value: bool,
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         mod unit {
@@ -4304,12 +4213,6 @@ mod enum_ {
                 nested: Nested,
                 string: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
@@ -4522,12 +4425,6 @@ mod enum_ {
                 // will have no difference from `Struct` variant
                 string2: String,
             },
-        }
-
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Nested {
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-            float: String,
         }
 
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
