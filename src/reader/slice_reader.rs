@@ -93,7 +93,7 @@ impl<'a> Reader<&'a [u8]> {
     /// "#);
     /// reader.trim_text(true);
     ///
-    /// let start = BytesStart::borrowed_name(b"outer");
+    /// let start = BytesStart::borrowed_name("outer");
     /// let end   = start.to_end().into_owned();
     ///
     /// // First, we read a start event...

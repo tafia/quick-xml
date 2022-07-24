@@ -113,7 +113,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// Writes self-closed tag `<tag_name/>` into inner writer
     fn write_self_closed(&mut self, tag_name: &str) -> Result<(), DeError> {
         self.writer
-            .write_event(Event::Empty(BytesStart::borrowed_name(tag_name.as_bytes())))?;
+            .write_event(Event::Empty(BytesStart::borrowed_name(tag_name)))?;
         Ok(())
     }
 
@@ -124,10 +124,10 @@ impl<'r, W: Write> Serializer<'r, W> {
         value: &T,
     ) -> Result<(), DeError> {
         self.writer
-            .write_event(Event::Start(BytesStart::borrowed_name(tag_name.as_bytes())))?;
+            .write_event(Event::Start(BytesStart::borrowed_name(tag_name)))?;
         value.serialize(&mut *self)?;
         self.writer
-            .write_event(Event::End(BytesEnd::borrowed(tag_name.as_bytes())))?;
+            .write_event(Event::End(BytesEnd::borrowed(tag_name)))?;
         Ok(())
     }
 }
@@ -306,7 +306,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         if let Some(tag) = self.root_tag {
             // TODO: Write self-closed tag if map is empty
             self.writer
-                .write_event(Event::Start(BytesStart::borrowed_name(tag.as_bytes())))?;
+                .write_event(Event::Start(BytesStart::borrowed_name(tag)))?;
         }
         Ok(Map::new(self))
     }

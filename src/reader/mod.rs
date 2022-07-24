@@ -269,7 +269,7 @@ impl EncodingRef {
 ///                 _ => (),
 ///             }
 ///         }
-///         Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
+///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 ///
 ///         // There are several other `Event`s we do not consider here
 ///         _ => (),
@@ -514,9 +514,9 @@ impl<R> Reader<R> {
                 };
 
                 Ok(if first {
-                    Event::StartText(BytesText::from_escaped(content).into())
+                    Event::StartText(BytesText::wrap(content, self.decoder()).into())
                 } else {
-                    Event::Text(BytesText::from_escaped(content))
+                    Event::Text(BytesText::wrap(content, self.decoder()))
                 })
             }
             Ok(None) => Ok(Event::Eof),
@@ -587,10 +587,13 @@ impl<R> Reader<R> {
                         return Err(Error::UnexpectedToken("--".to_string()));
                     }
                 }
-                Ok(Event::Comment(BytesText::from_escaped(&buf[3..len - 2])))
+                Ok(Event::Comment(BytesText::wrap(
+                    &buf[3..len - 2],
+                    self.decoder(),
+                )))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
-                Ok(Event::CData(BytesCData::new(&buf[8..])))
+                Ok(Event::CData(BytesCData::wrap(&buf[8..], self.decoder())))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 let start = buf[8..]
@@ -598,7 +601,10 @@ impl<R> Reader<R> {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or_else(|| len - 8);
                 debug_assert!(start < len - 8, "DocType must have a name");
-                Ok(Event::DocType(BytesText::from_escaped(&buf[8 + start..])))
+                Ok(Event::DocType(BytesText::wrap(
+                    &buf[8 + start..],
+                    self.decoder(),
+                )))
             }
             _ => Err(bang_type.to_err()),
         }
@@ -635,13 +641,13 @@ impl<R> Reader<R> {
                         mismatch_err(expected, name, &mut self.buf_position)
                     } else {
                         self.opened_buffer.truncate(start);
-                        Ok(Event::End(BytesEnd::borrowed(name)))
+                        Ok(Event::End(BytesEnd::wrap(name.into())))
                     }
                 }
                 None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
             }
         } else {
-            Ok(Event::End(BytesEnd::borrowed(name)))
+            Ok(Event::End(BytesEnd::wrap(name.into())))
         }
     }
 
@@ -651,7 +657,7 @@ impl<R> Reader<R> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::borrowed(&buf[1..len - 1], 3));
+                let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -663,7 +669,7 @@ impl<R> Reader<R> {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::from_escaped(&buf[1..len - 1])))
+                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
             }
         } else {
             self.buf_position -= len;
@@ -677,7 +683,7 @@ impl<R> Reader<R> {
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
-        Ok(Event::End(BytesEnd::owned(name)))
+        Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
@@ -692,16 +698,16 @@ impl<R> Reader<R> {
                 self.tag_state = TagState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..end]);
-                Ok(Event::Start(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Start(BytesStart::wrap(&buf[..len - 1], end)))
             } else {
-                Ok(Event::Empty(BytesStart::borrowed(&buf[..len - 1], end)))
+                Ok(Event::Empty(BytesStart::wrap(&buf[..len - 1], end)))
             }
         } else {
             if self.check_end_names {
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..name_end]);
             }
-            Ok(Event::Start(BytesStart::borrowed(buf, name_end)))
+            Ok(Event::Start(BytesStart::wrap(buf, name_end)))
         }
     }
 }
@@ -935,7 +941,7 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
 /// any XML declarations are ignored.
 ///
 /// [utf16]: https://github.com/tafia/quick-xml/issues/158
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Decoder {
     #[cfg(feature = "encoding")]
     encoding: &'static Encoding,
@@ -1025,9 +1031,6 @@ impl Decoder {
     }
 }
 
-/// This implementation is required for tests of other parts of the library
-#[cfg(test)]
-#[cfg(feature = "serialize")]
 impl Decoder {
     pub(crate) fn utf8() -> Self {
         Decoder {
@@ -1036,7 +1039,7 @@ impl Decoder {
         }
     }
 
-    #[cfg(feature = "encoding")]
+    #[cfg(all(test, feature = "encoding", feature = "serialize"))]
     pub(crate) fn utf16() -> Self {
         Decoder { encoding: UTF_16LE }
     }
@@ -1851,7 +1854,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
+                        Event::Decl(BytesDecl::from_start(BytesStart::borrowed("xml ", 3)))
                     );
                 }
 
@@ -1881,7 +1884,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Start(BytesStart::borrowed_name(b"tag"))
+                        Event::Start(BytesStart::borrowed_name("tag"))
                     );
                 }
 
@@ -1894,7 +1897,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::End(BytesEnd::borrowed(b"tag"))
+                        Event::End(BytesEnd::borrowed("tag"))
                     );
                 }
 
@@ -1904,7 +1907,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                        Event::Empty(BytesStart::borrowed_name("tag"))
                     );
                 }
 
@@ -1915,7 +1918,7 @@ mod test {
 
                     assert_eq!(
                         reader.read_event_impl($buf).unwrap(),
-                        Event::Empty(BytesStart::borrowed_name(b"tag"))
+                        Event::Empty(BytesStart::borrowed_name("tag"))
                     );
 
                     assert_eq!(

@@ -98,7 +98,7 @@ fn test_koi8_r_encoding() {
     loop {
         match r.read_event() {
             Ok(Text(e)) => {
-                e.decode_and_unescape(&r).unwrap();
+                e.unescape().unwrap();
             }
             Ok(Eof) => break,
             _ => (),
@@ -157,7 +157,7 @@ fn fuzz_101() {
                 }
             }
             Ok(Text(e)) => {
-                if e.decode_and_unescape(&reader).is_err() {
+                if e.unescape().is_err() {
                     break;
                 }
             }

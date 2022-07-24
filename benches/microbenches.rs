@@ -174,7 +174,7 @@ fn one_event(c: &mut Criterion) {
                 .check_comments(false)
                 .trim_text(true);
             match r.read_event_into(&mut buf) {
-                Ok(Event::Comment(e)) => nbtxt += e.decode_and_unescape(&r).unwrap().len(),
+                Ok(Event::Comment(e)) => nbtxt += e.unescape().unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
             };
 

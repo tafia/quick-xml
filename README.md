@@ -53,7 +53,7 @@ loop {
                 _ => (),
             }
         }
-        Ok(Event::Text(e)) => txt.push(e.decode_and_unescape(&reader).unwrap().into_owned()),
+        Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 
         // There are several other `Event`s we do not consider here
         _ => (),
@@ -80,7 +80,7 @@ loop {
 
             // crates a new element ... alternatively we could reuse `e` by calling
             // `e.into_owned()`
-            let mut elem = BytesStart::owned_name(b"my_elem".to_vec());
+            let mut elem = BytesStart::owned_name("my_elem");
 
             // collect existing attributes
             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -92,7 +92,7 @@ loop {
             assert!(writer.write_event(Event::Start(elem)).is_ok());
         },
         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
-            assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
+            assert!(writer.write_event(Event::End(BytesEnd::borrowed("my_elem"))).is_ok());
         },
         Ok(Event::Eof) => break,
         // we can either move or borrow the event to write, depending on your use-case

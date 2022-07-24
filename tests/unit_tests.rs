@@ -319,12 +319,12 @@ fn test_write_attrs() -> Result<()> {
             Start(elem) => {
                 let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
-                let mut elem = BytesStart::owned(b"copy".to_vec(), 4);
+                let mut elem = BytesStart::owned_name("copy");
                 elem.extend_attributes(attrs);
                 elem.push_attribute(("x", "y\"z"));
                 Start(elem)
             }
-            End(_) => End(BytesEnd::borrowed(b"copy")),
+            End(_) => End(BytesEnd::borrowed("copy")),
             e => e,
         };
         assert!(writer.write_event(event).is_ok());
@@ -340,7 +340,7 @@ fn test_write_attrs() -> Result<()> {
 fn test_new_xml_decl_full() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), Some(b"yo"))))
+        .write_event(Decl(BytesDecl::new("1.2", Some("utf-X"), Some("yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -355,7 +355,7 @@ fn test_new_xml_decl_full() {
 fn test_new_xml_decl_standalone() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Decl(BytesDecl::new(b"1.2", None, Some(b"yo"))))
+        .write_event(Decl(BytesDecl::new("1.2", None, Some("yo"))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -370,7 +370,7 @@ fn test_new_xml_decl_standalone() {
 fn test_new_xml_decl_encoding() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Decl(BytesDecl::new(b"1.2", Some(b"utf-X"), None)))
+        .write_event(Decl(BytesDecl::new("1.2", Some("utf-X"), None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -385,7 +385,7 @@ fn test_new_xml_decl_encoding() {
 fn test_new_xml_decl_version() {
     let mut writer = Writer::new(Vec::new());
     writer
-        .write_event(Decl(BytesDecl::new(b"1.2", None, None)))
+        .write_event(Decl(BytesDecl::new("1.2", None, None)))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -403,7 +403,7 @@ fn test_new_xml_decl_empty() {
     // An empty version should arguably be an error, but we don't expect anyone to actually supply
     // an empty version.
     writer
-        .write_event(Decl(BytesDecl::new(b"", Some(b""), Some(b""))))
+        .write_event(Decl(BytesDecl::new("", Some(""), Some(""))))
         .expect("writing xml decl should succeed");
 
     let result = writer.into_inner();
@@ -506,7 +506,7 @@ fn test_escaped_content() {
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
                 from_utf8(&*e)
             );
-            match e.decode_and_unescape(&r) {
+            match e.unescape() {
                 Ok(c) => assert_eq!(c, "<test>"),
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
@@ -578,38 +578,6 @@ fn test_read_write_roundtrip() -> Result<()> {
 }
 
 #[test]
-fn test_read_write_roundtrip_escape() -> Result<()> {
-    let input = r#"
-        <?xml version="1.0" encoding="UTF-8"?>
-        <section ns:label="header">
-            <section ns:label="empty element section" />
-            <section ns:label="start/end section"></section>
-            <section ns:label="with text">data &lt;escaped&gt;</section>
-            </section>
-    "#;
-
-    let mut reader = Reader::from_str(input);
-    reader.trim_text(false).expand_empty_elements(false);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            Text(e) => {
-                let t = e.escape();
-                assert!(writer
-                    .write_event(Text(BytesText::from_escaped(t.to_vec())))
-                    .is_ok());
-            }
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner().into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
-    Ok(())
-}
-
-#[test]
 fn test_read_write_roundtrip_escape_text() -> Result<()> {
     let input = r#"
         <?xml version="1.0" encoding="UTF-8"?>
@@ -627,7 +595,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
         match reader.read_event()? {
             Eof => break,
             Text(e) => {
-                let t = e.decode_and_unescape(&reader).unwrap();
+                let t = e.unescape().unwrap();
                 assert!(writer
                     .write_event(Text(BytesText::from_plain_str(&t)))
                     .is_ok());
@@ -769,7 +737,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -792,7 +760,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -810,7 +778,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }
@@ -830,7 +798,7 @@ mod decode_with_bom_removal {
 
         loop {
             match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal(reader.decoder()).unwrap()),
+                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
                 Ok(Eof) => break,
                 _ => (),
             }

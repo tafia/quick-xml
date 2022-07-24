@@ -574,11 +574,11 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns='default'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns='default'", 0), &mut buffer);
             assert_eq!(buffer, b"default");
 
             // Check that tags without namespaces does not change result
-            resolver.push(&BytesStart::borrowed(b"", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed("", 0), &mut buffer);
             assert_eq!(buffer, b"default");
             resolver.pop(&mut buffer);
 
@@ -604,8 +604,8 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns='old'", 0), &mut buffer);
-            resolver.push(&BytesStart::borrowed(b" xmlns='new'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns='new'", 0), &mut buffer);
 
             assert_eq!(buffer, b"oldnew");
             assert_eq!(
@@ -643,8 +643,8 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns='old'", 0), &mut buffer);
-            resolver.push(&BytesStart::borrowed(b" xmlns=''", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns=''", 0), &mut buffer);
 
             assert_eq!(buffer, b"old");
             assert_eq!(
@@ -684,11 +684,11 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns:p='default'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns:p='default'", 0), &mut buffer);
             assert_eq!(buffer, b"pdefault");
 
             // Check that tags without namespaces does not change result
-            resolver.push(&BytesStart::borrowed(b"", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed("", 0), &mut buffer);
             assert_eq!(buffer, b"pdefault");
             resolver.pop(&mut buffer);
 
@@ -714,8 +714,8 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns:p='old'", 0), &mut buffer);
-            resolver.push(&BytesStart::borrowed(b" xmlns:p='new'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns:p='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns:p='new'", 0), &mut buffer);
 
             assert_eq!(buffer, b"poldpnew");
             assert_eq!(
@@ -753,8 +753,8 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let mut buffer = Vec::new();
 
-            resolver.push(&BytesStart::borrowed(b" xmlns:p='old'", 0), &mut buffer);
-            resolver.push(&BytesStart::borrowed(b" xmlns:p=''", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns:p='old'", 0), &mut buffer);
+            resolver.push(&BytesStart::borrowed(" xmlns:p=''", 0), &mut buffer);
 
             assert_eq!(buffer, b"poldp");
             assert_eq!(

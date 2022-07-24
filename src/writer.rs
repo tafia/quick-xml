@@ -26,7 +26,7 @@ use std::io::Write;
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
-///             let mut elem = BytesStart::owned_name(b"my_elem".to_vec());
+///             let mut elem = BytesStart::owned_name("my_elem");
 ///
 ///             // collect existing attributes
 ///             elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
@@ -38,7 +38,7 @@ use std::io::Write;
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
 ///         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
-///             assert!(writer.write_event(Event::End(BytesEnd::borrowed(b"my_elem"))).is_ok());
+///             assert!(writer.write_event(Event::End(BytesEnd::borrowed("my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
@@ -106,7 +106,7 @@ impl<W: Write> Writer<W> {
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
-                self.write(&e.escape())
+                self.write(&e)
             }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => {
@@ -213,7 +213,7 @@ impl<W: Write> Writer<W> {
     #[must_use]
     pub fn create_element<'a, N>(&'a mut self, name: &'a N) -> ElementWriter<W>
     where
-        N: 'a + AsRef<[u8]> + ?Sized,
+        N: 'a + AsRef<str> + ?Sized,
     {
         ElementWriter {
             writer: self,
@@ -347,7 +347,7 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let tag = BytesStart::borrowed_name(b"self-closed")
+        let tag = BytesStart::borrowed_name("self-closed")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
         writer
             .write_event(Event::Empty(tag))
@@ -364,12 +364,11 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let name = b"paired";
-        let start = BytesStart::borrowed_name(name)
+        let start = BytesStart::borrowed_name("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
-        let end = BytesEnd::borrowed(name);
+        let end = start.to_end();
         writer
-            .write_event(Event::Start(start))
+            .write_event(Event::Start(start.clone()))
             .expect("write start tag failed");
         writer
             .write_event(Event::End(end))
@@ -387,14 +386,13 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let name = b"paired";
-        let start = BytesStart::borrowed_name(name)
+        let start = BytesStart::borrowed_name("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
-        let end = BytesEnd::borrowed(name);
-        let inner = BytesStart::borrowed_name(b"inner");
+        let end = start.to_end();
+        let inner = BytesStart::borrowed_name("inner");
 
         writer
-            .write_event(Event::Start(start))
+            .write_event(Event::Start(start.clone()))
             .expect("write start tag failed");
         writer
             .write_event(Event::Empty(inner))
@@ -416,14 +414,13 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let name = b"paired";
-        let start = BytesStart::borrowed_name(name)
+        let start = BytesStart::borrowed_name("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
-        let end = BytesEnd::borrowed(name);
+        let end = start.to_end();
         let text = BytesText::from_plain_str("text");
 
         writer
-            .write_event(Event::Start(start))
+            .write_event(Event::Start(start.clone()))
             .expect("write start tag failed");
         writer
             .write_event(Event::Text(text))
@@ -443,15 +440,14 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let name = b"paired";
-        let start = BytesStart::borrowed_name(name)
+        let start = BytesStart::borrowed_name("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
-        let end = BytesEnd::borrowed(name);
+        let end = start.to_end();
         let text = BytesText::from_plain_str("text");
-        let inner = BytesStart::borrowed_name(b"inner");
+        let inner = BytesStart::borrowed_name("inner");
 
         writer
-            .write_event(Event::Start(start))
+            .write_event(Event::Start(start.clone()))
             .expect("write start tag failed");
         writer
             .write_event(Event::Text(text))
@@ -475,17 +471,16 @@ mod indentation {
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
-        let name = b"paired";
-        let start = BytesStart::borrowed_name(name)
+        let start = BytesStart::borrowed_name("paired")
             .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
-        let end = BytesEnd::borrowed(name);
-        let inner = BytesStart::borrowed_name(b"inner");
+        let end = start.to_end();
+        let inner = BytesStart::borrowed_name("inner");
 
         writer
             .write_event(Event::Start(start.clone()))
             .expect("write start 1 tag failed");
         writer
-            .write_event(Event::Start(start))
+            .write_event(Event::Start(start.clone()))
             .expect("write start 2 tag failed");
         writer
             .write_event(Event::Empty(inner))
@@ -512,7 +507,7 @@ mod indentation {
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
 
         writer
-            .create_element(b"empty")
+            .create_element("empty")
             .with_attribute(("attr1", "value1"))
             .with_attribute(("attr2", "value2"))
             .write_empty()

@@ -416,7 +416,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
             Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
                 Ok(c) => format!("Characters({})", &c),
-                Err(err) => format!("FailedUnescape({:?}; {})", e.escape(), err),
+                Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
             },
             Ok((_, Event::Eof)) => format!("EndDocument"),
             Err(e) => format!("Error: {}", e),

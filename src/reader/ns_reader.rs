@@ -329,7 +329,7 @@ impl<R: BufRead> NsReader<R> {
     ///             }
     ///         }
     ///         Event::Text(e) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///             txt.push(e.unescape().unwrap().into_owned())
     ///         }
     ///         Event::Eof => break,
     ///         _ => (),
@@ -388,7 +388,7 @@ impl<R: BufRead> NsReader<R> {
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
     ///         (_, Event::Text(e)) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///             txt.push(e.unescape().unwrap().into_owned())
     ///         }
     ///         (_, Event::Eof) => break,
     ///         _ => (),
@@ -472,7 +472,7 @@ impl<R: BufRead> NsReader<R> {
     /// let mut buf = Vec::new();
     ///
     /// let ns = Namespace(b"namespace 1");
-    /// let start = BytesStart::borrowed(br#"outer xmlns="namespace 1""#, 5);
+    /// let start = BytesStart::borrowed(r#"outer xmlns="namespace 1""#, 5);
     /// let end   = start.to_end().into_owned();
     ///
     /// // First, we read a start event...
@@ -566,7 +566,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///             }
     ///         }
     ///         Event::Text(e) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///             txt.push(e.unescape().unwrap().into_owned())
     ///         }
     ///         Event::Eof => break,
     ///         _ => (),
@@ -624,7 +624,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
     ///         (_, Event::Text(e)) => {
-    ///             txt.push(e.decode_and_unescape(&reader).unwrap().into_owned())
+    ///             txt.push(e.unescape().unwrap().into_owned())
     ///         }
     ///         (_, Event::Eof) => break,
     ///         _ => (),
@@ -693,7 +693,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// reader.trim_text(true);
     ///
     /// let ns = Namespace(b"namespace 1");
-    /// let start = BytesStart::borrowed(br#"outer xmlns="namespace 1""#, 5);
+    /// let start = BytesStart::borrowed(r#"outer xmlns="namespace 1""#, 5);
     /// let end   = start.to_end().into_owned();
     ///
     /// // First, we read a start event...
