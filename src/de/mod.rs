@@ -297,8 +297,8 @@ where
 }
 
 /// Deserialize from a reader. This method will do internal copies of data
-/// readed from `reader`. If you want have a `&[u8]` or `&str` input and want
-/// to borrow as much as possible, use [`from_slice`] or [`from_str`]
+/// readed from `reader`. If you want have a `&str` input and want to borrow
+/// as much as possible, use [`from_str`].
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
     R: BufRead,
@@ -360,7 +360,6 @@ where
     /// Typically it is more convenient to use one of these methods instead:
     ///
     ///  - [`Deserializer::from_str`]
-    ///  - [`Deserializer::from_slice`]
     ///  - [`Deserializer::from_reader`]
     pub fn new(reader: R) -> Self {
         Deserializer {
@@ -689,9 +688,9 @@ where
     R: BufRead,
 {
     /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer. If you already have a string or a byte array, use
-    /// [`Self::from_str`] or [`Self::from_slice`] instead, because they will
-    /// borrow instead of copy, whenever possible
+    /// into internal buffer. If you already have a string use [`Self::from_str`]
+    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
+    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
     pub fn from_reader(reader: R) -> Self {
         let mut reader = Reader::from_reader(reader);
         reader
