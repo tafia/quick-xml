@@ -176,6 +176,8 @@
   |`BytesText::from_plain_str(&str)`                 |_(as above)_
   |`BytesCData::new(impl Into<Cow<[u8]>>)`           |`BytesCData::new(impl Into<Cow<str>>)`
   |`BytesCData::from_str(&str)`                      |_(as above)_
+- [#440]: Removed `Deserializer::from_slice` and `quick_xml::de::from_slice` methods because deserializing from a byte
+  array cannot guarantee borrowing due to possible copying while decoding.
 
 ### New Tests
 
@@ -186,7 +188,7 @@
 - [#363]: Add tests for `Reader::read_event_impl` to ensure that proper events generated for corresponding inputs
 - [#407]: Improved benchmark suite to cover whole-document parsing, escaping and unescaping text
 - [#418]: Parameterized macrobenchmarks and comparative benchmarks, added throughput measurements via criterion
-- [#434]: Added more tests for serde deserialier
+- [#434]: Added more tests for serde deserializer
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
@@ -212,6 +214,7 @@
 [#434]: https://github.com/tafia/quick-xml/pull/434
 [#437]: https://github.com/tafia/quick-xml/pull/437
 [#439]: https://github.com/tafia/quick-xml/pull/439
+[#440]: https://github.com/tafia/quick-xml/pull/440
 
 
 ## 0.23.0 -- 2022-05-08
