@@ -246,7 +246,12 @@ mod test {
     use crate::reader::test::check;
     use crate::reader::XmlSource;
 
-    check!(());
+    /// Default buffer constructor just pass the byte array from the test
+    fn identity<T>(input: T) -> T {
+        input
+    }
+
+    check!(identity, ());
 
     #[cfg(feature = "encoding")]
     mod encoding {
