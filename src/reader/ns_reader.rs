@@ -509,9 +509,7 @@ impl<R: BufRead> NsReader<R> {
 impl NsReader<BufReader<File>> {
     /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        Ok(Self::from_reader(reader))
+        Ok(Self::new(Reader::from_file(path)?))
     }
 }
 
