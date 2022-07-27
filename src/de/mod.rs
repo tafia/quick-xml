@@ -952,7 +952,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// XML input source that reads from a slice of bytes and can borrow from it.
 ///
 /// You cannot create it, it is created automatically when you call
-/// [`Deserializer::from_str`] or [`Deserializer::from_slice`]
+/// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
     reader: Reader<&'de [u8]>,
 }

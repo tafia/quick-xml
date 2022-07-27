@@ -85,7 +85,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
         ))
     }
 
-    /// Forwards deserialization to the [`Self::deserialize_bytes`]
+    /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes)
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
