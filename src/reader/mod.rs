@@ -496,31 +496,7 @@ impl<R> Reader<R> {
             .reader
             .read_bytes_until(b'<', buf, &mut self.buf_position)
         {
-            Ok(Some(bytes)) => {
-                #[cfg(feature = "encoding")]
-                if first && self.encoding.can_be_refined() {
-                    if let Some(encoding) = detect_encoding(bytes) {
-                        self.encoding = EncodingRef::BomDetected(encoding);
-                    }
-                }
-
-                let content = if self.trim_text_end {
-                    // Skip the ending '<
-                    let len = bytes
-                        .iter()
-                        .rposition(|&b| !is_whitespace(b))
-                        .map_or_else(|| bytes.len(), |p| p + 1);
-                    &bytes[..len]
-                } else {
-                    bytes
-                };
-
-                Ok(if first {
-                    Event::StartText(BytesText::wrap(content, self.decoder()).into())
-                } else {
-                    Event::Text(BytesText::wrap(content, self.decoder()))
-                })
-            }
+            Ok(Some(bytes)) => self.read_text(bytes, first),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -568,6 +544,44 @@ impl<R> Reader<R> {
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
+    }
+
+    /// Trims whitespaces from `bytes`, if required, and returns a [`StartText`]
+    /// or a [`Text`] event. When [`StartText`] is returned, the method can change
+    /// the encoding of the reader, detecting it from the beginning of the stream.
+    ///
+    /// # Parameters
+    /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
+    /// - `first`: if `true`, then this is the first call of that function,
+    ///   i. e. data from the start of stream and [`StartText`] will be returned,
+    ///   otherwise [`Text`] will be returned
+    ///
+    /// [`StartText`]: Event::StartText
+    /// [`Text`]: Event::Text
+    fn read_text<'b>(&mut self, bytes: &'b [u8], first: bool) -> Result<Event<'b>> {
+        #[cfg(feature = "encoding")]
+        if first && self.encoding.can_be_refined() {
+            if let Some(encoding) = detect_encoding(bytes) {
+                self.encoding = EncodingRef::BomDetected(encoding);
+            }
+        }
+
+        let content = if self.trim_text_end {
+            // Skip the ending '<
+            let len = bytes
+                .iter()
+                .rposition(|&b| !is_whitespace(b))
+                .map_or_else(|| bytes.len(), |p| p + 1);
+            &bytes[..len]
+        } else {
+            bytes
+        };
+
+        Ok(if first {
+            Event::StartText(BytesText::wrap(content, self.decoder()).into())
+        } else {
+            Event::Text(BytesText::wrap(content, self.decoder()))
+        })
     }
 
     /// reads `BytesElement` starting with a `!`,
