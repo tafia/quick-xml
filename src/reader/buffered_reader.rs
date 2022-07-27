@@ -429,6 +429,11 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
 
 #[cfg(test)]
 mod test {
+    use crate::reader::test::check;
+    use crate::reader::XmlSource;
+
+    check!(&mut Vec::new());
+
     #[cfg(feature = "encoding")]
     mod encoding {
         use crate::events::Event;

@@ -932,6 +932,7 @@ pub(crate) fn is_whitespace(b: u8) -> bool {
 
 #[cfg(test)]
 mod test {
+    /// Checks the internal implementation of the various reader methods
     macro_rules! check {
         ($buf:expr) => {
             mod read_bytes_until {
@@ -1804,17 +1805,8 @@ mod test {
         };
     }
 
-    /// Tests for reader that generates events that borrow from the provided buffer
-    mod buffered {
-        use crate::reader::XmlSource;
-
-        check!(&mut Vec::new());
-    }
-
-    /// Tests for reader that generates events that borrow from the input
-    mod borrowed {
-        use crate::reader::XmlSource;
-
-        check!(());
-    }
+    // Export a macro for the child modules:
+    // - buffered_reader
+    // - slice_reader
+    pub(super) use check;
 }

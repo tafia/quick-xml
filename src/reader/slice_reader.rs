@@ -232,6 +232,10 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
 #[cfg(test)]
 mod test {
+    use crate::reader::test::check;
+    use crate::reader::XmlSource;
+
+    check!(());
 
     #[cfg(feature = "encoding")]
     mod encoding {
