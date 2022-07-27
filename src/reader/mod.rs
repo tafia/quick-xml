@@ -31,7 +31,7 @@ macro_rules! configure_methods {
         /// [`Start`]: Event::Start
         /// [`End`]: Event::End
         pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .expand_empty_elements = val;
+            self $(.$holder)? .parser.expand_empty_elements = val;
             self
         }
 
@@ -44,8 +44,8 @@ macro_rules! configure_methods {
         ///
         /// [`Text`]: Event::Text
         pub fn trim_text(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .trim_text_start = val;
-            self $(.$holder)? .trim_text_end = val;
+            self $(.$holder)? .parser.trim_text_start = val;
+            self $(.$holder)? .parser.trim_text_end = val;
             self
         }
 
@@ -57,7 +57,7 @@ macro_rules! configure_methods {
         ///
         /// [`Text`]: Event::Text
         pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .trim_text_end = val;
+            self $(.$holder)? .parser.trim_text_end = val;
             self
         }
 
@@ -73,7 +73,7 @@ macro_rules! configure_methods {
         ///
         /// [`End`]: Event::End
         pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .trim_markup_names_in_closing_tags = val;
+            self $(.$holder)? .parser.trim_markup_names_in_closing_tags = val;
             self
         }
 
@@ -109,7 +109,7 @@ macro_rules! configure_methods {
         /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
         /// [`End`]: Event::End
         pub fn check_end_names(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .check_end_names = val;
+            self $(.$holder)? .parser.check_end_names = val;
             self
         }
 
@@ -124,7 +124,7 @@ macro_rules! configure_methods {
         ///
         /// [`Comment`]: Event::Comment
         pub fn check_comments(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .check_comments = val;
+            self $(.$holder)? .parser.check_comments = val;
             self
         }
     };
@@ -284,8 +284,17 @@ impl EncodingRef {
 /// [`NsReader`]: crate::reader::NsReader
 #[derive(Clone)]
 pub struct Reader<R> {
-    /// reader
+    /// Source of data for parse
     reader: R,
+    /// Configuration and current parse state
+    parser: Parser,
+}
+
+/// A struct that holds a current parse state and a parser configuration.
+/// It is independent on a way of reading data: the reader feed data into it and
+/// get back produced [`Event`]s.
+#[derive(Clone)]
+struct Parser {
     /// current buffer position, useful for debugging errors
     offset: usize,
     /// current state Open/Close
@@ -335,19 +344,21 @@ impl<R> Reader<R> {
     pub fn from_reader(reader: R) -> Self {
         Self {
             reader,
-            opened_buffer: Vec::new(),
-            opened_starts: Vec::new(),
-            tag_state: TagState::Init,
-            expand_empty_elements: false,
-            trim_text_start: false,
-            trim_text_end: false,
-            trim_markup_names_in_closing_tags: true,
-            check_end_names: true,
-            offset: 0,
-            check_comments: false,
+            parser: Parser {
+                opened_buffer: Vec::new(),
+                opened_starts: Vec::new(),
+                tag_state: TagState::Init,
+                expand_empty_elements: false,
+                trim_text_start: false,
+                trim_text_end: false,
+                trim_markup_names_in_closing_tags: true,
+                check_end_names: true,
+                offset: 0,
+                check_comments: false,
 
-            #[cfg(feature = "encoding")]
-            encoding: EncodingRef::Implicit(UTF_8),
+                #[cfg(feature = "encoding")]
+                encoding: EncodingRef::Implicit(UTF_8),
+            },
         }
     }
 
@@ -429,10 +440,10 @@ impl<R> Reader<R> {
     pub fn buffer_position(&self) -> usize {
         // when internal state is Opened, we have actually read until '<',
         // which we don't want to show
-        if let TagState::Opened = self.tag_state {
-            self.offset - 1
+        if let TagState::Opened = self.parser.tag_state {
+            self.parser.offset - 1
         } else {
-            self.offset
+            self.parser.offset
         }
     }
 
@@ -443,16 +454,13 @@ impl<R> Reader<R> {
     ///
     /// If `encoding` feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
+    #[inline]
     pub fn decoder(&self) -> Decoder {
-        Decoder {
-            #[cfg(feature = "encoding")]
-            encoding: self.encoding.encoding(),
-        }
+        self.parser.decoder()
     }
 }
 
-/// Parse methods, independent from a way of reading data
-impl<R> Reader<R> {
+impl Parser {
     /// Trims whitespaces from `bytes`, if required, and returns a [`StartText`]
     /// or a [`Text`] event. When [`StartText`] is returned, the method can change
     /// the encoding of the reader, detecting it from the beginning of the stream.
@@ -633,6 +641,20 @@ impl<R> Reader<R> {
             .split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::wrap(name.into())))
     }
+
+    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    ///
+    /// If `encoding` feature is enabled, the used encoding may change after
+    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
+    ///
+    /// If `encoding` feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
+    fn decoder(&self) -> Decoder {
+        Decoder {
+            #[cfg(feature = "encoding")]
+            encoding: self.encoding.encoding(),
+        }
+    }
 }
 
 /// Private sync reading methods
@@ -644,15 +666,15 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        let event = match self.tag_state {
+        let event = match self.parser.tag_state {
             TagState::Init => self.read_until_open(buf, true),
             TagState::Closed => self.read_until_open(buf, false),
             TagState::Opened => self.read_until_close(buf),
-            TagState::Empty => self.close_expanded_empty(),
+            TagState::Empty => self.parser.close_expanded_empty(),
             TagState::Exit => return Ok(Event::Eof),
         };
         match event {
-            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
+            Err(_) | Ok(Event::Eof) => self.parser.tag_state = TagState::Exit,
             _ => {}
         }
         event
@@ -665,22 +687,22 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        self.tag_state = TagState::Opened;
+        self.parser.tag_state = TagState::Opened;
 
-        if self.trim_text_start {
-            self.reader.skip_whitespace(&mut self.offset)?;
+        if self.parser.trim_text_start {
+            self.reader.skip_whitespace(&mut self.parser.offset)?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if self.reader.skip_one(b'<', &mut self.offset)? {
+        if self.reader.skip_one(b'<', &mut self.parser.offset)? {
             return self.read_event_impl(buf);
         }
 
         match self
             .reader
-            .read_bytes_until(b'<', buf, &mut self.offset)
+            .read_bytes_until(b'<', buf, &mut self.parser.offset)
         {
-            Ok(Some(bytes)) => self.read_text(bytes, first),
+            Ok(Some(bytes)) => self.parser.read_text(bytes, first),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -692,37 +714,37 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        self.tag_state = TagState::Closed;
+        self.parser.tag_state = TagState::Closed;
 
         match self.reader.peek_one() {
             // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.offset) {
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.parser.offset) {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
+                Ok(Some((bang_type, bytes))) => self.parser.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
             Ok(Some(b'/')) => match self
                 .reader
-                .read_bytes_until(b'>', buf, &mut self.offset)
+                .read_bytes_until(b'>', buf, &mut self.parser.offset)
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_end(bytes),
+                Ok(Some(bytes)) => self.parser.read_end(bytes),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match self
                 .reader
-                .read_bytes_until(b'>', buf, &mut self.offset)
+                .read_bytes_until(b'>', buf, &mut self.parser.offset)
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Ok(Some(bytes)) => self.parser.read_question_mark(bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.offset) {
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.parser.offset) {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_start(bytes),
+                Ok(Some(bytes)) => self.parser.read_start(bytes),
                 Err(e) => Err(e),
             },
             Ok(None) => Ok(Event::Eof),
