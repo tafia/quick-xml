@@ -5,7 +5,9 @@ use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
-use crate::{Error, Result};
+#[cfg(feature = "encoding")]
+use crate::Error;
+use crate::Result;
 
 /// Decoder of byte slices into strings.
 ///
