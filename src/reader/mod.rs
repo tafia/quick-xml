@@ -451,102 +451,6 @@ impl<R> Reader<R> {
     }
 }
 
-/// Private sync reading methods
-impl<R> Reader<R> {
-    /// Read text into the given buffer, and return an event that borrows from
-    /// either that buffer or from the input itself, based on the type of the
-    /// reader.
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        let event = match self.tag_state {
-            TagState::Init => self.read_until_open(buf, true),
-            TagState::Closed => self.read_until_open(buf, false),
-            TagState::Opened => self.read_until_close(buf),
-            TagState::Empty => self.close_expanded_empty(),
-            TagState::Exit => return Ok(Event::Eof),
-        };
-        match event {
-            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
-            _ => {}
-        }
-        event
-    }
-
-    /// Read until '<' is found and moves reader to an `Opened` state.
-    ///
-    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
-    fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        self.tag_state = TagState::Opened;
-
-        if self.trim_text_start {
-            self.reader.skip_whitespace(&mut self.buf_position)?;
-        }
-
-        // If we already at the `<` symbol, do not try to return an empty Text event
-        if self.reader.skip_one(b'<', &mut self.buf_position)? {
-            return self.read_event_impl(buf);
-        }
-
-        match self
-            .reader
-            .read_bytes_until(b'<', buf, &mut self.buf_position)
-        {
-            Ok(Some(bytes)) => self.read_text(bytes, first),
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Private function to read until `>` is found. This function expects that
-    /// it was called just after encounter a `<` symbol.
-    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        self.tag_state = TagState::Closed;
-
-        match self.reader.peek_one() {
-            // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
-                Err(e) => Err(e),
-            },
-            // `</` - closing tag
-            Ok(Some(b'/')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_end(bytes),
-                Err(e) => Err(e),
-            },
-            // `<?` - processing instruction
-            Ok(Some(b'?')) => match self
-                .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
-            {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_question_mark(bytes),
-                Err(e) => Err(e),
-            },
-            // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => self.read_start(bytes),
-                Err(e) => Err(e),
-            },
-            Ok(None) => Ok(Event::Eof),
-            Err(e) => Err(e),
-        }
-    }
-}
-
 /// Parse methods, independent from a way of reading data
 impl<R> Reader<R> {
     /// Trims whitespaces from `bytes`, if required, and returns a [`StartText`]
@@ -728,6 +632,102 @@ impl<R> Reader<R> {
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::wrap(name.into())))
+    }
+}
+
+/// Private sync reading methods
+impl<R> Reader<R> {
+    /// Read text into the given buffer, and return an event that borrows from
+    /// either that buffer or from the input itself, based on the type of the
+    /// reader.
+    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    where
+        R: XmlSource<'i, B>,
+    {
+        let event = match self.tag_state {
+            TagState::Init => self.read_until_open(buf, true),
+            TagState::Closed => self.read_until_open(buf, false),
+            TagState::Opened => self.read_until_close(buf),
+            TagState::Empty => self.close_expanded_empty(),
+            TagState::Exit => return Ok(Event::Eof),
+        };
+        match event {
+            Err(_) | Ok(Event::Eof) => self.tag_state = TagState::Exit,
+            _ => {}
+        }
+        event
+    }
+
+    /// Read until '<' is found and moves reader to an `Opened` state.
+    ///
+    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
+    fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
+    where
+        R: XmlSource<'i, B>,
+    {
+        self.tag_state = TagState::Opened;
+
+        if self.trim_text_start {
+            self.reader.skip_whitespace(&mut self.buf_position)?;
+        }
+
+        // If we already at the `<` symbol, do not try to return an empty Text event
+        if self.reader.skip_one(b'<', &mut self.buf_position)? {
+            return self.read_event_impl(buf);
+        }
+
+        match self
+            .reader
+            .read_bytes_until(b'<', buf, &mut self.buf_position)
+        {
+            Ok(Some(bytes)) => self.read_text(bytes, first),
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Private function to read until `>` is found. This function expects that
+    /// it was called just after encounter a `<` symbol.
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    where
+        R: XmlSource<'i, B>,
+    {
+        self.tag_state = TagState::Closed;
+
+        match self.reader.peek_one() {
+            // `<!` - comment, CDATA or DOCTYPE declaration
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
+                Err(e) => Err(e),
+            },
+            // `</` - closing tag
+            Ok(Some(b'/')) => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_end(bytes),
+                Err(e) => Err(e),
+            },
+            // `<?` - processing instruction
+            Ok(Some(b'?')) => match self
+                .reader
+                .read_bytes_until(b'>', buf, &mut self.buf_position)
+            {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_question_mark(bytes),
+                Err(e) => Err(e),
+            },
+            // `<...` - opening or self-closed tag
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
+                Ok(None) => Ok(Event::Eof),
+                Ok(Some(bytes)) => self.read_start(bytes),
+                Err(e) => Err(e),
+            },
+            Ok(None) => Ok(Event::Eof),
+            Err(e) => Err(e),
+        }
     }
 }
 
