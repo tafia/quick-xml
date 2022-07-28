@@ -451,7 +451,7 @@ impl<R> Reader<R> {
     }
 }
 
-/// Private methods
+/// Private sync reading methods
 impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
@@ -545,7 +545,10 @@ impl<R> Reader<R> {
             Err(e) => Err(e),
         }
     }
+}
 
+/// Parse methods, independent from a way of reading data
+impl<R> Reader<R> {
     /// Trims whitespaces from `bytes`, if required, and returns a [`StartText`]
     /// or a [`Text`] event. When [`StartText`] is returned, the method can change
     /// the encoding of the reader, detecting it from the beginning of the stream.
@@ -693,15 +696,6 @@ impl<R> Reader<R> {
         }
     }
 
-    #[inline]
-    fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.tag_state = TagState::Closed;
-        let name = self
-            .opened_buffer
-            .split_off(self.opened_starts.pop().unwrap());
-        Ok(Event::End(BytesEnd::wrap(name.into())))
-    }
-
     /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
     /// return `Start` or `Empty` event
     fn read_start<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
@@ -725,6 +719,15 @@ impl<R> Reader<R> {
             }
             Ok(Event::Start(BytesStart::wrap(buf, name_end)))
         }
+    }
+
+    #[inline]
+    fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
+        self.tag_state = TagState::Closed;
+        let name = self
+            .opened_buffer
+            .split_off(self.opened_starts.pop().unwrap());
+        Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 }
 
