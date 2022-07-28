@@ -1,7 +1,7 @@
 //! A module to handle `Reader`
 
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::Encoding;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
@@ -294,21 +294,7 @@ impl<R> Reader<R> {
     pub fn from_reader(reader: R) -> Self {
         Self {
             reader,
-            parser: Parser {
-                opened_buffer: Vec::new(),
-                opened_starts: Vec::new(),
-                tag_state: TagState::Init,
-                expand_empty_elements: false,
-                trim_text_start: false,
-                trim_text_end: false,
-                trim_markup_names_in_closing_tags: true,
-                check_end_names: true,
-                offset: 0,
-                check_comments: false,
-
-                #[cfg(feature = "encoding")]
-                encoding: EncodingRef::Implicit(UTF_8),
-            },
+            parser: Parser::default(),
         }
     }
 

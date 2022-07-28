@@ -1,6 +1,9 @@
 use std::str::from_utf8;
 
 #[cfg(feature = "encoding")]
+use encoding_rs::UTF_8;
+
+#[cfg(feature = "encoding")]
 use crate::encoding::detect_encoding;
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
@@ -49,10 +52,10 @@ pub(super) struct Parser {
     ///
     /// The `^` symbols shows which positions stored in the [`Self::opened_starts`]
     /// (0 and 4 in that case).
-    pub opened_buffer: Vec<u8>,
+    opened_buffer: Vec<u8>,
     /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
     /// for that field for details
-    pub opened_starts: Vec<usize>,
+    opened_starts: Vec<usize>,
 
     #[cfg(feature = "encoding")]
     /// Reference to the encoding used to read an XML
@@ -252,6 +255,26 @@ impl Parser {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: self.encoding.encoding(),
+        }
+    }
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self {
+            offset: 0,
+            tag_state: TagState::Init,
+            expand_empty_elements: false,
+            trim_text_start: false,
+            trim_text_end: false,
+            trim_markup_names_in_closing_tags: true,
+            check_end_names: true,
+            check_comments: false,
+            opened_buffer: Vec::new(),
+            opened_starts: Vec::new(),
+
+            #[cfg(feature = "encoding")]
+            encoding: EncodingRef::Implicit(UTF_8),
         }
     }
 }
