@@ -61,6 +61,7 @@
   when an enum variant represented as a `Text` event (i.e. `<xml>tag</xml>`)
   and a document encoding is not an UTF-8
 - [#434]: Fixed incorrect error generated in some cases by serde deserializer
+- [#445]: Use local name without namespace prefix when selecting enum variants based on element names
 
 ### Misc Changes
 

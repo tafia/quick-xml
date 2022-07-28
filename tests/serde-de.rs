@@ -3732,6 +3732,22 @@ mod struct_ {
         );
     }
 
+    #[test]
+    fn namespaces() {
+        let data: Struct = from_str(
+            // Comment for prevent unnecessary formatting - we use the same style in all tests
+            r#"<root xmlns:namespace="http://name.space"><namespace:float>42</namespace:float><string>answer</string></root>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            data,
+            Struct {
+                float: 42.0,
+                string: "answer".into()
+            }
+        );
+    }
+
     maplike_errors!(Struct);
 }
 
@@ -3917,6 +3933,22 @@ mod enum_ {
                 let data: Node = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<Struct float="42" string="answer"/>"#,
+                )
+                .unwrap();
+                assert_eq!(
+                    data,
+                    Node::Struct {
+                        float: 42.0,
+                        string: "answer".into()
+                    }
+                );
+            }
+
+            #[test]
+            fn namespaces() {
+                let data: Node = from_str(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<namespace:Struct xmlns:namespace="http://name.space"><float>42</float><string>answer</string></namespace:Struct>"#,
                 )
                 .unwrap();
                 assert_eq!(
