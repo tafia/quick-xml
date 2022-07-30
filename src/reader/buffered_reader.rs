@@ -146,26 +146,9 @@ impl<R: BufRead> Reader<R> {
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
-        let mut depth = 0;
-        loop {
+        read_to_end!(self, end, buf, {
             buf.clear();
-            match self.read_event_into(buf) {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
-            }
-        }
+        })
     }
 
     /// Reads optional text between start and end tags.

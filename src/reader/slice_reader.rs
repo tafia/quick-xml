@@ -138,25 +138,7 @@ impl<'a> Reader<&'a [u8]> {
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<()> {
-        let mut depth = 0;
-        loop {
-            match self.read_event() {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
-            }
-        }
+        read_to_end!(self, end, (), {})
     }
 }
 

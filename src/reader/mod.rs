@@ -127,6 +127,36 @@ macro_rules! configure_methods {
     };
 }
 
+/// Generalization of `read_to_end` method for buffered and borrowed readers
+macro_rules! read_to_end {
+    (
+        $self:expr, $end:expr, $buf:expr,
+        // Code block that performs clearing of internal buffer after read of each event
+        $clear:block
+    ) => {{
+        let mut depth = 0;
+        loop {
+            $clear
+            match $self.read_event_impl($buf) {
+                Err(e) => return Err(e),
+
+                Ok(Event::Start(e)) if e.name() == $end => depth += 1,
+                Ok(Event::End(e)) if e.name() == $end => {
+                    if depth == 0 {
+                        return Ok(());
+                    }
+                    depth -= 1;
+                }
+                Ok(Event::Eof) => {
+                    let name = $self.decoder().decode($end.as_ref());
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
+                }
+                _ => (),
+            }
+        }
+    }};
+}
+
 mod buffered_reader;
 mod ns_reader;
 mod parser;
