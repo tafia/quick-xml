@@ -285,7 +285,7 @@ impl EncodingRef {
 #[derive(Clone)]
 pub struct Reader<R> {
     /// reader
-    pub(crate) reader: R,
+    reader: R,
     /// current buffer position, useful for debugging errors
     buf_position: usize,
     /// current state Open/Close
