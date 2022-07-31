@@ -211,6 +211,9 @@ macro_rules! impl_buffered_source {
     };
 }
 
+// Make it public for use in async implementations
+pub(super) use impl_buffered_source;
+
 /// Implementation of `XmlSource` for any `BufRead` reader using a user-given
 /// `Vec<u8>` as buffer that will be borrowed by events.
 impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {

@@ -34,6 +34,10 @@ impl<'a> Reader<&'a [u8]> {
 
     /// Read an event that borrows from the input rather than a buffer.
     ///
+    /// There is no asynchronous `read_event_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
+    ///
     /// # Examples
     ///
     /// ```
@@ -82,6 +86,10 @@ impl<'a> Reader<&'a [u8]> {
     ///
     /// The correctness of the skipped events does not checked, if you disabled
     /// the [`check_end_names`] option.
+    ///
+    /// There is no asynchronous `read_to_end_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
     ///
     /// # Namespaces
     ///

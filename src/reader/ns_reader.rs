@@ -19,7 +19,7 @@ use crate::reader::{Reader, XmlSource};
 /// Consumes a [`BufRead`] and streams XML `Event`s.
 pub struct NsReader<R> {
     /// An XML reader
-    reader: Reader<R>,
+    pub(super) reader: Reader<R>,
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
     buffer: Vec<u8>,
@@ -63,14 +63,14 @@ impl<R> NsReader<R> {
         self.process_event(event)
     }
 
-    fn pop(&mut self) {
+    pub(super) fn pop(&mut self) {
         if self.pending_pop {
             self.ns_resolver.pop(&mut self.buffer);
             self.pending_pop = false;
         }
     }
 
-    fn process_event<'i>(&mut self, event: Result<Event<'i>>) -> Result<Event<'i>> {
+    pub(super) fn process_event<'i>(&mut self, event: Result<Event<'i>>) -> Result<Event<'i>> {
         match event {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, &mut self.buffer);
@@ -93,7 +93,7 @@ impl<R> NsReader<R> {
         }
     }
 
-    fn resolve_event<'i>(
+    pub(super) fn resolve_event<'i>(
         &mut self,
         event: Result<Event<'i>>,
     ) -> Result<(ResolveResult, Event<'i>)> {
@@ -538,6 +538,10 @@ impl<'i> NsReader<&'i [u8]> {
     /// You also can use [`read_resolved_event()`] instead if you want to resolve namespace
     /// as soon as you get an event.
     ///
+    /// There is no asynchronous `read_event_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
+    ///
     /// # Examples
     ///
     /// ```
@@ -594,6 +598,10 @@ impl<'i> NsReader<&'i [u8]> {
     ///
     /// If you are not interested in namespaces, you can use [`read_event()`]
     /// which will not automatically resolve namespaces for you.
+    ///
+    /// There is no asynchronous `read_resolved_event_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
     ///
     /// # Examples
     ///
@@ -660,6 +668,10 @@ impl<'i> NsReader<&'i [u8]> {
     /// The `end` parameter should contain name of the end element _in the reader
     /// encoding_. It is good practice to always get that parameter using
     /// [`BytesStart::to_end()`] method.
+    ///
+    /// There is no asynchronous `read_to_end_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
     ///
     /// # Namespaces
     ///

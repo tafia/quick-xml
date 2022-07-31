@@ -152,22 +152,22 @@ macro_rules! read_event_impl {
 macro_rules! read_until_open {
     (
         $self:ident, $buf:ident, $first:ident,
+        $reader:expr,
         $read_event:ident
         $(, $await:ident)?
     ) => {{
         $self.parser.state = ParseState::OpenedTag;
 
         if $self.parser.trim_text_start {
-            $self.reader.skip_whitespace(&mut $self.parser.offset) $(.$await)? ?;
+            $reader.skip_whitespace(&mut $self.parser.offset) $(.$await)? ?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if $self.reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
+        if $reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
             return $self.$read_event($buf) $(.$await)?;
         }
 
-        match $self
-            .reader
+        match $reader
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
@@ -180,15 +180,15 @@ macro_rules! read_until_open {
 
 macro_rules! read_until_close {
     (
-        $self:ident, $buf:ident
+        $self:ident, $buf:ident,
+        $reader:expr
         $(, $await:ident)?
     ) => {{
         $self.parser.state = ParseState::ClosedTag;
 
-        match $self.reader.peek_one() $(.$await)? {
+        match $reader.peek_one() $(.$await)? {
             // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match $self
-                .reader
+            Ok(Some(b'!')) => match $reader
                 .read_bang_element($buf, &mut $self.parser.offset)
                 $(.$await)?
             {
@@ -197,8 +197,7 @@ macro_rules! read_until_close {
                 Err(e) => Err(e),
             },
             // `</` - closing tag
-            Ok(Some(b'/')) => match $self
-                .reader
+            Ok(Some(b'/')) => match $reader
                 .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
                 $(.$await)?
             {
@@ -207,8 +206,7 @@ macro_rules! read_until_close {
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
-            Ok(Some(b'?')) => match $self
-                .reader
+            Ok(Some(b'?')) => match $reader
                 .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
                 $(.$await)?
             {
@@ -217,8 +215,7 @@ macro_rules! read_until_close {
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match $self
-                .reader
+            Ok(Some(_)) => match $reader
                 .read_element($buf, &mut $self.parser.offset)
                 $(.$await)?
             {
@@ -264,6 +261,8 @@ macro_rules! read_to_end {
     }};
 }
 
+#[cfg(feature = "async-tokio")]
+mod async_tokio;
 mod buffered_reader;
 mod ns_reader;
 mod parser;
@@ -455,7 +454,7 @@ impl<R> Reader<R> {
     /// let xml = r#"<tag1 att1 = "test">
     ///                 <tag2><!--Test comment-->Test</tag2>
     ///                 <tag3>Test 2</tag3>
-    ///             </tag1>"#;
+    ///              </tag1>"#;
     /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
     /// let mut buf = Vec::new();
     ///
@@ -552,7 +551,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_until_open!(self, buf, first, read_event_impl)
+        read_until_open!(self, buf, first, self.reader, read_event_impl)
     }
 
     /// Private function to read until `>` is found. This function expects that
@@ -561,7 +560,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_until_close!(self, buf)
+        read_until_close!(self, buf, self.reader)
     }
 }
 

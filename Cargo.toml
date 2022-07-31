@@ -8,13 +8,14 @@ documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
 
 keywords = ["xml", "serde", "parser", "writer", "html"]
-categories = ["encoding", "parsing", "parser-implementations"]
+categories = ["asynchronous", "encoding", "parsing", "parser-implementations"]
 license = "MIT"
 
 [dependencies]
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 serde = { version = "1.0", optional = true }
+tokio = { version = "1.20", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.5"
 
 [dev-dependencies]
@@ -23,6 +24,8 @@ pretty_assertions = "1.2"
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
+tokio = { version = "1.20", default-features = false, features = ["macros", "rt"] }
+tokio-test = "0.4"
 
 [lib]
 bench = false
@@ -37,6 +40,13 @@ harness = false
 
 [features]
 default = []
+
+## Enables support for asynchronous reading from `tokio`'s IO-Traits by enabling
+## [reading events] from types implementing [`tokio::io::AsyncBufRead`].
+##
+## [reading events]: crate::reader::Reader::read_event_into_async
+async-tokio = ["tokio"]
+
 ## Enables support of non-UTF-8 encoded documents. Encoding will be inferred from
 ## the XML declaration if it will be found, otherwise UTF-8 is assumed.
 ##
@@ -123,3 +133,7 @@ required-features = ["serialize"]
 [[test]]
 name = "serde-migrated"
 required-features = ["serialize"]
+
+[[test]]
+name = "async-tokio"
+required-features = ["async-tokio"]
