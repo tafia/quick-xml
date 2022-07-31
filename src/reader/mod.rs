@@ -287,7 +287,7 @@ pub struct Reader<R> {
     /// reader
     reader: R,
     /// current buffer position, useful for debugging errors
-    buf_position: usize,
+    offset: usize,
     /// current state Open/Close
     tag_state: TagState,
     /// expand empty element into an opening and closing element
@@ -343,7 +343,7 @@ impl<R> Reader<R> {
             trim_text_end: false,
             trim_markup_names_in_closing_tags: true,
             check_end_names: true,
-            buf_position: 0,
+            offset: 0,
             check_comments: false,
 
             #[cfg(feature = "encoding")]
@@ -430,9 +430,9 @@ impl<R> Reader<R> {
         // when internal state is Opened, we have actually read until '<',
         // which we don't want to show
         if let TagState::Opened = self.tag_state {
-            self.buf_position - 1
+            self.offset - 1
         } else {
-            self.buf_position
+            self.offset
         }
     }
 
@@ -506,7 +506,7 @@ impl<R> Reader<R> {
                     if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
                         .position(|p| buf[3 + p + 1] == b'-')
                     {
-                        self.buf_position += len - p;
+                        self.offset += len - p;
                         return Err(Error::UnexpectedToken("--".to_string()));
                     }
                 }
@@ -550,8 +550,8 @@ impl<R> Reader<R> {
             &buf[1..]
         };
         if self.check_end_names {
-            let mismatch_err = |expected: &[u8], found: &[u8], buf_position: &mut usize| {
-                *buf_position -= buf.len();
+            let mismatch_err = |expected: &[u8], found: &[u8], offset: &mut usize| {
+                *offset -= buf.len();
                 Err(Error::EndEventMismatch {
                     expected: from_utf8(expected).unwrap_or("").to_owned(),
                     found: from_utf8(found).unwrap_or("").to_owned(),
@@ -561,13 +561,13 @@ impl<R> Reader<R> {
                 Some(start) => {
                     let expected = &self.opened_buffer[start..];
                     if name != expected {
-                        mismatch_err(expected, name, &mut self.buf_position)
+                        mismatch_err(expected, name, &mut self.offset)
                     } else {
                         self.opened_buffer.truncate(start);
                         Ok(Event::End(BytesEnd::wrap(name.into())))
                     }
                 }
-                None => mismatch_err(b"", &buf[1..], &mut self.buf_position),
+                None => mismatch_err(b"", &buf[1..], &mut self.offset),
             }
         } else {
             Ok(Event::End(BytesEnd::wrap(name.into())))
@@ -595,7 +595,7 @@ impl<R> Reader<R> {
                 Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
             }
         } else {
-            self.buf_position -= len;
+            self.offset -= len;
             Err(Error::UnexpectedEof("XmlDecl".to_string()))
         }
     }
@@ -668,17 +668,17 @@ impl<R> Reader<R> {
         self.tag_state = TagState::Opened;
 
         if self.trim_text_start {
-            self.reader.skip_whitespace(&mut self.buf_position)?;
+            self.reader.skip_whitespace(&mut self.offset)?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if self.reader.skip_one(b'<', &mut self.buf_position)? {
+        if self.reader.skip_one(b'<', &mut self.offset)? {
             return self.read_event_impl(buf);
         }
 
         match self
             .reader
-            .read_bytes_until(b'<', buf, &mut self.buf_position)
+            .read_bytes_until(b'<', buf, &mut self.offset)
         {
             Ok(Some(bytes)) => self.read_text(bytes, first),
             Ok(None) => Ok(Event::Eof),
@@ -696,7 +696,7 @@ impl<R> Reader<R> {
 
         match self.reader.peek_one() {
             // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.buf_position) {
+            Ok(Some(b'!')) => match self.reader.read_bang_element(buf, &mut self.offset) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some((bang_type, bytes))) => self.read_bang(bang_type, bytes),
                 Err(e) => Err(e),
@@ -704,7 +704,7 @@ impl<R> Reader<R> {
             // `</` - closing tag
             Ok(Some(b'/')) => match self
                 .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
+                .read_bytes_until(b'>', buf, &mut self.offset)
             {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_end(bytes),
@@ -713,14 +713,14 @@ impl<R> Reader<R> {
             // `<?` - processing instruction
             Ok(Some(b'?')) => match self
                 .reader
-                .read_bytes_until(b'>', buf, &mut self.buf_position)
+                .read_bytes_until(b'>', buf, &mut self.offset)
             {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_question_mark(bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.buf_position) {
+            Ok(Some(_)) => match self.reader.read_element(buf, &mut self.offset) {
                 Ok(None) => Ok(Event::Eof),
                 Ok(Some(bytes)) => self.read_start(bytes),
                 Err(e) => Err(e),

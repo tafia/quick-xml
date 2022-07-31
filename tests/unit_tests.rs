@@ -415,7 +415,7 @@ fn test_new_xml_decl_empty() {
 }
 
 #[test]
-fn test_buf_position_err_end_element() {
+fn test_offset_err_end_element() {
     let mut r = Reader::from_str("</a>");
     r.trim_text(true).check_end_names(true);
 
@@ -431,7 +431,7 @@ fn test_buf_position_err_end_element() {
 }
 
 #[test]
-fn test_buf_position_err_comment() {
+fn test_offset_err_comment() {
     let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
@@ -452,7 +452,7 @@ fn test_buf_position_err_comment() {
 }
 
 #[test]
-fn test_buf_position_err_comment_2_buf() {
+fn test_offset_err_comment_2_buf() {
     let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
@@ -473,7 +473,7 @@ fn test_buf_position_err_comment_2_buf() {
 }
 
 #[test]
-fn test_buf_position_err_comment_trim_text() {
+fn test_offset_err_comment_trim_text() {
     let mut r = Reader::from_str("<a>\r\n <!--b>");
     r.trim_text(true).check_end_names(true);
 
