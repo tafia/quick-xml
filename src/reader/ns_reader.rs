@@ -58,11 +58,20 @@ impl<R> NsReader<R> {
     where
         R: XmlSource<'i, B>,
     {
+        self.pop();
+        let event = self.reader.read_event_impl(buf);
+        self.process_event(event)
+    }
+
+    fn pop(&mut self) {
         if self.pending_pop {
             self.ns_resolver.pop(&mut self.buffer);
             self.pending_pop = false;
         }
-        match self.reader.read_event_impl(buf) {
+    }
+
+    fn process_event<'i>(&mut self, event: Result<Event<'i>>) -> Result<Event<'i>> {
+        match event {
             Ok(Event::Start(e)) => {
                 self.ns_resolver.push(&e, &mut self.buffer);
                 Ok(Event::Start(e))
@@ -84,11 +93,11 @@ impl<R> NsReader<R> {
         }
     }
 
-    fn read_resolved_event_impl<'i, B>(&mut self, buf: B) -> Result<(ResolveResult, Event<'i>)>
-    where
-        R: XmlSource<'i, B>,
-    {
-        match self.read_event_impl(buf) {
+    fn resolve_event<'i>(
+        &mut self,
+        event: Result<Event<'i>>,
+    ) -> Result<(ResolveResult, Event<'i>)> {
+        match event {
             Ok(Event::Start(e)) => Ok((
                 self.ns_resolver.find(e.name(), &mut self.buffer),
                 Event::Start(e),
@@ -408,7 +417,8 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
-        self.read_resolved_event_impl(buf)
+        let event = self.read_event_impl(buf);
+        self.resolve_event(event)
     }
 
     /// Reads until end element is found using provided buffer as intermediate
@@ -632,7 +642,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`read_event()`]: Self::read_event
     #[inline]
     pub fn read_resolved_event(&mut self) -> Result<(ResolveResult, Event<'i>)> {
-        self.read_resolved_event_impl(())
+        let event = self.read_event_impl(());
+        self.resolve_event(event)
     }
 
     /// Reads until end element is found. This function is supposed to be called

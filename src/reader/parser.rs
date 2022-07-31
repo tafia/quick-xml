@@ -1,0 +1,280 @@
+use std::str::from_utf8;
+
+#[cfg(feature = "encoding")]
+use encoding_rs::UTF_8;
+
+#[cfg(feature = "encoding")]
+use crate::encoding::detect_encoding;
+use crate::encoding::Decoder;
+use crate::errors::{Error, Result};
+use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+#[cfg(feature = "encoding")]
+use crate::reader::EncodingRef;
+use crate::reader::{is_whitespace, BangType, ParseState};
+
+use memchr;
+
+/// A struct that holds a current parse state and a parser configuration.
+/// It is independent on a way of reading data: the reader feed data into it and
+/// get back produced [`Event`]s.
+#[derive(Clone)]
+pub(super) struct Parser {
+    /// Number of bytes read from the source of data since the parser was created
+    pub offset: usize,
+    /// Defines how to process next byte
+    pub state: ParseState,
+    /// Expand empty element into an opening and closing element
+    pub expand_empty_elements: bool,
+    /// Trims leading whitespace in Text events, skip the element if text is empty
+    pub trim_text_start: bool,
+    /// Trims trailing whitespace in Text events.
+    pub trim_text_end: bool,
+    /// Trims trailing whitespaces from markup names in closing tags `</a >`
+    pub trim_markup_names_in_closing_tags: bool,
+    /// Check if [`Event::End`] nodes match last [`Event::Start`] node
+    pub check_end_names: bool,
+    /// Check if comments contains `--` (false per default)
+    pub check_comments: bool,
+    /// All currently Started elements which didn't have a matching
+    /// End element yet.
+    ///
+    /// For an XML
+    ///
+    /// ```xml
+    /// <root><one/><inner attr="value">|<tag></inner></root>
+    /// ```
+    /// when cursor at the `|` position buffer contains:
+    ///
+    /// ```text
+    /// rootinner
+    /// ^   ^
+    /// ```
+    ///
+    /// The `^` symbols shows which positions stored in the [`Self::opened_starts`]
+    /// (0 and 4 in that case).
+    opened_buffer: Vec<u8>,
+    /// Opened name start indexes into [`Self::opened_buffer`]. See documentation
+    /// for that field for details
+    opened_starts: Vec<usize>,
+
+    #[cfg(feature = "encoding")]
+    /// Reference to the encoding used to read an XML
+    pub encoding: EncodingRef,
+}
+
+impl Parser {
+    /// Trims whitespaces from `bytes`, if required, and returns a [`StartText`]
+    /// or a [`Text`] event. When [`StartText`] is returned, the method can change
+    /// the encoding of the reader, detecting it from the beginning of the stream.
+    ///
+    /// # Parameters
+    /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
+    /// - `first`: if `true`, then this is the first call of that function,
+    ///   i. e. data from the start of stream and [`StartText`] will be returned,
+    ///   otherwise [`Text`] will be returned
+    ///
+    /// [`StartText`]: Event::StartText
+    /// [`Text`]: Event::Text
+    pub fn read_text<'b>(&mut self, bytes: &'b [u8], first: bool) -> Result<Event<'b>> {
+        #[cfg(feature = "encoding")]
+        if first && self.encoding.can_be_refined() {
+            if let Some(encoding) = detect_encoding(bytes) {
+                self.encoding = EncodingRef::BomDetected(encoding);
+            }
+        }
+
+        let content = if self.trim_text_end {
+            // Skip the ending '<
+            let len = bytes
+                .iter()
+                .rposition(|&b| !is_whitespace(b))
+                .map_or_else(|| bytes.len(), |p| p + 1);
+            &bytes[..len]
+        } else {
+            bytes
+        };
+
+        Ok(if first {
+            Event::StartText(BytesText::wrap(content, self.decoder()).into())
+        } else {
+            Event::Text(BytesText::wrap(content, self.decoder()))
+        })
+    }
+
+    /// reads `BytesElement` starting with a `!`,
+    /// return `Comment`, `CData` or `DocType` event
+    pub fn read_bang<'b>(&mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
+        let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
+            string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
+        };
+
+        let len = buf.len();
+        match bang_type {
+            BangType::Comment if buf.starts_with(b"!--") => {
+                if self.check_comments {
+                    // search if '--' not in comments
+                    if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
+                        .position(|p| buf[3 + p + 1] == b'-')
+                    {
+                        self.offset += len - p;
+                        return Err(Error::UnexpectedToken("--".to_string()));
+                    }
+                }
+                Ok(Event::Comment(BytesText::wrap(
+                    &buf[3..len - 2],
+                    self.decoder(),
+                )))
+            }
+            BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
+                Ok(Event::CData(BytesCData::wrap(&buf[8..], self.decoder())))
+            }
+            BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
+                let start = buf[8..]
+                    .iter()
+                    .position(|b| !is_whitespace(*b))
+                    .unwrap_or_else(|| len - 8);
+                debug_assert!(start < len - 8, "DocType must have a name");
+                Ok(Event::DocType(BytesText::wrap(
+                    &buf[8 + start..],
+                    self.decoder(),
+                )))
+            }
+            _ => Err(bang_type.to_err()),
+        }
+    }
+
+    /// reads `BytesElement` starting with a `/`,
+    /// if `self.check_end_names`, checks that element matches last opened element
+    /// return `End` event
+    pub fn read_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        // XML standard permits whitespaces after the markup name in closing tags.
+        // Let's strip them from the buffer before comparing tag names.
+        let name = if self.trim_markup_names_in_closing_tags {
+            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+                let (name, _) = buf[1..].split_at(pos_end_name + 1);
+                name
+            } else {
+                &buf[1..]
+            }
+        } else {
+            &buf[1..]
+        };
+        if self.check_end_names {
+            let mismatch_err = |expected: &[u8], found: &[u8], offset: &mut usize| {
+                *offset -= buf.len();
+                Err(Error::EndEventMismatch {
+                    expected: from_utf8(expected).unwrap_or("").to_owned(),
+                    found: from_utf8(found).unwrap_or("").to_owned(),
+                })
+            };
+            match self.opened_starts.pop() {
+                Some(start) => {
+                    let expected = &self.opened_buffer[start..];
+                    if name != expected {
+                        mismatch_err(expected, name, &mut self.offset)
+                    } else {
+                        self.opened_buffer.truncate(start);
+                        Ok(Event::End(BytesEnd::wrap(name.into())))
+                    }
+                }
+                None => mismatch_err(b"", &buf[1..], &mut self.offset),
+            }
+        } else {
+            Ok(Event::End(BytesEnd::wrap(name.into())))
+        }
+    }
+
+    /// reads `BytesElement` starting with a `?`,
+    /// return `Decl` or `PI` event
+    pub fn read_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        let len = buf.len();
+        if len > 2 && buf[len - 1] == b'?' {
+            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
+                let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
+
+                // Try getting encoding from the declaration event
+                #[cfg(feature = "encoding")]
+                if self.encoding.can_be_refined() {
+                    if let Some(encoding) = event.encoder() {
+                        self.encoding = EncodingRef::XmlDetected(encoding);
+                    }
+                }
+
+                Ok(Event::Decl(event))
+            } else {
+                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
+            }
+        } else {
+            self.offset -= len;
+            Err(Error::UnexpectedEof("XmlDecl".to_string()))
+        }
+    }
+
+    /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
+    /// return `Start` or `Empty` event
+    pub fn read_start<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        // TODO: do this directly when reading bufreader ...
+        let len = buf.len();
+        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
+        if let Some(&b'/') = buf.last() {
+            let end = if name_end < len { name_end } else { len - 1 };
+            if self.expand_empty_elements {
+                self.state = ParseState::Empty;
+                self.opened_starts.push(self.opened_buffer.len());
+                self.opened_buffer.extend(&buf[..end]);
+                Ok(Event::Start(BytesStart::wrap(&buf[..len - 1], end)))
+            } else {
+                Ok(Event::Empty(BytesStart::wrap(&buf[..len - 1], end)))
+            }
+        } else {
+            if self.check_end_names {
+                self.opened_starts.push(self.opened_buffer.len());
+                self.opened_buffer.extend(&buf[..name_end]);
+            }
+            Ok(Event::Start(BytesStart::wrap(buf, name_end)))
+        }
+    }
+
+    #[inline]
+    pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
+        self.state = ParseState::ClosedTag;
+        let name = self
+            .opened_buffer
+            .split_off(self.opened_starts.pop().unwrap());
+        Ok(Event::End(BytesEnd::wrap(name.into())))
+    }
+
+    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    ///
+    /// If `encoding` feature is enabled, the used encoding may change after
+    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
+    ///
+    /// If `encoding` feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
+    pub fn decoder(&self) -> Decoder {
+        Decoder {
+            #[cfg(feature = "encoding")]
+            encoding: self.encoding.encoding(),
+        }
+    }
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self {
+            offset: 0,
+            state: ParseState::Init,
+            expand_empty_elements: false,
+            trim_text_start: false,
+            trim_text_end: false,
+            trim_markup_names_in_closing_tags: true,
+            check_end_names: true,
+            check_comments: false,
+            opened_buffer: Vec::new(),
+            opened_starts: Vec::new(),
+
+            #[cfg(feature = "encoding")]
+            encoding: EncodingRef::Implicit(UTF_8),
+        }
+    }
+}

@@ -24,7 +24,7 @@ impl<'a> Reader<&'a [u8]> {
         #[cfg(feature = "encoding")]
         {
             let mut reader = Self::from_reader(s.as_bytes());
-            reader.encoding = EncodingRef::Explicit(UTF_8);
+            reader.parser.encoding = EncodingRef::Explicit(UTF_8);
             reader
         }
 
@@ -33,6 +33,35 @@ impl<'a> Reader<&'a [u8]> {
     }
 
     /// Read an event that borrows from the input rather than a buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str(r#"
+    ///     <tag1 att1 = "test">
+    ///        <tag2><!--Test comment-->Test</tag2>
+    ///        <tag2>Test 2</tag2>
+    ///     </tag1>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let mut count = 0;
+    /// let mut txt = Vec::new();
+    /// loop {
+    ///     match reader.read_event().unwrap() {
+    ///         Event::Start(e) => count += 1,
+    ///         Event::Text(e) => txt.push(e.unescape().unwrap().into_owned()),
+    ///         Event::Eof => break,
+    ///         _ => (),
+    ///     }
+    /// }
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
+    /// ```
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'a>> {
         self.read_event_impl(())
