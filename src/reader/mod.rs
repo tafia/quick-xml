@@ -142,35 +142,35 @@ pub use ns_reader::NsReader;
 ///   subgraph _
 ///     direction LR
 ///
-///     Init   -- "(no event)"\nStartText                              --> Opened
-///     Opened -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> Closed
-///     Closed -- "#lt;false#gt;\n(no event)"\nText                    --> Opened
+///     Init      -- "(no event)"\nStartText                              --> OpenedTag
+///     OpenedTag -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> ClosedTag
+///     ClosedTag -- "#lt;false#gt;\n(no event)"\nText                    --> OpenedTag
 ///   end
-///   Closed -- "#lt;true#gt;"\nStart --> Empty
-///   Empty  -- End                   --> Closed
+///   ClosedTag -- "#lt;true#gt;"\nStart --> Empty
+///   Empty     -- End                   --> ClosedTag
 ///   _ -. Eof .-> Exit
 /// ```
 #[derive(Clone)]
-enum TagState {
+enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
     /// state could produce a `StartText`, `Decl`, `Comment` or `Start` event.
-    /// The next state is always `Opened`. The reader will never return to this
-    /// state. The event emitted during transition to `Opened` is a `StartEvent`
+    /// The next state is always `OpenedTag`. The reader will never return to this
+    /// state. The event emitted during transition to `OpenedTag` is a `StartEvent`
     /// if the first symbol not `<`, otherwise no event are emitted.
     Init,
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events (except `StartText`) could be generated.
     ///
-    /// After generating ane event the reader moves to the `Closed` state.
-    Opened,
+    /// After generating ane event the reader moves to the `ClosedTag` state.
+    OpenedTag,
     /// State in which reader searches the `<` symbol of a markup. All bytes before
     /// that symbol will be returned in the [`Event::Text`] event. After that
-    /// the reader moves to the `Opened` state.
-    Closed,
+    /// the reader moves to the `OpenedTag` state.
+    ClosedTag,
     /// This state is used only if option `expand_empty_elements` is set to `true`.
-    /// Reader enters to this state when it is in a `Closed` state and emits an
+    /// Reader enters to this state when it is in a `ClosedTag` state and emits an
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
-    /// after which reader returned to the `Closed` state.
+    /// after which reader returned to the `ClosedTag` state.
     Empty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
@@ -374,9 +374,9 @@ impl<R> Reader<R> {
     ///
     /// Useful when debugging errors.
     pub fn buffer_position(&self) -> usize {
-        // when internal state is Opened, we have actually read until '<',
+        // when internal state is OpenedTag, we have actually read until '<',
         // which we don't want to show
-        if let TagState::Opened = self.parser.tag_state {
+        if let ParseState::OpenedTag = self.parser.state {
             self.parser.offset - 1
         } else {
             self.parser.offset
@@ -405,28 +405,28 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        let event = match self.parser.tag_state {
-            TagState::Init => self.read_until_open(buf, true),
-            TagState::Closed => self.read_until_open(buf, false),
-            TagState::Opened => self.read_until_close(buf),
-            TagState::Empty => self.parser.close_expanded_empty(),
-            TagState::Exit => return Ok(Event::Eof),
+        let event = match self.parser.state {
+            ParseState::Init => self.read_until_open(buf, true),
+            ParseState::ClosedTag => self.read_until_open(buf, false),
+            ParseState::OpenedTag => self.read_until_close(buf),
+            ParseState::Empty => self.parser.close_expanded_empty(),
+            ParseState::Exit => return Ok(Event::Eof),
         };
         match event {
-            Err(_) | Ok(Event::Eof) => self.parser.tag_state = TagState::Exit,
+            Err(_) | Ok(Event::Eof) => self.parser.state = ParseState::Exit,
             _ => {}
         }
         event
     }
 
-    /// Read until '<' is found and moves reader to an `Opened` state.
+    /// Read until '<' is found and moves reader to an `OpenedTag` state.
     ///
     /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
     fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
-        self.parser.tag_state = TagState::Opened;
+        self.parser.state = ParseState::OpenedTag;
 
         if self.parser.trim_text_start {
             self.reader.skip_whitespace(&mut self.parser.offset)?;
@@ -453,7 +453,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        self.parser.tag_state = TagState::Closed;
+        self.parser.state = ParseState::ClosedTag;
 
         match self.reader.peek_one() {
             // `<!` - comment, CDATA or DOCTYPE declaration

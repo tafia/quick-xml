@@ -10,7 +10,7 @@ use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{is_whitespace, BangType, TagState};
+use crate::reader::{is_whitespace, BangType, ParseState};
 
 use memchr;
 
@@ -19,21 +19,21 @@ use memchr;
 /// get back produced [`Event`]s.
 #[derive(Clone)]
 pub(super) struct Parser {
-    /// current buffer position, useful for debugging errors
+    /// Number of bytes read from the source of data since the parser was created
     pub offset: usize,
-    /// current state Open/Close
-    pub tag_state: TagState,
-    /// expand empty element into an opening and closing element
+    /// Defines how to process next byte
+    pub state: ParseState,
+    /// Expand empty element into an opening and closing element
     pub expand_empty_elements: bool,
-    /// trims leading whitespace in Text events, skip the element if text is empty
+    /// Trims leading whitespace in Text events, skip the element if text is empty
     pub trim_text_start: bool,
-    /// trims trailing whitespace in Text events.
+    /// Trims trailing whitespace in Text events.
     pub trim_text_end: bool,
-    /// trims trailing whitespaces from markup names in closing tags `</a >`
+    /// Trims trailing whitespaces from markup names in closing tags `</a >`
     pub trim_markup_names_in_closing_tags: bool,
-    /// check if End nodes match last Start node
+    /// Check if [`Event::End`] nodes match last [`Event::Start`] node
     pub check_end_names: bool,
-    /// check if comments contains `--` (false per default)
+    /// Check if comments contains `--` (false per default)
     pub check_comments: bool,
     /// All currently Started elements which didn't have a matching
     /// End element yet.
@@ -219,7 +219,7 @@ impl Parser {
         if let Some(&b'/') = buf.last() {
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
-                self.tag_state = TagState::Empty;
+                self.state = ParseState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&buf[..end]);
                 Ok(Event::Start(BytesStart::wrap(&buf[..len - 1], end)))
@@ -237,7 +237,7 @@ impl Parser {
 
     #[inline]
     pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.tag_state = TagState::Closed;
+        self.state = ParseState::ClosedTag;
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
@@ -263,7 +263,7 @@ impl Default for Parser {
     fn default() -> Self {
         Self {
             offset: 0,
-            tag_state: TagState::Init,
+            state: ParseState::Init,
             expand_empty_elements: false,
             trim_text_start: false,
             trim_text_end: false,
