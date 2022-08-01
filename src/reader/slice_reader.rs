@@ -251,7 +251,13 @@ mod test {
         input
     }
 
-    check!(identity, ());
+    check!(
+        #[test]
+        read_event_impl,
+        read_until_close,
+        identity,
+        ()
+    );
 
     #[cfg(feature = "encoding")]
     mod encoding {
