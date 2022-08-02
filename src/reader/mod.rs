@@ -1496,11 +1496,11 @@ mod test {
 
             mod issue_344 {
                 use crate::errors::Error;
+                use crate::reader::Reader;
 
                 #[$test]
                 $($async)? fn cdata() {
-                    let doc = "![]]>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("![]]>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "CData" => {}
@@ -1514,8 +1514,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn comment() {
-                    let doc = "!- -->";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!- -->");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
@@ -1529,8 +1528,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn doctype_uppercase() {
-                    let doc = "!D>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!D>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
@@ -1544,8 +1542,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn doctype_lowercase() {
-                    let doc = "!d>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!d>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
