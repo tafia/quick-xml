@@ -65,6 +65,7 @@
   and a document encoding is not an UTF-8
 - [#434]: Fixed incorrect error generated in some cases by serde deserializer
 - [#445]: Use local name without namespace prefix when selecting enum variants based on element names
+  in a serde deserializer
 
 ### Misc Changes
 
@@ -181,6 +182,7 @@
   |`BytesText::from_plain_str(&str)`                 |_(as above)_
   |`BytesCData::new(impl Into<Cow<[u8]>>)`           |`BytesCData::new(impl Into<Cow<str>>)`
   |`BytesCData::from_str(&str)`                      |_(as above)_
+
 - [#440]: Removed `Deserializer::from_slice` and `quick_xml::de::from_slice` methods because deserializing from a byte
   array cannot guarantee borrowing due to possible copying while decoding.
 
@@ -225,6 +227,7 @@
 [#439]: https://github.com/tafia/quick-xml/pull/439
 [#440]: https://github.com/tafia/quick-xml/pull/440
 [#443]: https://github.com/tafia/quick-xml/pull/443
+[#445]: https://github.com/tafia/quick-xml/pull/445
 [#450]: https://github.com/tafia/quick-xml/pull/450
 [#455]: https://github.com/tafia/quick-xml/pull/455
 
