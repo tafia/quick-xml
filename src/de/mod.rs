@@ -828,10 +828,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let seq = visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?);
-        #[cfg(feature = "overlapped-lists")]
-        self.start_replay();
-        seq
+        visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>

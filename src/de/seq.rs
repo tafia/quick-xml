@@ -100,6 +100,16 @@ where
     }
 }
 
+#[cfg(feature = "overlapped-lists")]
+impl<'de, 'a, R> Drop for TopLevelSeqAccess<'de, 'a, R>
+where
+    R: XmlRead<'de>,
+{
+    fn drop(&mut self) {
+        self.de.start_replay();
+    }
+}
+
 impl<'de, 'a, R> SeqAccess<'de> for TopLevelSeqAccess<'de, 'a, R>
 where
     R: XmlRead<'de>,

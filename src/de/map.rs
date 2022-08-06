@@ -553,13 +553,10 @@ where
         } else {
             TagFilter::Exclude(self.map.fields)
         };
-        let seq = visitor.visit_seq(MapValueSeqAccess {
+        visitor.visit_seq(MapValueSeqAccess {
             map: self.map,
             filter,
-        });
-        #[cfg(feature = "overlapped-lists")]
-        self.map.de.start_replay();
-        seq
+        })
     }
 
     #[inline]
@@ -588,6 +585,16 @@ where
     /// When feature `overlapped-lists` is activated, all tags, that not pass
     /// this check, will be skipped.
     filter: TagFilter<'de>,
+}
+
+#[cfg(feature = "overlapped-lists")]
+impl<'de, 'a, 'm, R> Drop for MapValueSeqAccess<'de, 'a, 'm, R>
+where
+    R: XmlRead<'de>,
+{
+    fn drop(&mut self) {
+        self.map.de.start_replay();
+    }
 }
 
 impl<'de, 'a, 'm, R> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R>
