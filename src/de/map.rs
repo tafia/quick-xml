@@ -554,6 +554,9 @@ where
             TagFilter::Exclude(self.map.fields)
         };
         visitor.visit_seq(MapValueSeqAccess {
+            #[cfg(feature = "overlapped-lists")]
+            checkpoint: self.map.de.skip_checkpoint(),
+
             map: self.map,
             filter,
         })
@@ -585,6 +588,12 @@ where
     /// When feature `overlapped-lists` is activated, all tags, that not pass
     /// this check, will be skipped.
     filter: TagFilter<'de>,
+
+    /// Checkpoint after which all skipped events should be returned. All events,
+    /// that was skipped before creating this checkpoint, will still stay buffered
+    /// and will not be returned
+    #[cfg(feature = "overlapped-lists")]
+    checkpoint: usize,
 }
 
 #[cfg(feature = "overlapped-lists")]
@@ -593,7 +602,7 @@ where
     R: XmlRead<'de>,
 {
     fn drop(&mut self) {
-        self.map.de.start_replay();
+        self.map.de.start_replay(self.checkpoint);
     }
 }
 
