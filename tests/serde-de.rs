@@ -765,6 +765,40 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        outer: [List; 3],
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                          <outer><item/><item/><item/></outer>
+                          <unknown/>
+                          <outer><item/><item/><item/></outer>
+                          <outer><item/><item/><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests non-sequential field is defined in the struct
@@ -821,6 +855,41 @@ mod seq {
                             <node/>
                             <item/>
                             <item/>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        outer: [List; 3],
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <outer><item/><item/><item/></outer>
+                            <node/>
+                            <outer><item/><item/><item/></outer>
+                            <outer><item/><item/><item/></outer>
                         </root>
                         "#,
                     );
@@ -913,6 +982,41 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        outer: [List; 3],
+                        node: (),
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <outer><item/><item/><item/></outer>
+                            <node/>
+                            <outer><item/><item/><item/></outer>
+                            <outer><item/><item/><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests two lists are deserialized simultaneously.
@@ -954,6 +1058,42 @@ mod seq {
                             <item/>
                             <element/>
                             <item/>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    data.unwrap();
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Pair {
+                        outer: [List; 3],
+                        element: [(); 2],
+                    }
+
+                    let data = from_str::<Pair>(
+                        r#"
+                        <root>
+                            <outer><item/><item/><item/></outer>
+                            <element/>
+                            <outer><item/><item/><item/></outer>
+                            <element/>
+                            <outer><item/><item/><item/></outer>
                         </root>
                         "#,
                     );
@@ -1300,6 +1440,47 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        outer: Vec<List>,
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <outer><item/></outer>
+                            <unknown/>
+                            <outer><item/></outer>
+                            <outer><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            outer: vec![
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                            ],
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests non-sequential field is defined in the struct
@@ -1391,6 +1572,49 @@ mod seq {
                         }
                         e => panic!(
                             r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        outer: Vec<List>,
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <outer><item/></outer>
+                            <node/>
+                            <outer><item/></outer>
+                            <outer><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            node: (),
+                            outer: vec![
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                            ],
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
                             e
                         ),
                     }
@@ -1490,6 +1714,49 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        outer: Vec<List>,
+                        node: (),
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <outer><item/></outer>
+                            <node/>
+                            <outer><item/></outer>
+                            <outer><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            outer: vec![
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                            ],
+                            node: (),
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests two lists are deserialized simultaneously.
@@ -1556,6 +1823,48 @@ mod seq {
                         Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
                         e => panic!(
                             r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
+
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Pair {
+                        outer: Vec<List>,
+                        element: Vec<()>,
+                    }
+
+                    let data = from_str::<Pair>(
+                        r#"
+                        <root>
+                            <outer><item/></outer>
+                            <element/>
+                            <outer><item/></outer>
+                            <outer><item/></outer>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Pair {
+                            outer: vec![
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                                List { item: vec![()] },
+                            ],
+                            element: vec![()],
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
                             e
                         ),
                     }
@@ -1824,6 +2133,19 @@ mod seq {
             Other,
         }
 
+        #[derive(Debug, PartialEq, Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        enum Choice4 {
+            One {
+                inner: [(); 1],
+            },
+            Two {
+                inner: [(); 1],
+            },
+            #[serde(other)]
+            Other,
+        }
+
         /// This module contains tests where size of the list have a compile-time size
         mod fixed_size {
             use super::*;
@@ -2048,6 +2370,52 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        #[serde(rename = "$value")]
+                        item: [Choice4; 3],
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <one><inner/></one>
+                            <node/>
+                            <two><inner/></two>
+                            <three><inner/></three>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            node: (),
+                            item: [
+                                Choice4::One { inner: [()] },
+                                Choice4::Two { inner: [()] },
+                                Choice4::Other,
+                            ],
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests non-sequential field is defined in the struct
@@ -2144,6 +2512,52 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        #[serde(rename = "$value")]
+                        item: [Choice4; 3],
+                        node: (),
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <one><inner/></one>
+                            <node/>
+                            <two><inner/></two>
+                            <three><inner/></three>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            item: [
+                                Choice4::One { inner: [()] },
+                                Choice4::Two { inner: [()] },
+                                Choice4::Other,
+                            ],
+                            node: (),
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests two lists are deserialized simultaneously.
@@ -2216,77 +2630,169 @@ mod seq {
                         );
                     }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a fixed-name one
-                    #[test]
-                    fn overlapped_fixed_before() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <element/>
-                                <one/>
-                                <two/>
-                                <element/>
-                                <three/>
-                            </root>
-                            "#,
-                        );
+                    mod overlapped {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: [(), ()],
-                            }
-                        );
-
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => {
-                                assert_eq!(e, "invalid length 1, expected an array of length 2")
-                            }
-                            e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
-                                e
-                            ),
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Root {
+                            #[serde(rename = "$value")]
+                            item: [Choice4; 3],
+                            element: [(); 2],
                         }
-                    }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a variable-name one
-                    #[test]
-                    fn overlapped_fixed_after() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <one/>
-                                <element/>
-                                <two/>
-                                <three/>
-                                <element/>
-                            </root>
-                            "#,
-                        );
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn fixed_before() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one/>
+                                    <two/>
+                                    <element/>
+                                    <three/>
+                                </root>
+                                "#,
+                            );
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: [(), ()],
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 2")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                    e
+                                ),
                             }
-                        );
+                        }
 
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => {
-                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn fixed_after() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <element/>
+                                    <two/>
+                                    <three/>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 3")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                    e
+                                ),
                             }
-                            e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
-                                e
-                            ),
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_before() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one><inner/></one>
+                                    <two><inner/></two>
+                                    <element/>
+                                    <three><inner/></three>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    item: [
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                    element: [(); 2],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 2")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_after() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one><inner/></one>
+                                    <element/>
+                                    <two><inner/></two>
+                                    <three><inner/></three>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    item: [
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                    element: [(); 2],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 3")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                    e
+                                ),
+                            }
                         }
                     }
                 }
@@ -2356,77 +2862,169 @@ mod seq {
                         );
                     }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a fixed-name one
-                    #[test]
-                    fn overlapped_fixed_before() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <element/>
-                                <one/>
-                                <two/>
-                                <element/>
-                                <three/>
-                            </root>
-                            "#,
-                        );
+                    mod overlapped {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: [(), ()],
-                            }
-                        );
-
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => {
-                                assert_eq!(e, "invalid length 1, expected an array of length 2")
-                            }
-                            e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
-                                e
-                            ),
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Root {
+                            element: [(); 2],
+                            #[serde(rename = "$value")]
+                            item: [Choice4; 3],
                         }
-                    }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a variable-name one
-                    #[test]
-                    fn overlapped_fixed_after() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <one/>
-                                <element/>
-                                <two/>
-                                <three/>
-                                <element/>
-                            </root>
-                            "#,
-                        );
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn fixed_before() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one/>
+                                    <two/>
+                                    <element/>
+                                    <three/>
+                                </root>
+                                "#,
+                            );
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: [(), ()],
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 2")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                    e
+                                ),
                             }
-                        );
+                        }
 
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => {
-                                assert_eq!(e, "invalid length 1, expected an array of length 3")
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn fixed_after() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <element/>
+                                    <two/>
+                                    <three/>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: [Choice::One, Choice::Two, Choice::Other("three".into())],
+                                    element: [(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 3")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                    e
+                                ),
                             }
-                            e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
-                                e
-                            ),
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_before() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one><inner/></one>
+                                    <two><inner/></two>
+                                    <element/>
+                                    <three><inner/></three>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    element: [(); 2],
+                                    item: [
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 2")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_after() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one><inner/></one>
+                                    <element/>
+                                    <two><inner/></two>
+                                    <three><inner/></three>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    element: [(); 2],
+                                    item: [
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "invalid length 1, expected an array of length 3")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                    e
+                                ),
+                            }
                         }
                     }
                 }
@@ -2867,6 +3465,52 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        node: (),
+                        #[serde(rename = "$value")]
+                        item: Vec<Choice4>,
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <one><inner/></one>
+                            <node/>
+                            <two><inner/></two>
+                            <three><inner/></three>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            node: (),
+                            item: vec![
+                                Choice4::One { inner: [()] },
+                                Choice4::Two { inner: [()] },
+                                Choice4::Other,
+                            ],
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "duplicate field `$value`")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests non-sequential field is defined in the struct
@@ -2961,6 +3605,52 @@ mod seq {
                         ),
                     }
                 }
+
+                /// Test for https://github.com/tafia/quick-xml/issues/435
+                #[test]
+                fn overlapped_with_nested_list() {
+                    #[derive(Debug, PartialEq, Deserialize)]
+                    struct Root {
+                        #[serde(rename = "$value")]
+                        item: Vec<Choice4>,
+                        node: (),
+                    }
+
+                    let data = from_str::<Root>(
+                        r#"
+                        <root>
+                            <one><inner/></one>
+                            <node/>
+                            <two><inner/></two>
+                            <three><inner/></three>
+                        </root>
+                        "#,
+                    );
+
+                    #[cfg(feature = "overlapped-lists")]
+                    assert_eq!(
+                        data.unwrap(),
+                        Root {
+                            item: vec![
+                                Choice4::One { inner: [()] },
+                                Choice4::Two { inner: [()] },
+                                Choice4::Other,
+                            ],
+                            node: (),
+                        }
+                    );
+
+                    #[cfg(not(feature = "overlapped-lists"))]
+                    match data {
+                        Err(DeError::Custom(e)) => {
+                            assert_eq!(e, "duplicate field `$value`")
+                        }
+                        e => panic!(
+                            r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                            e
+                        ),
+                    }
+                }
             }
 
             /// In those tests two lists are deserialized simultaneously.
@@ -3033,73 +3723,177 @@ mod seq {
                         );
                     }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a fixed-name one
-                    #[test]
-                    fn overlapped_fixed_before() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <element/>
-                                <one/>
-                                <two/>
-                                <element/>
-                                <three/>
-                            </root>
-                            "#,
-                        );
+                    mod overlapped {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: vec![(), ()],
-                            }
-                        );
-
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `element`"),
-                            e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
-                                e
-                            ),
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Root {
+                            #[serde(rename = "$value")]
+                            item: Vec<Choice4>,
+                            element: Vec<()>,
                         }
-                    }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a variable-name one
-                    #[test]
-                    fn overlapped_fixed_after() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <one/>
-                                <element/>
-                                <two/>
-                                <three/>
-                                <element/>
-                            </root>
-                            "#,
-                        );
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn fixed_before() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one/>
+                                    <two/>
+                                    <element/>
+                                    <three/>
+                                </root>
+                                "#,
+                            );
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
-                                element: vec![(), ()],
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into())
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `element`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                    e
+                                ),
                             }
-                        );
+                        }
 
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
-                            e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
-                                e
-                            ),
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn fixed_after() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <element/>
+                                    <two/>
+                                    <three/>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into())
+                                    ],
+                                    element: vec![(), ()],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `$value`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_before() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one><inner/></one>
+                                    <two><inner/></two>
+                                    <element/>
+                                    <three><inner/></three>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    item: vec![
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                    element: vec![(); 2],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `element`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_after() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one><inner/></one>
+                                    <element/>
+                                    <two><inner/></two>
+                                    <three><inner/></three>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    item: vec![
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                    element: vec![(); 2],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `$value`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                    e
+                                ),
+                            }
                         }
                     }
                 }
@@ -3169,73 +3963,177 @@ mod seq {
                         );
                     }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a fixed-name one
-                    #[test]
-                    fn overlapped_fixed_before() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <element/>
-                                <one/>
-                                <two/>
-                                <element/>
-                                <three/>
-                            </root>
-                            "#,
-                        );
+                    mod overlapped {
+                        use super::*;
+                        use pretty_assertions::assert_eq;
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                element: vec![(), ()],
-                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
-                            }
-                        );
-
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `element`"),
-                            e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
-                                e
-                            ),
+                        #[derive(Debug, PartialEq, Deserialize)]
+                        struct Root {
+                            element: Vec<()>,
+                            #[serde(rename = "$value")]
+                            item: Vec<Choice4>,
                         }
-                    }
 
-                    /// A list with fixed-name elements are mixed with a list with variable-name
-                    /// elements in an XML, and the first element is a variable-name one
-                    #[test]
-                    fn overlapped_fixed_after() {
-                        let data = from_str::<Pair>(
-                            r#"
-                            <root>
-                                <one/>
-                                <element/>
-                                <two/>
-                                <three/>
-                                <element/>
-                            </root>
-                            "#,
-                        );
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a fixed-name one
+                        #[test]
+                        fn fixed_before() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one/>
+                                    <two/>
+                                    <element/>
+                                    <three/>
+                                </root>
+                                "#,
+                            );
 
-                        #[cfg(feature = "overlapped-lists")]
-                        assert_eq!(
-                            data.unwrap(),
-                            Pair {
-                                element: vec![(), ()],
-                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into())
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `element`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                    e
+                                ),
                             }
-                        );
+                        }
 
-                        #[cfg(not(feature = "overlapped-lists"))]
-                        match data {
-                            Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
-                            e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
-                                e
-                            ),
+                        /// A list with fixed-name elements are mixed with a list with variable-name
+                        /// elements in an XML, and the first element is a variable-name one
+                        #[test]
+                        fn fixed_after() {
+                            let data = from_str::<Pair>(
+                                r#"
+                                <root>
+                                    <one/>
+                                    <element/>
+                                    <two/>
+                                    <three/>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Pair {
+                                    element: vec![(), ()],
+                                    item: vec![
+                                        Choice::One,
+                                        Choice::Two,
+                                        Choice::Other("three".into())
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `$value`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_before() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <element/>
+                                    <one><inner/></one>
+                                    <two><inner/></two>
+                                    <element/>
+                                    <three><inner/></three>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    element: vec![(); 2],
+                                    item: vec![
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `element`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                    e
+                                ),
+                            }
+                        }
+
+                        /// Test for https://github.com/tafia/quick-xml/issues/435
+                        #[test]
+                        fn with_nested_list_fixed_after() {
+                            let data = from_str::<Root>(
+                                r#"
+                                <root>
+                                    <one><inner/></one>
+                                    <element/>
+                                    <two><inner/></two>
+                                    <three><inner/></three>
+                                    <element/>
+                                </root>
+                                "#,
+                            );
+
+                            #[cfg(feature = "overlapped-lists")]
+                            assert_eq!(
+                                data.unwrap(),
+                                Root {
+                                    element: vec![(); 2],
+                                    item: vec![
+                                        Choice4::One { inner: [()] },
+                                        Choice4::Two { inner: [()] },
+                                        Choice4::Other,
+                                    ],
+                                }
+                            );
+
+                            #[cfg(not(feature = "overlapped-lists"))]
+                            match data {
+                                Err(DeError::Custom(e)) => {
+                                    assert_eq!(e, "duplicate field `$value`")
+                                }
+                                e => panic!(
+                                    r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                    e
+                                ),
+                            }
                         }
                     }
                 }

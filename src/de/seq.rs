@@ -82,6 +82,12 @@ where
     /// When feature `overlapped-lists` is activated, all tags, that not pass
     /// this check, will be skipped.
     filter: TagFilter<'de>,
+
+    /// Checkpoint after which all skipped events should be returned. All events,
+    /// that was skipped before creating this checkpoint, will still stay buffered
+    /// and will not be returned
+    #[cfg(feature = "overlapped-lists")]
+    checkpoint: usize,
 }
 
 impl<'a, 'de, R> TopLevelSeqAccess<'de, 'a, R>
@@ -96,7 +102,23 @@ where
         } else {
             TagFilter::Exclude(&[])
         };
-        Ok(Self { de, filter })
+        Ok(Self {
+            #[cfg(feature = "overlapped-lists")]
+            checkpoint: de.skip_checkpoint(),
+
+            de,
+            filter,
+        })
+    }
+}
+
+#[cfg(feature = "overlapped-lists")]
+impl<'de, 'a, R> Drop for TopLevelSeqAccess<'de, 'a, R>
+where
+    R: XmlRead<'de>,
+{
+    fn drop(&mut self) {
+        self.de.start_replay(self.checkpoint);
     }
 }
 

@@ -483,6 +483,14 @@ where
         self.reader.next()
     }
 
+    /// Returns the mark after which all events, skipped by [`Self::skip()`] call,
+    /// should be replayed after calling [`Self::start_replay()`].
+    #[cfg(feature = "overlapped-lists")]
+    #[inline]
+    fn skip_checkpoint(&self) -> usize {
+        self.write.len()
+    }
+
     /// Extracts XML tree of events from and stores them in the skipped events
     /// buffer from which they can be retrieved later. You MUST call
     /// [`Self::start_replay()`] after calling this to give access to the skipped
@@ -530,8 +538,8 @@ where
         Ok(())
     }
 
-    /// Moves all buffered events to the end of [`Self::write`] buffer and swaps
-    /// read and write buffers.
+    /// Moves buffered events, skipped after given `checkpoint` from [`Self::write`]
+    /// skip buffer to [`Self::read`] buffer.
     ///
     /// After calling this method, [`Self::peek()`] and [`Self::next()`] starts
     /// return events that was skipped previously by calling [`Self::skip()`],
@@ -541,9 +549,15 @@ where
     /// This method MUST be called if any number of [`Self::skip()`] was called
     /// after [`Self::new()`] or `start_replay()` or you'll lost events.
     #[cfg(feature = "overlapped-lists")]
-    fn start_replay(&mut self) {
-        self.write.append(&mut self.read);
-        std::mem::swap(&mut self.read, &mut self.write);
+    fn start_replay(&mut self, checkpoint: usize) {
+        if checkpoint == 0 {
+            self.write.append(&mut self.read);
+            std::mem::swap(&mut self.read, &mut self.write);
+        } else {
+            let mut read = self.write.split_off(checkpoint);
+            read.append(&mut self.read);
+            self.read = read;
+        }
     }
 
     fn next_start(&mut self) -> Result<Option<BytesStart<'de>>, DeError> {
@@ -828,10 +842,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let seq = visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?);
-        #[cfg(feature = "overlapped-lists")]
-        self.start_replay();
-        seq
+        visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -1024,6 +1035,10 @@ mod tests {
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("inner")));
 
+            // Mark that start_replay() should begin replay from this point
+            let checkpoint = de.skip_checkpoint();
+            assert_eq!(checkpoint, 0);
+
             // Should skip first <inner> tree
             de.skip().unwrap();
             assert_eq!(de.read, vec![]);
@@ -1060,7 +1075,7 @@ mod tests {
             //
             //   <target/>
             // </root>
-            de.start_replay();
+            de.start_replay(checkpoint);
             assert_eq!(
                 de.read,
                 vec![
@@ -1073,6 +1088,10 @@ mod tests {
             );
             assert_eq!(de.write, vec![]);
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
+
+            // Mark that start_replay() should begin replay from this point
+            let checkpoint = de.skip_checkpoint();
+            assert_eq!(checkpoint, 0);
 
             // Skip `#text` node and consume <inner/> after it
             de.skip().unwrap();
@@ -1105,7 +1124,7 @@ mod tests {
             //
             //   <target/>
             // </root>
-            de.start_replay();
+            de.start_replay(checkpoint);
             assert_eq!(
                 de.read,
                 vec![
@@ -1119,6 +1138,7 @@ mod tests {
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Eof);
         }
 
         /// Checks that `read_to_end()` behaves correctly after `skip()`
@@ -1143,6 +1163,10 @@ mod tests {
             assert_eq!(de.write, vec![]);
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+
+            // Mark that start_replay() should begin replay from this point
+            let checkpoint = de.skip_checkpoint();
+            assert_eq!(checkpoint, 0);
 
             // Skip the <skip> tree
             de.skip().unwrap();
@@ -1189,7 +1213,7 @@ mod tests {
             // and after that stream that messages:
             //
             // </root>
-            de.start_replay();
+            de.start_replay(checkpoint);
             assert_eq!(
                 de.read,
                 vec![
@@ -1206,6 +1230,206 @@ mod tests {
             de.read_to_end(QName(b"skip")).unwrap();
 
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Eof);
+        }
+
+        /// Checks that replay replayes only part of events
+        /// Test for https://github.com/tafia/quick-xml/issues/435
+        #[test]
+        fn partial_replay() {
+            let mut de = Deserializer::from_str(
+                r#"
+                <root>
+                    <skipped-1/>
+                    <skipped-2/>
+                    <inner>
+                        <skipped-3/>
+                        <skipped-4/>
+                        <target-2/>
+                    </inner>
+                    <target-1/>
+                </root>
+                "#,
+            );
+
+            // Initial conditions - both are empty
+            assert_eq!(de.read, vec![]);
+            assert_eq!(de.write, vec![]);
+
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+
+            // start_replay() should start replay from this point
+            let checkpoint1 = de.skip_checkpoint();
+            assert_eq!(checkpoint1, 0);
+
+            // Should skip first and second <skipped-N/> elements
+            de.skip().unwrap(); // skipped-1
+            de.skip().unwrap(); // skipped-2
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+
+            ////////////////////////////////////////////////////////////////////////////////////////
+
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("inner")));
+            assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("skipped-3")));
+            assert_eq!(
+                de.read,
+                vec![
+                    // This comment here to keep the same formatting of both arrays
+                    // otherwise rustfmt suggest one-line it
+                    Start(BytesStart::new("skipped-3")),
+                ]
+            );
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+
+            // start_replay() should start replay from this point
+            let checkpoint2 = de.skip_checkpoint();
+            assert_eq!(checkpoint2, 4);
+
+            // Should skip third and forth <skipped-N/> elements
+            de.skip().unwrap(); // skipped-3
+            de.skip().unwrap(); // skipped-4
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    // checkpoint 1
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                    // checkpoint 2
+                    Start(BytesStart::new("skipped-3")),
+                    End(BytesEnd::new("skipped-3")),
+                    Start(BytesStart::new("skipped-4")),
+                    End(BytesEnd::new("skipped-4")),
+                ]
+            );
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target-2")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target-2")));
+            assert_eq!(de.peek().unwrap(), &End(BytesEnd::new("inner")));
+            assert_eq!(
+                de.read,
+                vec![
+                    // This comment here to keep the same formatting of both arrays
+                    // otherwise rustfmt suggest one-line it
+                    End(BytesEnd::new("inner")),
+                ]
+            );
+            assert_eq!(
+                de.write,
+                vec![
+                    // checkpoint 1
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                    // checkpoint 2
+                    Start(BytesStart::new("skipped-3")),
+                    End(BytesEnd::new("skipped-3")),
+                    Start(BytesStart::new("skipped-4")),
+                    End(BytesEnd::new("skipped-4")),
+                ]
+            );
+
+            // Start replay events from checkpoint 2
+            de.start_replay(checkpoint2);
+            assert_eq!(
+                de.read,
+                vec![
+                    Start(BytesStart::new("skipped-3")),
+                    End(BytesEnd::new("skipped-3")),
+                    Start(BytesStart::new("skipped-4")),
+                    End(BytesEnd::new("skipped-4")),
+                    End(BytesEnd::new("inner")),
+                ]
+            );
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+
+            // Replayed events
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-3")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-3")));
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-4")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-4")));
+
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+
+            ////////////////////////////////////////////////////////////////////////////////////////
+
+            // New events
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("target-1")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("target-1")));
+
+            assert_eq!(de.read, vec![]);
+            assert_eq!(
+                de.write,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+
+            // Start replay events from checkpoint 1
+            de.start_replay(checkpoint1);
+            assert_eq!(
+                de.read,
+                vec![
+                    Start(BytesStart::new("skipped-1")),
+                    End(BytesEnd::new("skipped-1")),
+                    Start(BytesStart::new("skipped-2")),
+                    End(BytesEnd::new("skipped-2")),
+                ]
+            );
+            assert_eq!(de.write, vec![]);
+
+            // Replayed events
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-1")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-1")));
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("skipped-2")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("skipped-2")));
+
+            assert_eq!(de.read, vec![]);
+            assert_eq!(de.write, vec![]);
+
+            // New events
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Eof);
         }
 
         /// Checks that limiting buffer size works correctly
