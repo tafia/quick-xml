@@ -1,5 +1,3 @@
-use std::str::from_utf8;
-
 #[cfg(feature = "encoding")]
 use encoding_rs::UTF_8;
 
@@ -84,7 +82,7 @@ impl Parser {
         }
 
         let content = if self.trim_text_end {
-            // Skip the ending '<
+            // Skip the ending '<'
             let len = bytes
                 .iter()
                 .rposition(|&b| !is_whitespace(b))
@@ -143,9 +141,8 @@ impl Parser {
         }
     }
 
-    /// reads `BytesElement` starting with a `/`,
-    /// if `self.check_end_names`, checks that element matches last opened element
-    /// return `End` event
+    /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
+    /// end name matches the last opened start name if `self.check_end_names` is set.
     pub fn read_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
@@ -160,24 +157,26 @@ impl Parser {
             &buf[1..]
         };
         if self.check_end_names {
-            let mismatch_err = |expected: &[u8], found: &[u8], offset: &mut usize| {
+            let decoder = self.decoder();
+            let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
                 *offset -= buf.len();
                 Err(Error::EndEventMismatch {
-                    expected: from_utf8(expected).unwrap_or("").to_owned(),
-                    found: from_utf8(found).unwrap_or("").to_owned(),
+                    expected,
+                    found: decoder.decode(found).unwrap_or_default().into_owned(),
                 })
             };
             match self.opened_starts.pop() {
                 Some(start) => {
                     let expected = &self.opened_buffer[start..];
                     if name != expected {
+                        let expected = decoder.decode(expected).unwrap_or_default().into_owned();
                         mismatch_err(expected, name, &mut self.offset)
                     } else {
                         self.opened_buffer.truncate(start);
                         Ok(Event::End(BytesEnd::wrap(name.into())))
                     }
                 }
-                None => mismatch_err(b"", &buf[1..], &mut self.offset),
+                None => mismatch_err("".to_string(), &buf[1..], &mut self.offset),
             }
         } else {
             Ok(Event::End(BytesEnd::wrap(name.into())))

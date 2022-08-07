@@ -305,7 +305,7 @@ enum ParseState {
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events (except `StartText`) could be generated.
     ///
-    /// After generating ane event the reader moves to the `ClosedTag` state.
+    /// After generating one event the reader moves to the `ClosedTag` state.
     OpenedTag,
     /// State in which reader searches the `<` symbol of a markup. All bytes before
     /// that symbol will be returned in the [`Event::Text`] event. After that
