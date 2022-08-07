@@ -667,10 +667,22 @@ trait XmlSource<'r, B> {
     /// [events]: crate::events::Event
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
+    /// Consume and discard all the whitespace until the next non-whitespace
+    /// character or EOF.
+    ///
+    /// # Parameters
+    /// - `position`: Will be increased by amount of bytes consumed
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
 
+    /// Consume and discard one character if it matches the given byte. Return
+    /// `true` if it matched.
+    ///
+    /// # Parameters
+    /// - `position`: Will be increased by 1 if byte is matched
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
+    /// Return one character without consuming it, so that future `read_*` calls
+    /// will still include it. On EOF, return `None`.
     fn peek_one(&mut self) -> Result<Option<u8>>;
 }
 

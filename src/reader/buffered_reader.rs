@@ -159,8 +159,6 @@ macro_rules! impl_buffered_source {
             }
         }
 
-        /// Consume and discard all the whitespace until the next non-whitespace
-        /// character or EOF.
         $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
@@ -180,8 +178,6 @@ macro_rules! impl_buffered_source {
             }
         }
 
-        /// Consume and discard one character if it matches the given byte. Return
-        /// true if it matched.
         $($async)? fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
@@ -196,8 +192,6 @@ macro_rules! impl_buffered_source {
             }
         }
 
-        /// Return one character without consuming it, so that future `read_*` calls
-        /// will still include it. On EOF, return None.
         $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
