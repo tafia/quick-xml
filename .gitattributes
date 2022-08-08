@@ -1,2 +1,6 @@
 # Unit tests assume that all xml files have unix style line endings
-*.xml text eol=cr
+/tests/documents/* text eol=lf
+
+/tests/documents/utf16be.xml binary
+/tests/documents/utf16le.xml binary
+/tests/documents/sample_5_utf16bom.xml binary

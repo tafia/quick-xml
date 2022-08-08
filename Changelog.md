@@ -190,6 +190,7 @@
 - [#407]: Improved benchmark suite to cover whole-document parsing, escaping and unescaping text
 - [#418]: Parameterized macrobenchmarks and comparative benchmarks, added throughput measurements via criterion
 - [#434]: Added more tests for serde deserializer
+- [#443]: Now all documents in `/tests/documents` are checked out with LF eol in working copy (except sample_5_utf16bom.xml)
 
 [#8]: https://github.com/Mingun/fast-xml/pull/8
 [#9]: https://github.com/Mingun/fast-xml/pull/9
@@ -216,6 +217,7 @@
 [#437]: https://github.com/tafia/quick-xml/pull/437
 [#439]: https://github.com/tafia/quick-xml/pull/439
 [#440]: https://github.com/tafia/quick-xml/pull/440
+[#443]: https://github.com/tafia/quick-xml/pull/443
 
 
 ## 0.23.0 -- 2022-05-08

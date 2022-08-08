@@ -235,10 +235,6 @@ fn test_writer_borrow() -> Result<()> {
 #[test]
 fn test_writer_indent() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
-    // Normalize newlines on Windows to just \n, which is what the reader and
-    // writer use.
-    let normalized_txt = txt.replace("\r\n", "\n");
-    let txt = normalized_txt.as_str();
     let mut reader = Reader::from_str(txt);
     reader.trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
@@ -250,12 +246,6 @@ fn test_writer_indent() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    // println!("{:?}", String::from_utf8_lossy(&result));
-
-    #[cfg(windows)]
-    assert!(result.into_iter().eq(txt.bytes().filter(|b| *b != 13)));
-
-    #[cfg(not(windows))]
     assert_eq!(result, txt.as_bytes());
 
     Ok(())
@@ -275,11 +265,6 @@ fn test_writer_indent_cdata() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-
-    #[cfg(windows)]
-    assert!(result.into_iter().eq(txt.bytes().filter(|b| *b != 13)));
-
-    #[cfg(not(windows))]
     assert_eq!(result, txt.as_bytes());
 
     Ok(())
