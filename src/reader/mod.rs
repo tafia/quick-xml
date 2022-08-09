@@ -2,6 +2,7 @@
 
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
+use std::ops::Range;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
@@ -238,16 +239,18 @@ macro_rules! read_to_end {
         $clear:block
         $(, $await:ident)?
     ) => {{
+        let start = $self.buffer_position();
         let mut depth = 0;
         loop {
             $clear
+            let end = $self.buffer_position();
             match $self.$read_event($buf) $(.$await)? {
                 Err(e) => return Err(e),
 
                 Ok(Event::Start(e)) if e.name() == $end => depth += 1,
                 Ok(Event::End(e)) if e.name() == $end => {
                     if depth == 0 {
-                        return Ok(());
+                        break start..end;
                     }
                     depth -= 1;
                 }
@@ -269,6 +272,11 @@ mod parser;
 mod slice_reader;
 
 pub use ns_reader::NsReader;
+
+/// Range of input in bytes, that corresponds to some piece of XML
+pub type Span = Range<usize>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Possible reader states. The state transition diagram (`true` and `false` shows
 /// value of [`Reader::expand_empty_elements()`] option):

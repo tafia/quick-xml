@@ -10,7 +10,7 @@ use encoding_rs::UTF_8;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
+use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
 use memchr;
 
@@ -74,6 +74,10 @@ impl<'a> Reader<&'a [u8]> {
     /// Reads until end element is found. This function is supposed to be called
     /// after you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
@@ -131,7 +135,7 @@ impl<'a> Reader<&'a [u8]> {
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end(end.name()).unwrap();
@@ -143,10 +147,11 @@ impl<'a> Reader<&'a [u8]> {
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
-    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
-        read_to_end!(self, end, (), read_event_impl, {})
+    pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
+        Ok(read_to_end!(self, end, (), read_event_impl, {}))
     }
 }
 

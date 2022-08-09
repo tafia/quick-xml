@@ -12,7 +12,7 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Reader, XmlSource};
+use crate::reader::{Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -425,6 +425,10 @@ impl<R: BufRead> NsReader<R> {
     /// storage for events content. This function is supposed to be called after
     /// you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name
     /// ("the same" means that their local names are the same and their prefixes
     /// resolves to the same namespace).
@@ -491,7 +495,7 @@ impl<R: BufRead> NsReader<R> {
     ///     (ResolveResult::Bound(ns), Event::Start(start))
     /// );
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
@@ -508,8 +512,9 @@ impl<R: BufRead> NsReader<R> {
     /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     #[inline]
-    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
         self.reader.read_to_end_into(end, buf)
@@ -657,6 +662,10 @@ impl<'i> NsReader<&'i [u8]> {
     /// Reads until end element is found. This function is supposed to be called
     /// after you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name
     /// ("the same" means that their local names are the same and their prefixes
     /// resolves to the same namespace).
@@ -717,7 +726,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///     (ResolveResult::Bound(ns), Event::Start(start))
     /// );
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end(end.name()).unwrap();
@@ -734,8 +743,9 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     #[inline]
-    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
+    pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
         self.reader.read_to_end(end)

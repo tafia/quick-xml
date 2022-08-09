@@ -951,7 +951,8 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end_into(name, &mut self.buf) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
-            other => Ok(other?),
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(()),
         }
     }
 
@@ -991,7 +992,8 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end(name) {
             Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
-            other => Ok(other?),
+            Err(e) => Err(e.into()),
+            Ok(_) => Ok(()),
         }
     }
 
