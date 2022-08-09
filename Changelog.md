@@ -41,6 +41,7 @@
   under the `quick-xml::encoding` namespace.
 - [#450]: Added support of asynchronous [tokio](https://tokio.rs/) readers
 - [#455]: Change return type of all `read_to_end*` methods to return a span between tags
+- [#455]: Added `Reader::read_text` method to return a raw content (including markup) between tags
 
 
 ### Bug Fixes

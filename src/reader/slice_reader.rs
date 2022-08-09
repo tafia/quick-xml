@@ -2,6 +2,8 @@
 //! underlying byte stream. This implementation supports not using an
 //! intermediate buffer as the byte slice itself can be used to borrow from.
 
+use std::borrow::Cow;
+
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
@@ -152,6 +154,78 @@ impl<'a> Reader<&'a [u8]> {
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         Ok(read_to_end!(self, end, (), read_event_impl, {}))
+    }
+
+    /// Reads content between start and end tags, including any markup. This
+    /// function is supposed to be called after you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// This method does not unescape read data, instead it returns content
+    /// "as is" of the XML document. This is because it has no idea what text
+    /// it reads, and if, for example, it contains CDATA section, attempt to
+    /// unescape it content will spoil data.
+    ///
+    /// Any text will be decoded using the XML current [`decoder()`].
+    ///
+    /// Actually, this method perform the following code:
+    ///
+    /// ```ignore
+    /// let span = reader.read_to_end(end)?;
+    /// let text = reader.decoder().decode(&reader.inner_slice[span]);
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can read a HTML content from your XML document.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use std::borrow::Cow;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::Reader;
+    ///
+    /// let mut reader = Reader::from_str("
+    ///     <html>
+    ///         <title>This is a HTML text</title>
+    ///         <p>Usual XML rules does not apply inside it
+    ///         <p>For example, elements not needed to be &quot;closed&quot;
+    ///     </html>
+    /// ");
+    /// reader.trim_text(true);
+    ///
+    /// let start = BytesStart::new("html");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
+    /// // ...and disable checking of end names because we expect HTML further...
+    /// reader.check_end_names(false);
+    ///
+    /// // ...then, we could read text content until close tag.
+    /// // This call will correctly handle nested <html> elements.
+    /// let text = reader.read_text(end.name()).unwrap();
+    /// assert_eq!(text, Cow::Borrowed(r#"
+    ///         <title>This is a HTML text</title>
+    ///         <p>Usual XML rules does not apply inside it
+    ///         <p>For example, elements not needed to be &quot;closed&quot;
+    ///     "#));
+    ///
+    /// // Now we can enable checks again
+    /// reader.check_end_names(true);
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`decoder()`]: Self::decoder()
+    pub fn read_text(&mut self, end: QName) -> Result<Cow<'a, str>> {
+        // self.reader will be changed, so store original reference
+        let buffer = self.reader;
+        let span = self.read_to_end(end)?;
+
+        self.decoder().decode(&buffer[0..span.len()])
     }
 }
 
