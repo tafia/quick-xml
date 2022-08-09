@@ -139,6 +139,7 @@
   |`*_with_custom_entities`|`*_with`
   |`BytesText::unescaped()`|`BytesText::unescape()`
   |`Attribute::unescaped_*`|`Attribute::unescape_*`
+- [#329]: Also, that functions now borrow from the input instead of event / attribute
 
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
@@ -199,6 +200,7 @@
 [#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
 [#324]: https://github.com/tafia/quick-xml/issues/324
+[#329]: https://github.com/tafia/quick-xml/issues/329
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
