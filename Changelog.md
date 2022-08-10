@@ -184,6 +184,8 @@
 - [#440]: Removed `Deserializer::from_slice` and `quick_xml::de::from_slice` methods because deserializing from a byte
   array cannot guarantee borrowing due to possible copying while decoding.
 
+- [#455]: Removed `Reader::read_text_into` which is only not a better wrapper over match on `Event::Text`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input

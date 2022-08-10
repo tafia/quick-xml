@@ -365,54 +365,6 @@ impl<R: BufRead> Reader<R> {
             buf.clear();
         }))
     }
-
-    /// Reads optional text between start and end tags.
-    ///
-    /// If the next event is a [`Text`] event, returns the decoded and unescaped content as a
-    /// `String`. If the next event is an [`End`] event, returns the empty string. In all other
-    /// cases, returns an error.
-    ///
-    /// Any text will be decoded using the XML encoding specified in the XML declaration (or UTF-8
-    /// if none is specified).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    ///
-    /// let mut xml = Reader::from_reader(b"
-    ///     <a>&lt;b&gt;</a>
-    ///     <a></a>
-    /// " as &[u8]);
-    /// xml.trim_text(true);
-    ///
-    /// let expected = ["<b>", ""];
-    /// for &content in expected.iter() {
-    ///     match xml.read_event_into(&mut Vec::new()) {
-    ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text_into(e.name(), &mut Vec::new()).unwrap(), content);
-    ///         },
-    ///         e => panic!("Expecting Start event, found {:?}", e),
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// [`Text`]: Event::Text
-    /// [`End`]: Event::End
-    pub fn read_text_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event_into(buf) {
-            Err(e) => return Err(e),
-
-            Ok(Event::Text(e)) => e.unescape()?.into_owned(),
-            Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
-            Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
-            _ => return Err(Error::TextNotFound),
-        };
-        self.read_to_end_into(end, buf)?;
-        Ok(s)
-    }
 }
 
 impl Reader<BufReader<File>> {
