@@ -111,7 +111,7 @@ fn test_issue94() {
 fn test_no_trim() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
 
-    assert!(matches!(reader.read_event().unwrap(), StartText(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
     assert!(matches!(reader.read_event().unwrap(), Start(_)));
     assert!(matches!(reader.read_event().unwrap(), Text(_)));
     assert!(matches!(reader.read_event().unwrap(), End(_)));
@@ -123,7 +123,7 @@ fn test_trim_end() {
     let mut reader = Reader::from_str(" <tag> text </tag> ");
     reader.trim_text_end(true);
 
-    assert!(matches!(reader.read_event().unwrap(), StartText(_)));
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
     assert!(matches!(reader.read_event().unwrap(), Start(_)));
     assert!(matches!(reader.read_event().unwrap(), Text(_)));
     assert!(matches!(reader.read_event().unwrap(), End(_)));

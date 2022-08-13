@@ -374,11 +374,6 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     let mut decoder = reader.decoder();
     loop {
         let line = match reader.read_resolved_event() {
-            Ok((_, Event::StartText(_))) => {
-                // BOM could change decoder
-                decoder = reader.decoder();
-                "StartText".to_string()
-            }
             Ok((_, Event::Decl(e))) => {
                 // Declaration could change decoder
                 decoder = reader.decoder();
