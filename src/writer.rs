@@ -90,7 +90,6 @@ impl<W: Write> Writer<W> {
     pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<()> {
         let mut next_should_line_break = true;
         let result = match *event.as_ref() {
-            Event::StartText(ref e) => self.write(&e),
             Event::Start(ref e) => {
                 let result = self.write_wrapped(b"<", e, b">");
                 if let Some(i) = self.indent.as_mut() {

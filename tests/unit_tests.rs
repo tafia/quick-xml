@@ -41,7 +41,6 @@ macro_rules! next_eq_content {
 }
 
 macro_rules! next_eq {
-    ($r:expr, StartText, $bytes:expr) => (next_eq_content!($r, StartText, $bytes););
     ($r:expr, Start, $bytes:expr) => (next_eq_name!($r, Start, $bytes););
     ($r:expr, End, $bytes:expr) => (next_eq_name!($r, End, $bytes););
     ($r:expr, Empty, $bytes:expr) => (next_eq_name!($r, Empty, $bytes););
@@ -704,91 +703,4 @@ fn test_closing_bracket_in_single_quote_mixed() {
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     next_eq!(r, End, b"a");
-}
-
-mod decode_with_bom_removal {
-    use super::*;
-    use pretty_assertions::assert_eq;
-
-    #[test]
-    #[cfg(not(feature = "encoding"))]
-    fn removes_utf8_bom() {
-        let input: &str = std::str::from_utf8(b"\xEF\xBB\xBF<?xml version=\"1.0\"?>").unwrap();
-
-        let mut reader = Reader::from_str(&input);
-        reader.trim_text(true);
-
-        let mut txt = Vec::new();
-
-        loop {
-            match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
-                Ok(Eof) => break,
-                _ => (),
-            }
-        }
-        assert_eq!(txt, vec![""]);
-    }
-
-    /// Test is disabled: the input started with `[FE FF 00 3C 00 3F ...]` and currently
-    /// quick-xml captures `[FE FF 00]` as a `StartText` event, because it is stopped
-    /// at byte `<` (0x3C). That sequence represents UTF-16 BOM (=BE) and a first byte
-    /// of the `<` symbol, encoded in UTF-16 BE (`00 3C`).
-    #[test]
-    #[cfg(feature = "encoding")]
-    #[ignore = "Non-ASCII compatible encodings not properly supported yet. See https://github.com/tafia/quick-xml/issues/158"]
-    fn removes_utf16be_bom() {
-        let mut reader = Reader::from_reader(include_bytes!("./documents/utf16be.xml").as_ref());
-        reader.trim_text(true);
-
-        let mut buf = Vec::new();
-        let mut txt = Vec::new();
-
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
-                Ok(Eof) => break,
-                _ => (),
-            }
-        }
-        assert_eq!(Some(txt[0].as_ref()), Some(""));
-    }
-
-    #[test]
-    #[cfg(feature = "encoding")]
-    fn removes_utf16le_bom() {
-        let mut reader = Reader::from_reader(include_bytes!("./documents/utf16le.xml").as_ref());
-        reader.trim_text(true);
-        let mut buf = Vec::new();
-        let mut txt = Vec::new();
-
-        loop {
-            match reader.read_event_into(&mut buf) {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
-                Ok(Eof) => break,
-                _ => (),
-            }
-        }
-        assert_eq!(Some(txt[0].as_ref()), Some(""));
-    }
-
-    #[test]
-    #[cfg(not(feature = "encoding"))]
-    fn does_nothing_if_no_bom_exists() {
-        let input: &str = std::str::from_utf8(b"<?xml version=\"1.0\"?>").unwrap();
-
-        let mut reader = Reader::from_str(&input);
-        reader.trim_text(true);
-
-        let mut txt = Vec::new();
-
-        loop {
-            match reader.read_event() {
-                Ok(StartText(e)) => txt.push(e.decode_with_bom_removal().unwrap()),
-                Ok(Eof) => break,
-                _ => (),
-            }
-        }
-        assert!(txt.is_empty());
-    }
 }
