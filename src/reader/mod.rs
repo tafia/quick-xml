@@ -286,7 +286,7 @@ pub type Span = Range<usize>;
 ///   subgraph _
 ///     direction LR
 ///
-///     Init      -- "(no event)"\nStartText                              --> OpenedTag
+///     Init      -- "(no event)"\n                                       --> OpenedTag
 ///     OpenedTag -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> ClosedTag
 ///     ClosedTag -- "#lt;false#gt;\n(no event)"\nText                    --> OpenedTag
 ///   end
@@ -297,13 +297,13 @@ pub type Span = Range<usize>;
 #[derive(Clone)]
 enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
-    /// state could produce a `StartText`, `Decl`, `Comment` or `Start` event.
-    /// The next state is always `OpenedTag`. The reader will never return to this
-    /// state. The event emitted during transition to `OpenedTag` is a `StartEvent`
-    /// if the first symbol not `<`, otherwise no event are emitted.
+    /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next
+    /// state is always `OpenedTag`. The reader will never return to this state. The
+    /// event emitted during transition to `OpenedTag` is a `StartEvent` if the
+    /// first symbol not `<`, otherwise no event are emitted.
     Init,
     /// State after seeing the `<` symbol. Depending on the next symbol all other
-    /// events (except `StartText`) could be generated.
+    /// events could be generated.
     ///
     /// After generating one event the reader moves to the `ClosedTag` state.
     OpenedTag,
@@ -553,8 +553,6 @@ impl<R> Reader<R> {
     }
 
     /// Read until '<' is found and moves reader to an `OpenedTag` state.
-    ///
-    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
     fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
@@ -1572,16 +1570,6 @@ mod test {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
-
-                #[$test]
-                $($async)? fn start_text() {
-                    let mut reader = Reader::from_str("bom");
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::StartText(BytesText::from_escaped("bom").into())
-                    );
-                }
 
                 #[$test]
                 $($async)? fn declaration() {

@@ -118,20 +118,6 @@ fn read_resolved_event_into(c: &mut Criterion) {
 /// Benchmarks, how fast individual event parsed
 fn one_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("One event");
-    group.bench_function("StartText", |b| {
-        let src = "Hello world!".repeat(512 / 12);
-        b.iter(|| {
-            let mut r = Reader::from_str(&src);
-            let mut nbtxt = criterion::black_box(0);
-            r.check_end_names(false).check_comments(false);
-            match r.read_event() {
-                Ok(Event::StartText(e)) => nbtxt += e.len(),
-                something_else => panic!("Did not expect {:?}", something_else),
-            };
-
-            assert_eq!(nbtxt, 504);
-        })
-    });
 
     group.bench_function("Start", |b| {
         let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5));

@@ -50,69 +50,6 @@ use crate::name::{LocalName, QName};
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 
-/// Text that appeared before an XML declaration, a start element or a comment.
-///
-/// In well-formed XML it could contain a Byte-Order-Mark (BOM). If this event
-/// contains something else except BOM, the XML should be considered ill-formed.
-///
-/// This is a reader-only event. If you need to write a text before the first tag,
-/// use the [`BytesText`] event.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BytesStartText<'a> {
-    content: BytesText<'a>,
-}
-
-impl<'a> BytesStartText<'a> {
-    /// Converts the event into an owned event.
-    pub fn into_owned(self) -> BytesStartText<'static> {
-        BytesStartText {
-            content: self.content.into_owned(),
-        }
-    }
-
-    /// Extracts the inner `Cow` from the `BytesStartText` event container.
-    #[inline]
-    pub fn into_inner(self) -> Cow<'a, [u8]> {
-        self.content.into_inner()
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesStartText {
-        BytesStartText {
-            content: self.content.borrow(),
-        }
-    }
-
-    /// Decodes bytes of event, stripping byte order mark (BOM) if it is presented
-    /// in the event.
-    ///
-    /// This method does not unescapes content, because no escape sequences can
-    /// appeared in the BOM or in the text before the first tag.
-    pub fn decode_with_bom_removal(&self) -> Result<String> {
-        //TODO: Fix lifetime issue - it should be possible to borrow string
-        let decoded = self.content.decoder.decode_with_bom_removal(&*self)?;
-
-        Ok(decoded.to_string())
-    }
-}
-
-impl<'a> Deref for BytesStartText<'a> {
-    type Target = BytesText<'a>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.content
-    }
-}
-
-impl<'a> From<BytesText<'a>> for BytesStartText<'a> {
-    fn from(content: BytesText<'a>) -> Self {
-        Self { content }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
 /// `<name attr="value">`.
@@ -797,12 +734,6 @@ impl<'a> Deref for BytesText<'a> {
     }
 }
 
-impl<'a> From<BytesStartText<'a>> for BytesText<'a> {
-    fn from(content: BytesStartText<'a>) -> Self {
-        content.content
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// CDATA content contains unescaped data from the reader. If you want to write them as a text,
@@ -941,56 +872,6 @@ impl<'a> Deref for BytesCData<'a> {
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event<'a> {
-    /// Text that appeared before the first opening tag or an [XML declaration].
-    /// [According to the XML standard][std], no text allowed before the XML
-    /// declaration. However, if there is a BOM in the stream, some data may be
-    /// present.
-    ///
-    /// When this event is generated, it is the very first event emitted by the
-    /// [`Reader`], and there can be the only one such event.
-    ///
-    /// The [`Writer`] writes content of this event "as is" without encoding or
-    /// escaping. If you write it, it should be written first and only one time
-    /// (but writer does not enforce that).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use std::borrow::Cow;
-    /// use quick_xml::events::Event;
-    /// use quick_xml::reader::Reader;
-    ///
-    /// // XML in UTF-8 with BOM
-    /// let xml = b"\xEF\xBB\xBF<?xml version='1.0'?>".as_ref();
-    /// let mut reader = Reader::from_reader(xml);
-    /// let mut buf = Vec::new();
-    /// let mut events_processed = 0;
-    /// loop {
-    ///     match reader.read_event_into(&mut buf) {
-    ///         Ok(Event::StartText(e)) => {
-    ///             assert_eq!(events_processed, 0);
-    ///             // Content contains BOM
-    ///             assert_eq!(e.into_inner(), Cow::Borrowed(b"\xEF\xBB\xBF"));
-    ///         }
-    ///         Ok(Event::Decl(_)) => {
-    ///             assert_eq!(events_processed, 1);
-    ///         }
-    ///         Ok(Event::Eof) => {
-    ///             assert_eq!(events_processed, 2);
-    ///             break;
-    ///         }
-    ///         e => panic!("Unexpected event {:?}", e),
-    ///     }
-    ///     events_processed += 1;
-    /// }
-    /// ```
-    ///
-    /// [XML declaration]: Event::Decl
-    /// [std]: https://www.w3.org/TR/xml11/#NT-document
-    /// [`Reader`]: crate::reader::Reader
-    /// [`Writer`]: crate::writer::Writer
-    StartText(BytesStartText<'a>),
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
     /// End tag `</tag>`.
@@ -1018,7 +899,6 @@ impl<'a> Event<'a> {
     /// buffer used when reading but incurring a new, separate allocation.
     pub fn into_owned(self) -> Event<'static> {
         match self {
-            Event::StartText(e) => Event::StartText(e.into_owned()),
             Event::Start(e) => Event::Start(e.into_owned()),
             Event::End(e) => Event::End(e.into_owned()),
             Event::Empty(e) => Event::Empty(e.into_owned()),
@@ -1036,7 +916,6 @@ impl<'a> Event<'a> {
     #[inline]
     pub fn borrow(&self) -> Event {
         match self {
-            Event::StartText(e) => Event::StartText(e.borrow()),
             Event::Start(e) => Event::Start(e.borrow()),
             Event::End(e) => Event::End(e.borrow()),
             Event::Empty(e) => Event::Empty(e.borrow()),
@@ -1056,7 +935,6 @@ impl<'a> Deref for Event<'a> {
 
     fn deref(&self) -> &[u8] {
         match *self {
-            Event::StartText(ref e) => &*e,
             Event::Start(ref e) | Event::Empty(ref e) => &*e,
             Event::End(ref e) => &*e,
             Event::Text(ref e) => &*e,
