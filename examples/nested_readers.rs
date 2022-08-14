@@ -22,7 +22,7 @@ fn main() -> Result<(), quick_xml::Error> {
     loop {
         match reader.read_event_into(&mut buf)? {
             Event::Start(element) => {
-                if let b"w:tbl" = element.name().as_ref() {
+                if let "w:tbl" = element.name().as_ref() {
                     count += 1;
                     let mut stats = TableStat {
                         index: count,

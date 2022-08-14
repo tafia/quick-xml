@@ -14,9 +14,9 @@ use quick_xml::Error;
 fn issue115() {
     let mut r = Reader::from_str("<tag1 attr1='line 1\nline 2'></tag1>");
     match r.read_event() {
-        Ok(Event::Start(e)) if e.name() == QName(b"tag1") => {
+        Ok(Event::Start(e)) if e.name() == QName("tag1") => {
             let v = e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>();
-            assert_eq!(v[0].clone().into_owned(), b"line 1\nline 2");
+            assert_eq!(v[0].clone().into_owned(), "line 1\nline 2");
         }
         _ => (),
     }

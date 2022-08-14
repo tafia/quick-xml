@@ -35,14 +35,14 @@ fn test_attributes_empty() {
                 attrs.next(),
                 Some(Ok(Attribute {
                     key: QName("att1"),
-                    value: Cow::Borrowed(b"a"),
+                    value: Cow::Borrowed("a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
                     key: QName("att2"),
-                    value: Cow::Borrowed(b"b"),
+                    value: Cow::Borrowed("b"),
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -63,7 +63,7 @@ fn test_attribute_equal() {
                 attrs.next(),
                 Some(Ok(Attribute {
                     key: QName("att1"),
-                    value: Cow::Borrowed(b"a=b"),
+                    value: Cow::Borrowed("a=b"),
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -80,7 +80,7 @@ fn test_comment_starting_with_gt() {
     loop {
         match r.read_event() {
             Ok(Comment(e)) => {
-                assert_eq!(e.as_ref(), b">");
+                assert_eq!(e.unescape().unwrap(), ">");
                 break;
             }
             Ok(Eof) => panic!("Expecting Comment"),

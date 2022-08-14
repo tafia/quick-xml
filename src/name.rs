@@ -410,11 +410,10 @@ impl NamespaceResolver {
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
-                let v = std::str::from_utf8(&v).expect("fixme dalley");
                 match k.as_namespace_binding() {
                     Some(PrefixDeclaration::Default) => {
                         let start = buffer.len();
-                        buffer.push_str(v);
+                        buffer.push_str(&*v);
                         self.bindings.push(NamespaceEntry {
                             start,
                             prefix_len: 0,
@@ -425,7 +424,7 @@ impl NamespaceResolver {
                     Some(PrefixDeclaration::Named(prefix)) => {
                         let start = buffer.len();
                         buffer.push_str(prefix);
-                        buffer.push_str(v);
+                        buffer.push_str(&*v);
                         self.bindings.push(NamespaceEntry {
                             start,
                             prefix_len: prefix.len(),

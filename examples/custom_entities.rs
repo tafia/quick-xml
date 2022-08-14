@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match reader.read_event() {
             Ok(Event::DocType(ref e)) => {
-                for cap in entity_re.captures_iter(e) {
+                for cap in entity_re.captures_iter(e.as_bytes()) {
                     custom_entities.insert(
                         String::from_utf8(cap[1].to_owned())?,
                         String::from_utf8(cap[2].to_owned())?,
@@ -41,12 +41,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Ok(Event::Start(ref e)) => {
-                if let b"test" = e.name().as_ref() {
+                if let "test" = e.name().as_ref() {
                     let attributes = e
                         .attributes()
                         .map(|a| {
                             a.unwrap()
-                                .decode_and_unescape_value_with(&reader, |ent| {
+                                .unescape_value_with(|ent| {
                                     custom_entities.get(ent).map(|s| s.as_str())
                                 })
                                 .unwrap()

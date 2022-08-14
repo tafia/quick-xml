@@ -1,10 +1,10 @@
 use pretty_assertions::assert_eq;
-use quick_xml::encoding::Decoder;
+use std::str::from_utf8;
+
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
 use quick_xml::reader::NsReader;
-use std::str::from_utf8;
 
 #[test]
 fn sample_1_short() {
@@ -264,7 +264,7 @@ fn issue_93_large_characters_in_entity_references() {
         r#"<hello>&𤶼;</hello>"#,
         r#"
             |StartElement(hello)
-            |1:10 FailedUnescape([38, 240, 164, 182, 188, 59]; Error while escaping character at range 1..5: Unrecognized escape symbol: "𤶼")
+            |1:10 FailedUnescape("&𤶼;" Error while escaping character at range 1..5: Unrecognized escape symbol: "𤶼")
             |EndElement(hello)
             |EndDocument
         "#,
@@ -391,26 +391,21 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
 
     let mut spec_lines = SpecIter(output).enumerate();
 
-    let mut decoder = reader.decoder();
     loop {
         let line = match reader.read_resolved_event_into(&mut Vec::new()) {
             Ok((_, Event::Decl(e))) => {
                 // Declaration could change decoder
-                decoder = reader.decoder();
-
-                let version_cow = e.version().unwrap();
-                let version = decoder.decode(version_cow.as_ref()).unwrap();
-                let encoding_cow = e.encoding().unwrap().unwrap();
-                let encoding = decoder.decode(encoding_cow.as_ref()).unwrap();
+                let version = e.version().unwrap();
+                let encoding = e.encoding().unwrap().unwrap();
                 format!("StartDocument({}, {})", version, encoding)
             }
             Ok((_, Event::PI(e))) => {
-                format!("ProcessingInstruction(PI={})", decoder.decode(&e).unwrap())
+                format!("ProcessingInstruction(PI={})", &*e)
             }
-            Ok((_, Event::DocType(e))) => format!("DocType({})", decoder.decode(&e).unwrap()),
+            Ok((_, Event::DocType(e))) => format!("DocType({})", &*e),
             Ok((n, Event::Start(e))) => {
                 let name = namespace_name(n, e.name());
-                match make_attrs(&e, decoder) {
+                match make_attrs(&e) {
                     Ok(attrs) if attrs.is_empty() => format!("StartElement({})", &name),
                     Ok(attrs) => format!("StartElement({} [{}])", &name, &attrs),
                     Err(e) => format!("StartElement({}, attr-error: {})", &name, &e),
@@ -418,7 +413,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             }
             Ok((n, Event::Empty(e))) => {
                 let name = namespace_name(n, e.name());
-                match make_attrs(&e, decoder) {
+                match make_attrs(&e) {
                     Ok(attrs) if attrs.is_empty() => format!("EmptyElement({})", &name),
                     Ok(attrs) => format!("EmptyElement({} [{}])", &name, &attrs),
                     Err(e) => format!("EmptyElement({}, attr-error: {})", &name, &e),
@@ -428,11 +423,11 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
                 let name = namespace_name(n, e.name());
                 format!("EndElement({})", name)
             }
-            Ok((_, Event::Comment(e))) => format!("Comment({})", decoder.decode(&e).unwrap()),
-            Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
-            Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
+            Ok((_, Event::Comment(e))) => format!("Comment({})", &*e),
+            Ok((_, Event::CData(e))) => format!("CData({})", &*e),
+            Ok((_, Event::Text(e))) => match unescape(&*e) {
                 Ok(c) => format!("Characters({})", &c),
-                Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
+                Err(err) => format!("FailedUnescape({:?} {})", &*e, err),
             },
             Ok((_, Event::Eof)) => "EndDocument".to_string(),
             Err(e) => format!("Error: {}", e),
@@ -464,14 +459,14 @@ fn namespace_name(n: ResolveResult, name: QName) -> String {
     }
 }
 
-fn make_attrs(e: &BytesStart, decoder: Decoder) -> ::std::result::Result<String, String> {
+fn make_attrs(e: &BytesStart) -> ::std::result::Result<String, String> {
     let mut atts = Vec::new();
     for a in e.attributes() {
         match a {
             Ok(a) => {
                 if a.key.as_namespace_binding().is_none() {
                     let key = a.key.as_ref();
-                    let value = decoder.decode(a.value.as_ref()).unwrap();
+                    let value = a.value.as_ref();
                     let unescaped_value = unescape(&value).unwrap();
                     atts.push(format!(
                         "{}=\"{}\"",

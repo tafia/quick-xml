@@ -131,8 +131,9 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
         if let Some(raw) = bytes.get(pos..) {
             escaped.extend_from_slice(raw);
         }
-        // SAFETY: we operate on UTF-8 input and search for an one byte chars only,
-        // so all slices that was put to the `escaped` is a valid UTF-8 encoded strings
+        // SAFETY: we operate on UTF-8 input and search for only one-byte chars, so
+        // the end point will always be at a character boundary, and we can yield a
+        // valid UTF-8 slice always.
         // TODO: Can be replaced with `unsafe { String::from_utf8_unchecked() }`
         // if unsafe code will be allowed
         Cow::Owned(String::from_utf8(escaped).unwrap())

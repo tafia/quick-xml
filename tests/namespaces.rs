@@ -152,14 +152,14 @@ fn attributes_empty_ns() {
         });
     assert_eq!(
         attrs.next(),
-        Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
+        Some((Unbound, &"att1"[..], Cow::Borrowed(&"a"[..])))
     );
     assert_eq!(
         attrs.next(),
         Some((
             Bound(Namespace("urn:example:r")),
             &"att2"[..],
-            Cow::Borrowed(&b"b"[..])
+            Cow::Borrowed(&"b"[..])
         ))
     );
     assert_eq!(attrs.next(), None);
@@ -191,14 +191,14 @@ fn attributes_empty_ns_expanded() {
             });
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&"a"[..])))
         );
         assert_eq!(
             attrs.next(),
             Some((
                 Bound(Namespace("urn:example:r")),
                 &"att2"[..],
-                Cow::Borrowed(&b"b"[..])
+                Cow::Borrowed(&"b"[..])
             ))
         );
         assert_eq!(attrs.next(), None);
@@ -252,7 +252,7 @@ fn default_ns_shadowing_empty() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
@@ -308,7 +308,7 @@ fn default_ns_shadowing_expanded() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
