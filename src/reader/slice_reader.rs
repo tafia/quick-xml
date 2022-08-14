@@ -34,6 +34,10 @@ impl<'a> Reader<&'a [u8]> {
 
     /// Read an event that borrows from the input rather than a buffer.
     ///
+    /// There is no asynchronous `read_event_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
+    ///
     /// # Examples
     ///
     /// ```
@@ -82,6 +86,10 @@ impl<'a> Reader<&'a [u8]> {
     ///
     /// The correctness of the skipped events does not checked, if you disabled
     /// the [`check_end_names`] option.
+    ///
+    /// There is no asynchronous `read_to_end_async()` version of this function,
+    /// because it is not necessary -- the contents are already in memory and no IO
+    /// is needed, therefore there is no potential for blocking.
     ///
     /// # Namespaces
     ///
@@ -138,25 +146,7 @@ impl<'a> Reader<&'a [u8]> {
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<()> {
-        let mut depth = 0;
-        loop {
-            match self.read_event() {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
-            }
-        }
+        read_to_end!(self, end, (), read_event_impl, {})
     }
 }
 
@@ -264,7 +254,18 @@ mod test {
     use crate::reader::test::check;
     use crate::reader::XmlSource;
 
-    check!(());
+    /// Default buffer constructor just pass the byte array from the test
+    fn identity<T>(input: T) -> T {
+        input
+    }
+
+    check!(
+        #[test]
+        read_event_impl,
+        read_until_close,
+        identity,
+        ()
+    );
 
     #[cfg(feature = "encoding")]
     mod encoding {

@@ -12,6 +12,216 @@ use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
 
+macro_rules! impl_buffered_source {
+    ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
+        #[inline]
+        $($async)? fn read_bytes_until $(<$lf>)? (
+            &mut self,
+            byte: u8,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> Result<Option<&'b [u8]>> {
+            // search byte must be within the ascii range
+            debug_assert!(byte.is_ascii());
+
+            let mut read = 0;
+            let mut done = false;
+            let start = buf.len();
+            while !done {
+                let used = {
+                    let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                        Ok(n) if n.is_empty() => break,
+                        Ok(n) => n,
+                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                        Err(e) => {
+                            *position += read;
+                            return Err(Error::Io(e));
+                        }
+                    };
+
+                    match memchr::memchr(byte, available) {
+                        Some(i) => {
+                            buf.extend_from_slice(&available[..i]);
+                            done = true;
+                            i + 1
+                        }
+                        None => {
+                            buf.extend_from_slice(available);
+                            available.len()
+                        }
+                    }
+                };
+                self $(.$reader)? .consume(used);
+                read += used;
+            }
+            *position += read;
+
+            if read == 0 {
+                Ok(None)
+            } else {
+                Ok(Some(&buf[start..]))
+            }
+        }
+
+        $($async)? fn read_bang_element $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> Result<Option<(BangType, &'b [u8])>> {
+            // Peeked one bang ('!') before being called, so it's guaranteed to
+            // start with it.
+            let start = buf.len();
+            let mut read = 1;
+            buf.push(b'!');
+            self $(.$reader)? .consume(1);
+
+            let bang_type = BangType::new(self.peek_one() $(.$await)? ?)?;
+
+            loop {
+                match self $(.$reader)? .fill_buf() $(.$await)? {
+                    // Note: Do not update position, so the error points to
+                    // somewhere sane rather than at the EOF
+                    Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
+                    Ok(available) => {
+                        if let Some((consumed, used)) = bang_type.parse(available, read) {
+                            buf.extend_from_slice(consumed);
+
+                            self $(.$reader)? .consume(used);
+                            read += used;
+
+                            *position += read;
+                            break;
+                        } else {
+                            buf.extend_from_slice(available);
+
+                            let used = available.len();
+                            self $(.$reader)? .consume(used);
+                            read += used;
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e));
+                    }
+                }
+            }
+
+            if read == 0 {
+                Ok(None)
+            } else {
+                Ok(Some((bang_type, &buf[start..])))
+            }
+        }
+
+        #[inline]
+        $($async)? fn read_element $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> Result<Option<&'b [u8]>> {
+            let mut state = ReadElementState::Elem;
+            let mut read = 0;
+
+            let start = buf.len();
+            loop {
+                match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(available) => {
+                        if let Some((consumed, used)) = state.change(available) {
+                            buf.extend_from_slice(consumed);
+
+                            self $(.$reader)? .consume(used);
+                            read += used;
+
+                            *position += read;
+                            break;
+                        } else {
+                            buf.extend_from_slice(available);
+
+                            let used = available.len();
+                            self $(.$reader)? .consume(used);
+                            read += used;
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e));
+                    }
+                };
+            }
+
+            if read == 0 {
+                Ok(None)
+            } else {
+                Ok(Some(&buf[start..]))
+            }
+        }
+
+        /// Consume and discard all the whitespace until the next non-whitespace
+        /// character or EOF.
+        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+            loop {
+                break match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) => {
+                        let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
+                        if count > 0 {
+                            self $(.$reader)? .consume(count);
+                            *position += count;
+                            continue;
+                        } else {
+                            Ok(())
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(Error::Io(e)),
+                };
+            }
+        }
+
+        /// Consume and discard one character if it matches the given byte. Return
+        /// true if it matched.
+        $($async)? fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+            // search byte must be within the ascii range
+            debug_assert!(byte.is_ascii());
+
+            match self.peek_one() $(.$await)? ? {
+                Some(b) if b == byte => {
+                    *position += 1;
+                    self $(.$reader)? .consume(1);
+                    Ok(true)
+                }
+                _ => Ok(false),
+            }
+        }
+
+        /// Return one character without consuming it, so that future `read_*` calls
+        /// will still include it. On EOF, return None.
+        $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
+            loop {
+                break match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => Ok(None),
+                    Ok(n) => Ok(Some(n[0])),
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(Error::Io(e)),
+                };
+            }
+        }
+    };
+}
+
+// Make it public for use in async implementations
+pub(super) use impl_buffered_source;
+
+/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
+/// `Vec<u8>` as buffer that will be borrowed by events.
+impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
+    impl_buffered_source!();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// This is an implementation of [`Reader`] for reading from a [`BufRead`] as
 /// underlying byte stream.
 impl<R: BufRead> Reader<R> {
@@ -146,26 +356,9 @@ impl<R: BufRead> Reader<R> {
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
-        let mut depth = 0;
-        loop {
+        read_to_end!(self, end, buf, read_event_impl, {
             buf.clear();
-            match self.read_event_into(buf) {
-                Err(e) => return Err(e),
-
-                Ok(Event::Start(e)) if e.name() == end => depth += 1,
-                Ok(Event::End(e)) if e.name() == end => {
-                    if depth == 0 {
-                        return Ok(());
-                    }
-                    depth -= 1;
-                }
-                Ok(Event::Eof) => {
-                    let name = self.decoder().decode(end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
-                _ => (),
-            }
-        }
+        })
     }
 
     /// Reads optional text between start and end tags.
@@ -226,213 +419,23 @@ impl Reader<BufReader<File>> {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
-/// `Vec<u8>` as buffer that will be borrowed by events.
-impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
-    #[inline]
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        let mut read = 0;
-        let mut done = false;
-        let start = buf.len();
-        while !done {
-            let used = {
-                let available = match self.fill_buf() {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e));
-                    }
-                };
-
-                match memchr::memchr(byte, available) {
-                    Some(i) => {
-                        buf.extend_from_slice(&available[..i]);
-                        done = true;
-                        i + 1
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-                        available.len()
-                    }
-                }
-            };
-            self.consume(used);
-            read += used;
-        }
-        *position += read;
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
-        }
-    }
-
-    fn read_bang_element(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'b [u8])>> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        let start = buf.len();
-        let mut read = 1;
-        buf.push(b'!');
-        self.consume(1);
-
-        let bang_type = BangType::new(self.peek_one()?)?;
-
-        loop {
-            match self.fill_buf() {
-                // Note: Do not update position, so the error points to
-                // somewhere sane rather than at the EOF
-                Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
-                Ok(available) => {
-                    if let Some((consumed, used)) = bang_type.parse(available, read) {
-                        buf.extend_from_slice(consumed);
-
-                        self.consume(used);
-                        read += used;
-
-                        *position += read;
-                        break;
-                    } else {
-                        buf.extend_from_slice(available);
-
-                        let used = available.len();
-                        self.consume(used);
-                        read += used;
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            }
-        }
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some((bang_type, &buf[start..])))
-        }
-    }
-
-    #[inline]
-    fn read_element(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        position: &mut usize,
-    ) -> Result<Option<&'b [u8]>> {
-        let mut state = ReadElementState::Elem;
-        let mut read = 0;
-
-        let start = buf.len();
-        loop {
-            match self.fill_buf() {
-                Ok(n) if n.is_empty() => break,
-                Ok(available) => {
-                    if let Some((consumed, used)) = state.change(available) {
-                        buf.extend_from_slice(consumed);
-
-                        self.consume(used);
-                        read += used;
-
-                        *position += read;
-                        break;
-                    } else {
-                        buf.extend_from_slice(available);
-
-                        let used = available.len();
-                        self.consume(used);
-                        read += used;
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => {
-                    *position += read;
-                    return Err(Error::Io(e));
-                }
-            };
-        }
-
-        if read == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(&buf[start..]))
-        }
-    }
-
-    /// Consume and discard all the whitespace until the next non-whitespace
-    /// character or EOF.
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        loop {
-            break match self.fill_buf() {
-                Ok(n) => {
-                    let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
-                    if count > 0 {
-                        self.consume(count);
-                        *position += count;
-                        continue;
-                    } else {
-                        Ok(())
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => Err(Error::Io(e)),
-            };
-        }
-    }
-
-    /// Consume and discard one character if it matches the given byte. Return
-    /// true if it matched.
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        match self.peek_one()? {
-            Some(b) if b == byte => {
-                *position += 1;
-                self.consume(1);
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
-    }
-
-    /// Return one character without consuming it, so that future `read_*` calls
-    /// will still include it. On EOF, return None.
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        loop {
-            break match self.fill_buf() {
-                Ok(n) if n.is_empty() => Ok(None),
-                Ok(n) => Ok(Some(n[0])),
-                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => Err(Error::Io(e)),
-            };
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::reader::test::check;
     use crate::reader::XmlSource;
 
-    check!(&mut Vec::new());
+    /// Default buffer constructor just pass the byte array from the test
+    fn identity<T>(input: T) -> T {
+        input
+    }
+
+    check!(
+        #[test]
+        read_event_impl,
+        read_until_close,
+        identity,
+        &mut Vec::new()
+    );
 
     #[cfg(feature = "encoding")]
     mod encoding {

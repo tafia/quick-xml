@@ -39,6 +39,7 @@
   |`attribute_namespace`   |`resolve_attribute`
 - [#439]: Added utilities `detect_encoding()`, `decode()`, and `decode_with_bom_removal()`
   under the `quick-xml::encoding` namespace.
+- [#450]: Added support of asynchronous [tokio](https://tokio.rs/) readers
 
 
 ### Bug Fixes
@@ -218,6 +219,7 @@
 [#439]: https://github.com/tafia/quick-xml/pull/439
 [#440]: https://github.com/tafia/quick-xml/pull/440
 [#443]: https://github.com/tafia/quick-xml/pull/443
+[#450]: https://github.com/tafia/quick-xml/pull/450
 
 
 ## 0.23.0 -- 2022-05-08
