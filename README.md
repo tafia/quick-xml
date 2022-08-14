@@ -271,7 +271,6 @@ Note that despite not focusing on performance (there are several unnecessary cop
 Benchmarking is hard and the results depend on your input file and your machine.
 
 Here on my particular file, quick-xml is around **50 times faster** than [xml-rs](https://crates.io/crates/xml-rs) crate.
-_(measurements was done while this crate named quick-xml)_
 
 ```
 // quick-xml benches
