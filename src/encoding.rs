@@ -105,10 +105,9 @@ impl Decoder {
     }
 }
 
-/// Decodes the provided bytes using the specified encoding, ignoring the BOM
-/// if it is present in the `bytes`.
+/// Decodes the provided bytes using the specified encoding.
 ///
-/// Returns an error in case of malformed sequences in the `bytes`.
+/// Returns an error in case of malformed or non-representable sequences in the `bytes`.
 #[cfg(feature = "encoding")]
 pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b, str>> {
     encoding
@@ -119,7 +118,7 @@ pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b
 /// Decodes a slice with an unknown encoding, removing the BOM if it is present
 /// in the bytes.
 ///
-/// Returns an error in case of malformed sequences in the `bytes`.
+/// Returns an error in case of malformed or non-representable sequences in the `bytes`.
 #[cfg(feature = "encoding")]
 pub fn decode_with_bom_removal<'b>(bytes: &'b [u8]) -> Result<Cow<'b, str>> {
     if let Some(encoding) = detect_encoding(bytes) {
@@ -185,5 +184,3 @@ pub fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
         _ => None,
     }
 }
-
-// TODO: add some tests for functions

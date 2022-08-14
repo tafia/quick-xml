@@ -3,7 +3,7 @@ use quick_xml::events::Event::*;
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
-use std::{borrow::Cow, io::Cursor};
+use std::borrow::Cow;
 
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
@@ -93,40 +93,6 @@ fn test_comment_starting_with_gt() {
 }
 
 #[test]
-#[cfg(feature = "encoding")]
-fn test_koi8_r_encoding() {
-    let src = include_bytes!("documents/opennews_all.rss").as_ref();
-    let mut buf = vec![];
-    let mut r = Reader::from_reader(src);
-    r.trim_text(true).expand_empty_elements(false);
-    loop {
-        match r.read_event_into(&mut buf) {
-            Ok(Text(e)) => {
-                e.unescape().unwrap();
-            }
-            Ok(Eof) => break,
-            _ => (),
-        }
-    }
-}
-
-#[test]
-fn fuzz_53() {
-    let data: &[u8] = b"\xe9\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\n(\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\
-\x00<>\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00<<\x00\x00\x00";
-    let cursor = Cursor::new(data);
-    let mut reader = Reader::from_reader(cursor);
-    let mut buf = vec![];
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Eof) | Err(..) => break,
-            _ => buf.clear(),
-        }
-    }
-}
-
-#[test]
 fn test_issue94() {
     let data = br#"<Run>
 <!B>
@@ -138,37 +104,6 @@ fn test_issue94() {
             Ok(Eof) | Err(..) => break,
             _ => (),
         }
-    }
-}
-
-#[test]
-fn fuzz_101() {
-    let data: &[u8] = b"\x00\x00<\x00\x00\x0a>&#44444444401?#\x0a413518\
-                       #\x0a\x0a\x0a;<:<)(<:\x0a\x0a\x0a\x0a;<:\x0a\x0a\
-                       <:\x0a\x0a\x0a\x0a\x0a<\x00*\x00\x00\x00\x00";
-    let cursor = Cursor::new(data);
-    let mut reader = Reader::from_reader(cursor);
-    let mut buf = vec![];
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Start(e)) | Ok(Empty(e)) => {
-                for a in e.attributes() {
-                    if a.ok()
-                        .map_or(true, |a| a.decode_and_unescape_value(&reader).is_err())
-                    {
-                        break;
-                    }
-                }
-            }
-            Ok(Text(e)) => {
-                if e.unescape().is_err() {
-                    break;
-                }
-            }
-            Ok(Eof) | Err(..) => break,
-            _ => (),
-        }
-        buf.clear();
     }
 }
 
