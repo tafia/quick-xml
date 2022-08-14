@@ -27,6 +27,8 @@ mod decode {
 }
 
 #[test]
+#[ignore = "fixme dalley - encoding support"]
+#[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
     let src = include_bytes!("documents/opennews_all.rss").as_ref();
     let mut buf = vec![];

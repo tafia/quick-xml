@@ -30,7 +30,7 @@ use {crate::de::DeError, serde::Serialize};
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
 /// loop {
 ///     match reader.read_event() {
-///         Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
+///         Ok(Event::Start(e)) if e.name().as_ref() == "this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
@@ -45,7 +45,7 @@ use {crate::de::DeError, serde::Serialize};
 ///             // writes the event to the writer
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
-///         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
+///         Ok(Event::End(e)) if e.name().as_ref() == "this_tag" => {
 ///             assert!(writer.write_event(Event::End(BytesEnd::new("my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,

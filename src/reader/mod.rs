@@ -350,7 +350,7 @@ macro_rules! read_to_end {
                     depth -= 1;
                 }
                 Ok(Event::Eof) => {
-                    let name = $self.decoder().decode($end.as_ref());
+                    let name = $self.decoder().decode($end.as_ref().as_bytes());
                     return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
                 }
                 _ => (),
@@ -503,10 +503,10 @@ impl EncodingRef {
 ///
 ///         Ok(Event::Start(e)) => {
 ///             match e.name().as_ref() {
-///                 b"tag1" => println!("attributes values: {:?}",
+///                 "tag1" => println!("attributes values: {:?}",
 ///                                     e.attributes().map(|a| a.unwrap().value)
 ///                                     .collect::<Vec<_>>()),
-///                 b"tag2" => count += 1,
+///                 "tag2" => count += 1,
 ///                 _ => (),
 ///             }
 ///         }

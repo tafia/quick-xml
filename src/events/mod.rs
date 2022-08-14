@@ -42,7 +42,6 @@ use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
 use std::ops::Deref;
-use std::str::from_utf8;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
@@ -162,13 +161,13 @@ impl<'a> BytesStart<'a> {
 
     /// Creates new paired close tag
     pub fn to_end(&self) -> BytesEnd {
-        BytesEnd::wrap(self.name().into_inner().into())
+        BytesEnd::new(self.name().as_ref().to_owned())
     }
 
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
     pub fn name(&self) -> QName {
-        QName(&self.buf[..self.name_len])
+        QName(std::str::from_utf8(&self.buf[..self.name_len]).expect("fixme dalley"))
     }
 
     /// Gets the undecoded raw local tag name (excluding namespace) as present
@@ -245,7 +244,7 @@ impl<'a> BytesStart<'a> {
         let a = attr.into();
         let bytes = self.buf.to_mut();
         bytes.push(b' ');
-        bytes.extend_from_slice(a.key.as_ref());
+        bytes.extend_from_slice(a.key.as_ref().as_bytes());
         bytes.extend_from_slice(b"=\"");
         bytes.extend_from_slice(a.value.as_ref());
         bytes.push(b'"');
@@ -281,7 +280,7 @@ impl<'a> BytesStart<'a> {
     ) -> Result<Option<Attribute<'a>>> {
         for a in self.attributes().with_checks(false) {
             let a = a?;
-            if a.key.as_ref() == attr_name.as_ref() {
+            if a.key.as_ref().as_bytes() == attr_name.as_ref() {
                 return Ok(Some(a));
             }
         }
@@ -433,10 +432,10 @@ impl<'a> BytesDecl<'a> {
     pub fn version(&self) -> Result<Cow<[u8]>> {
         // The version *must* be the first thing in the declaration.
         match self.content.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
+            Some(Ok(a)) if a.key.as_ref() == "version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref())?.to_string();
+                let found = a.key.as_ref().to_owned();
                 Err(Error::XmlDeclWithoutVersion(Some(found)))
             }
             // error parsing attributes
@@ -625,7 +624,7 @@ impl<'a> BytesEnd<'a> {
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
     pub fn name(&self) -> QName {
-        QName(&self.name)
+        QName(std::str::from_utf8(&*self.name).expect("fixme dalley - make const again"))
     }
 
     /// Gets the undecoded raw local tag name (excluding namespace) as present
@@ -1104,21 +1103,21 @@ mod test {
     fn bytestart_create() {
         let b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
     }
 
     #[test]
     fn bytestart_set_name() {
         let mut b = BytesStart::new("test");
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
         assert_eq!(b.attributes_raw(), b"");
         b.push_attribute(("x", "a"));
         assert_eq!(b.len(), 10);
         assert_eq!(b.attributes_raw(), b" x=\"a\"");
         b.set_name(b"g");
         assert_eq!(b.len(), 7);
-        assert_eq!(b.name(), QName(b"g"));
+        assert_eq!(b.name(), QName("g"));
     }
 
     #[test]
@@ -1129,6 +1128,6 @@ mod test {
         b.clear_attributes();
         assert!(b.attributes().next().is_none());
         assert_eq!(b.len(), 4);
-        assert_eq!(b.name(), QName(b"test"));
+        assert_eq!(b.name(), QName("test"));
     }
 }

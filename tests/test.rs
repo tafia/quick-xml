@@ -34,14 +34,14 @@ fn test_attributes_empty() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
+                    key: QName("att1"),
                     value: Cow::Borrowed(b"a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att2"),
+                    key: QName("att2"),
                     value: Cow::Borrowed(b"b"),
                 }))
             );
@@ -62,7 +62,7 @@ fn test_attribute_equal() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
+                    key: QName("att1"),
                     value: Cow::Borrowed(b"a=b"),
                 }))
             );
@@ -167,16 +167,16 @@ fn test_issue299() -> Result<(), Error> {
         match reader.read_event()? {
             Start(e) | Empty(e) => {
                 let attr_count = match e.name().as_ref() {
-                    b"MICEX_DOC" => 1,
-                    b"SECURITY" => 4,
-                    b"RECORDS" => 26,
+                    "MICEX_DOC" => 1,
+                    "SECURITY" => 4,
+                    "RECORDS" => 26,
                     _ => unreachable!(),
                 };
                 assert_eq!(
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
                     "mismatch att count on '{:?}'",
-                    reader.decoder().decode(e.name().as_ref())
+                    e.name().as_ref()
                 );
             }
             Eof => break,

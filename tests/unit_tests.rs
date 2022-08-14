@@ -15,7 +15,7 @@ use pretty_assertions::assert_eq;
 macro_rules! next_eq_name {
     ($r:expr, $t:tt, $bytes:expr) => {
         match $r.read_event().unwrap() {
-            $t(ref e) if e.name().as_ref() == $bytes => (),
+            $t(ref e) if e.name().as_ref().as_bytes() == $bytes => (),
             e => panic!(
                 "expecting {}({:?}), found {:?}",
                 stringify!($t),
@@ -603,14 +603,14 @@ fn test_closing_bracket_in_single_quote_attr() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"2"),
                 }))
             );
@@ -631,14 +631,14 @@ fn test_closing_bracket_in_double_quote_attr() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"2"),
                 }))
             );
@@ -659,14 +659,14 @@ fn test_closing_bracket_in_double_quote_mixed() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(b"'>'"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(b"'2'"),
                 }))
             );
@@ -687,14 +687,14 @@ fn test_closing_bracket_in_single_quote_mixed() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
+                    key: QName("attr"),
                     value: Cow::Borrowed(br#"">""#),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
+                    key: QName("check"),
                     value: Cow::Borrowed(br#""2""#),
                 }))
             );

@@ -22,7 +22,7 @@ fn namespace() {
 
     // <b>
     match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -35,7 +35,7 @@ fn namespace() {
     }
     // </b>
     match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -65,7 +65,7 @@ fn default_namespace() {
 
     // <b>
     match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner start element with to resolve to 'www1', got {:?}",
             e
@@ -73,7 +73,7 @@ fn default_namespace() {
     }
     // </b>
     match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting inner end element with to resolve to 'www1', got {:?}",
             e
@@ -95,7 +95,7 @@ fn default_namespace_reset() {
 
     // <a>
     match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting outer start element with to resolve to 'www1', got {:?}",
             e
@@ -118,7 +118,7 @@ fn default_namespace_reset() {
 
     // </a>
     match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "expecting outer end element with to resolve to 'www1', got {:?}",
             e
@@ -152,13 +152,13 @@ fn attributes_empty_ns() {
         });
     assert_eq!(
         attrs.next(),
-        Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+        Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
     );
     assert_eq!(
         attrs.next(),
         Some((
-            Bound(Namespace(b"urn:example:r")),
-            &b"att2"[..],
+            Bound(Namespace("urn:example:r")),
+            &"att2"[..],
             Cow::Borrowed(&b"b"[..])
         ))
     );
@@ -191,13 +191,13 @@ fn attributes_empty_ns_expanded() {
             });
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(
             attrs.next(),
             Some((
-                Bound(Namespace(b"urn:example:r")),
-                &b"att2"[..],
+                Bound(Namespace("urn:example:r")),
+                &"att2"[..],
                 Cow::Borrowed(&b"b"[..])
             ))
         );
@@ -205,7 +205,7 @@ fn attributes_empty_ns_expanded() {
     }
 
     match r.read_resolved_event() {
-        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
+        Ok((Unbound, End(e))) => assert_eq!(e.name(), QName("a")),
         e => panic!("Expecting End event, got {:?}", e),
     }
 }
@@ -221,8 +221,8 @@ fn default_ns_shadowing_empty() {
     {
         match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                assert_eq!(e.name(), QName("e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -232,8 +232,8 @@ fn default_ns_shadowing_empty() {
     {
         let e = match r.read_resolved_event() {
             Ok((ns, Empty(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:i")));
+                assert_eq!(e.name(), QName("e"));
                 e
             }
             e => panic!("Expecting Empty event, got {:?}", e),
@@ -252,7 +252,7 @@ fn default_ns_shadowing_empty() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
@@ -260,8 +260,8 @@ fn default_ns_shadowing_empty() {
     // </outer>
     match r.read_resolved_event() {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), QName(b"e"));
+            assert_eq!(ns, Bound(Namespace("urn:example:o")));
+            assert_eq!(e.name(), QName("e"));
         }
         e => panic!("Expected End event (<outer>), got {:?}", e),
     }
@@ -278,8 +278,8 @@ fn default_ns_shadowing_expanded() {
     {
         match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:o")));
+                assert_eq!(e.name(), QName("e"));
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
@@ -289,8 +289,8 @@ fn default_ns_shadowing_expanded() {
     {
         let e = match r.read_resolved_event() {
             Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), QName(b"e"));
+                assert_eq!(ns, Bound(Namespace("urn:example:i")));
+                assert_eq!(e.name(), QName("e"));
                 e
             }
             e => panic!("Expecting Start event (<inner>), got {:?}", e),
@@ -308,7 +308,7 @@ fn default_ns_shadowing_expanded() {
         // apply to attributes.
         assert_eq!(
             attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            Some((Unbound, &"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
     }
@@ -316,16 +316,16 @@ fn default_ns_shadowing_expanded() {
     // virtual </inner>
     match r.read_resolved_event() {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-            assert_eq!(e.name(), QName(b"e"));
+            assert_eq!(ns, Bound(Namespace("urn:example:i")));
+            assert_eq!(e.name(), QName("e"));
         }
         e => panic!("Expected End event (</inner>), got {:?}", e),
     }
     // </outer>
     match r.read_resolved_event() {
         Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), QName(b"e"));
+            assert_eq!(ns, Bound(Namespace("urn:example:o")));
+            assert_eq!(e.name(), QName("e"));
         }
         e => panic!("Expected End event (</outer>), got {:?}", e),
     }
@@ -347,7 +347,7 @@ fn reserved_name() {
 
     // <a />
     match r.read_resolved_event() {
-        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+        Ok((ns, Empty(_))) => assert_eq!(ns, Bound(Namespace("www1"))),
         e => panic!(
             "Expected empty element bound to namespace 'www1', got {:?}",
             e

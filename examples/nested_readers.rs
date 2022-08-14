@@ -35,20 +35,17 @@ fn main() -> Result<(), quick_xml::Error> {
                         skip_buf.clear();
                         match reader.read_event_into(&mut skip_buf)? {
                             Event::Start(element) => match element.name().as_ref() {
-                                b"w:tr" => {
+                                "w:tr" => {
                                     stats.rows.push(vec![]);
                                     row_index = stats.rows.len() - 1;
                                 }
-                                b"w:tc" => {
-                                    stats.rows[row_index].push(
-                                        String::from_utf8(element.name().as_ref().to_vec())
-                                            .unwrap(),
-                                    );
+                                "w:tc" => {
+                                    stats.rows[row_index].push(element.name().as_ref().to_owned());
                                 }
                                 _ => {}
                             },
                             Event::End(element) => {
-                                if element.name().as_ref() == b"w:tbl" {
+                                if element.name().as_ref() == "w:tbl" {
                                     found_tables.push(stats);
                                     break;
                                 }
