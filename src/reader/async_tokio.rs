@@ -9,7 +9,9 @@ use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{is_whitespace, BangType, NsReader, ParseState, ReadElementState, Reader};
+use crate::reader::{
+    is_whitespace, BangType, NsReader, ParseState, ReadElementState, Reader, Span,
+};
 use crate::{Error, Result};
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
@@ -125,7 +127,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event_into_async(&mut buf).await.unwrap(), Event::Start(start));
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end_into_async(end.name(), &mut buf).await.unwrap();
@@ -142,8 +144,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         // We should name that lifetime due to https://github.com/rust-lang/rust/issues/63033`
         end: QName<'n>,
         buf: &mut Vec<u8>,
-    ) -> Result<()> {
-        read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await)
+    ) -> Result<Span> {
+        Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
     }
 
     /// Read until '<' is found and moves reader to an `Opened` state.
@@ -275,7 +277,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///     (ResolveResult::Bound(ns), Event::Start(start))
     /// );
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end_into_async(end.name(), &mut buf).await.unwrap();
@@ -295,7 +297,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
         // We should name that lifetime due to https://github.com/rust-lang/rust/issues/63033`
         end: QName<'n>,
         buf: &mut Vec<u8>,
-    ) -> Result<()> {
+    ) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Reader::check_end_names` documentation
         self.reader.read_to_end_into_async(end, buf).await

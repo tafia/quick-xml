@@ -41,7 +41,7 @@ impl<'a> Attribute<'a> {
     ///
     /// This method is available only if `encoding` feature is **not** enabled.
     #[cfg(any(doc, not(feature = "encoding")))]
-    pub fn unescape_value(&self) -> XmlResult<Cow<str>> {
+    pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         self.unescape_value_with(|_| None)
     }
 
@@ -61,19 +61,26 @@ impl<'a> Attribute<'a> {
     pub fn unescape_value_with<'entity>(
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> XmlResult<Cow<str>> {
+    ) -> XmlResult<Cow<'a, str>> {
         // from_utf8 should never fail because content is always UTF-8 encoded
-        Ok(unescape_with(
-            std::str::from_utf8(&self.value)?,
-            resolve_entity,
-        )?)
+        let decoded = match &self.value {
+            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes)?),
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Cow::Owned(std::str::from_utf8(bytes)?.to_string()),
+        };
+
+        match unescape_with(&decoded, resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            Cow::Owned(s) => Ok(s.into()),
+        }
     }
 
     /// Decodes then unescapes the value.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<str>> {
+    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<'a, str>> {
         self.decode_and_unescape_value_with(reader, |_| None)
     }
 
@@ -85,8 +92,12 @@ impl<'a> Attribute<'a> {
         &self,
         reader: &Reader<B>,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> XmlResult<Cow<str>> {
-        let decoded = reader.decoder().decode(&*self.value)?;
+    ) -> XmlResult<Cow<'a, str>> {
+        let decoded = match &self.value {
+            Cow::Borrowed(bytes) => reader.decoder().decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => reader.decoder().decode(bytes)?.into_owned().into(),
+        };
 
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string

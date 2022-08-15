@@ -40,6 +40,8 @@
 - [#439]: Added utilities `detect_encoding()`, `decode()`, and `decode_with_bom_removal()`
   under the `quick-xml::encoding` namespace.
 - [#450]: Added support of asynchronous [tokio](https://tokio.rs/) readers
+- [#455]: Change return type of all `read_to_end*` methods to return a span between tags
+- [#455]: Added `Reader::read_text` method to return a raw content (including markup) between tags
 
 
 ### Bug Fixes
@@ -139,6 +141,7 @@
   |`*_with_custom_entities`|`*_with`
   |`BytesText::unescaped()`|`BytesText::unescape()`
   |`Attribute::unescaped_*`|`Attribute::unescape_*`
+- [#329]: Also, that functions now borrow from the input instead of event / attribute
 
 - [#416]: `BytesStart::to_borrowed` renamed to `BytesStart::borrow`, the same method
   added to all events
@@ -181,6 +184,8 @@
 - [#440]: Removed `Deserializer::from_slice` and `quick_xml::de::from_slice` methods because deserializing from a byte
   array cannot guarantee borrowing due to possible copying while decoding.
 
+- [#455]: Removed `Reader::read_text_into` which is only not a better wrapper over match on `Event::Text`
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -199,6 +204,7 @@
 [#180]: https://github.com/tafia/quick-xml/issues/180
 [#191]: https://github.com/tafia/quick-xml/issues/191
 [#324]: https://github.com/tafia/quick-xml/issues/324
+[#329]: https://github.com/tafia/quick-xml/issues/329
 [#363]: https://github.com/tafia/quick-xml/issues/363
 [#387]: https://github.com/tafia/quick-xml/pull/387
 [#391]: https://github.com/tafia/quick-xml/pull/391
@@ -220,6 +226,7 @@
 [#440]: https://github.com/tafia/quick-xml/pull/440
 [#443]: https://github.com/tafia/quick-xml/pull/443
 [#450]: https://github.com/tafia/quick-xml/pull/450
+[#455]: https://github.com/tafia/quick-xml/pull/455
 
 
 ## 0.23.0 -- 2022-05-08

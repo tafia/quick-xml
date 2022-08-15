@@ -4,6 +4,7 @@
 //! [qualified names]: https://www.w3.org/TR/xml-names11/#dt-qualname
 //! [expanded names]: https://www.w3.org/TR/xml-names11/#dt-expname
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::ops::Deref;
@@ -12,7 +13,7 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Reader, XmlSource};
+use crate::reader::{Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -425,6 +426,10 @@ impl<R: BufRead> NsReader<R> {
     /// storage for events content. This function is supposed to be called after
     /// you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name
     /// ("the same" means that their local names are the same and their prefixes
     /// resolves to the same namespace).
@@ -491,7 +496,7 @@ impl<R: BufRead> NsReader<R> {
     ///     (ResolveResult::Bound(ns), Event::Start(start))
     /// );
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
@@ -508,8 +513,9 @@ impl<R: BufRead> NsReader<R> {
     /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     #[inline]
-    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
         self.reader.read_to_end_into(end, buf)
@@ -657,6 +663,10 @@ impl<'i> NsReader<&'i [u8]> {
     /// Reads until end element is found. This function is supposed to be called
     /// after you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name
     /// ("the same" means that their local names are the same and their prefixes
     /// resolves to the same namespace).
@@ -717,7 +727,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///     (ResolveResult::Bound(ns), Event::Start(start))
     /// );
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end(end.name()).unwrap();
@@ -734,11 +744,81 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     #[inline]
-    pub fn read_to_end(&mut self, end: QName) -> Result<()> {
+    pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
         self.reader.read_to_end(end)
+    }
+
+    /// Reads content between start and end tags, including any markup. This
+    /// function is supposed to be called after you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements have the same name.
+    ///
+    /// This method does not unescape read data, instead it returns content
+    /// "as is" of the XML document. This is because it has no idea what text
+    /// it reads, and if, for example, it contains CDATA section, attempt to
+    /// unescape it content will spoil data.
+    ///
+    /// Any text will be decoded using the XML current [`decoder()`].
+    ///
+    /// Actually, this method perform the following code:
+    ///
+    /// ```ignore
+    /// let span = reader.read_to_end(end)?;
+    /// let text = reader.decoder().decode(&reader.inner_slice[span]);
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// This example shows, how you can read a HTML content from your XML document.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use std::borrow::Cow;
+    /// use quick_xml::events::{BytesStart, Event};
+    /// use quick_xml::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str(r#"
+    ///     <html>
+    ///         <title>This is a HTML text</title>
+    ///         <p>Usual XML rules does not apply inside it
+    ///         <p>For example, elements not needed to be &quot;closed&quot;
+    ///     </html>
+    /// "#);
+    /// reader.trim_text(true);
+    ///
+    /// let start = BytesStart::new("html");
+    /// let end   = start.to_end().into_owned();
+    ///
+    /// // First, we read a start event...
+    /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
+    /// // ...and disable checking of end names because we expect HTML further...
+    /// reader.check_end_names(false);
+    ///
+    /// // ...then, we could read text content until close tag.
+    /// // This call will correctly handle nested <html> elements.
+    /// let text = reader.read_text(end.name()).unwrap();
+    /// assert_eq!(text, Cow::Borrowed(r#"
+    ///         <title>This is a HTML text</title>
+    ///         <p>Usual XML rules does not apply inside it
+    ///         <p>For example, elements not needed to be &quot;closed&quot;
+    ///     "#));
+    ///
+    /// // Now we can enable checks again
+    /// reader.check_end_names(true);
+    ///
+    /// // At the end we should get an Eof event, because we ate the whole XML
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Start`]: Event::Start
+    /// [`decoder()`]: Reader::decoder()
+    #[inline]
+    pub fn read_text(&mut self, end: QName) -> Result<Cow<'i, str>> {
+        self.reader.read_text(end)
     }
 }
 

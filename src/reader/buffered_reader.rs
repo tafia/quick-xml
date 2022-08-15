@@ -10,7 +10,7 @@ use memchr;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, XmlSource};
+use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -277,6 +277,10 @@ impl<R: BufRead> Reader<R> {
     /// storage for events content. This function is supposed to be called after
     /// you already read a [`Start`] event.
     ///
+    /// Returns a span that cover content between `>` of an opening tag and `<` of
+    /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
+    /// this method was called after reading expanded [`Start`] event.
+    ///
     /// Manages nested cases where parent and child elements have the same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
@@ -340,7 +344,7 @@ impl<R: BufRead> Reader<R> {
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Start(start));
     ///
-    /// //...then, we could skip all events to the corresponding end event.
+    /// // ...then, we could skip all events to the corresponding end event.
     /// // This call will correctly handle nested <outer> elements.
     /// // Note, however, that this method does not handle namespaces.
     /// reader.read_to_end_into(end.name(), &mut buf).unwrap();
@@ -353,60 +357,13 @@ impl<R: BufRead> Reader<R> {
     /// [`End`]: Event::End
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`read_to_end()`]: Self::read_to_end
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
-    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<()> {
-        read_to_end!(self, end, buf, read_event_impl, {
+    pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
+        Ok(read_to_end!(self, end, buf, read_event_impl, {
             buf.clear();
-        })
-    }
-
-    /// Reads optional text between start and end tags.
-    ///
-    /// If the next event is a [`Text`] event, returns the decoded and unescaped content as a
-    /// `String`. If the next event is an [`End`] event, returns the empty string. In all other
-    /// cases, returns an error.
-    ///
-    /// Any text will be decoded using the XML encoding specified in the XML declaration (or UTF-8
-    /// if none is specified).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::Reader;
-    /// use quick_xml::events::Event;
-    ///
-    /// let mut xml = Reader::from_reader(b"
-    ///     <a>&lt;b&gt;</a>
-    ///     <a></a>
-    /// " as &[u8]);
-    /// xml.trim_text(true);
-    ///
-    /// let expected = ["<b>", ""];
-    /// for &content in expected.iter() {
-    ///     match xml.read_event_into(&mut Vec::new()) {
-    ///         Ok(Event::Start(ref e)) => {
-    ///             assert_eq!(&xml.read_text_into(e.name(), &mut Vec::new()).unwrap(), content);
-    ///         },
-    ///         e => panic!("Expecting Start event, found {:?}", e),
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// [`Text`]: Event::Text
-    /// [`End`]: Event::End
-    pub fn read_text_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<String> {
-        let s = match self.read_event_into(buf) {
-            Err(e) => return Err(e),
-
-            Ok(Event::Text(e)) => e.unescape()?.into_owned(),
-            Ok(Event::End(e)) if e.name() == end => return Ok("".to_string()),
-            Ok(Event::Eof) => return Err(Error::UnexpectedEof("Text".to_string())),
-            _ => return Err(Error::TextNotFound),
-        };
-        self.read_to_end_into(end, buf)?;
-        Ok(s)
+        }))
     }
 }
 

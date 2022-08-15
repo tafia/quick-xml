@@ -732,7 +732,7 @@ impl<'a> BytesText<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn unescape(&self) -> Result<Cow<str>> {
+    pub fn unescape(&self) -> Result<Cow<'a, str>> {
         self.unescape_with(|_| None)
     }
 
@@ -743,8 +743,12 @@ impl<'a> BytesText<'a> {
     pub fn unescape_with<'entity>(
         &self,
         resolve_entity: impl Fn(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<str>> {
-        let decoded = self.decoder.decode(&*self)?;
+    ) -> Result<Cow<'a, str>> {
+        let decoded = match &self.content {
+            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
+        };
 
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
@@ -754,11 +758,9 @@ impl<'a> BytesText<'a> {
     }
 
     /// Gets content of this text buffer in the specified encoding and optionally
-    /// unescapes it. Unlike [`Self::unescape`] & Co., the lifetime
-    /// of the returned `Cow` is bound to the original buffer / input
+    /// unescapes it.
     #[cfg(feature = "serialize")]
     pub(crate) fn decode(&self, unescape: bool) -> Result<Cow<'a, str>> {
-        //TODO: too many copies, can be optimized
         let text = match &self.content {
             Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
