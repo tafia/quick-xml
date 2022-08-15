@@ -1,6 +1,6 @@
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event;
-use quick_xml::Reader;
+use quick_xml::reader::Reader;
 
 // a structure to capture the rows we've extracted
 // from a ECMA-376 table in document.xml

@@ -1,7 +1,8 @@
+use quick_xml::encoding::Decoder;
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::{QName, ResolveResult};
-use quick_xml::{Decoder, NsReader};
+use quick_xml::reader::NsReader;
 use std::str::from_utf8;
 
 #[test]

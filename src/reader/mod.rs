@@ -1,4 +1,4 @@
-//! A module to handle `Reader`
+//! Contains high-level interface for a pull-based XML parser.
 
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
@@ -305,7 +305,7 @@ enum ParseState {
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events (except `StartText`) could be generated.
     ///
-    /// After generating ane event the reader moves to the `ClosedTag` state.
+    /// After generating one event the reader moves to the `ClosedTag` state.
     OpenedTag,
     /// State in which reader searches the `<` symbol of a markup. All bytes before
     /// that symbol will be returned in the [`Event::Text`] event. After that
@@ -380,8 +380,8 @@ impl EncodingRef {
 /// # Examples
 ///
 /// ```
-/// use quick_xml::Reader;
 /// use quick_xml::events::Event;
+/// use quick_xml::reader::Reader;
 ///
 /// let xml = r#"<tag1 att1 = "test">
 ///                 <tag2><!--Test comment-->Test</tag2>
@@ -456,8 +456,8 @@ impl<R> Reader<R> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use std::{str, io::Cursor};
-    /// use quick_xml::Reader;
     /// use quick_xml::events::Event;
+    /// use quick_xml::reader::Reader;
     ///
     /// let xml = r#"<tag1 att1 = "test">
     ///                 <tag2><!--Test comment-->Test</tag2>
@@ -667,10 +667,22 @@ trait XmlSource<'r, B> {
     /// [events]: crate::events::Event
     fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
 
+    /// Consume and discard all the whitespace until the next non-whitespace
+    /// character or EOF.
+    ///
+    /// # Parameters
+    /// - `position`: Will be increased by amount of bytes consumed
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
 
+    /// Consume and discard one character if it matches the given byte. Return
+    /// `true` if it matched.
+    ///
+    /// # Parameters
+    /// - `position`: Will be increased by 1 if byte is matched
     fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
 
+    /// Return one character without consuming it, so that future `read_*` calls
+    /// will still include it. On EOF, return `None`.
     fn peek_one(&mut self) -> Result<Option<u8>>;
 }
 
@@ -1496,11 +1508,11 @@ mod test {
 
             mod issue_344 {
                 use crate::errors::Error;
+                use crate::reader::Reader;
 
                 #[$test]
                 $($async)? fn cdata() {
-                    let doc = "![]]>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("![]]>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "CData" => {}
@@ -1514,8 +1526,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn comment() {
-                    let doc = "!- -->";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!- -->");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
@@ -1529,8 +1540,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn doctype_uppercase() {
-                    let doc = "!D>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!D>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
@@ -1544,8 +1554,7 @@ mod test {
 
                 #[$test]
                 $($async)? fn doctype_lowercase() {
-                    let doc = "!d>";
-                    let mut reader = crate::Reader::from_str(doc);
+                    let mut reader = Reader::from_str("!d>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}

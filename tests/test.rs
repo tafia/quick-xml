@@ -1,5 +1,8 @@
+use quick_xml::events::attributes::Attribute;
+use quick_xml::events::Event::*;
 use quick_xml::name::QName;
-use quick_xml::{events::attributes::Attribute, events::Event::*, Error, Reader};
+use quick_xml::reader::Reader;
+use quick_xml::Error;
 use std::{borrow::Cow, io::Cursor};
 
 #[cfg(feature = "serialize")]

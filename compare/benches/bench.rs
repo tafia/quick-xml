@@ -1,6 +1,7 @@
 use criterion::{self, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use pretty_assertions::assert_eq;
-use quick_xml::{self, events::Event, Reader};
+use quick_xml::events::Event;
+use quick_xml::reader::Reader;
 use serde::Deserialize;
 use serde_xml_rs;
 use xml::reader::{EventReader, XmlEvent};

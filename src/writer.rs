@@ -1,4 +1,4 @@
-//! A module to handle `Writer`
+//! Contains high-level interface for an events-based XML emitter.
 
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
@@ -13,7 +13,8 @@ use std::io::Write;
 /// ```
 /// # use pretty_assertions::assert_eq;
 /// use quick_xml::events::{Event, BytesEnd, BytesStart};
-/// use quick_xml::{Reader, Writer};
+/// use quick_xml::reader::Reader;
+/// use quick_xml::writer::Writer;
 /// use std::io::Cursor;
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
@@ -179,8 +180,9 @@ impl<W: Write> Writer<W> {
     /// ```rust
     /// # use quick_xml::Result;
     /// # fn main() -> Result<()> {
-    /// use quick_xml::{Error, Writer};
     /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// use quick_xml::writer::Writer;
+    /// use quick_xml::Error;
     /// use std::io::Cursor;
     ///
     /// let mut writer = Writer::new(Cursor::new(Vec::new()));

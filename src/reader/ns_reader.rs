@@ -205,7 +205,7 @@ impl<R> NsReader<R> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str("<tag xmlns='root namespace'/>");
     ///
@@ -258,7 +258,7 @@ impl<R> NsReader<R> {
     /// use quick_xml::events::Event;
     /// use quick_xml::events::attributes::Attribute;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str("
     ///     <tag one='1'
@@ -312,9 +312,9 @@ impl<R: BufRead> NsReader<R> {
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::NsReader;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -370,9 +370,9 @@ impl<R: BufRead> NsReader<R> {
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::NsReader;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -467,7 +467,7 @@ impl<R: BufRead> NsReader<R> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::name::{Namespace, ResolveResult};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <outer xmlns="namespace 1">
@@ -552,9 +552,9 @@ impl<'i> NsReader<&'i [u8]> {
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::NsReader;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -613,9 +613,9 @@ impl<'i> NsReader<&'i [u8]> {
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::NsReader;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -699,7 +699,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::name::{Namespace, ResolveResult};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <outer xmlns="namespace 1">
@@ -779,7 +779,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// # use pretty_assertions::assert_eq;
     /// # use std::borrow::Cow;
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_str(r#"
     ///     <html>

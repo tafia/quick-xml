@@ -49,7 +49,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// # tokio_test::block_on(async {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// // This explicitly uses `from_reader("...".as_bytes())` to use a buffered
     /// // reader instead of relying on the zero-copy optimizations for reading
@@ -106,7 +106,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// # tokio_test::block_on(async {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::Reader;
+    /// use quick_xml::reader::Reader;
     ///
     /// let mut reader = Reader::from_reader(r#"
     ///     <outer>
@@ -185,7 +185,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, ResolveResult::*};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_reader(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">
@@ -248,7 +248,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::name::{Namespace, ResolveResult};
     /// use quick_xml::events::{BytesStart, Event};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_reader(r#"
     ///     <outer xmlns="namespace 1">
@@ -320,7 +320,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
-    /// use quick_xml::NsReader;
+    /// use quick_xml::reader::NsReader;
     ///
     /// let mut reader = NsReader::from_reader(r#"
     ///     <x:tag1 xmlns:x="www.xxxx" xmlns:y="www.yyyy" att1 = "test">

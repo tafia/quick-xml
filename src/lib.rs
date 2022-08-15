@@ -54,13 +54,13 @@ pub mod escape {
 }
 pub mod events;
 pub mod name;
-mod reader;
+pub mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
 /// Not an official API, public for integration tests
 #[doc(hidden)]
 pub mod utils;
-mod writer;
+pub mod writer;
 
 // reexports
 pub use crate::encoding::Decoder;

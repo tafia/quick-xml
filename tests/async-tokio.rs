@@ -1,5 +1,5 @@
 use quick_xml::events::Event::*;
-use quick_xml::Reader;
+use quick_xml::reader::Reader;
 
 #[tokio::test]
 async fn test_sample() {

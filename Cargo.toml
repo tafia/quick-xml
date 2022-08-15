@@ -59,6 +59,9 @@ async-tokio = ["tokio"]
 ## [standard compliant]: https://www.w3.org/TR/xml11/#charencoding
 encoding = ["encoding_rs"]
 
+## Enables support for recognizing all [HTML 5 entities](https://dev.w3.org/html5/html-author/charref)
+escape-html = []
+
 ## This feature enables support for deserializing lists where tags are overlapped
 ## with tags that do not correspond to the list.
 ##
@@ -107,9 +110,6 @@ overlapped-lists = []
 
 ## Enables support for [`serde`] serialization and deserialization
 serialize = ["serde"]
-
-## Enables support for recognizing all [HTML 5 entities](https://dev.w3.org/html5/html-author/charref)
-escape-html = []
 
 [package.metadata.docs.rs]
 # document all features

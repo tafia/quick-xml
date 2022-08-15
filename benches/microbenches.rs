@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use quick_xml::escape::{escape, unescape};
 use quick_xml::events::Event;
 use quick_xml::name::QName;
-use quick_xml::{NsReader, Reader};
+use quick_xml::reader::{NsReader, Reader};
 
 static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
 static PLAYERS: &str = include_str!("../tests/documents/players.xml");
