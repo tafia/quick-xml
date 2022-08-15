@@ -139,13 +139,31 @@ macro_rules! configure_methods {
 macro_rules! read_event_impl {
     (
         $self:ident, $buf:ident,
+        $reader:expr,
         $read_until_open:ident,
         $read_until_close:ident
         $(, $await:ident)?
     ) => {{
         let event = match $self.parser.state {
-            ParseState::Init => $self.$read_until_open($buf, true) $(.$await)?,
-            ParseState::ClosedTag => $self.$read_until_open($buf, false) $(.$await)?,
+            ParseState::Init => {
+                // If encoding set explicitly, we not need to detect it. For example,
+                // explicit UTF-8 set automatically if Reader was created using `from_str`.
+                // But we still need to remove BOM for consistency with no encoding
+                // feature enabled path
+                #[cfg(feature = "encoding")]
+                if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
+                    if $self.parser.encoding.can_be_refined() {
+                        $self.parser.encoding = crate::reader::EncodingRef::BomDetected(encoding);
+                    }
+                }
+
+                // Removes UTF-8 BOM if it is present
+                #[cfg(not(feature = "encoding"))]
+                $reader.remove_utf8_bom() $(.$await)? ?;
+
+                $self.$read_until_open($buf) $(.$await)?
+            },
+            ParseState::ClosedTag => $self.$read_until_open($buf) $(.$await)?,
             ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
             ParseState::Empty => $self.parser.close_expanded_empty(),
             ParseState::Exit => return Ok(Event::Eof),
@@ -160,7 +178,7 @@ macro_rules! read_event_impl {
 
 macro_rules! read_until_open {
     (
-        $self:ident, $buf:ident, $first:ident,
+        $self:ident, $buf:ident,
         $reader:expr,
         $read_event:ident
         $(, $await:ident)?
@@ -180,7 +198,7 @@ macro_rules! read_until_open {
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
-            Ok(Some(bytes)) => $self.parser.read_text(bytes, $first),
+            Ok(Some(bytes)) => $self.parser.read_text(bytes),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -557,15 +575,15 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_event_impl!(self, buf, read_until_open, read_until_close)
+        read_event_impl!(self, buf, self.reader, read_until_open, read_until_close)
     }
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    fn read_until_open<'i, B>(&mut self, buf: B, first: bool) -> Result<Event<'i>>
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
-        read_until_open!(self, buf, first, self.reader, read_event_impl)
+        read_until_open!(self, buf, self.reader, read_event_impl)
     }
 
     /// Private function to read until `>` is found. This function expects that
@@ -595,6 +613,14 @@ impl<R> Reader<R> {
 /// - `B`: a type of a buffer that can be used to store data read from `Self` and
 ///   from which events can borrow
 trait XmlSource<'r, B> {
+    /// Removes UTF-8 BOM if it is present
+    #[cfg(not(feature = "encoding"))]
+    fn remove_utf8_bom(&mut self) -> Result<()>;
+
+    /// Determines encoding from the start of input and removes BOM if it is present
+    #[cfg(feature = "encoding")]
+    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>>;
+
     /// Read input until `byte` is found or end of input is reached.
     ///
     /// Returns a slice of data read up to `byte`, which does not include into result.
@@ -1579,10 +1605,39 @@ mod test {
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
+                /// When `encoding` feature is enabled, encoding should be detected
+                /// from BOM (UTF-8) and BOM should be stripped.
+                ///
+                /// When `encoding` feature is disabled, UTF-8 is assumed and BOM
+                /// character should be stripped for consistency
                 #[$test]
-                #[should_panic] // Failure is expected until read_until_open() is smart enough to skip over irrelevant text events.
-                $($async)? fn bom_at_start() {
-                    let mut reader = Reader::from_str("\u{feff}");
+                $($async)? fn bom_from_reader() {
+                    let mut reader = Reader::from_reader("\u{feff}\u{feff}".as_bytes());
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Text(BytesText::from_escaped("\u{feff}"))
+                    );
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                /// When parsing from &str, encoding is fixed (UTF-8), so
+                /// - when `encoding` feature is disabled, the behavior the
+                ///   same as in `bom_from_reader` text
+                /// - when `encoding` feature is enabled, the behavior should
+                ///   stay consistent, so the first BOM character is stripped
+                #[$test]
+                $($async)? fn bom_from_str() {
+                    let mut reader = Reader::from_str("\u{feff}\u{feff}");
+
+                    assert_eq!(
+                        reader.$read_event($buf) $(.$await)? .unwrap(),
+                        Event::Text(BytesText::from_escaped("\u{feff}"))
+                    );
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),

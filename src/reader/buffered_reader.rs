@@ -14,6 +14,40 @@ use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, Xml
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
+        #[cfg(not(feature = "encoding"))]
+        $($async)? fn remove_utf8_bom(&mut self) -> Result<()> {
+            use crate::encoding::UTF8_BOM;
+
+            loop {
+                break match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) => {
+                        if n.starts_with(UTF8_BOM) {
+                            self $(.$reader)? .consume(UTF8_BOM.len());
+                        }
+                        Ok(())
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(Error::Io(e)),
+                };
+            }
+        }
+
+        #[cfg(feature = "encoding")]
+        $($async)? fn detect_encoding(&mut self) -> Result<Option<&'static encoding_rs::Encoding>> {
+            loop {
+                break match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) => if let Some((enc, bom_len)) = crate::encoding::detect_encoding(n) {
+                        self $(.$reader)? .consume(bom_len);
+                        Ok(Some(enc))
+                    } else {
+                        Ok(None)
+                    },
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(Error::Io(e)),
+                };
+            }
+        }
+
         #[inline]
         $($async)? fn read_bytes_until $(<$lf>)? (
             &mut self,
@@ -396,6 +430,7 @@ mod test {
         use pretty_assertions::assert_eq;
 
         /// Checks that encoding is detected by BOM and changed after XML declaration
+        /// BOM indicates UTF-16LE, but XML - windows-1251
         #[test]
         fn bom_detected() {
             let mut reader =
@@ -403,9 +438,6 @@ mod test {
             let mut buf = Vec::new();
 
             assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event_into(&mut buf).unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
             reader.read_event_into(&mut buf).unwrap();
             assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
 
