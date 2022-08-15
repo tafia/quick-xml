@@ -7,7 +7,7 @@ use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
-use encoding_rs::UTF_8;
+use encoding_rs::{Encoding, UTF_8};
 
 use crate::errors::{Error, Result};
 use crate::events::Event;
@@ -236,6 +236,23 @@ impl<'a> Reader<&'a [u8]> {
 /// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
 /// that will be borrowed by events. This implementation provides a zero-copy deserialization
 impl<'a> XmlSource<'a, ()> for &'a [u8] {
+    #[cfg(not(feature = "encoding"))]
+    fn remove_utf8_bom(&mut self) -> Result<()> {
+        if self.starts_with(crate::encoding::UTF8_BOM) {
+            *self = &self[crate::encoding::UTF8_BOM.len()..];
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "encoding")]
+    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
+        if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
+            *self = &self[bom_len..];
+            return Ok(Some(enc));
+        }
+        Ok(None)
+    }
+
     fn read_bytes_until(
         &mut self,
         byte: u8,

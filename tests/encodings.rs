@@ -18,11 +18,11 @@ mod decode {
     #[test]
     fn test_detect_encoding() {
         // No BOM
-        assert_eq!(detect_encoding(UTF8_TEXT.as_bytes()), Some(UTF_8));
+        assert_eq!(detect_encoding(UTF8_TEXT.as_bytes()), Some((UTF_8, 0)));
         // BOM
-        assert_eq!(detect_encoding(UTF8_TEXT_WITH_BOM), Some(UTF_8));
-        assert_eq!(detect_encoding(UTF16BE_TEXT_WITH_BOM), Some(UTF_16BE));
-        assert_eq!(detect_encoding(UTF16LE_TEXT_WITH_BOM), Some(UTF_16LE));
+        assert_eq!(detect_encoding(UTF8_TEXT_WITH_BOM), Some((UTF_8, 3)));
+        assert_eq!(detect_encoding(UTF16BE_TEXT_WITH_BOM), Some((UTF_16BE, 2)));
+        assert_eq!(detect_encoding(UTF16LE_TEXT_WITH_BOM), Some((UTF_16LE, 2)));
     }
 }
 

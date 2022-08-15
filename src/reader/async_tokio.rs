@@ -86,7 +86,13 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         buf: &'b mut Vec<u8>,
     ) -> Pin<Box<dyn Future<Output = Result<Event<'b>>> + 'reader>> {
         Box::pin(async move {
-            read_event_impl!(self, buf, read_until_open_async, read_until_close_async, await)
+            read_event_impl!(
+                self, buf,
+                TokioAdapter(&mut self.reader),
+                read_until_open_async,
+                read_until_close_async,
+                await
+            )
         })
     }
 
@@ -148,15 +154,9 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
     }
 
-    /// Read until '<' is found and moves reader to an `Opened` state.
-    ///
-    /// Return a `StartText` event if `first` is `true` and a `Text` event otherwise
-    async fn read_until_open_async<'b>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-        first: bool,
-    ) -> Result<Event<'b>> {
-        read_until_open!(self, buf, first, TokioAdapter(&mut self.reader), read_event_into_async, await)
+    /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
+    async fn read_until_open_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
     }
 
     /// Private function to read until `>` is found. This function expects that
