@@ -6,9 +6,9 @@ mod decode {
     use pretty_assertions::assert_eq;
     use quick_xml::encoding::*;
 
-    static UTF16BE_TEXT_WITH_BOM: &[u8] = include_bytes!("./documents/utf16be.xml");
-    static UTF16LE_TEXT_WITH_BOM: &[u8] = include_bytes!("./documents/utf16le.xml");
-    static UTF8_TEXT_WITH_BOM: &[u8] = include_bytes!("./documents/utf8.xml");
+    static UTF16BE_TEXT_WITH_BOM: &[u8] = include_bytes!("documents/encoding/utf16be-bom.xml");
+    static UTF16LE_TEXT_WITH_BOM: &[u8] = include_bytes!("documents/encoding/utf16le-bom.xml");
+    static UTF8_TEXT_WITH_BOM: &[u8] = include_bytes!("documents/encoding/utf8-bom.xml");
 
     static UTF8_TEXT: &str = r#"<?xml version="1.0"?>
 <project name="project-name">
