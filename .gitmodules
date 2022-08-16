@@ -1,0 +1,4 @@
+[submodule "encoding"]
+	path = test-gen/encoding
+	url = https://github.com/whatwg/encoding.git
+	shallow = true
