@@ -126,6 +126,10 @@ all-features = true
 rustdoc-args = ["--cfg", "docs_rs"]
 
 [[test]]
+name = "encodings"
+required-features = ["encoding"]
+
+[[test]]
 name = "serde_attrs"
 required-features = ["serialize"]
 

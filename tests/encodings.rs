@@ -1,9 +1,6 @@
-#[allow(unused_imports)]
 use quick_xml::events::Event;
-#[allow(unused_imports)]
 use quick_xml::Reader;
 
-#[cfg(feature = "encoding")]
 mod decode {
     use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
     use pretty_assertions::assert_eq;
@@ -75,7 +72,6 @@ mod decode {
 }
 
 #[test]
-#[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
     let src = include_bytes!("documents/opennews_all.rss").as_ref();
     let mut buf = vec![];
