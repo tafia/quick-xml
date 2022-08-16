@@ -1,4 +1,6 @@
+#[allow(unused_imports)]
 use quick_xml::events::Event;
+#[allow(unused_imports)]
 use quick_xml::Reader;
 
 #[cfg(feature = "encoding")]
