@@ -152,7 +152,7 @@ fn split_at_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> (&'b [u8], 
 }
 
 #[cfg(feature = "encoding")]
-fn remove_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> &'b [u8] {
+pub(crate) fn remove_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> &'b [u8] {
     let (_, bytes) = split_at_bom(bytes, encoding);
     bytes
 }

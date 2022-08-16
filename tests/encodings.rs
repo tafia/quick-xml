@@ -1,4 +1,6 @@
+#[allow(dead_code)]
 use quick_xml::events::Event;
+#[allow(dead_code)]
 use quick_xml::Reader;
 
 #[cfg(feature = "encoding")]

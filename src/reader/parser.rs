@@ -1,9 +1,7 @@
 #[cfg(feature = "encoding")]
 use encoding_rs::UTF_8;
 
-#[cfg(feature = "encoding")]
-use crate::encoding::detect_encoding;
-use crate::encoding::Decoder;
+use crate::encoding::{self, Decoder};
 use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
@@ -68,23 +66,31 @@ impl Parser {
     ///
     /// [`Text`]: Event::Text
     pub fn read_text<'b>(&mut self, bytes: &'b [u8], first: bool) -> Result<Event<'b>> {
-        #[cfg(feature = "encoding")]
-        if first && self.encoding.can_be_refined() {
-            if let Some(encoding) = detect_encoding(bytes) {
-                self.encoding = EncodingRef::BomDetected(encoding);
-            }
-        }
+        let mut content = bytes;
 
-        let content = if self.trim_text_end {
+        if self.trim_text_end {
             // Skip the ending '<'
             let len = bytes
                 .iter()
                 .rposition(|&b| !is_whitespace(b))
                 .map_or_else(|| bytes.len(), |p| p + 1);
-            &bytes[..len]
-        } else {
-            bytes
-        };
+            content = &bytes[..len];
+        }
+
+        if first {
+            #[cfg(feature = "encoding")]
+            if self.encoding.can_be_refined() {
+                if let Some(encoding) = encoding::detect_encoding(bytes) {
+                    self.encoding = EncodingRef::BomDetected(encoding);
+                    content = encoding::remove_bom(content, encoding);
+                }
+            }
+            #[cfg(not(feature = "encoding"))]
+            if bytes.starts_with(encoding::UTF8_BOM) {
+                content = &bytes[encoding::UTF8_BOM.len()..];
+            }
+        }
+
         Ok(Event::Text(BytesText::wrap(content, self.decoder())))
     }
 

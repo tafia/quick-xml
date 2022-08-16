@@ -182,7 +182,8 @@
 - [#456]: Reader and writer stuff grouped under `reader` and `writer` modules.
   You still can use re-exported definitions from a crate root
 
-- [#458]: Made the `Writer::write()` method non-public as writing random bytes to a document is not generally useful.
+- [#458]: Made the `Writer::write()` method non-public as writing random bytes to a document is not generally useful or desirable.
+- [#458]: BOM bytes are no longer emitted as `Event::Text`. To write a BOM, use the configuration options present on `Writer`.
 
 ### New Tests
 
