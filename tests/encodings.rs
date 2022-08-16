@@ -6,6 +6,7 @@ use quick_xml::Reader;
 #[cfg(feature = "encoding")]
 mod decode {
     use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
+    use pretty_assertions::assert_eq;
     use quick_xml::encoding::*;
     use std::borrow::Cow;
 
