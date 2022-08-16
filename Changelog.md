@@ -42,7 +42,9 @@
 - [#450]: Added support of asynchronous [tokio](https://tokio.rs/) readers
 - [#455]: Change return type of all `read_to_end*` methods to return a span between tags
 - [#455]: Added `Reader::read_text` method to return a raw content (including markup) between tags
-
+- [#458]: Added an `EncodingScheme` configuration option to `Writer` to allow writing documents
+  with a BOM. Currently UTF-8 is the only supported encoding however it could be extended to cover
+  others in the future.
 
 ### Bug Fixes
 
@@ -186,10 +188,12 @@
 - [#440]: Removed `Deserializer::from_slice` and `quick_xml::de::from_slice` methods because deserializing from a byte
   array cannot guarantee borrowing due to possible copying while decoding.
 
-- [#455]: Removed `Reader::read_text_into` which is only not a better wrapper over match on `Event::Text`
+- [#455]: Removed `Reader::read_text_into` which is just a thin wrapper around match on `Event::Text`
 
 - [#456]: Reader and writer stuff grouped under `reader` and `writer` modules.
   You still can use re-exported definitions from a crate root
+
+- [#458]: Made the `Writer::write()` method non-public as writing random bytes to a document is not generally useful.
 
 ### New Tests
 
@@ -234,7 +238,7 @@
 [#450]: https://github.com/tafia/quick-xml/pull/450
 [#455]: https://github.com/tafia/quick-xml/pull/455
 [#456]: https://github.com/tafia/quick-xml/pull/456
-
+[#458]: https://github.com/tafia/quick-xml/pull/458
 
 ## 0.23.0 -- 2022-05-08
 

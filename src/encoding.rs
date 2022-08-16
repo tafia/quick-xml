@@ -9,6 +9,15 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 use crate::Error;
 use crate::Result;
 
+/// Unicode "byte order mark" encoded as UTF-8
+pub(crate) const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+/// Unicode "byte order mark" encoded as UTF-16 with little-endian byte order
+#[allow(dead_code)]
+pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
+/// Unicode "byte order mark" encoded as UTF-16 with big-endian byte order
+#[allow(dead_code)]
+pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
+
 /// Decoder of byte slices into strings.
 ///
 /// If feature `encoding` is enabled, this encoding taken from the `"encoding"`
@@ -62,7 +71,7 @@ impl Decoder {
     ///
     /// If you instead want to use XML declared encoding, use the `encoding` feature
     pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        let bytes = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        let bytes = if bytes.starts_with(UTF8_BOM) {
             &bytes[3..]
         } else {
             bytes
@@ -131,11 +140,11 @@ pub fn decode_with_bom_removal<'b>(bytes: &'b [u8]) -> Result<Cow<'b, str>> {
 
 #[cfg(feature = "encoding")]
 fn split_at_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> (&'b [u8], &'b [u8]) {
-    if encoding == UTF_8 && bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+    if encoding == UTF_8 && bytes.starts_with(UTF8_BOM) {
         bytes.split_at(3)
-    } else if encoding == UTF_16LE && bytes.starts_with(&[0xFF, 0xFE]) {
+    } else if encoding == UTF_16LE && bytes.starts_with(UTF16_LE_BOM) {
         bytes.split_at(2)
-    } else if encoding == UTF_16BE && bytes.starts_with(&[0xFE, 0xFF]) {
+    } else if encoding == UTF_16BE && bytes.starts_with(UTF16_BE_BOM) {
         bytes.split_at(2)
     } else {
         (&[], bytes)
@@ -172,9 +181,9 @@ fn remove_bom<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> &'b [u8] {
 pub fn detect_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
     match bytes {
         // with BOM
-        _ if bytes.starts_with(&[0xFE, 0xFF]) => Some(UTF_16BE),
-        _ if bytes.starts_with(&[0xFF, 0xFE]) => Some(UTF_16LE),
-        _ if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) => Some(UTF_8),
+        _ if bytes.starts_with(UTF16_BE_BOM) => Some(UTF_16BE),
+        _ if bytes.starts_with(UTF16_LE_BOM) => Some(UTF_16LE),
+        _ if bytes.starts_with(UTF8_BOM) => Some(UTF_8),
 
         // without BOM
         _ if bytes.starts_with(&[0x00, b'<', 0x00, b'?']) => Some(UTF_16BE), // Some BE encoding, for example, UTF-16 or ISO-10646-UCS-2

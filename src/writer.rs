@@ -1,8 +1,29 @@
 //! Contains high-level interface for an events-based XML emitter.
 
+use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 use std::io::Write;
+
+/// Writer-side encoding schemes supported by quick-xml.
+///
+/// Currently, `quick-xml` only supports UTF-8 as an output encoding as the `encoding_rs`
+/// library does not provide encoders for any other encodings. If you need to write UTF-16
+/// encoded XML, consider writing the XML with a UTF-8 encoding and then re-encoding the file.
+#[derive(Clone, Debug)]
+pub enum EncodingScheme {
+    /// UTF-8 text with no "BOM". This is the default, and recommended value.
+    Utf8,
+    /// UTF-8 with a "BOM" identifier. The standard recommends against this but some software
+    /// struggles to detect the encoding properly if it is not present.
+    Utf8WithBom,
+}
+
+impl Default for EncodingScheme {
+    fn default() -> Self {
+        Self::Utf8
+    }
+}
 
 /// XML writer.
 ///
@@ -57,6 +78,8 @@ pub struct Writer<W: Write> {
     /// underlying writer
     writer: W,
     indent: Option<Indentation>,
+    encoding: EncodingScheme,
+    first_write: bool,
 }
 
 impl<W: Write> Writer<W> {
@@ -65,14 +88,34 @@ impl<W: Write> Writer<W> {
         Writer {
             writer: inner,
             indent: None,
+            encoding: EncodingScheme::default(),
+            first_write: false,
         }
     }
 
-    /// Creates a Writer with configured whitespace indents from a generic Write
+    /// Creates a Writer from a generic Write implementor with configured whitespace indents
     pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
         Writer {
             writer: inner,
             indent: Some(Indentation::new(indent_char, indent_size)),
+            encoding: EncodingScheme::default(),
+            first_write: true,
+        }
+    }
+
+    /// Creates a Writer from a generic Write implementor with configured whitespace indents and a
+    /// specified encoding scheme.
+    pub fn new_with_indent_and_encoding(
+        inner: W,
+        indent_char: u8,
+        indent_size: usize,
+        encoding_scheme: EncodingScheme,
+    ) -> Writer<W> {
+        Writer {
+            writer: inner,
+            indent: Some(Indentation::new(indent_char, indent_size)),
+            encoding: encoding_scheme,
+            first_write: true,
         }
     }
 
@@ -129,7 +172,15 @@ impl<W: Write> Writer<W> {
 
     /// Writes bytes
     #[inline]
-    pub fn write(&mut self, value: &[u8]) -> Result<()> {
+    pub(crate) fn write(&mut self, value: &[u8]) -> Result<()> {
+        // The BOM should be the very first thing written to the file, but it should only be written once
+        if self.first_write {
+            match self.encoding {
+                EncodingScheme::Utf8WithBom => self.writer.write_all(UTF8_BOM)?,
+                _ => (),
+            }
+            self.first_write = false;
+        }
         self.writer.write_all(value).map_err(Error::Io)
     }
 
@@ -577,6 +628,25 @@ mod indentation {
         <empty/>
     </inner>
 </outer>"#
+        );
+    }
+
+    #[test]
+    fn write_utf8_with_bom() {
+        let mut buffer = Vec::new();
+        let mut writer =
+            Writer::new_with_indent_and_encoding(&mut buffer, b' ', 4, EncodingScheme::Utf8WithBom);
+
+        writer
+            .create_element("paired")
+            .with_attribute(("attr1", "value1"))
+            .with_attribute(("attr2", "value2"))
+            .write_text_content(BytesText::new("text"))
+            .expect("failure");
+
+        assert_eq!(
+            &buffer,
+            "\u{FEFF}<paired attr1=\"value1\" attr2=\"value2\">text</paired>".as_bytes()
         );
     }
 }
