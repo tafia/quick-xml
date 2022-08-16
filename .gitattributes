@@ -2,6 +2,8 @@
 /tests/documents/* text eol=lf
 /tests/documents/encoding/* text eol=lf
 
+/tests/documents/encoding/utf16be.xml binary
+/tests/documents/encoding/utf16le.xml binary
 /tests/documents/encoding/utf16be-bom.xml binary
 /tests/documents/encoding/utf16le-bom.xml binary
 /tests/documents/sample_5_utf16bom.xml binary
