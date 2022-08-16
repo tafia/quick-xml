@@ -181,6 +181,7 @@
   You still can use re-exported definitions from a crate root
 
 - [#459]: Made the `Writer::write()` method non-public as writing random bytes to a document is not generally useful or desirable.
+- [#459]: BOM bytes are no longer emitted as `Event::Text`. To write a BOM, use `Writer::write_bom()`.
 
 ### New Tests
 
