@@ -1,8 +1,10 @@
 //! Contains high-level interface for an events-based XML emitter.
 
+use std::io::Write;
+
+use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
-use std::io::Write;
 
 /// XML writer.
 ///
@@ -86,6 +88,40 @@ impl<W: Write> Writer<W> {
         &mut self.writer
     }
 
+    /// Write a [Byte-Order-Mark] character to the document.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use quick_xml::Result;
+    /// # fn main() -> Result<()> {
+    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// use quick_xml::writer::Writer;
+    /// use quick_xml::Error;
+    /// use std::io::Cursor;
+    ///
+    /// let mut buffer = Vec::new();
+    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+    ///
+    /// writer.write_bom()?;
+    /// writer
+    ///     .create_element("empty")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .write_empty()
+    ///     .expect("failure");
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     "\u{FEFF}<empty attr1=\"value1\"/>"
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    /// [Byte-Order-Mark]: https://unicode.org/faq/utf_bom.html#BOM
+    pub fn write_bom(&mut self) -> Result<()> {
+        self.write(UTF8_BOM)
+    }
+
     /// Writes the given event to the underlying writer.
     pub fn write_event<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<()> {
         let mut next_should_line_break = true;
@@ -128,7 +164,7 @@ impl<W: Write> Writer<W> {
 
     /// Writes bytes
     #[inline]
-    pub fn write(&mut self, value: &[u8]) -> Result<()> {
+    pub(crate) fn write(&mut self, value: &[u8]) -> Result<()> {
         self.writer.write_all(value).map_err(Error::Io)
     }
 
@@ -502,6 +538,7 @@ mod indentation {
 </paired>"#
         );
     }
+
     #[test]
     fn element_writer_empty() {
         let mut buffer = Vec::new();
