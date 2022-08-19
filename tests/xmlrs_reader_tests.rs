@@ -1,3 +1,4 @@
+use pretty_assertions::assert_eq;
 use quick_xml::encoding::Decoder;
 use quick_xml::escape::unescape;
 use quick_xml::events::{BytesStart, Event};
@@ -439,17 +440,12 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             if spec.trim() == "EndDocument" {
                 break;
             }
-            if line.trim() != spec.trim() {
-                panic!(
-                    "\n-------------------\n\
-                     Unexpected event at line {}:\n\
-                     Expected: {}\nFound: {}\n\
-                     -------------------\n",
-                    n + 1,
-                    spec,
-                    line
-                );
-            }
+            assert_eq!(
+                line.trim(),
+                spec.trim(),
+                "Unexpected event at line {}",
+                n + 1
+            );
         } else {
             if line == "EndDocument" {
                 break;
