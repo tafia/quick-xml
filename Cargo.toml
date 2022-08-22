@@ -53,10 +53,55 @@ async-tokio = ["tokio"]
 ## Currently, only ASCII-compatible encodings are supported, so, for example,
 ## UTF-16 will not work (therefore, `quick-xml` is not [standard compliant]).
 ##
-## List of supported encodings includes all encodings supported by [`encoding_rs`]
-## crate, that satisfied the restriction above.
+## Thus, quick-xml supports all encodings of [`encoding_rs`] except these:
+## - [UTF-16BE]
+## - [UTF-16LE]
+## - [ISO-2022-JP]
+##
+## You should stop to process document when one of that encoding will be detected,
+## because generated events can be wrong and do not reflect a real document structure!
+##
+## Because there is only supported encodings that is not ASCII compatible, you can
+## check for that to detect them:
+##
+## ```
+## use quick_xml::events::Event;
+## use quick_xml::reader::Reader;
+##
+## # fn to_utf16le_with_bom(string: &str) -> Vec<u8> {
+## #     let mut bytes = Vec::new();
+## #     bytes.extend_from_slice(&[0xFF, 0xFE]); // UTF-16 LE BOM
+## #     for ch in string.encode_utf16() {
+## #         bytes.extend_from_slice(&ch.to_le_bytes());
+## #     }
+## #     bytes
+## # }
+## let xml = to_utf16le_with_bom(r#"<?xml encoding='UTF-16'><element/>"#);
+## let mut reader = Reader::from_reader(xml.as_ref());
+## reader.trim_text(true);
+##
+## let mut buf = Vec::new();
+## let mut unsupported = false;
+## loop {
+##     if !reader.decoder().encoding().is_ascii_compatible() {
+##         unsupported = true;
+##         break;
+##     }
+##     buf.clear();
+##     match reader.read_event_into(&mut buf).unwrap() {
+##         Event::Eof => break,
+##         _ => {}
+##     }
+## }
+## assert_eq!(unsupported, true);
+## ```
+## That restriction will be eliminated once issue [#158] is resolved.
 ##
 ## [standard compliant]: https://www.w3.org/TR/xml11/#charencoding
+## [UTF-16BE]: encoding_rs::UTF_16BE
+## [UTF-16LE]: encoding_rs::UTF_16LE
+## [ISO-2022-JP]: encoding_rs::ISO_2022_JP
+## [#158]: https://github.com/tafia/quick-xml/issues/158
 encoding = ["encoding_rs"]
 
 ## Enables support for recognizing all [HTML 5 entities] in [`unescape`] and
