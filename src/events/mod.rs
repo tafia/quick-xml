@@ -226,7 +226,7 @@ impl<'a> BytesStart<'a> {
         bytes.push(b' ');
         bytes.extend_from_slice(a.key.as_ref());
         bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(&*a.value);
+        bytes.extend_from_slice(a.value.as_ref());
         bytes.push(b'"');
     }
 
@@ -258,7 +258,7 @@ impl<'a> BytesStart<'a> {
         &'a self,
         attr_name: N,
     ) -> Result<Option<Attribute<'a>>> {
-        for a in self.attributes() {
+        for a in self.attributes().with_checks(false) {
             let a = a?;
             if a.key.as_ref() == attr_name.as_ref() {
                 return Ok(Some(a));
