@@ -28,7 +28,7 @@ pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 /// key is not defined or contains unknown encoding.
 ///
 /// The library supports any UTF-8 compatible encodings that crate `encoding_rs`
-/// is supported. [*UTF-16 is not supported at the present*][utf16].
+/// is supported. [*UTF-16 and ISO-2022-JP are not supported at the present*][utf16].
 ///
 /// If feature `encoding` is disabled, the decoder is always UTF-8 decoder:
 /// any XML declarations are ignored.
