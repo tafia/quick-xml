@@ -216,8 +216,7 @@ impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// This is an implementation of [`Reader`] for reading from a [`BufRead`] as
-/// underlying byte stream.
+/// This is an implementation for reading from a [`BufRead`] as underlying byte stream.
 impl<R: BufRead> Reader<R> {
     /// Reads the next `Event`.
     ///
@@ -243,7 +242,7 @@ impl<R: BufRead> Reader<R> {
     /// let xml = r#"<tag1 att1 = "test">
     ///                 <tag2><!--Test comment-->Test</tag2>
     ///                 <tag2>Test 2</tag2>
-    ///             </tag1>"#;
+    ///              </tag1>"#;
     /// let mut reader = Reader::from_str(xml);
     /// reader.trim_text(true);
     /// let mut count = 0;
@@ -251,7 +250,7 @@ impl<R: BufRead> Reader<R> {
     /// let mut txt = Vec::new();
     /// loop {
     ///     match reader.read_event_into(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => count += 1,
+    ///         Ok(Event::Start(_)) => count += 1,
     ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
     ///         Ok(Event::Eof) => break,
@@ -259,8 +258,8 @@ impl<R: BufRead> Reader<R> {
     ///     }
     ///     buf.clear();
     /// }
-    /// println!("Found {} start events", count);
-    /// println!("Text events: {:?}", txt);
+    /// assert_eq!(count, 3);
+    /// assert_eq!(txt, vec!["Test".to_string(), "Test 2".to_string()]);
     /// ```
     #[inline]
     pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
@@ -275,7 +274,8 @@ impl<R: BufRead> Reader<R> {
     /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
     /// this method was called after reading expanded [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name.
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
     /// will be returned. In particularly, that error will be returned if you call
@@ -299,7 +299,7 @@ impl<R: BufRead> Reader<R> {
     ///
     /// # Namespaces
     ///
-    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// While the `Reader` does not support namespace resolution, namespaces
     /// does not change the algorithm for comparing names. Although the names
     /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
     /// same namespace, are semantically equivalent, `</b:name>` cannot close

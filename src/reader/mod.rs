@@ -20,14 +20,16 @@ macro_rules! configure_methods {
         /// default), those tags are represented by an [`Empty`] event instead.
         ///
         /// Note, that setting this to `true` will lead to additional allocates that
-        /// needed to store tag name for an [`End`] event. There is no additional
-        /// allocation, however, if [`Self::check_end_names()`] is also set.
+        /// needed to store tag name for an [`End`] event. However if [`check_end_names`]
+        /// is also set, only one additional allocation will be performed that support
+        /// both these options.
         ///
         /// (`false` by default)
         ///
         /// [`Empty`]: Event::Empty
         /// [`Start`]: Event::Start
         /// [`End`]: Event::End
+        /// [`check_end_names`]: Self::check_end_names
         pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .parser.expand_empty_elements = val;
             self
@@ -35,12 +37,15 @@ macro_rules! configure_methods {
 
         /// Changes whether whitespace before and after character data should be removed.
         ///
-        /// When set to `true`, all [`Text`] events are trimmed. If they are empty, no event will be
-        /// pushed.
+        /// When set to `true`, all [`Text`] events are trimmed.
+        /// If after that the event is empty it will not be pushed.
+        ///
+        /// Changing this option automatically changes the [`trim_text_end`] option.
         ///
         /// (`false` by default)
         ///
         /// [`Text`]: Event::Text
+        /// [`trim_text_end`]: Self::trim_text_end
         pub fn trim_text(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .parser.trim_text_start = val;
             self $(.$holder)? .parser.trim_text_end = val;
@@ -50,6 +55,7 @@ macro_rules! configure_methods {
         /// Changes whether whitespace after character data should be removed.
         ///
         /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
+        /// If after that the event is empty it will not be pushed.
         ///
         /// (`false` by default)
         ///
@@ -99,13 +105,15 @@ macro_rules! configure_methods {
         /// contain the data of the mismatched end tag.
         ///
         /// Note, that setting this to `true` will lead to additional allocates that
-        /// needed to store tag name for an [`End`] event. There is no additional
-        /// allocation, however, if [`Self::expand_empty_elements()`] is also set.
+        /// needed to store tag name for an [`End`] event. However if [`expand_empty_elements`]
+        /// is also set, only one additional allocation will be performed that support
+        /// both these options.
         ///
         /// (`true` by default)
         ///
         /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
         /// [`End`]: Event::End
+        /// [`expand_empty_elements`]: Self::expand_empty_elements
         pub fn check_end_names(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .parser.check_end_names = val;
             self

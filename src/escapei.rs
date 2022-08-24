@@ -132,13 +132,21 @@ fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
 }
 
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
-/// their corresponding value
+/// their corresponding value.
+///
+/// If feature `escape-html` is enabled, then recognizes all [HTML5 escapes].
+///
+/// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
     unescape_with(raw, |_| None)
 }
 
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
 /// their corresponding value, using a resolver function for custom entities.
+///
+/// If feature `escape-html` is enabled, then recognizes all [HTML5 escapes].
+///
+/// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape_with<'input, 'entity, F>(
     raw: &'input str,
     resolve_entity: F,
@@ -211,6 +219,7 @@ const fn named_entity(name: &str) -> Option<&str> {
 const fn named_entity(name: &str) -> Option<&str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
+    //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json
     let s = match name.as_bytes() {
         b"Tab" => "\u{09}",
         b"NewLine" => "\u{0A}",

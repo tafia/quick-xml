@@ -16,8 +16,8 @@
 //! See [`Event`] for a list of all possible events.
 //!
 //! # Reading
-//! When reading a XML stream, the events are emitted by
-//! [`Reader::read_event_into`]. You must listen
+//! When reading a XML stream, the events are emitted by [`Reader::read_event`]
+//! and [`Reader::read_event_into`]. You must listen
 //! for the different types of events you are interested in.
 //!
 //! See [`Reader`] for further information.
@@ -29,6 +29,7 @@
 //!
 //! See [`Writer`] for further information.
 //!
+//! [`Reader::read_event`]: crate::reader::Reader::read_event
 //! [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
 //! [`Reader`]: crate::reader::Reader
 //! [`Writer`]: crate::writer::Writer
@@ -500,7 +501,12 @@ impl<'a> BytesDecl<'a> {
             .transpose()
     }
 
-    /// Gets the decoder struct
+    /// Gets the actual encoding using [_get an encoding_](https://encoding.spec.whatwg.org/#concept-encoding-get)
+    /// algorithm.
+    ///
+    /// If encoding in not known, or `encoding` key was not found, returns `None`.
+    /// In case of duplicated `encoding` key, encoding, corresponding to the first
+    /// one, is returned.
     #[cfg(feature = "encoding")]
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()

@@ -16,9 +16,9 @@ use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, Xml
 
 use memchr;
 
-/// This is an implementation of [`Reader`] for reading from a `&[u8]` as
-/// underlying byte stream. This implementation supports not using an
-/// intermediate buffer as the byte slice itself can be used to borrow from.
+/// This is an implementation for reading from a `&[u8]` as underlying byte stream.
+/// This implementation supports not using an intermediate buffer as the byte slice
+/// itself can be used to borrow from.
 impl<'a> Reader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
     pub fn from_str(s: &'a str) -> Self {
@@ -80,7 +80,8 @@ impl<'a> Reader<&'a [u8]> {
     /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
     /// this method was called after reading expanded [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name.
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
     /// will be returned. In particularly, that error will be returned if you call
@@ -99,7 +100,7 @@ impl<'a> Reader<&'a [u8]> {
     ///
     /// # Namespaces
     ///
-    /// While the [`Reader`] does not support namespace resolution, namespaces
+    /// While the `Reader` does not support namespace resolution, namespaces
     /// does not change the algorithm for comparing names. Although the names
     /// `a:name` and `b:name` where both prefixes `a` and `b` resolves to the
     /// same namespace, are semantically equivalent, `</b:name>` cannot close
@@ -159,7 +160,8 @@ impl<'a> Reader<&'a [u8]> {
     /// Reads content between start and end tags, including any markup. This
     /// function is supposed to be called after you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name.
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// This method does not unescape read data, instead it returns content
     /// "as is" of the XML document. This is because it has no idea what text

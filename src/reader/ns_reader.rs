@@ -134,9 +134,9 @@ impl<R> NsReader<R> {
     }
 
     /// Resolves a potentially qualified **element name** or **attribute name**
-    /// into (namespace name, local name).
+    /// into _(namespace name, local name)_.
     ///
-    /// *Qualified* names have the form `prefix:local-name` where the `prefix`
+    /// _Qualified_ names have the form `prefix:local-name` where the `prefix`
     /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
     /// The namespace prefix can be defined on the same element as the name in question.
     ///
@@ -172,14 +172,14 @@ impl<R> NsReader<R> {
         self.ns_resolver.resolve(name, &self.buffer, !attribute)
     }
 
-    /// Resolves a potentially qualified **element name** into (namespace name, local name).
+    /// Resolves a potentially qualified **element name** into _(namespace name, local name)_.
     ///
-    /// *Qualified* element names have the form `prefix:local-name` where the
+    /// _Qualified_ element names have the form `prefix:local-name` where the
     /// `prefix` is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
     /// The namespace prefix can be defined on the same element as the element
     /// in question.
     ///
-    /// *Unqualified* elements inherits the current *default namespace*.
+    /// _Unqualified_ elements inherits the current _default namespace_.
     ///
     /// The method returns following results depending on the `name` shape and
     /// the presence of the default namespace:
@@ -200,7 +200,7 @@ impl<R> NsReader<R> {
     ///
     /// This example shows how you can resolve qualified name into a namespace.
     /// Note, that in the code like this you do not need to do that manually,
-    /// because the namespace resolution result returned by the [`read_event()`].
+    /// because the namespace resolution result returned by the [`read_resolved_event()`].
     ///
     /// ```
     /// # use pretty_assertions::assert_eq;
@@ -222,20 +222,20 @@ impl<R> NsReader<R> {
     /// [`Bound`]: ResolveResult::Bound
     /// [`Unbound`]: ResolveResult::Unbound
     /// [`Unknown`]: ResolveResult::Unknown
-    /// [`read_event()`]: Self::read_event
+    /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
         self.ns_resolver.resolve(name, &self.buffer, true)
     }
 
-    /// Resolves a potentially qualified **attribute name** into (namespace name, local name).
+    /// Resolves a potentially qualified **attribute name** into _(namespace name, local name)_.
     ///
-    /// *Qualified* attribute names have the form `prefix:local-name` where the
+    /// _Qualified_ attribute names have the form `prefix:local-name` where the
     /// `prefix` is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
     /// The namespace prefix can be defined on the same element as the attribute
     /// in question.
     ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    /// _Unqualified_ attribute names do *not* inherit the current _default namespace_.
     ///
     /// The method returns following results depending on the `name` shape and
     /// the presence of the default namespace:
@@ -431,9 +431,8 @@ impl<R: BufRead> NsReader<R> {
     /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
     /// this method was called after reading expanded [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
-    /// ("the same" means that their local names are the same and their prefixes
-    /// resolves to the same namespace).
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
     /// will be returned. In particularly, that error will be returned if you call
@@ -448,16 +447,21 @@ impl<R: BufRead> NsReader<R> {
     /// appropriate size of each event, you can preallocate the buffer to reduce
     /// number of reallocations.
     ///
-    /// The `ns` and `end` parameters should contain namespace and name of the
-    /// end element _in the reader encoding_. It is good practice to always get
-    /// that parameters using [`BytesStart::to_end()`] method.
+    /// The `end` parameter should contain name of the end element _in the reader
+    /// encoding_. It is good practice to always get that parameter using
+    /// [`BytesStart::to_end()`] method.
     ///
     /// # Namespaces
     ///
-    /// Unlike [`Reader::read_to_end_into()`], this method resolves namespace
-    /// prefixes, so the names that are not equals literally (for example,
-    /// `a:name` and `b:name`) could be considered equal if prefixes resolved to
-    /// the same namespace.
+    /// While the `NsReader` does namespace resolution, namespaces does not
+    /// change the algorithm for comparing names. Although the names `a:name`
+    /// and `b:name` where both prefixes `a` and `b` resolves to the same namespace,
+    /// are semantically equivalent, `</b:name>` cannot close `<a:name>`, because
+    /// according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
     ///
     /// # Examples
     ///
@@ -515,6 +519,7 @@ impl<R: BufRead> NsReader<R> {
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`expand_empty_elements`]: Self::expand_empty_elements
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     #[inline]
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
@@ -668,9 +673,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// a closing tag or an empty slice, if [`expand_empty_elements`] is set and
     /// this method was called after reading expanded [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name
-    /// ("the same" means that their local names are the same and their prefixes
-    /// resolves to the same namespace).
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
     /// will be returned. In particularly, that error will be returned if you call
@@ -686,10 +690,15 @@ impl<'i> NsReader<&'i [u8]> {
     ///
     /// # Namespaces
     ///
-    /// Unlike [`Reader::read_to_end()`], this method resolves namespace
-    /// prefixes, so the names that are not equals literally (for example,
-    /// `a:name` and `b:name`) could be considered equal if prefixes resolved to
-    /// the same namespace.
+    /// While the `NsReader` does namespace resolution, namespaces does not
+    /// change the algorithm for comparing names. Although the names `a:name`
+    /// and `b:name` where both prefixes `a` and `b` resolves to the same namespace,
+    /// are semantically equivalent, `</b:name>` cannot close `<a:name>`, because
+    /// according to [the specification]
+    ///
+    /// > The end of every element that begins with a **start-tag** MUST be marked
+    /// > by an **end-tag** containing a name that echoes the element's type as
+    /// > given in the **start-tag**
     ///
     /// # Examples
     ///
@@ -743,9 +752,9 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
     /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
-    /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`expand_empty_elements`]: Self::expand_empty_elements
+    /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     #[inline]
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
@@ -756,7 +765,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// Reads content between start and end tags, including any markup. This
     /// function is supposed to be called after you already read a [`Start`] event.
     ///
-    /// Manages nested cases where parent and child elements have the same name.
+    /// Manages nested cases where parent and child elements have the _literally_
+    /// same name.
     ///
     /// This method does not unescape read data, instead it returns content
     /// "as is" of the XML document. This is because it has no idea what text

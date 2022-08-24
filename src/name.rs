@@ -212,7 +212,7 @@ impl<'a> AsRef<[u8]> for Prefix<'a> {
 /// [XML Schema specification](https://www.w3.org/TR/xml-names/#ns-decl)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrefixDeclaration<'a> {
-    /// XML attribute binds a default namespace. Corresponds to `xmlns` in in `xmlns="..."`
+    /// XML attribute binds a default namespace. Corresponds to `xmlns` in `xmlns="..."`
     Default,
     /// XML attribute binds a specified prefix to a namespace. Corresponds to a
     /// `prefix` in `xmlns:prefix="..."`, which is stored as payload of this variant.

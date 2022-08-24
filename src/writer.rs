@@ -6,9 +6,7 @@ use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 
-/// XML writer.
-///
-/// Writes XML `Event`s to a `Write` implementor.
+/// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
 /// # Examples
 ///
@@ -62,7 +60,7 @@ pub struct Writer<W: Write> {
 }
 
 impl<W: Write> Writer<W> {
-    /// Creates a Writer from a generic Write
+    /// Creates a `Writer` from a generic writer.
     pub const fn new(inner: W) -> Writer<W> {
         Writer {
             writer: inner,
@@ -70,7 +68,7 @@ impl<W: Write> Writer<W> {
         }
     }
 
-    /// Creates a Writer with configured whitespace indents from a generic Write
+    /// Creates a `Writer` with configured whitespace indents from a generic writer.
     pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
         Writer {
             writer: inner,
