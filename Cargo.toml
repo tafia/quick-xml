@@ -59,11 +59,17 @@ async-tokio = ["tokio"]
 ## [standard compliant]: https://www.w3.org/TR/xml11/#charencoding
 encoding = ["encoding_rs"]
 
-## Enables support for recognizing all [HTML 5 entities](https://dev.w3.org/html5/html-author/charref)
+## Enables support for recognizing all [HTML 5 entities] in [`unescape`] and
+## [`unescape_with`] functions. The full list of entities also can be found in
+## <https://html.spec.whatwg.org/entities.json>.
+##
+## [HTML 5 entities]: https://dev.w3.org/html5/html-author/charref
+## [`unescape`]: crate::escape::unescape
+## [`unescape_with`]: crate::escape::unescape_with
 escape-html = []
 
-## This feature enables support for deserializing lists where tags are overlapped
-## with tags that do not correspond to the list.
+## This feature for a serde deserializer that enables support for deserializing
+## lists where tags are overlapped with tags that do not correspond to the list.
 ##
 ## When this feature is enabled, the XML:
 ## ```xml
@@ -75,7 +81,8 @@ escape-html = []
 ## </any-name>
 ## ```
 ## could be deserialized to a struct:
-## ```ignore
+## ```no_run
+## # use serde::Deserialize;
 ## #[derive(Deserialize)]
 ## #[serde(rename_all = "kebab-case")]
 ## struct AnyName {

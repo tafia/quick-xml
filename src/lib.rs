@@ -7,18 +7,19 @@
 //! A streaming API based on the [StAX] model. This is suited for larger XML documents which
 //! cannot completely read into memory at once.
 //!
-//! The user has to explicitly _ask_ for the next XML event, similar
-//! to a database cursor.
+//! The user has to explicitly _ask_ for the next XML event, similar to a database cursor.
 //! This is achieved by the following two structs:
 //!
 //! - [`Reader`]: A low level XML pull-reader where buffer allocation/clearing is left to user.
 //! - [`Writer`]: A XML writer. Can be nested with readers if you want to transform XMLs.
 //!
-//! Especially for nested XML elements, the user must keep track _where_ (how deep) in the XML document
-//! the current event is located. This is needed as the
+//! Especially for nested XML elements, the user must keep track _where_ (how deep)
+//! in the XML document the current event is located.
 //!
-//! Furthermore, quick-xml also contains optional [Serde] support to directly serialize and deserialize from
-//! structs, without having to deal with the XML events.
+//! quick-xml contains optional support of asynchronous reading using [tokio].
+//!
+//! Furthermore, quick-xml also contains optional [Serde] support to directly
+//! serialize and deserialize from structs, without having to deal with the XML events.
 //!
 //! # Examples
 //!
@@ -30,6 +31,7 @@
 //! `quick-xml` supports the following features:
 //!
 //! [StAX]: https://en.wikipedia.org/wiki/StAX
+//! [tokio]: https://tokio.rs/
 //! [Serde]: https://serde.rs/
 #![cfg_attr(
     feature = "document-features",
