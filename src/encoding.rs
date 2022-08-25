@@ -54,38 +54,38 @@ impl Decoder {
     }
 }
 
-#[cfg(not(feature = "encoding"))]
-impl Decoder {
-    /// Decodes a UTF8 slice regardless of XML declaration and ignoring BOM if
-    /// it is present in the `bytes`.
-    ///
-    /// Returns an error in case of malformed sequences in the `bytes`.
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    #[inline]
-    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        Ok(Cow::Borrowed(std::str::from_utf8(bytes)?))
-    }
-}
-
-#[cfg(feature = "encoding")]
 impl Decoder {
     /// Returns the `Reader`s encoding.
     ///
     /// This encoding will be used by [`decode`].
     ///
     /// [`decode`]: Self::decode
+    #[cfg(feature = "encoding")]
     pub const fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
 
+    /// ## Without `encoding` feature
+    ///
+    /// Decodes an UTF-8 slice regardless of XML declaration and ignoring BOM
+    /// if it is present in the `bytes`.
+    ///
+    /// ## With `encoding` feature
+    ///
     /// Decodes specified bytes using encoding, declared in the XML, if it was
     /// declared there, or UTF-8 otherwise, and ignoring BOM if it is present
     /// in the `bytes`.
     ///
+    /// ----
     /// Returns an error in case of malformed sequences in the `bytes`.
     pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        decode(bytes, self.encoding)
+        #[cfg(not(feature = "encoding"))]
+        let decoded = Ok(Cow::Borrowed(std::str::from_utf8(bytes)?));
+
+        #[cfg(feature = "encoding")]
+        let decoded = decode(bytes, self.encoding);
+
+        decoded
     }
 }
 
