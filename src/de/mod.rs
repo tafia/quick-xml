@@ -256,7 +256,7 @@ where
     ///
     ///  - [`Deserializer::from_str`]
     ///  - [`Deserializer::from_reader`]
-    pub fn new(reader: R) -> Self {
+    fn new(reader: R) -> Self {
         Deserializer {
             reader,
 

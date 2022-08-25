@@ -183,6 +183,8 @@
 - [#459]: Made the `Writer::write()` method non-public as writing random bytes to a document is not generally useful or desirable.
 - [#459]: BOM bytes are no longer emitted as `Event::Text`. To write a BOM, use `Writer::write_bom()`.
 
+- [#467]: Removed `Deserializer::new` because it cannot be used outside of the quick-xml crate
+
 ### New Tests
 
 - [#9]: Added tests for incorrect nested tags in input
@@ -227,6 +229,7 @@
 [#455]: https://github.com/tafia/quick-xml/pull/455
 [#456]: https://github.com/tafia/quick-xml/pull/456
 [#459]: https://github.com/tafia/quick-xml/pull/459
+[#467]: https://github.com/tafia/quick-xml/pull/467
 
 ## 0.23.0 -- 2022-05-08
 
