@@ -129,7 +129,7 @@ pub(crate) const UNFLATTEN_PREFIX: &str = "$unflatten=";
 pub(crate) const PRIMITIVE_PREFIX: &str = "$primitive=";
 
 /// Simplified event which contains only these variants that used by deserializer
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DeEvent<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
@@ -343,7 +343,7 @@ where
             self.read.push_front(self.reader.next()?);
         }
         if let Some(event) = self.read.front() {
-            return Ok(&event);
+            return Ok(event);
         }
         // SAFETY: `self.read` was filled in the code above.
         // NOTE: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`

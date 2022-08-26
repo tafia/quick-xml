@@ -241,7 +241,7 @@ impl<'a> FusedIterator for Attributes<'a> {}
 ///
 /// Recovery position in examples shows the position from which parsing of the
 /// next attribute will be attempted.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AttrError {
     /// Attribute key was not followed by `=`, position relative to the start of
     /// the owning tag is provided.

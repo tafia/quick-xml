@@ -39,10 +39,10 @@ pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
 /// Also, when `serialize` feature is on, this type deserialized using
 /// [`deserialize_byte_buf`](serde::Deserializer::deserialize_byte_buf) instead
 /// of vector's generic [`deserialize_seq`](serde::Deserializer::deserialize_seq)
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct ByteBuf(pub Vec<u8>);
 
-impl<'de> Debug for ByteBuf {
+impl Debug for ByteBuf {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write_byte_string(f, &self.0)
     }
@@ -72,7 +72,7 @@ impl<'de> Deserialize<'de> for ByteBuf {
             }
         }
 
-        Ok(d.deserialize_byte_buf(ValueVisitor)?)
+        d.deserialize_byte_buf(ValueVisitor)
     }
 }
 
@@ -84,12 +84,12 @@ impl<'de> Deserialize<'de> for ByteBuf {
 /// Also, when `serialize` feature is on, this type deserialized using
 /// [`deserialize_bytes`](serde::Deserializer::deserialize_bytes) instead
 /// of vector's generic [`deserialize_seq`](serde::Deserializer::deserialize_seq)
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub struct Bytes<'de>(pub &'de [u8]);
 
 impl<'de> Debug for Bytes<'de> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write_byte_string(f, &self.0)
+        write_byte_string(f, self.0)
     }
 }
 
@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for Bytes<'de> {
             }
         }
 
-        Ok(d.deserialize_bytes(ValueVisitor)?)
+        d.deserialize_bytes(ValueVisitor)
     }
 }
 
