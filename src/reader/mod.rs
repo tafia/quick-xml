@@ -351,7 +351,7 @@ enum EncodingRef {
 #[cfg(feature = "encoding")]
 impl EncodingRef {
     #[inline]
-    fn encoding(&self) -> &'static Encoding {
+    const fn encoding(&self) -> &'static Encoding {
         match self {
             Self::Implicit(e) => e,
             Self::Explicit(e) => e,
@@ -360,7 +360,7 @@ impl EncodingRef {
         }
     }
     #[inline]
-    fn can_be_refined(&self) -> bool {
+    const fn can_be_refined(&self) -> bool {
         match self {
             Self::Implicit(_) | Self::BomDetected(_) => true,
             Self::Explicit(_) | Self::XmlDetected(_) => false,
@@ -505,7 +505,7 @@ impl<R> Reader<R> {
     }
 
     /// Gets a reference to the underlying reader.
-    pub fn get_ref(&self) -> &R {
+    pub const fn get_ref(&self) -> &R {
         &self.reader
     }
 
@@ -517,7 +517,7 @@ impl<R> Reader<R> {
     /// Gets the current byte position in the input data.
     ///
     /// Useful when debugging errors.
-    pub fn buffer_position(&self) -> usize {
+    pub const fn buffer_position(&self) -> usize {
         // when internal state is OpenedTag, we have actually read until '<',
         // which we don't want to show
         if let ParseState::OpenedTag = self.parser.state {
@@ -535,7 +535,7 @@ impl<R> Reader<R> {
     /// If `encoding` feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
     #[inline]
-    pub fn decoder(&self) -> Decoder {
+    pub const fn decoder(&self) -> Decoder {
         self.parser.decoder()
     }
 }
@@ -789,7 +789,7 @@ impl ReadElementState {
 
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
-pub(crate) fn is_whitespace(b: u8) -> bool {
+pub(crate) const fn is_whitespace(b: u8) -> bool {
     match b {
         b' ' | b'\r' | b'\n' | b'\t' => true,
         _ => false,

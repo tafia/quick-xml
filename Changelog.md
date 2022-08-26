@@ -41,6 +41,23 @@
 - [#455]: Change return type of all `read_to_end*` methods to return a span between tags
 - [#455]: Added `Reader::read_text` method to return a raw content (including markup) between tags
 - [#459]: Added a `Writer::write_bom()` method for inserting a Byte-Order-Mark into the document.
+- [#467]: The following functions made `const`:
+  - `Attr::key`
+  - `Attr::value`
+  - `Attributes::html`
+  - `Attributes::new`
+  - `BytesDecl::from_start`
+  - `Decoder::encoding`
+  - `LocalName::into_inner`
+  - `Namespace::into_inner`
+  - `Prefix::into_inner`
+  - `QName::into_inner`
+  - `Reader::buffer_position`
+  - `Reader::decoder`
+  - `Reader::get_ref`
+  - `Serializer::new`
+  - `Serializer::with_root`
+  - `Writer::new`
 
 ### Bug Fixes
 
