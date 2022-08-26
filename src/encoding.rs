@@ -90,7 +90,7 @@ impl Decoder {
     /// This encoding will be used by [`decode`].
     ///
     /// [`decode`]: Self::decode
-    pub fn encoding(&self) -> &'static Encoding {
+    pub const fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
 
