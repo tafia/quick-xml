@@ -621,13 +621,13 @@ where
             break match self.map.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => {
+                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
                     self.map.de.skip()?;
                     continue;
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(&e, decoder)? => Ok(None),
+                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
 
                 // Stop iteration after reaching a closing tag
                 DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),

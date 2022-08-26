@@ -142,7 +142,7 @@ impl<W: Write> Writer<W> {
             Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
-                self.write(&e)
+                self.write(e)
             }
             Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
             Event::CData(ref e) => {
@@ -325,13 +325,13 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Create a new scope for writing XML inside the current element.
-    pub fn write_inner_content<F>(mut self, closure: F) -> Result<&'a mut Writer<W>>
+    pub fn write_inner_content<F>(self, closure: F) -> Result<&'a mut Writer<W>>
     where
         F: Fn(&mut Writer<W>) -> Result<()>,
     {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
-        closure(&mut self.writer)?;
+        closure(self.writer)?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)
@@ -366,10 +366,7 @@ impl Indentation {
     }
 
     fn shrink(&mut self) {
-        self.indents_len = match self.indents_len.checked_sub(self.indent_size) {
-            Some(result) => result,
-            None => 0,
-        };
+        self.indents_len = self.indents_len.saturating_sub(self.indent_size);
     }
 }
 

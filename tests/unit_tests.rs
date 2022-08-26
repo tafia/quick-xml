@@ -134,16 +134,16 @@ fn test_xml_decl() {
                     &*v,
                     b"1.0",
                     "expecting version '1.0', got '{:?}",
-                    from_utf8(&*v)
+                    from_utf8(&v)
                 ),
-                Err(e) => assert!(false, "{:?}", e),
+                Err(e) => panic!("{:?}", e),
             }
             match e.encoding() {
                 Some(Ok(v)) => assert_eq!(
                     &*v,
                     b"utf-8",
                     "expecting encoding 'utf-8', got '{:?}",
-                    from_utf8(&*v)
+                    from_utf8(&v)
                 ),
                 Some(Err(e)) => panic!("{:?}", e),
                 None => panic!("cannot find encoding"),
@@ -433,7 +433,7 @@ fn test_offset_err_comment() {
             r.buffer_position(),
             e
         ),
-        e => assert!(false, "expecting error, found {:?}", e),
+        e => panic!("expecting error, found {:?}", e),
     }
 }
 
@@ -454,7 +454,7 @@ fn test_offset_err_comment_2_buf() {
             r.buffer_position(),
             e
         ),
-        e => assert!(false, "expecting error, found {:?}", e),
+        e => panic!("expecting error, found {:?}", e),
     }
 }
 
@@ -475,7 +475,7 @@ fn test_offset_err_comment_trim_text() {
             r.buffer_position(),
             e
         ),
-        e => assert!(false, "expecting error, found {:?}", e),
+        e => panic!("expecting error, found {:?}", e),
     }
 }
 
@@ -490,7 +490,7 @@ fn test_escaped_content() {
                 &*e,
                 b"&lt;test&gt;",
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
-                from_utf8(&*e)
+                from_utf8(&e)
             );
             match e.unescape() {
                 Ok(c) => assert_eq!(c, "<test>"),

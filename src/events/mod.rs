@@ -280,7 +280,7 @@ impl<'a> Deref for BytesStart<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.buf
+        &self.buf
     }
 }
 
@@ -505,7 +505,7 @@ impl<'a> BytesDecl<'a> {
     pub fn encoder(&self) -> Option<&'static Encoding> {
         self.encoding()
             .and_then(|e| e.ok())
-            .and_then(|e| Encoding::for_label(&*e))
+            .and_then(|e| Encoding::for_label(&e))
     }
 
     /// Converts the event into an owned event.
@@ -528,7 +528,7 @@ impl<'a> Deref for BytesDecl<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.content
+        &self.content
     }
 }
 
@@ -575,7 +575,7 @@ impl<'a> BytesEnd<'a> {
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
     pub fn name(&self) -> QName {
-        QName(&*self.name)
+        QName(&self.name)
     }
 
     /// Gets the undecoded raw local tag name (excluding namespace) as present
@@ -600,7 +600,7 @@ impl<'a> Deref for BytesEnd<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.name
+        &self.name
     }
 }
 
@@ -730,7 +730,7 @@ impl<'a> Deref for BytesText<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.content
+        &self.content
     }
 }
 
@@ -861,7 +861,7 @@ impl<'a> Deref for BytesCData<'a> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &*self.content
+        &self.content
     }
 }
 
@@ -935,14 +935,14 @@ impl<'a> Deref for Event<'a> {
 
     fn deref(&self) -> &[u8] {
         match *self {
-            Event::Start(ref e) | Event::Empty(ref e) => &*e,
-            Event::End(ref e) => &*e,
-            Event::Text(ref e) => &*e,
-            Event::Decl(ref e) => &*e,
-            Event::PI(ref e) => &*e,
-            Event::CData(ref e) => &*e,
-            Event::Comment(ref e) => &*e,
-            Event::DocType(ref e) => &*e,
+            Event::Start(ref e) | Event::Empty(ref e) => e,
+            Event::End(ref e) => e,
+            Event::Text(ref e) => e,
+            Event::Decl(ref e) => e,
+            Event::PI(ref e) => e,
+            Event::CData(ref e) => e,
+            Event::Comment(ref e) => e,
+            Event::DocType(ref e) => e,
             Event::Eof => &[],
         }
     }

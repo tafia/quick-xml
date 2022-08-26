@@ -107,7 +107,7 @@ impl std::fmt::Display for Error {
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {
                 f.write_str("Unknown namespace prefix '")?;
-                write_byte_string(f, &prefix)?;
+                write_byte_string(f, prefix)?;
                 f.write_str("'")
             }
         }
@@ -195,12 +195,12 @@ pub mod serialize {
                 DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
                     f.write_str("Unexpected `Event::Start(")?;
-                    write_byte_string(f, &e)?;
+                    write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEnd(e) => {
                     f.write_str("Unexpected `Event::End(")?;
-                    write_byte_string(f, &e)?;
+                    write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),

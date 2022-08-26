@@ -171,7 +171,7 @@ impl<'a> From<QName<'a>> for LocalName<'a> {
     /// ```
     #[inline]
     fn from(name: QName<'a>) -> Self {
-        Self(name.index().map_or(&name.0, |i| &name.0[i + 1..]))
+        Self(name.index().map_or(name.0, |i| &name.0[i + 1..]))
     }
 }
 
@@ -414,7 +414,7 @@ impl NamespaceResolver {
                 match k.as_namespace_binding() {
                     Some(PrefixDeclaration::Default) => {
                         let start = buffer.len();
-                        buffer.extend_from_slice(&*v);
+                        buffer.extend_from_slice(&v);
                         self.bindings.push(NamespaceEntry {
                             start,
                             prefix_len: 0,
@@ -425,7 +425,7 @@ impl NamespaceResolver {
                     Some(PrefixDeclaration::Named(prefix)) => {
                         let start = buffer.len();
                         buffer.extend_from_slice(prefix);
-                        buffer.extend_from_slice(&*v);
+                        buffer.extend_from_slice(&v);
                         self.bindings.push(NamespaceEntry {
                             start,
                             prefix_len: prefix.len(),

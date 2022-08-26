@@ -100,15 +100,16 @@ impl<R> NsReader<R> {
     ) -> Result<(ResolveResult, Event<'i>)> {
         match event {
             Ok(Event::Start(e)) => Ok((
-                self.ns_resolver.find(e.name(), &mut self.buffer),
+                self.ns_resolver.find(e.name(), &self.buffer),
                 Event::Start(e),
             )),
             Ok(Event::Empty(e)) => Ok((
-                self.ns_resolver.find(e.name(), &mut self.buffer),
+                self.ns_resolver.find(e.name(), &self.buffer),
                 Event::Empty(e),
             )),
             Ok(Event::End(e)) => Ok((
-                self.ns_resolver.find(e.name(), &mut self.buffer),
+                // Comment that prevent cargo rmt
+                self.ns_resolver.find(e.name(), &self.buffer),
                 Event::End(e),
             )),
             Ok(e) => Ok((ResolveResult::Unbound, e)),
