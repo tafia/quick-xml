@@ -1580,16 +1580,6 @@ mod test {
                 use pretty_assertions::assert_eq;
 
                 #[$test]
-                $($async)? fn text_at_start() {
-                    let mut reader = Reader::from_str("text");
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("text").into())
-                    );
-                }
-
-                #[$test]
                 #[should_panic] // Failure is expected until read_until_open() is smart enough to skip over irrelevant text events.
                 $($async)? fn bom_at_start() {
                     let mut reader = Reader::from_str("\u{feff}");
@@ -1663,15 +1653,9 @@ mod test {
                     );
                 }
 
-                /// Text event cannot be generated without preceding event of another type
                 #[$test]
                 $($async)? fn text() {
-                    let mut reader = Reader::from_str("<tag/>text");
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Empty(BytesStart::new("tag"))
-                    );
+                    let mut reader = Reader::from_str("text");
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
