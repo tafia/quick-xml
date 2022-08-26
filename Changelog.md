@@ -35,8 +35,7 @@
   |                        |`resolve`
   |`event_namespace`       |`resolve_element`
   |`attribute_namespace`   |`resolve_attribute`
-- [#439]: Added utilities `detect_encoding()`, `decode()`, and `decode_with_bom_removal()`
-  under the `quick-xml::encoding` namespace.
+- [#439]: Added utilities `detect_encoding()` and `decode()` under the `quick-xml::encoding` namespace.
 - [#450]: Added support of asynchronous [tokio](https://tokio.rs/) readers
 - [#455]: Change return type of all `read_to_end*` methods to return a span between tags
 - [#455]: Added `Reader::read_text` method to return a raw content (including markup) between tags
@@ -112,7 +111,7 @@
 - [#191]: Remove `*_without_bom` methods from the `Attributes` struct because they are useless.
   Use the same-named methods without that suffix instead. Attribute values cannot contain BOM
 - [#191]: Remove `Reader::decode()` and `Reader::decode_without_bom()`, they are replaced by
-  `Decoder::decode()` and `Decoder::decode_with_bom_removal()`.
+  `Decoder::decode()` and nothing.
   Use `reader.decoder().decode_*(...)` instead of `reader.decode_*(...)` for now.
   `Reader::encoding()` is replaced by `Decoder::encoding()` as well
 - [#180]: Eliminated the differences in the decoding API when feature `encoding` enabled and when it is

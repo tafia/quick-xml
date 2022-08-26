@@ -66,21 +66,6 @@ impl Decoder {
     pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
         Ok(Cow::Borrowed(std::str::from_utf8(bytes)?))
     }
-
-    /// Decodes a slice regardless of XML declaration with BOM removal if
-    /// it is present in the `bytes`.
-    ///
-    /// Returns an error in case of malformed sequences in the `bytes`.
-    ///
-    /// If you instead want to use XML declared encoding, use the `encoding` feature
-    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        let bytes = if bytes.starts_with(UTF8_BOM) {
-            &bytes[3..]
-        } else {
-            bytes
-        };
-        self.decode(bytes)
-    }
 }
 
 #[cfg(feature = "encoding")]
@@ -102,19 +87,6 @@ impl Decoder {
     pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
         decode(bytes, self.encoding)
     }
-
-    /// Decodes a slice with BOM removal if it is present in the `bytes` using
-    /// the reader encoding.
-    ///
-    /// If this method called after reading XML declaration with the `"encoding"`
-    /// key, then this encoding is used, otherwise UTF-8 is used.
-    ///
-    /// If XML declaration is absent in the XML, UTF-8 is used.
-    ///
-    /// Returns an error in case of malformed sequences in the `bytes`.
-    pub fn decode_with_bom_removal<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        self.decode(remove_bom(bytes, self.encoding))
-    }
 }
 
 /// Decodes the provided bytes using the specified encoding.
@@ -125,20 +97,6 @@ pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b
     encoding
         .decode_without_bom_handling_and_without_replacement(bytes)
         .ok_or(Error::NonDecodable(None))
-}
-
-/// Decodes a slice with an unknown encoding, removing the BOM if it is present
-/// in the bytes.
-///
-/// Returns an error in case of malformed or non-representable sequences in the `bytes`.
-#[cfg(feature = "encoding")]
-pub fn decode_with_bom_removal<'b>(bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-    if let Some(encoding) = detect_encoding(bytes) {
-        let bytes = remove_bom(bytes, encoding);
-        decode(bytes, encoding)
-    } else {
-        decode(bytes, UTF_8)
-    }
 }
 
 #[cfg(feature = "encoding")]
