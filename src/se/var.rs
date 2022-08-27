@@ -79,6 +79,8 @@ where
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An implementation of `SerializeStruct` for serializing to XML.
 pub struct Struct<'r, 'w, W>
 where
@@ -185,6 +187,8 @@ where
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An implementation of `SerializeSeq' for serializing to XML.
 pub struct Seq<'r, 'w, W>
 where
@@ -222,6 +226,8 @@ where
         Ok(())
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An implementation of `SerializeTuple`, `SerializeTupleStruct` and
 /// `SerializeTupleVariant` for serializing to XML.
@@ -307,4 +313,25 @@ where
     fn end(self) -> Result<Self::Ok, Self::Error> {
         <Self as ser::SerializeTuple>::end(self)
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[test]
+fn test_serialize_map_entries() {
+    use serde::ser::SerializeMap;
+
+    let mut buffer = Vec::new();
+
+    {
+        let mut ser = Serializer::new(&mut buffer);
+        let mut map = Map::new(&mut ser);
+        map.serialize_entry("name", "Bob").unwrap();
+        map.serialize_entry("age", "5").unwrap();
+    }
+
+    assert_eq!(
+        String::from_utf8(buffer).unwrap(),
+        "<name>Bob</name><age>5</age>"
+    );
 }

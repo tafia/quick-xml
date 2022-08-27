@@ -334,7 +334,6 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use serde::ser::SerializeMap;
     use serde::{Serialize, Serializer as SerSerializer};
 
     #[test]
@@ -411,22 +410,6 @@ mod tests {
         };
         let should_be = "<Person name=\"Bob\">42</Person>";
         let got = to_string(&bob).unwrap();
-        assert_eq!(got, should_be);
-    }
-
-    #[test]
-    fn test_serialize_map_entries() {
-        let should_be = "<name>Bob</name><age>5</age>";
-        let mut buffer = Vec::new();
-
-        {
-            let mut ser = Serializer::new(&mut buffer);
-            let mut map = Map::new(&mut ser);
-            map.serialize_entry("name", "Bob").unwrap();
-            map.serialize_entry("age", "5").unwrap();
-        }
-
-        let got = String::from_utf8(buffer).unwrap();
         assert_eq!(got, should_be);
     }
 
