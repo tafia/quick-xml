@@ -35,8 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Event::DocType(ref e)) => {
                 for cap in entity_re.captures_iter(e) {
                     custom_entities.insert(
-                        reader.decoder().decode(&cap[1])?.into_owned(),
-                        reader.decoder().decode(&cap[2])?.into_owned(),
+                        String::from_utf8(cap[1].to_owned())?,
+                        String::from_utf8(cap[2].to_owned())?,
                     );
                 }
             }
