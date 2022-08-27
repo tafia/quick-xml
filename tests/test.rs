@@ -97,7 +97,7 @@ fn test_issue94() {
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
     loop {
-        match reader.read_event() {
+        match reader.read_event_into(&mut Vec::new()) {
             Ok(Eof) | Err(..) => break,
             _ => (),
         }

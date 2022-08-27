@@ -392,7 +392,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
 
     let mut decoder = reader.decoder();
     loop {
-        let line = match reader.read_resolved_event() {
+        let line = match reader.read_resolved_event_into(&mut Vec::new()) {
             Ok((_, Event::Decl(e))) => {
                 // Declaration could change decoder
                 decoder = reader.decoder();

@@ -16,9 +16,11 @@ use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, Xml
 
 use memchr;
 
-/// This is an implementation for reading from a `&[u8]` as underlying byte stream.
-/// This implementation supports not using an intermediate buffer as the byte slice
-/// itself can be used to borrow from.
+use super::parser::Parser;
+
+/// This is an implementation of [`Reader`] for reading from a `&[u8]` as
+/// underlying byte stream. This implementation supports not using an
+/// intermediate buffer as the byte slice itself can be used to borrow from.
 impl<'a> Reader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
     #[allow(clippy::should_implement_trait)]
@@ -26,13 +28,21 @@ impl<'a> Reader<&'a [u8]> {
         // Rust strings are guaranteed to be UTF-8, so lock the encoding
         #[cfg(feature = "encoding")]
         {
-            let mut reader = Self::from_reader(s.as_bytes());
-            reader.parser.encoding = EncodingRef::Explicit(UTF_8);
-            reader
+            let mut parser = Parser::default();
+            parser.encoding = EncodingRef::Explicit(UTF_8);
+            Self {
+                reader: s.as_bytes(),
+                parser: parser,
+            }
         }
 
         #[cfg(not(feature = "encoding"))]
-        Self::from_reader(s.as_bytes())
+        {
+            Self {
+                reader: s.as_bytes(),
+                parser: Parser::default(),
+            }
+        }
     }
 
     /// Read an event that borrows from the input rather than a buffer.

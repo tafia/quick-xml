@@ -1,9 +1,12 @@
 //! A module for wrappers that encode / decode data.
 
 use std::borrow::Cow;
+use std::io;
 
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
+#[cfg(feature = "encoding")]
+use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 
 #[cfg(feature = "encoding")]
 use crate::Error;
@@ -20,6 +23,57 @@ pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 #[cfg(feature = "encoding")]
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
+
+/// A struct for transparently decoding / validating bytes as UTF-8.
+#[derive(Debug)]
+pub struct Utf8BytesReader<R> {
+    #[cfg(feature = "encoding")]
+    reader: io::BufReader<DecodeReaderBytes<R, Vec<u8>>>,
+    #[cfg(not(feature = "encoding"))]
+    reader: io::BufReader<R>,
+}
+
+impl<R: io::Read> Utf8BytesReader<R> {
+    /// Build a new reader which decodes a stream of bytes in an unknown encoding into UTF-8.
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(feature = "encoding")]
+    pub fn new(reader: R) -> Self {
+        let decoder = DecodeReaderBytesBuilder::new()
+            .bom_override(true)
+            .build(reader);
+
+        Self {
+            reader: io::BufReader::new(decoder),
+        }
+    }
+
+    /// Build a new reader which (will eventually) validate UTF-8.
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(not(feature = "encoding"))]
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader: io::BufReader::new(reader),
+        }
+    }
+}
+
+impl<R: io::Read> io::Read for Utf8BytesReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.reader.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.reader.consume(amt)
+    }
+}
 
 /// Decoder of byte slices into strings.
 ///

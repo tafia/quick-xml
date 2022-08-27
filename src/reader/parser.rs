@@ -187,7 +187,6 @@ impl Parser {
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
                 let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
-
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
                 if self.encoding.can_be_refined() {

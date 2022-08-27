@@ -6,15 +6,15 @@
 
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, Read};
 use std::ops::Deref;
 use std::path::Path;
 
+use crate::encoding::Utf8BytesReader;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 use crate::reader::{Reader, Span, XmlSource};
-
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
 /// Consumes a [`BufRead`] and streams XML `Event`s.
@@ -33,14 +33,12 @@ pub struct NsReader<R> {
 }
 
 /// Builder methods
-impl<R> NsReader<R> {
+impl<R: Read> NsReader<Utf8BytesReader<R>> {
     /// Creates a `NsReader` that reads from a reader.
     #[inline]
     pub fn from_reader(reader: R) -> Self {
         Self::new(Reader::from_reader(reader))
     }
-
-    configure_methods!(reader);
 }
 
 /// Private methods
@@ -118,8 +116,11 @@ impl<R> NsReader<R> {
     }
 }
 
-/// Getters
+/// Public implementation-independent functionality
 impl<R> NsReader<R> {
+    // Configuration setters
+    configure_methods!(reader);
+
     /// Consumes `NsReader` returning the underlying reader
     ///
     /// See the [`Reader::into_inner`] for examples
@@ -528,7 +529,7 @@ impl<R: BufRead> NsReader<R> {
     }
 }
 
-impl NsReader<BufReader<File>> {
+impl NsReader<Utf8BytesReader<File>> {
     /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self::new(Reader::from_file(path)?))
