@@ -74,6 +74,7 @@ macro_rules! write_primitive {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 mod key;
+pub(crate) mod simple_type;
 mod var;
 
 use self::var::{Map, Seq, Struct, Tuple};
@@ -99,6 +100,56 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
     to_writer(&mut writer, value)?;
     Ok(String::from_utf8(writer)?)
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Defines which characters would be escaped in [`Text`] events and attribute
+/// values.
+///
+/// [`Text`]: Event::Text
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuoteLevel {
+    /// Performs escaping, escape all characters that could have special meaning
+    /// in the XML. This mode is compatible with SGML specification.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `>`      | `&gt;`
+    /// `&`      | `&amp;`
+    /// `"`      | `&quot;`
+    /// `'`      | `&apos;`
+    Full,
+    /// Performs escaping that is compatible with SGML specification.
+    ///
+    /// This level adds escaping of `>` to the `Minimal` level, which is [required]
+    /// for compatibility with SGML.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `>`      | `&gt;`
+    /// `&`      | `&amp;`
+    ///
+    /// [required]: https://www.w3.org/TR/xml11/#syntax
+    Partial,
+    /// Performs the minimal possible escaping, escape only strictly necessary
+    /// characters.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `&`      | `&amp;`
+    Minimal,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Almost all characters can form a name. Citation from <https://www.w3.org/TR/xml11/#sec-xml11>:
 ///
