@@ -828,10 +828,26 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
+    use crate::se::QuoteLevel;
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
+
+    macro_rules! simple_only {
+        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
+            #[test]
+            fn $name() {
+                let decoder = Decoder::$encoding();
+                let xml = $xml;
+                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true, decoder);
+                let data: $type = Deserialize::deserialize(de).unwrap();
+
+                assert_eq!(data, $result);
+            }
+        };
+    }
 
     macro_rules! simple {
         ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
@@ -843,6 +859,17 @@ mod tests {
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
                 assert_eq!(data, $result);
+
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    data.serialize(SimpleTypeSerializer {
+                        writer: String::new(),
+                        target: QuoteTarget::Text,
+                        level: QuoteLevel::Full,
+                    })
+                    .unwrap(),
+                    xml
+                );
             }
         };
     }
@@ -910,8 +937,7 @@ mod tests {
     /// Tests for deserialize atomic and union values, as defined in XSD specification
     mod atomic {
         use super::*;
-        use crate::se::simple_type::{AtomicSerializer, QuoteTarget};
-        use crate::se::QuoteLevel;
+        use crate::se::simple_type::AtomicSerializer;
         use pretty_assertions::assert_eq;
 
         /// Checks that given `$input` successfully deserializing into given `$result`
@@ -1207,7 +1233,7 @@ mod tests {
         simple!(utf8, char_unescaped: char = "h" => 'h');
         simple!(utf8, char_escaped: char = "&lt;" => '<');
 
-        simple!(utf8, string: String = "&lt;escaped&#32;string" => "<escaped string");
+        simple!(utf8, string: String = "&lt;escaped string" => "<escaped string");
         err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
@@ -1218,11 +1244,17 @@ mod tests {
         simple!(utf8, option_none: Option<&str> = "" => None);
         simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
 
-        simple!(utf8, unit: () = "any data" => ());
-        simple!(utf8, unit_struct: Unit = "any data" => Unit);
+        simple_only!(utf8, unit: () = "any data" => ());
+        simple_only!(utf8, unit_struct: Unit = "any data" => Unit);
 
-        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
-        simple!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+        // Serializer will not escape space because this is unnecessary.
+        // Because borrowing has meaning only for deserializer, no need to test
+        // roundtrip here, it is already tested for strings where compatible list
+        // of escaped characters is used
+        simple_only!(utf8, newtype_owned: Newtype = "&lt;escaped&#32;string"
+            => Newtype("<escaped string".into()));
+        simple_only!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string"
+            => BorrowedNewtype("non-escaped string"));
 
         err!(utf8, map: HashMap<(), ()> = "any data"
              => Unsupported("maps are not supported for XSD `simpleType`s"));
@@ -1239,8 +1271,8 @@ mod tests {
         err!(utf8, enum_other: Enum = "any data"
              => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        simple!(utf8, identifier: Id = "Field" => Id::Field);
-        simple!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
+        simple_only!(utf8, identifier: Id = "Field" => Id::Field);
+        simple_only!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
     }
 
     #[cfg(feature = "encoding")]
@@ -1258,7 +1290,7 @@ mod tests {
 
         macro_rules! utf16 {
             ($name:ident: $type:ty = $xml:literal => $result:expr) => {
-                simple!(utf16, $name: $type = to_utf16($xml) => $result);
+                simple_only!(utf16, $name: $type = to_utf16($xml) => $result);
             };
         }
 
