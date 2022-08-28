@@ -12,6 +12,14 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+## 0.24.0 -- 2022-08-28
+
+### New Features
+
 - [#387]: Allow overlapping between elements of sequence and other elements
   (using new feature `overlapped-lists`)
 - [#393]: New module `name` with `QName`, `LocalName`, `Namespace`, `Prefix`
