@@ -830,7 +830,7 @@ mod tests {
     use super::*;
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
     macro_rules! simple {
@@ -869,22 +869,22 @@ mod tests {
         };
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Unit;
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Newtype(String);
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct BorrowedNewtype<'a>(&'a str);
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Struct {
         key: String,
         val: usize,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     enum Enum {
         Unit,
         Newtype(String),
@@ -910,9 +910,28 @@ mod tests {
     /// Tests for deserialize atomic and union values, as defined in XSD specification
     mod atomic {
         use super::*;
+        use crate::se::simple_type::{AtomicSerializer, QuoteTarget};
+        use crate::se::QuoteLevel;
         use pretty_assertions::assert_eq;
 
         /// Checks that given `$input` successfully deserializing into given `$result`
+        macro_rules! deserialized_to_only {
+            ($name:ident: $type:ty = $input:literal => $result:expr) => {
+                #[test]
+                fn $name() {
+                    let de = AtomicDeserializer {
+                        content: Content::Input($input),
+                        escaped: true,
+                    };
+                    let data: $type = Deserialize::deserialize(de).unwrap();
+
+                    assert_eq!(data, $result);
+                }
+            };
+        }
+
+        /// Checks that given `$input` successfully deserializing into given `$result`
+        /// and the result is serialized back to the `$input`
         macro_rules! deserialized_to {
             ($name:ident: $type:ty = $input:literal => $result:expr) => {
                 #[test]
@@ -924,6 +943,17 @@ mod tests {
                     let data: $type = Deserialize::deserialize(de).unwrap();
 
                     assert_eq!(data, $result);
+
+                    // Roundtrip to ensure that serializer corresponds to deserializer
+                    assert_eq!(
+                        data.serialize(AtomicSerializer {
+                            writer: String::new(),
+                            target: QuoteTarget::Text,
+                            level: QuoteLevel::Full,
+                        })
+                        .unwrap(),
+                        $input
+                    );
                 }
             };
         }
@@ -978,7 +1008,9 @@ mod tests {
         deserialized_to!(char_escaped: char = "&lt;" => '<');
 
         deserialized_to!(string: String = "&lt;escaped&#32;string" => "<escaped string");
-        deserialized_to!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
+        // Serializer will escape space. Because borrowing has meaning only for deserializer,
+        // no need to test roundtrip here, it is already tested with non-borrowing version
+        deserialized_to_only!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
         err!(escaped_str: &str = "escaped&#32;string"
                 => Custom("invalid type: string \"escaped string\", expected a borrowed string"));
 
@@ -988,13 +1020,16 @@ mod tests {
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
 
         deserialized_to!(option_none: Option<&str> = "" => None);
-        deserialized_to!(option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
+        deserialized_to!(option_some: Option<&str> = "non-escaped-string" => Some("non-escaped-string"));
 
-        deserialized_to!(unit: () = "<root>anything</root>" => ());
-        deserialized_to!(unit_struct: Unit = "<root>anything</root>" => Unit);
+        deserialized_to_only!(unit: () = "<root>anything</root>" => ());
+        deserialized_to_only!(unit_struct: Unit = "<root>anything</root>" => Unit);
 
         deserialized_to!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
-        deserialized_to!(newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+        // Serializer will escape space. Because borrowing has meaning only for deserializer,
+        // no need to test roundtrip here, it is already tested with non-borrowing version
+        deserialized_to_only!(newtype_borrowed: BorrowedNewtype = "non-escaped string"
+                => BorrowedNewtype("non-escaped string"));
 
         err!(seq: Vec<()> = "non-escaped string"
                 => Unsupported("sequences are not supported as `xs:list` items"));
@@ -1018,8 +1053,8 @@ mod tests {
         err!(enum_other: Enum = "any data"
                 => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        deserialized_to!(identifier: Id = "Field" => Id::Field);
-        deserialized_to!(ignored_any: Any = "any data" => Any(IgnoredAny));
+        deserialized_to_only!(identifier: Id = "Field" => Id::Field);
+        deserialized_to_only!(ignored_any: Any = "any data" => Any(IgnoredAny));
 
         /// Checks that deserialization from an owned content is working
         #[test]
