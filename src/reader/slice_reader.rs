@@ -5,9 +5,7 @@
 use std::borrow::Cow;
 
 #[cfg(feature = "encoding")]
-use crate::reader::EncodingRef;
-#[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::Encoding;
 
 use crate::errors::{Error, Result};
 use crate::events::Event;
@@ -16,24 +14,10 @@ use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, Xml
 
 use memchr;
 
-/// This is an implementation for reading from a `&[u8]` as underlying byte stream.
-/// This implementation supports not using an intermediate buffer as the byte slice
-/// itself can be used to borrow from.
+/// This is an implementation of [`Reader`] for reading from a `&[u8]` as
+/// underlying byte stream. This implementation supports not using an
+/// intermediate buffer as the byte slice itself can be used to borrow from.
 impl<'a> Reader<&'a [u8]> {
-    /// Creates an XML reader from a string slice.
-    pub fn from_str(s: &'a str) -> Self {
-        // Rust strings are guaranteed to be UTF-8, so lock the encoding
-        #[cfg(feature = "encoding")]
-        {
-            let mut reader = Self::from_reader(s.as_bytes());
-            reader.parser.encoding = EncodingRef::Explicit(UTF_8);
-            reader
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        Self::from_reader(s.as_bytes())
-    }
-
     /// Read an event that borrows from the input rather than a buffer.
     ///
     /// There is no asynchronous `read_event_async()` version of this function,

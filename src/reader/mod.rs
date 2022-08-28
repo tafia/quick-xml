@@ -1,8 +1,9 @@
 //! Contains high-level interface for a pull-based XML parser.
 
-#[cfg(feature = "encoding")]
-use encoding_rs::Encoding;
 use std::ops::Range;
+
+#[cfg(feature = "encoding")]
+use encoding_rs::{Encoding, UTF_8};
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
@@ -458,8 +459,36 @@ pub struct Reader<R> {
     parser: Parser,
 }
 
-/// Builder methods
+/// Methods specialized to reading from a slice
+impl<'a> Reader<&'a [u8]> {
+    /// Creates an XML reader from a string slice.
+    pub fn from_str(s: &'a str) -> Self {
+        // Rust strings are guaranteed to be UTF-8, so lock the encoding
+        #[cfg(feature = "encoding")]
+        {
+            let mut parser = Parser::default();
+            parser.encoding = EncodingRef::Explicit(UTF_8);
+            Self {
+                reader: s.as_bytes(),
+                parser: parser,
+            }
+        }
+
+        #[cfg(not(feature = "encoding"))]
+        {
+            Self {
+                reader: s.as_bytes(),
+                parser: Parser::default(),
+            }
+        }
+    }
+}
+
+/// Public implementation-independent functionality
 impl<R> Reader<R> {
+    /// Configuration methods
+    configure_methods!();
+
     /// Creates a `Reader` that reads from a given reader.
     pub fn from_reader(reader: R) -> Self {
         Self {
@@ -468,11 +497,6 @@ impl<R> Reader<R> {
         }
     }
 
-    configure_methods!();
-}
-
-/// Getters
-impl<R> Reader<R> {
     /// Consumes `Reader` returning the underlying reader
     ///
     /// Can be used to compute line and column of a parsing error position
