@@ -4,7 +4,7 @@ use std::io::Read;
 use std::ops::Range;
 
 #[cfg(feature = "encoding")]
-use encoding_rs::Encoding;
+use encoding_rs::{Encoding, UTF_8};
 
 use crate::encoding::{Decoder, Utf8BytesReader};
 use crate::errors::{Error, Result};
@@ -536,6 +536,31 @@ impl<R: Read> Reader<Utf8BytesReader<R>> {
         Self {
             reader: Utf8BytesReader::new(reader),
             parser: Parser::default(),
+        }
+    }
+}
+
+/// Builder methods
+impl<'a> Reader<&'a [u8]> {
+    /// Creates an XML reader from a string slice.
+    pub fn from_str(s: &'a str) -> Self {
+        // Rust strings are guaranteed to be UTF-8, so lock the encoding
+        #[cfg(feature = "encoding")]
+        {
+            let mut parser = Parser::default();
+            parser.encoding = EncodingRef::Explicit(UTF_8);
+            Self {
+                reader: s.as_bytes(),
+                parser: parser,
+            }
+        }
+
+        #[cfg(not(feature = "encoding"))]
+        {
+            Self {
+                reader: s.as_bytes(),
+                parser: Parser::default(),
+            }
         }
     }
 }
