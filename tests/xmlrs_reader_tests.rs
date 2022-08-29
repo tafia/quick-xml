@@ -394,7 +394,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     loop {
         let line = match reader.read_resolved_event_into(&mut Vec::new()) {
             Ok((_, Event::Decl(e))) => {
-                // Declaration could change decoder
+                // Declaration could change encoding
                 let version = e.version().unwrap();
                 let encoding = e.encoding().unwrap().unwrap();
                 format!("StartDocument({}, {})", version, encoding)

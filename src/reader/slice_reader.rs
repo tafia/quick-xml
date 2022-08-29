@@ -152,13 +152,11 @@ impl<'a> Reader<&'a [u8]> {
     /// it reads, and if, for example, it contains CDATA section, attempt to
     /// unescape it content will spoil data.
     ///
-    /// Any text will be decoded using the XML current [`decoder()`].
-    ///
     /// Actually, this method perform the following code:
     ///
     /// ```ignore
     /// let span = reader.read_to_end(end)?;
-    /// let text = reader.decoder().decode(&reader.inner_slice[span]);
+    /// let text = std::str::from_utf8(&reader.inner_slice[span]);
     /// ```
     ///
     /// # Examples
@@ -206,13 +204,12 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     ///
     /// [`Start`]: Event::Start
-    /// [`decoder()`]: Self::decoder()
     pub fn read_text(&mut self, end: QName) -> Result<Cow<'a, str>> {
         // self.reader will be changed, so store original reference
         let buffer = self.reader;
         let span = self.read_to_end(end)?;
 
-        self.decoder().decode(&buffer[0..span.len()])
+        Ok(Cow::Borrowed(std::str::from_utf8(&buffer[0..span.len()])?))
     }
 }
 
@@ -364,9 +361,9 @@ mod test {
         fn str_always_has_utf8() {
             let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
 
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
             reader.read_event().unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
 
             assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }

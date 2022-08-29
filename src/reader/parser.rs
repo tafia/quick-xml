@@ -1,7 +1,6 @@
 #[cfg(feature = "encoding")]
 use encoding_rs::UTF_8;
 
-use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
@@ -55,6 +54,16 @@ pub(super) struct Parser {
 
     #[cfg(feature = "encoding")]
     /// Reference to the encoding used to read an XML
+    ///
+    /// If feature `encoding` is enabled, this encoding is taken from the `"encoding"`
+    /// XML declaration or assumes UTF-8, if XML has no <?xml ?> declaration, encoding
+    /// key is not defined or contains unknown encoding.
+    ///
+    /// The library supports any UTF-8 compatible encodings that crate `encoding_rs`
+    /// is supported. [*UTF-16 and ISO-2022-JP are not supported at the present*][utf16].
+    ///
+    /// If feature `encoding` is disabled, the decoder is always UTF-8 decoder:
+    /// any XML declarations are ignored.
     pub encoding: EncodingRef,
 }
 
@@ -248,20 +257,6 @@ impl Parser {
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
         Ok(Event::End(BytesEnd::new(name)))
-    }
-
-    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
-    ///
-    /// If `encoding` feature is enabled, the used encoding may change after
-    /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
-    ///
-    /// If `encoding` feature is enabled and no encoding is specified in declaration,
-    /// defaults to UTF-8.
-    pub fn decoder(&self) -> Decoder {
-        Decoder {
-            #[cfg(feature = "encoding")]
-            encoding: self.encoding.encoding(),
-        }
     }
 }
 

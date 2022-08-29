@@ -91,7 +91,7 @@ async-tokio = ["tokio"]
 ## let mut buf = Vec::new();
 ## let mut unsupported = false;
 ## loop {
-##     if !reader.decoder().encoding().is_ascii_compatible() {
+##     if !reader.encoding().is_ascii_compatible() {
 ##         unsupported = true;
 ##         break;
 ##     }

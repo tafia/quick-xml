@@ -71,7 +71,6 @@ pub mod utils;
 pub mod writer;
 
 // reexports
-pub use crate::encoding::Decoder;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::DeError;
 pub use crate::errors::{Error, Result};

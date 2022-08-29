@@ -1931,7 +1931,7 @@ pub use crate::errors::serialize::DeError;
 pub use resolver::{EntityResolver, NoEntityResolver};
 
 use crate::{
-    encoding::{Decoder, Utf8BytesReader},
+    encoding::Utf8BytesReader,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,

@@ -775,13 +775,11 @@ impl<'i> NsReader<&'i [u8]> {
     /// it reads, and if, for example, it contains CDATA section, attempt to
     /// unescape it content will spoil data.
     ///
-    /// Any text will be decoded using the XML current [`decoder()`].
-    ///
     /// Actually, this method perform the following code:
     ///
     /// ```ignore
     /// let span = reader.read_to_end(end)?;
-    /// let text = reader.decoder().decode(&reader.inner_slice[span]);
+    /// let text = std::str::from_utf8(&reader.inner_slice[span]);
     /// ```
     ///
     /// # Examples
@@ -828,7 +826,6 @@ impl<'i> NsReader<&'i [u8]> {
     /// ```
     ///
     /// [`Start`]: Event::Start
-    /// [`decoder()`]: Reader::decoder()
     #[inline]
     pub fn read_text(&mut self, end: QName) -> Result<Cow<'i, str>> {
         self.reader.read_text(end)

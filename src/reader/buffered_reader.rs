@@ -445,9 +445,9 @@ mod test {
                 Reader::from_reader(b"\xFF\xFE<?xml encoding='windows-1251'?>".as_ref());
             let mut buf = Vec::new();
 
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
             reader.read_event_into(&mut buf).unwrap();
-            assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
+            assert_eq!(reader.encoding(), WINDOWS_1251);
 
             assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
         }
@@ -460,12 +460,12 @@ mod test {
             );
             let mut buf = Vec::new();
 
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
             reader.read_event_into(&mut buf).unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_16LE);
+            assert_eq!(reader.encoding(), UTF_16LE);
 
             reader.read_event_into(&mut buf).unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_16LE);
+            assert_eq!(reader.encoding(), UTF_16LE);
 
             assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
         }

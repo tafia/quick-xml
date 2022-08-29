@@ -6,7 +6,7 @@ use std::ops::Range;
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_8};
 
-use crate::encoding::{Decoder, Utf8BytesReader};
+use crate::encoding::Utf8BytesReader;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::reader::parser::Parser;
@@ -350,8 +350,7 @@ macro_rules! read_to_end {
                     depth -= 1;
                 }
                 Ok(Event::Eof) => {
-                    let name = $self.decoder().decode($end.as_ref().as_bytes());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", $end.as_ref())));
                 }
                 _ => (),
             }
@@ -598,16 +597,17 @@ impl<R> Reader<R> {
         }
     }
 
-    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    /// Get the encoding this reader is currently using to decode strings.
     ///
     /// If `encoding` feature is enabled, the used encoding may change after
     /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
     ///
     /// If `encoding` feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
+    #[cfg(feature = "encoding")]
     #[inline]
-    pub fn decoder(&self) -> Decoder {
-        self.parser.decoder()
+    pub fn encoding(&self) -> &'static Encoding {
+        self.parser.encoding.encoding()
     }
 }
 

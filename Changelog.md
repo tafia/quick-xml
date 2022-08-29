@@ -238,6 +238,9 @@
 
 ### Misc Changes
 
+- [#441]: `Reader::decoder()` removed as it is no longer necessary (`Reader` already
+  decodes everything for you). `Reader::encoding()` is provided to make the current
+  encoding accessible as it was before.
 - [#481]: Removed the uses of `const fn` added in version 0.24 in favor of a lower minimum
   supported Rust version (1.46.0).  Minimum supported Rust version is now verified in the CI.
 - [#489]: Reduced the size of the package uploaded into the crates.io by excluding
