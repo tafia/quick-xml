@@ -17,6 +17,7 @@
 ### Misc Changes
 
 - [#468]: Content of `DeError::Unsupported` changed from `&'static str` to `Cow<'static, str>`
+- [#468]: Ensure that map keys are restricted to only types that can be serialized as primitives
 
 [#468]: https://github.com/tafia/quick-xml/pull/468
 

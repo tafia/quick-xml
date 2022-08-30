@@ -294,4 +294,11 @@ pub mod serialize {
             Self::InvalidFloat(e)
         }
     }
+
+    impl From<fmt::Error> for DeError {
+        #[inline]
+        fn from(e: fmt::Error) -> Self {
+            Self::Custom(e.to_string())
+        }
+    }
 }

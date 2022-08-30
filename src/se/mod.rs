@@ -1,5 +1,83 @@
 //! Module to handle custom serde `Serializer`
 
+/// Implements writing primitives to the underlying writer.
+/// Implementor must provide `write_str(self, &str) -> Result<(), DeError>` method
+macro_rules! write_primitive {
+    ($method:ident ( $ty:ty )) => {
+        fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
+            self.write_str(&value.to_string())?;
+            Ok(self.writer)
+        }
+    };
+    () => {
+        fn serialize_bool(mut self, value: bool) -> Result<Self::Ok, Self::Error> {
+            self.write_str(if value { "true" } else { "false" })?;
+            Ok(self.writer)
+        }
+
+        write_primitive!(serialize_i8(i8));
+        write_primitive!(serialize_i16(i16));
+        write_primitive!(serialize_i32(i32));
+        write_primitive!(serialize_i64(i64));
+
+        write_primitive!(serialize_u8(u8));
+        write_primitive!(serialize_u16(u16));
+        write_primitive!(serialize_u32(u32));
+        write_primitive!(serialize_u64(u64));
+
+        serde_if_integer128! {
+            write_primitive!(serialize_i128(i128));
+            write_primitive!(serialize_u128(u128));
+        }
+
+        write_primitive!(serialize_f32(f32));
+        write_primitive!(serialize_f64(f64));
+
+        fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
+            self.serialize_str(&value.to_string())
+        }
+
+        fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
+            //TODO: customization point - allow user to decide how to encode bytes
+            Err(DeError::Unsupported(
+                "`serialize_bytes` not supported yet".into(),
+            ))
+        }
+
+        fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+            Ok(self.writer)
+        }
+
+        fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
+            value.serialize(self)
+        }
+
+        fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
+            self.serialize_str(name)
+        }
+
+        fn serialize_unit_variant(
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            variant: &'static str,
+        ) -> Result<Self::Ok, Self::Error> {
+            self.serialize_str(variant)
+        }
+
+        fn serialize_newtype_struct<T: ?Sized + Serialize>(
+            self,
+            _name: &'static str,
+            value: &T,
+        ) -> Result<Self::Ok, Self::Error> {
+            value.serialize(self)
+        }
+    };
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+mod key;
 mod var;
 
 use self::var::{Map, Seq, Struct, Tuple};

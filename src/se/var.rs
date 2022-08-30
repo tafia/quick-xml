@@ -2,6 +2,7 @@ use crate::{
     de::{INNER_VALUE, UNFLATTEN_PREFIX},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
+    se::key::XmlNameSerializer,
     se::Serializer,
     writer::Writer,
 };
@@ -64,17 +65,21 @@ where
         key: &K,
         value: &V,
     ) -> Result<(), DeError> {
-        // TODO: Is it possible to ensure our key is never a composite type?
-        // Anything which isn't a "primitive" would lead to malformed XML here...
-        write!(self.parent.writer.inner(), "<").map_err(Error::Io)?;
-        key.serialize(&mut *self.parent)?;
-        write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+        let key = key.serialize(XmlNameSerializer {
+            writer: String::new(),
+        })?;
+
+        let writer = self.parent.writer.inner();
+        writer.write_all(b"<").map_err(Error::Io)?;
+        writer.write_all(key.as_bytes()).map_err(Error::Io)?;
+        writer.write_all(b">").map_err(Error::Io)?;
 
         value.serialize(&mut *self.parent)?;
 
-        write!(self.parent.writer.inner(), "</").map_err(Error::Io)?;
-        key.serialize(&mut *self.parent)?;
-        write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+        let writer = self.parent.writer.inner();
+        writer.write_all(b"</").map_err(Error::Io)?;
+        writer.write_all(key.as_bytes()).map_err(Error::Io)?;
+        writer.write_all(b">").map_err(Error::Io)?;
         Ok(())
     }
 }
