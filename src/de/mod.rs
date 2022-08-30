@@ -356,7 +356,6 @@ use std::num::NonZeroUsize;
 pub(crate) const TEXT_KEY: &str = "$text";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
-pub(crate) const PRIMITIVE_PREFIX: &str = "$primitive=";
 
 /// Simplified event which contains only these variants that used by deserializer
 #[derive(Debug, PartialEq, Eq)]

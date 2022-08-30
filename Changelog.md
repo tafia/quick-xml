@@ -14,11 +14,24 @@
 
 ### Bug Fixes
 
+- [#490]: Ensure that serialization of map keys always produces valid XML names.
+  In particular, that means that maps with numeric and numeric-like keys (for
+  example, `"42"`) no longer can be serialized because [XML name] cannot start
+  from a digit
+
 ### Misc Changes
 
 - [#490]: Removed `$unflatten=` special prefix for fields for serde (de)serializer, because:
   - it is useless for deserializer
   - serializer was rewritten and does not require it anymore
+
+  This prefix allowed you to serialize struct field as an XML element and now
+  replaced by a more thoughtful system explicitly indicating that a field should
+  be serialized as an attribute by prepending `@` character to its name
+- [#490]: Removed `$primitive=` prefix. That prefix allowed you to serialize struct
+  field as an attribute instead of an element and now replaced by a more thoughtful
+  system explicitly indicating that a field should be serialized as an attribute
+  by prepending `@` character to its name
 - [#490]: In addition to the `$value` special name for a field a new `$text`
   special name was added:
   - `$text` is used if you want to map field to text content only. No markup is
@@ -31,6 +44,7 @@
   Refer to [documentation] for details.
 
 [#490]: https://github.com/tafia/quick-xml/pull/490
+[XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
 ## 0.26.0 -- 2022-10-23

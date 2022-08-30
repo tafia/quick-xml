@@ -1,6 +1,5 @@
 use quick_xml::se::Serializer;
 use quick_xml::utils::Bytes;
-use quick_xml::writer::Writer;
 use quick_xml::DeError;
 
 use serde::{serde_if_integer128, Serialize};
@@ -52,8 +51,6 @@ struct Text {
 #[derive(Serialize)]
 enum ExternallyTagged {
     Unit,
-    #[serde(rename = "$primitive=PrimitiveUnit")]
-    PrimitiveUnit,
     Newtype(bool),
     Tuple(f64, &'static str),
     Struct {
@@ -167,11 +164,9 @@ mod without_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = Vec::new();
-                let mut ser = Serializer::new(&mut buffer);
+                let ser = Serializer::new(String::new());
 
-                $data.serialize(&mut ser).unwrap();
-                assert_eq!(String::from_utf8(buffer).unwrap(), $expected);
+                assert_eq!($data.serialize(ser).unwrap(), $expected);
             }
         };
     }
@@ -182,10 +177,10 @@ mod without_root {
         ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let mut buffer = Vec::new();
-                let mut ser = Serializer::new(&mut buffer);
+                let mut buffer = String::new();
+                let ser = Serializer::new(&mut buffer);
 
-                match $data.serialize(&mut ser) {
+                match $data.serialize(ser) {
                     Err(DeError::$kind(e)) => assert_eq!(e, $reason),
                     e => panic!(
                         "Expected `{}({})`, found `{:?}`",
@@ -194,7 +189,7 @@ mod without_root {
                         e
                     ),
                 }
-                assert_eq!(String::from_utf8(buffer).unwrap(), "");
+                assert_eq!(buffer, "");
             }
         };
     }
@@ -233,7 +228,7 @@ mod without_root {
     err!(str_non_escaped: "non-escaped string" => Unsupported("cannot serialize `&str` without defined root tag"));
     err!(str_escaped:  "<\"escaped & string'>" => Unsupported("cannot serialize `&str` without defined root tag"));
 
-    err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+    err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("cannot serialize `&[u8]` without defined root tag"));
 
     serialize_as!(option_none: Option::<Unit>::None => "");
     serialize_as!(option_some: Some(Unit) => "<Unit/>");
@@ -306,9 +301,6 @@ mod without_root {
             serialize_as!(unit:
                 ExternallyTagged::Unit
                 => "<Unit/>");
-            serialize_as!(primitive_unit:
-                ExternallyTagged::PrimitiveUnit
-                => "<PrimitiveUnit/>");
             serialize_as!(newtype:
                 ExternallyTagged::Newtype(true)
                 => "<Newtype>true</Newtype>");
@@ -565,11 +557,9 @@ mod with_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = Vec::new();
-                let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
 
-                $data.serialize(&mut ser).unwrap();
-                assert_eq!(String::from_utf8(buffer).unwrap(), $expected);
+                assert_eq!($data.serialize(ser).unwrap(), $expected);
             }
         };
     }
@@ -580,10 +570,10 @@ mod with_root {
         ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let mut buffer = Vec::new();
-                let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+                let mut buffer = String::new();
+                let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
 
-                match $data.serialize(&mut ser) {
+                match $data.serialize(ser) {
                     Err(DeError::$kind(e)) => assert_eq!(e, $reason),
                     e => panic!(
                         "Expected `{}({})`, found `{:?}`",
@@ -593,7 +583,7 @@ mod with_root {
                     ),
                 }
                 // We can write something before fail
-                // assert_eq!(String::from_utf8(buffer).unwrap(), "");
+                // assert_eq!(buffer, "");
             }
         };
     }
@@ -721,9 +711,6 @@ mod with_root {
             serialize_as!(unit:
                 ExternallyTagged::Unit
                 => "<Unit/>");
-            serialize_as!(primitive_unit:
-                ExternallyTagged::PrimitiveUnit
-                => "<PrimitiveUnit/>");
             serialize_as!(newtype:
                 ExternallyTagged::Newtype(true)
                 => "<Newtype>true</Newtype>");
