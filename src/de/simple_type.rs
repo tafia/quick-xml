@@ -47,7 +47,7 @@ macro_rules! unsupported {
             $($(_: $type,)*)?
             _visitor: V
         ) -> Result<V::Value, Self::Error> {
-            Err(DeError::Unsupported($message))
+            Err(DeError::Unsupported($message.into()))
         }
     };
 }
@@ -345,7 +345,7 @@ impl<'de> VariantAccess<'de> for AtomicUnitOnly {
         T: DeserializeSeed<'de>,
     {
         Err(DeError::Unsupported(
-            "enum newtype variants are not supported as `xs:list` items",
+            "enum newtype variants are not supported as `xs:list` items".into(),
         ))
     }
 
@@ -354,7 +354,7 @@ impl<'de> VariantAccess<'de> for AtomicUnitOnly {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "enum tuple variants are not supported as `xs:list` items",
+            "enum tuple variants are not supported as `xs:list` items".into(),
         ))
     }
 
@@ -367,7 +367,7 @@ impl<'de> VariantAccess<'de> for AtomicUnitOnly {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "enum struct variants are not supported as `xs:list` items",
+            "enum struct variants are not supported as `xs:list` items".into(),
         ))
     }
 }
@@ -648,7 +648,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "binary data content is not supported by XML format",
+            "binary data content is not supported by XML format".into(),
         ))
     }
 
@@ -796,7 +796,7 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
         T: DeserializeSeed<'de>,
     {
         Err(DeError::Unsupported(
-            "enum newtype variants are not supported for XSD `simpleType`s",
+            "enum newtype variants are not supported for XSD `simpleType`s".into(),
         ))
     }
 
@@ -805,7 +805,7 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "enum tuple variants are not supported for XSD `simpleType`s",
+            "enum tuple variants are not supported for XSD `simpleType`s".into(),
         ))
     }
 
@@ -818,7 +818,7 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "enum struct variants are not supported for XSD `simpleType`s",
+            "enum struct variants are not supported for XSD `simpleType`s".into(),
         ))
     }
 }

@@ -16,6 +16,10 @@
 
 ### Misc Changes
 
+- [#468]: Content of `DeError::Unsupported` changed from `&'static str` to `Cow<'static, str>`
+
+[#468]: https://github.com/tafia/quick-xml/pull/468
+
 ## 0.24.0 -- 2022-08-28
 
 ### New Features

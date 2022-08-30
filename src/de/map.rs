@@ -752,7 +752,9 @@ where
                         self.map.de.reader.decoder(),
                     )
                     .deserialize_seq(visitor),
-                    e => Err(DeError::Custom(format!("Unsupported event {:?}", e))),
+                    e => Err(DeError::Unsupported(
+                        format!("unsupported event {:?}", e).into(),
+                    )),
                 };
                 // TODO: May be assert that here we expect only matching closing tag?
                 self.map.de.read_to_end(e.name())?;

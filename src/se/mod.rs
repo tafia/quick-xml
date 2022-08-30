@@ -209,7 +209,9 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, DeError> {
         // TODO: I imagine you'd want to use base64 here.
         // Not sure how to roundtrip effectively though...
-        Err(DeError::Unsupported("serialize_bytes"))
+        Err(DeError::Unsupported(
+            "`serialize_bytes` not supported yet".into(),
+        ))
     }
 
     fn serialize_none(self) -> Result<Self::Ok, DeError> {
