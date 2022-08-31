@@ -119,20 +119,20 @@ struct Tuple(f32, &'static str);
 #[derive(Serialize)]
 struct Struct {
     float: f64,
-    string: String,
+    string: &'static str,
 }
 
 #[derive(Serialize)]
 struct NestedStruct {
     nested: Nested,
-    string: String,
+    string: &'static str,
 }
 
 #[derive(Serialize)]
 struct FlattenStruct {
     #[serde(flatten)]
     nested: Nested,
-    string: String,
+    string: &'static str,
 }
 
 #[derive(Serialize)]
@@ -146,19 +146,19 @@ enum ExternallyTagged {
     #[serde(rename = "$primitive=PrimitiveUnit")]
     PrimitiveUnit,
     Newtype(bool),
-    Tuple(f64, String),
+    Tuple(f64, &'static str),
     Struct {
         float: f64,
-        string: String,
+        string: &'static str,
     },
     Holder {
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
     Flatten {
         #[serde(flatten)]
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
 }
 
@@ -168,19 +168,19 @@ enum InternallyTagged {
     Unit,
     /// Primitives (such as `bool`) are not supported by the serde in the internally tagged mode
     Newtype(Nested),
-    // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
+    // Tuple(f64, &'static str),// Tuples are not supported in the internally tagged mode
     Struct {
         float: f64,
-        string: String,
+        string: &'static str,
     },
     Holder {
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
     Flatten {
         #[serde(flatten)]
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
 }
 
@@ -189,19 +189,19 @@ enum InternallyTagged {
 enum AdjacentlyTagged {
     Unit,
     Newtype(bool),
-    Tuple(f64, String),
+    Tuple(f64, &'static str),
     Struct {
         float: f64,
-        string: String,
+        string: &'static str,
     },
     Holder {
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
     Flatten {
         #[serde(flatten)]
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
 }
 
@@ -210,19 +210,19 @@ enum AdjacentlyTagged {
 enum Untagged {
     Unit,
     Newtype(bool),
-    Tuple(f64, String),
+    Tuple(f64, &'static str),
     Struct {
         float: f64,
-        string: String,
+        string: &'static str,
     },
     Holder {
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
     Flatten {
         #[serde(flatten)]
         nested: Nested,
-        string: String,
+        string: &'static str,
     },
 }
 
@@ -279,7 +279,7 @@ fn struct_() {
 
     let node = Struct {
         float: 42.0,
-        string: "answer".to_string(),
+        string: "answer",
     };
     node.serialize(&mut ser).unwrap();
     assert_eq!(
@@ -295,7 +295,7 @@ fn nested_struct() {
 
     let node = NestedStruct {
         nested: Nested { float: 42.0 },
-        string: "answer".to_string(),
+        string: "answer",
     };
     node.serialize(&mut ser).unwrap();
     assert_eq!(
@@ -311,7 +311,7 @@ fn flatten_struct() {
 
     let node = FlattenStruct {
         nested: Nested { float: 42.0 },
-        string: "answer".to_string(),
+        string: "answer",
     };
     node.serialize(&mut ser).unwrap();
     assert_eq!(
@@ -367,7 +367,7 @@ mod enum_ {
 
             let node = ExternallyTagged::Struct {
                 float: 42.0,
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -381,7 +381,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = ExternallyTagged::Tuple(42.0, "answer".to_string());
+            let node = ExternallyTagged::Tuple(42.0, "answer");
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -396,7 +396,7 @@ mod enum_ {
 
             let node = ExternallyTagged::Holder {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -412,7 +412,7 @@ mod enum_ {
 
             let node = ExternallyTagged::Flatten {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -456,7 +456,7 @@ mod enum_ {
 
             let node = InternallyTagged::Struct {
                 float: 42.0,
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -472,7 +472,7 @@ mod enum_ {
 
             let node = InternallyTagged::Holder {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -488,7 +488,7 @@ mod enum_ {
 
             let node = InternallyTagged::Flatten {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -530,7 +530,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = AdjacentlyTagged::Tuple(42.0, "answer".to_string());
+            let node = AdjacentlyTagged::Tuple(42.0, "answer");
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -545,7 +545,7 @@ mod enum_ {
 
             let node = AdjacentlyTagged::Struct {
                 float: 42.0,
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -561,7 +561,7 @@ mod enum_ {
 
             let node = AdjacentlyTagged::Holder {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -577,7 +577,7 @@ mod enum_ {
 
             let node = AdjacentlyTagged::Flatten {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -618,7 +618,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Untagged::Tuple(42.0, "answer".to_string());
+            let node = Untagged::Tuple(42.0, "answer");
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -633,7 +633,7 @@ mod enum_ {
 
             let node = Untagged::Struct {
                 float: 42.0,
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -649,7 +649,7 @@ mod enum_ {
 
             let node = Untagged::Holder {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
@@ -665,7 +665,7 @@ mod enum_ {
 
             let node = Untagged::Flatten {
                 nested: Nested { float: 42.0 },
-                string: "answer".to_string(),
+                string: "answer",
             };
             node.serialize(&mut ser).unwrap();
             assert_eq!(
