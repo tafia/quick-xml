@@ -107,11 +107,127 @@ fn serialize_a_list() {
     panic!();
 }
 
+#[derive(Serialize)]
+struct Unit;
+
+#[derive(Serialize)]
+struct Newtype(bool);
+
+#[derive(Serialize)]
+struct Tuple(f32, &'static str);
+
+#[derive(Serialize)]
+struct Struct {
+    float: f64,
+    string: String,
+}
+
+#[derive(Serialize)]
+struct NestedStruct {
+    nested: Nested,
+    string: String,
+}
+
+#[derive(Serialize)]
+struct FlattenStruct {
+    #[serde(flatten)]
+    nested: Nested,
+    string: String,
+}
+
+#[derive(Serialize)]
+struct Nested {
+    float: f64,
+}
+
+#[derive(Serialize)]
+enum ExternallyTagged {
+    Unit,
+    #[serde(rename = "$primitive=PrimitiveUnit")]
+    PrimitiveUnit,
+    Newtype(bool),
+    Tuple(f64, String),
+    Struct {
+        float: f64,
+        string: String,
+    },
+    Holder {
+        nested: Nested,
+        string: String,
+    },
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: String,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "tag")]
+enum InternallyTagged {
+    Unit,
+    /// Primitives (such as `bool`) are not supported by the serde in the internally tagged mode
+    Newtype(Nested),
+    // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
+    Struct {
+        float: f64,
+        string: String,
+    },
+    Holder {
+        nested: Nested,
+        string: String,
+    },
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: String,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(tag = "tag", content = "content")]
+enum AdjacentlyTagged {
+    Unit,
+    Newtype(bool),
+    Tuple(f64, String),
+    Struct {
+        float: f64,
+        string: String,
+    },
+    Holder {
+        nested: Nested,
+        string: String,
+    },
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: String,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Untagged {
+    Unit,
+    Newtype(bool),
+    Tuple(f64, String),
+    Struct {
+        float: f64,
+        string: String,
+    },
+    Holder {
+        nested: Nested,
+        string: String,
+    },
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: String,
+    },
+}
+
 #[test]
 fn unit() {
-    #[derive(Serialize)]
-    struct Unit;
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
@@ -122,9 +238,6 @@ fn unit() {
 
 #[test]
 fn newtype() {
-    #[derive(Serialize)]
-    struct Newtype(bool);
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
@@ -148,9 +261,6 @@ fn tuple() {
 
 #[test]
 fn tuple_struct() {
-    #[derive(Serialize)]
-    struct Tuple(f32, &'static str);
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
@@ -164,12 +274,6 @@ fn tuple_struct() {
 
 #[test]
 fn struct_() {
-    #[derive(Serialize)]
-    struct Struct {
-        float: f64,
-        string: String,
-    }
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
@@ -186,21 +290,10 @@ fn struct_() {
 
 #[test]
 fn nested_struct() {
-    #[derive(Serialize)]
-    struct Struct {
-        nested: Nested,
-        string: String,
-    }
-
-    #[derive(Serialize)]
-    struct Nested {
-        float: f64,
-    }
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-    let node = Struct {
+    let node = NestedStruct {
         nested: Nested { float: 42.0 },
         string: "answer".to_string(),
     };
@@ -213,22 +306,10 @@ fn nested_struct() {
 
 #[test]
 fn flatten_struct() {
-    #[derive(Serialize)]
-    struct Struct {
-        #[serde(flatten)]
-        nested: Nested,
-        string: String,
-    }
-
-    #[derive(Serialize)]
-    struct Nested {
-        float: f64,
-    }
-
     let mut buffer = Vec::new();
     let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-    let node = Struct {
+    let node = FlattenStruct {
         nested: Nested { float: 42.0 },
         string: "answer".to_string(),
     };
@@ -242,43 +323,16 @@ fn flatten_struct() {
 mod enum_ {
     use super::*;
 
-    #[derive(Serialize)]
-    struct Nested {
-        float: f64,
-    }
-
     mod externally_tagged {
         use super::*;
         use pretty_assertions::assert_eq;
-
-        #[derive(Serialize)]
-        enum Node {
-            Unit,
-            #[serde(rename = "$primitive=PrimitiveUnit")]
-            PrimitiveUnit,
-            Newtype(bool),
-            Tuple(f64, String),
-            Struct {
-                float: f64,
-                string: String,
-            },
-            Holder {
-                nested: Nested,
-                string: String,
-            },
-            Flatten {
-                #[serde(flatten)]
-                nested: Nested,
-                string: String,
-            },
-        }
 
         #[test]
         fn unit() {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Unit;
+            let node = ExternallyTagged::Unit;
             node.serialize(&mut ser).unwrap();
             assert_eq!(String::from_utf8(buffer).unwrap(), "<Unit/>");
         }
@@ -288,7 +342,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::PrimitiveUnit;
+            let node = ExternallyTagged::PrimitiveUnit;
             node.serialize(&mut ser).unwrap();
             assert_eq!(String::from_utf8(buffer).unwrap(), "PrimitiveUnit");
         }
@@ -298,7 +352,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Newtype(true);
+            let node = ExternallyTagged::Newtype(true);
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -311,7 +365,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Struct {
+            let node = ExternallyTagged::Struct {
                 float: 42.0,
                 string: "answer".to_string(),
             };
@@ -327,7 +381,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Tuple(42.0, "answer".to_string());
+            let node = ExternallyTagged::Tuple(42.0, "answer".to_string());
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -340,7 +394,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Holder {
+            let node = ExternallyTagged::Holder {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -356,7 +410,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Flatten {
+            let node = ExternallyTagged::Flatten {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -372,39 +426,12 @@ mod enum_ {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[derive(Serialize)]
-        #[serde(tag = "tag")]
-        enum Node {
-            Unit,
-            /// Primitives (such as `bool`) are not supported by the serde in the internally tagged mode
-            Newtype(NewtypeContent),
-            // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
-            Struct {
-                float: f64,
-                string: String,
-            },
-            Holder {
-                nested: Nested,
-                string: String,
-            },
-            Flatten {
-                #[serde(flatten)]
-                nested: Nested,
-                string: String,
-            },
-        }
-
-        #[derive(Serialize)]
-        struct NewtypeContent {
-            value: bool,
-        }
-
         #[test]
         fn unit() {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Unit;
+            let node = InternallyTagged::Unit;
             node.serialize(&mut ser).unwrap();
             assert_eq!(String::from_utf8(buffer).unwrap(), r#"<root tag="Unit"/>"#);
         }
@@ -414,11 +441,11 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Newtype(NewtypeContent { value: true });
+            let node = InternallyTagged::Newtype(Nested { float: 4.2 });
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
-                r#"<root tag="Newtype" value="true"/>"#
+                r#"<root tag="Newtype" float="4.2"/>"#
             );
         }
 
@@ -427,7 +454,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Struct {
+            let node = InternallyTagged::Struct {
                 float: 42.0,
                 string: "answer".to_string(),
             };
@@ -443,7 +470,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Holder {
+            let node = InternallyTagged::Holder {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -459,7 +486,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Flatten {
+            let node = InternallyTagged::Flatten {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -475,33 +502,12 @@ mod enum_ {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[derive(Serialize)]
-        #[serde(tag = "tag", content = "content")]
-        enum Node {
-            Unit,
-            Newtype(bool),
-            Tuple(f64, String),
-            Struct {
-                float: f64,
-                string: String,
-            },
-            Holder {
-                nested: Nested,
-                string: String,
-            },
-            Flatten {
-                #[serde(flatten)]
-                nested: Nested,
-                string: String,
-            },
-        }
-
         #[test]
         fn unit() {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Unit;
+            let node = AdjacentlyTagged::Unit;
             node.serialize(&mut ser).unwrap();
             assert_eq!(String::from_utf8(buffer).unwrap(), r#"<root tag="Unit"/>"#);
         }
@@ -511,7 +517,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Newtype(true);
+            let node = AdjacentlyTagged::Newtype(true);
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -524,7 +530,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Tuple(42.0, "answer".to_string());
+            let node = AdjacentlyTagged::Tuple(42.0, "answer".to_string());
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -537,7 +543,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Struct {
+            let node = AdjacentlyTagged::Struct {
                 float: 42.0,
                 string: "answer".to_string(),
             };
@@ -553,7 +559,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Holder {
+            let node = AdjacentlyTagged::Holder {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -569,7 +575,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Flatten {
+            let node = AdjacentlyTagged::Flatten {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -585,33 +591,12 @@ mod enum_ {
         use super::*;
         use pretty_assertions::assert_eq;
 
-        #[derive(Serialize)]
-        #[serde(untagged)]
-        enum Node {
-            Unit,
-            Newtype(bool),
-            Tuple(f64, String),
-            Struct {
-                float: f64,
-                string: String,
-            },
-            Holder {
-                nested: Nested,
-                string: String,
-            },
-            Flatten {
-                #[serde(flatten)]
-                nested: Nested,
-                string: String,
-            },
-        }
-
         #[test]
         fn unit() {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Unit;
+            let node = Untagged::Unit;
             node.serialize(&mut ser).unwrap();
             // Unit variant consists just from the tag, and because tags
             // are not written in untagged mode, nothing is written
@@ -623,7 +608,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Newtype(true);
+            let node = Untagged::Newtype(true);
             node.serialize(&mut ser).unwrap();
             assert_eq!(String::from_utf8(buffer).unwrap(), "true");
         }
@@ -633,7 +618,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Tuple(42.0, "answer".to_string());
+            let node = Untagged::Tuple(42.0, "answer".to_string());
             node.serialize(&mut ser).unwrap();
             assert_eq!(
                 String::from_utf8(buffer).unwrap(),
@@ -646,7 +631,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Struct {
+            let node = Untagged::Struct {
                 float: 42.0,
                 string: "answer".to_string(),
             };
@@ -662,7 +647,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Holder {
+            let node = Untagged::Holder {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
@@ -678,7 +663,7 @@ mod enum_ {
             let mut buffer = Vec::new();
             let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
 
-            let node = Node::Flatten {
+            let node = Untagged::Flatten {
                 nested: Nested { float: 42.0 },
                 string: "answer".to_string(),
             };
