@@ -524,7 +524,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
             Some(tag) => tag,
             None => {
                 return Err(DeError::Custom(
-                    "root tag name must be specified when serialize unnamed tuple".into(),
+                    "cannot serialize unnamed tuple without defined root tag".into(),
                 ))
             }
         };
