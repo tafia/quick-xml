@@ -1,9 +1,12 @@
 use quick_xml::se::{to_string, Serializer};
+use quick_xml::utils::Bytes;
 use quick_xml::writer::Writer;
+use quick_xml::DeError;
 
 use pretty_assertions::assert_eq;
 
-use serde::{Serialize, Serializer as SerSerializer};
+use serde::{serde_if_integer128, Serialize, Serializer as SerSerializer};
+use std::collections::BTreeMap;
 
 #[test]
 fn serialize_bool() {
@@ -277,20 +280,101 @@ mod with_root {
         };
     }
 
+    /// Checks that attempt to serialize given `$data` results to a
+    /// serialization error `$kind` with `$reason`
+    macro_rules! err {
+        ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+            #[test]
+            fn $name() {
+                let mut buffer = Vec::new();
+                let mut ser = Serializer::with_root(Writer::new(&mut buffer), Some("root"));
+
+                match $data.serialize(&mut ser) {
+                    Err(DeError::$kind(e)) => assert_eq!(e, $reason),
+                    e => panic!(
+                        "Expected `{}({})`, found `{:?}`",
+                        stringify!($kind),
+                        $reason,
+                        e
+                    ),
+                }
+                // We can write something before fail
+                // assert_eq!(String::from_utf8(buffer).unwrap(), "");
+            }
+        };
+    }
+
+    serialize_as!(false_: false => "<root>false</root>");
+    serialize_as!(true_:  true  => "<root>true</root>");
+
+    serialize_as!(i8_:    -42i8                => "<root>-42</root>");
+    serialize_as!(i16_:   -4200i16             => "<root>-4200</root>");
+    serialize_as!(i32_:   -42000000i32         => "<root>-42000000</root>");
+    serialize_as!(i64_:   -42000000000000i64   => "<root>-42000000000000</root>");
+    serialize_as!(isize_: -42000000000000isize => "<root>-42000000000000</root>");
+
+    serialize_as!(u8_:    42u8                => "<root>42</root>");
+    serialize_as!(u16_:   4200u16             => "<root>4200</root>");
+    serialize_as!(u32_:   42000000u32         => "<root>42000000</root>");
+    serialize_as!(u64_:   42000000000000u64   => "<root>42000000000000</root>");
+    serialize_as!(usize_: 42000000000000usize => "<root>42000000000000</root>");
+
+    serde_if_integer128! {
+        serialize_as!(i128_: -420000000000000000000000000000i128 => "<root>-420000000000000000000000000000</root>");
+        serialize_as!(u128_:  420000000000000000000000000000u128 => "<root>420000000000000000000000000000</root>");
+    }
+
+    serialize_as!(f32_: 4.2f32 => "<root>4.2</root>");
+    serialize_as!(f64_: 4.2f64 => "<root>4.2</root>");
+
+    serialize_as!(char_non_escaped: 'h'  => "<root>h</root>");
+    serialize_as!(char_lt:          '<'  => "<root>&lt;</root>");
+    serialize_as!(char_gt:          '>'  => "<root>&gt;</root>");
+    serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
+    serialize_as!(char_apos:        '\'' => "<root>&apos;</root>");
+    serialize_as!(char_quot:        '"'  => "<root>&quot;</root>");
+    serialize_as!(char_space:       ' '  => "<root> </root>");
+
+    serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
+    serialize_as!(str_escaped:  "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
+
+    err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+
+    serialize_as!(option_none: Option::<&str>::None => "");
+    serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");
+
     serialize_as!(unit:
+        ()
+        => "<root/>");
+    serialize_as!(unit_struct:
         Unit
         => "<root/>");
+
     serialize_as!(newtype:
         Newtype(true)
         => "<root>true</root>");
+
+    serialize_as!(seq:
+        vec![1, 2, 3]
+        => "<root>1</root>\
+            <root>2</root>\
+            <root>3</root>");
     serialize_as!(tuple:
-        (42.0, "answer")
-        => "<root>42</root>\
-            <root>answer</root>");
+        ("<\"&'>", "with\t\r\n spaces", 3usize)
+        => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
+            <root>with\t\r\n spaces</root>\
+            <root>3</root>");
     serialize_as!(tuple_struct:
         Tuple(42.0, "answer")
         => "<root>42</root>\
             <root>answer</root>");
+
+    serialize_as!(map:
+        BTreeMap::from([("$text", 1), ("_2", 3)])
+        => "<root>\
+                1\
+                <_2>3</_2>\
+            </root>");
     serialize_as!(struct_:
         Struct {
             float: 42.0,
@@ -345,7 +429,7 @@ mod with_root {
                 => "<Unit/>");
             serialize_as!(primitive_unit:
                 ExternallyTagged::PrimitiveUnit
-                => "PrimitiveUnit");
+                => "<PrimitiveUnit/>");
             serialize_as!(newtype:
                 ExternallyTagged::Newtype(true)
                 => "<Newtype>true</Newtype>");
@@ -541,12 +625,10 @@ mod with_root {
 
             serialize_as!(unit:
                 Untagged::Unit
-                // Unit variant consists just from the tag, and because tags
-                // are not written in untagged mode, nothing is written
-                => "");
+                => "<root/>");
             serialize_as!(newtype:
                 Untagged::Newtype(true)
-                => "true");
+                => "<root>true</root>");
             serialize_as!(tuple_struct:
                 Untagged::Tuple(42.0, "answer")
                 => "<root>42</root>\
