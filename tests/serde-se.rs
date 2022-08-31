@@ -285,28 +285,41 @@ mod with_root {
         => "<root>true</root>");
     serialize_as!(tuple:
         (42.0, "answer")
-        => "<root>42</root><root>answer</root>");
+        => "<root>42</root>\
+            <root>answer</root>");
     serialize_as!(tuple_struct:
         Tuple(42.0, "answer")
-        => "<root>42</root><root>answer</root>");
+        => "<root>42</root>\
+            <root>answer</root>");
     serialize_as!(struct_:
         Struct {
             float: 42.0,
             string: "answer"
         }
-        => r#"<root float="42" string="answer"/>"#);
+        => "<root>\
+                <float>42</float>\
+                <string>answer</string>\
+            </root>");
     serialize_as!(nested_struct:
         NestedStruct {
             nested: Nested { float: 42.0 },
             string: "answer",
         }
-        => r#"<root string="answer"><nested float="42"/></root>"#);
+        => "<root>\
+                <nested>\
+                    <float>42</float>\
+                </nested>\
+                <string>answer</string>\
+            </root>");
     serialize_as!(flatten_struct:
         FlattenStruct {
             nested: Nested { float: 42.0 },
             string: "answer",
         }
-        => r#"<root><float>42</float><string>answer</string></root>"#);
+        => "<root>\
+                <float>42</float>\
+                <string>answer</string>\
+            </root>");
     serialize_as!(empty_struct:
         Empty {}
         => "<root/>");
@@ -315,7 +328,10 @@ mod with_root {
             float: 42.0,
             string: "answer"
         }
-        => r#"<root string="answer">42</root>"#);
+        => "<root>\
+                42\
+                <string>answer</string>\
+            </root>");
 
     mod enum_ {
         use super::*;
@@ -335,25 +351,37 @@ mod with_root {
                 => "<Newtype>true</Newtype>");
             serialize_as!(tuple_struct:
                 ExternallyTagged::Tuple(42.0, "answer")
-                => "<Tuple>42</Tuple><Tuple>answer</Tuple>");
+                => "<Tuple>42</Tuple>\
+                    <Tuple>answer</Tuple>");
             serialize_as!(struct_:
                 ExternallyTagged::Struct {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<Struct float="42" string="answer"/>"#);
+                => "<Struct>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </Struct>");
             serialize_as!(nested_struct:
                 ExternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<Holder string="answer"><nested float="42"/></Holder>"#);
+                => "<Holder>\
+                        <nested>\
+                            <float>42</float>\
+                        </nested>\
+                        <string>answer</string>\
+                    </Holder>");
             serialize_as!(flatten_struct:
                 ExternallyTagged::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<Flatten><float>42</float><string>answer</string></Flatten>"#);
+                => "<Flatten>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </Flatten>");
             serialize_as!(empty_struct:
                 ExternallyTagged::Empty {}
                 => "<Empty/>");
@@ -362,7 +390,10 @@ mod with_root {
                     float: 42.0,
                     string: "answer"
                 }
-                => r#"<Text string="answer">42</Text>"#);
+                => "<Text>\
+                        42\
+                        <string>answer</string>\
+                    </Text>");
         }
 
         mod internally_tagged {
@@ -371,28 +402,47 @@ mod with_root {
 
             serialize_as!(unit:
                 InternallyTagged::Unit
-                => r#"<root tag="Unit"/>"#);
+                => "<root>\
+                        <tag>Unit</tag>\
+                    </root>");
             serialize_as!(newtype:
                 InternallyTagged::Newtype(Nested { float: 4.2 })
-                => r#"<root tag="Newtype" float="4.2"/>"#);
+                => "<root>\
+                        <tag>Newtype</tag>\
+                        <float>4.2</float>\
+                    </root>");
             serialize_as!(struct_:
                 InternallyTagged::Struct {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<root tag="Struct" float="42" string="answer"/>"#);
+                => "<root>\
+                        <tag>Struct</tag>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(nested_struct:
                 InternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#);
+                => "<root>\
+                        <tag>Holder</tag>\
+                        <nested>\
+                            <float>42</float>\
+                        </nested>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(flatten_struct:
                 InternallyTagged::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#);
+                => "<root>\
+                        <tag>Flatten</tag>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(empty_struct:
                 InternallyTagged::Empty {}
                 => r#"<root tag="Empty"/>"#);
@@ -401,7 +451,11 @@ mod with_root {
                     float: 42.0,
                     string: "answer"
                 }
-                => r#"<root tag="Text" string="answer">42</root>"#);
+                => "<root>\
+                        <tag>Text</tag>\
+                        42\
+                        <string>answer</string>\
+                    </root>");
         }
 
         mod adjacently_tagged {
@@ -410,31 +464,60 @@ mod with_root {
 
             serialize_as!(unit:
                 AdjacentlyTagged::Unit
-                => r#"<root tag="Unit"/>"#);
+                => "<root>\
+                        <tag>Unit</tag>\
+                    </root>");
             serialize_as!(newtype:
                 AdjacentlyTagged::Newtype(true)
-                => r#"<root tag="Newtype" content="true"/>"#);
+                => "<root>\
+                        <tag>Newtype</tag>\
+                        <content>true</content>\
+                    </root>");
             serialize_as!(tuple_struct:
                 AdjacentlyTagged::Tuple(42.0, "answer")
-                => r#"<root tag="Tuple"><content>42</content><content>answer</content></root>"#);
+                => "<root>\
+                        <tag>Tuple</tag>\
+                        <content>42</content>\
+                        <content>answer</content>\
+                    </root>");
             serialize_as!(struct_:
                 AdjacentlyTagged::Struct {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<root tag="Struct"><content float="42" string="answer"/></root>"#);
+                => "<root>\
+                        <tag>Struct</tag>\
+                        <content>\
+                            <float>42</float>\
+                            <string>answer</string>\
+                        </content>\
+                    </root>");
             serialize_as!(nested_struct:
                 AdjacentlyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root tag="Holder"><content string="answer"><nested float="42"/></content></root>"#);
+                => "<root>\
+                        <tag>Holder</tag>\
+                        <content>\
+                            <nested>\
+                                <float>42</float>\
+                            </nested>\
+                            <string>answer</string>\
+                        </content>\
+                    </root>");
             serialize_as!(flatten_struct:
                 AdjacentlyTagged::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root tag="Flatten"><content><float>42</float><string>answer</string></content></root>"#);
+                => "<root>\
+                        <tag>Flatten</tag>\
+                        <content>\
+                            <float>42</float>\
+                            <string>answer</string>\
+                        </content>\
+                    </root>");
             serialize_as!(empty_struct:
                 AdjacentlyTagged::Empty {}
                 => r#"<root tag="Empty"><content/></root>"#);
@@ -443,7 +526,13 @@ mod with_root {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<root tag="Text"><content string="answer">42</content></root>"#);
+                => "<root>\
+                        <tag>Text</tag>\
+                        <content>\
+                            42\
+                            <string>answer</string>\
+                        </content>\
+                    </root>");
         }
 
         mod untagged {
@@ -460,25 +549,37 @@ mod with_root {
                 => "true");
             serialize_as!(tuple_struct:
                 Untagged::Tuple(42.0, "answer")
-                => "<root>42</root><root>answer</root>");
+                => "<root>42</root>\
+                    <root>answer</root>");
             serialize_as!(struct_:
                 Untagged::Struct {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<root float="42" string="answer"/>"#);
+                => "<root>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(nested_struct:
                 Untagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root string="answer"><nested float="42"/></root>"#);
+                => "<root>\
+                        <nested>\
+                            <float>42</float>\
+                        </nested>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(flatten_struct:
                 Untagged::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => r#"<root><float>42</float><string>answer</string></root>"#);
+                => "<root>\
+                        <float>42</float>\
+                        <string>answer</string>\
+                    </root>");
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<root/>");
@@ -487,7 +588,10 @@ mod with_root {
                     float: 42.0,
                     string: "answer"
                 }
-                => r#"<root string="answer">42</root>"#);
+                => "<root>\
+                        42\
+                        <string>answer</string>\
+                    </root>");
         }
     }
 }
