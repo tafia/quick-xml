@@ -141,6 +141,16 @@ struct Nested {
 }
 
 #[derive(Serialize)]
+struct Empty {}
+
+#[derive(Serialize)]
+struct Value {
+    #[serde(rename = "$value")]
+    float: f64,
+    string: &'static str,
+}
+
+#[derive(Serialize)]
 enum ExternallyTagged {
     Unit,
     #[serde(rename = "$primitive=PrimitiveUnit")]
@@ -158,6 +168,12 @@ enum ExternallyTagged {
     Flatten {
         #[serde(flatten)]
         nested: Nested,
+        string: &'static str,
+    },
+    Empty {},
+    Value {
+        #[serde(rename = "$value")]
+        float: f64,
         string: &'static str,
     },
 }
@@ -182,6 +198,12 @@ enum InternallyTagged {
         nested: Nested,
         string: &'static str,
     },
+    Empty {},
+    Value {
+        #[serde(rename = "$value")]
+        float: f64,
+        string: &'static str,
+    },
 }
 
 #[derive(Serialize)]
@@ -203,6 +225,12 @@ enum AdjacentlyTagged {
         nested: Nested,
         string: &'static str,
     },
+    Empty {},
+    Value {
+        #[serde(rename = "$value")]
+        float: f64,
+        string: &'static str,
+    },
 }
 
 #[derive(Serialize)]
@@ -222,6 +250,12 @@ enum Untagged {
     Flatten {
         #[serde(flatten)]
         nested: Nested,
+        string: &'static str,
+    },
+    Empty {},
+    Value {
+        #[serde(rename = "$value")]
+        float: f64,
         string: &'static str,
     },
 }
@@ -273,6 +307,15 @@ mod with_root {
             string: "answer",
         }
         => r#"<root><float>42</float><string>answer</string></root>"#);
+    serialize_as!(empty_struct:
+        Empty {}
+        => "<root/>");
+    serialize_as!(value:
+        Value {
+            float: 42.0,
+            string: "answer"
+        }
+        => r#"<root string="answer">42</root>"#);
 
     mod enum_ {
         use super::*;
@@ -311,6 +354,15 @@ mod with_root {
                     string: "answer",
                 }
                 => r#"<Flatten><float>42</float><string>answer</string></Flatten>"#);
+            serialize_as!(empty_struct:
+                ExternallyTagged::Empty {}
+                => "<Empty/>");
+            serialize_as!(value:
+                ExternallyTagged::Value {
+                    float: 42.0,
+                    string: "answer"
+                }
+                => r#"<Value string="answer">42</Value>"#);
         }
 
         mod internally_tagged {
@@ -341,6 +393,15 @@ mod with_root {
                     string: "answer",
                 }
                 => r#"<root><tag>Flatten</tag><float>42</float><string>answer</string></root>"#);
+            serialize_as!(empty_struct:
+                InternallyTagged::Empty {}
+                => r#"<root tag="Empty"/>"#);
+            serialize_as!(value:
+                InternallyTagged::Value {
+                    float: 42.0,
+                    string: "answer"
+                }
+                => r#"<root tag="Value" string="answer">42</root>"#);
         }
 
         mod adjacently_tagged {
@@ -374,6 +435,15 @@ mod with_root {
                     string: "answer",
                 }
                 => r#"<root tag="Flatten"><content><float>42</float><string>answer</string></content></root>"#);
+            serialize_as!(empty_struct:
+                AdjacentlyTagged::Empty {}
+                => r#"<root tag="Empty"><content/></root>"#);
+            serialize_as!(value:
+                AdjacentlyTagged::Value {
+                    float: 42.0,
+                    string: "answer",
+                }
+                => r#"<root tag="Value"><content string="answer">42</content></root>"#);
         }
 
         mod untagged {
@@ -409,6 +479,15 @@ mod with_root {
                     string: "answer",
                 }
                 => r#"<root><float>42</float><string>answer</string></root>"#);
+            serialize_as!(empty_struct:
+                Untagged::Empty {}
+                => "<root/>");
+            serialize_as!(value:
+                Untagged::Value {
+                    float: 42.0,
+                    string: "answer"
+                }
+                => r#"<root string="answer">42</root>"#);
         }
     }
 }
