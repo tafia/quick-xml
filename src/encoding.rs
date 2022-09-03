@@ -75,6 +75,56 @@ impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
     }
 }
 
+///
+#[derive(Debug)]
+pub struct ValidatingReader<R> {
+    reader: R,
+    leftover_bytes_buf: [u8; 7],
+    leftover_bytes: u8,
+}
+
+impl<R: io::Read> ValidatingReader<R> {
+    ///
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader,
+            leftover_bytes_buf: [0; 7],
+            leftover_bytes: 0,
+        }
+    }
+}
+
+impl<R: io::Read> io::Read for ValidatingReader<R> {
+    // TODO: bug around the edges of the buffer
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let amt = {
+            let leftover_bytes = &self.leftover_bytes_buf[..self.leftover_bytes.into()];
+            let (dest_for_leftover_bytes, dest_for_bytes_read) = buf.split_at_mut(leftover_bytes.len());
+            dest_for_leftover_bytes.copy_from_slice(&leftover_bytes);
+            self.reader.read(dest_for_bytes_read)? + self.leftover_bytes as usize
+        };
+
+        let (bytes_in_buffer, _unused_buffer) = buf.split_at(amt);
+        match std::str::from_utf8(bytes_in_buffer) {
+            Ok(_) => {
+                self.leftover_bytes = 0;
+                Ok(amt)
+            },
+            Err(err) => {
+                let (valid, leftover) = bytes_in_buffer.split_at(err.valid_up_to());
+                self.leftover_bytes_buf[..leftover.len()].copy_from_slice(leftover);
+                self.leftover_bytes = leftover.len() as u8;
+                Ok(valid.len())
+            }
+        }
+    }
+}
+
+// error::const_io_error!(
+//     ErrorKind::InvalidData,
+//     "stream did not contain valid UTF-8"
+// )
+
 /// Decodes the provided bytes using the specified encoding.
 ///
 /// Returns an error in case of malformed or non-representable sequences in the `bytes`.
@@ -124,5 +174,37 @@ pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
         _ if bytes.starts_with(&[b'<', b'?', b'x', b'm']) => Some((UTF_8, 0)), // Some ASCII compatible
 
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Read;
+
+    use super::*;
+
+    #[track_caller]
+    fn test_validate_input(input: &[u8]) {
+        let mut reader = ValidatingReader::new(input);
+        assert_eq!(reader.read_to_end(&mut Vec::new()).unwrap(), input.len());
+    }
+
+    mod decoding_reader {
+
+    }
+
+    mod validating_reader {
+        use super::*;
+
+        #[test]
+        fn utf8_test_file() {
+            let test_file = std::fs::read("tests/documents/encoding/utf8.txt").unwrap();
+
+            // test_validate_input(b"asdf");
+            // test_validate_input("\u{2014}asdfasdfasdfasdfasdfa\u{2014}asdf".as_bytes());
+            test_validate_input(test_file.as_slice());
+            // test_validate_input(b"\x82\xA0\x82\xA2\x82\xA4");
+            // test_validate_input(b"\xEF\xBB\xBFfoo\xFFbar");
+        }
     }
 }
