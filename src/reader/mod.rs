@@ -1630,33 +1630,13 @@ mod test {
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
-                /// When `encoding` feature is enabled, encoding should be detected
-                /// from BOM (UTF-8) and BOM should be stripped.
-                ///
-                /// When `encoding` feature is disabled, UTF-8 is assumed and BOM
-                /// character should be stripped for consistency
-                #[$test]
-                $($async)? fn bom_from_reader() {
-                    let mut reader = Reader::from_reader("\u{feff}\u{feff}".as_bytes());
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("\u{feff}"))
-                    );
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Eof
-                    );
-                }
-
                 /// When parsing from &str, encoding is fixed (UTF-8), so
                 /// - when `encoding` feature is disabled, the behavior the
                 ///   same as in `bom_from_reader` text
                 /// - when `encoding` feature is enabled, the behavior should
                 ///   stay consistent, so the first BOM character is stripped
                 #[$test]
-                $($async)? fn bom_from_str() {
+                $($async)? fn bom() {
                     let mut reader = Reader::from_str("\u{feff}\u{feff}");
 
                     assert_eq!(
