@@ -3,6 +3,8 @@
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
 use crate::utils::write_byte_string;
+use std::fmt;
+use std::io::Error as IoError;
 use std::str::Utf8Error;
 use std::string::FromUtf8Error;
 
@@ -10,7 +12,7 @@ use std::string::FromUtf8Error;
 #[derive(Debug)]
 pub enum Error {
     /// IO error
-    Io(::std::io::Error),
+    Io(IoError),
     /// Input decoding error. If `encoding` feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
     NonDecodable(Option<Utf8Error>),
@@ -39,10 +41,10 @@ pub enum Error {
     UnknownPrefix(Vec<u8>),
 }
 
-impl From<::std::io::Error> for Error {
+impl From<IoError> for Error {
     /// Creates a new `Error::Io` from the given error
     #[inline]
-    fn from(error: ::std::io::Error) -> Error {
+    fn from(error: IoError) -> Error {
         Error::Io(error)
     }
 }
@@ -81,8 +83,8 @@ impl From<AttrError> for Error {
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
@@ -132,7 +134,7 @@ pub mod serialize {
 
     use super::*;
     use crate::utils::write_byte_string;
-    use std::fmt;
+    use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
     use std::num::{ParseFloatError, ParseIntError};
@@ -186,7 +188,7 @@ pub mod serialize {
         /// An attempt to deserialize to a type, that is not supported by the XML
         /// store at current position, for example, attempt to deserialize `struct`
         /// from attribute or attempt to deserialize binary data.
-        Unsupported(&'static str),
+        Unsupported(Cow<'static, str>),
         /// Too many events were skipped while deserializing a sequence, event limit
         /// exceeded. The limit was provided as an argument
         #[cfg(feature = "overlapped-lists")]
@@ -214,7 +216,7 @@ pub mod serialize {
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
                 DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
-                DeError::Unsupported(s) => write!(f, "Unsupported operation {}", s),
+                DeError::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
                 #[cfg(feature = "overlapped-lists")]
                 DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),
             }
@@ -290,6 +292,13 @@ pub mod serialize {
         #[inline]
         fn from(e: ParseFloatError) -> Self {
             Self::InvalidFloat(e)
+        }
+    }
+
+    impl From<fmt::Error> for DeError {
+        #[inline]
+        fn from(e: fmt::Error) -> Self {
+            Self::Custom(e.to_string())
         }
     }
 }

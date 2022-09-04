@@ -81,7 +81,7 @@ macro_rules! deserialize_primitives {
         where
             V: Visitor<'de>,
         {
-            Err(DeError::Unsupported("binary data content is not supported by XML format"))
+            Err(DeError::Unsupported("binary data content is not supported by XML format".into()))
         }
 
         /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).

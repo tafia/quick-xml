@@ -43,7 +43,7 @@ where
             }
             _ => {
                 return Err(DeError::Unsupported(
-                    "Invalid event for Enum, expecting `Text` or `Start`",
+                    "Invalid event for Enum, expecting `Text` or `Start`".into(),
                 ))
             }
         };

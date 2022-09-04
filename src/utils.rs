@@ -3,6 +3,8 @@ use std::fmt::{self, Debug, Formatter};
 
 #[cfg(feature = "serialize")]
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
+#[cfg(feature = "serialize")]
+use serde::ser::{Serialize, Serializer};
 
 pub fn write_cow_string(f: &mut Formatter, cow_string: &Cow<[u8]>) -> fmt::Result {
     match cow_string {
@@ -76,6 +78,16 @@ impl<'de> Deserialize<'de> for ByteBuf {
     }
 }
 
+#[cfg(feature = "serialize")]
+impl Serialize for ByteBuf {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Wrapper around `&[u8]` that has a human-readable debug representation:
@@ -114,6 +126,16 @@ impl<'de> Deserialize<'de> for Bytes<'de> {
         }
 
         d.deserialize_bytes(ValueVisitor)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> Serialize for Bytes<'de> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(self.0)
     }
 }
 

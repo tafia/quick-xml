@@ -81,7 +81,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
         V: Visitor<'de>,
     {
         Err(DeError::Unsupported(
-            "binary data content is not supported by XML format",
+            "binary data content is not supported by XML format".into(),
         ))
     }
 

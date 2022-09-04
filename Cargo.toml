@@ -187,6 +187,10 @@ name = "serde-de"
 required-features = ["serialize"]
 
 [[test]]
+name = "serde-se"
+required-features = ["serialize"]
+
+[[test]]
 name = "serde-migrated"
 required-features = ["serialize"]
 

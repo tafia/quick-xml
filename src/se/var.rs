@@ -2,6 +2,7 @@ use crate::{
     de::{INNER_VALUE, UNFLATTEN_PREFIX},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
+    se::key::XmlNameSerializer,
     se::Serializer,
     writer::Writer,
 };
@@ -64,20 +65,26 @@ where
         key: &K,
         value: &V,
     ) -> Result<(), DeError> {
-        // TODO: Is it possible to ensure our key is never a composite type?
-        // Anything which isn't a "primitive" would lead to malformed XML here...
-        write!(self.parent.writer.inner(), "<").map_err(Error::Io)?;
-        key.serialize(&mut *self.parent)?;
-        write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+        let key = key.serialize(XmlNameSerializer {
+            writer: String::new(),
+        })?;
+
+        let writer = self.parent.writer.inner();
+        writer.write_all(b"<").map_err(Error::Io)?;
+        writer.write_all(key.as_bytes()).map_err(Error::Io)?;
+        writer.write_all(b">").map_err(Error::Io)?;
 
         value.serialize(&mut *self.parent)?;
 
-        write!(self.parent.writer.inner(), "</").map_err(Error::Io)?;
-        key.serialize(&mut *self.parent)?;
-        write!(self.parent.writer.inner(), ">").map_err(Error::Io)?;
+        let writer = self.parent.writer.inner();
+        writer.write_all(b"</").map_err(Error::Io)?;
+        writer.write_all(key.as_bytes()).map_err(Error::Io)?;
+        writer.write_all(b">").map_err(Error::Io)?;
         Ok(())
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An implementation of `SerializeStruct` for serializing to XML.
 pub struct Struct<'r, 'w, W>
@@ -185,6 +192,8 @@ where
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An implementation of `SerializeSeq' for serializing to XML.
 pub struct Seq<'r, 'w, W>
 where
@@ -222,6 +231,8 @@ where
         Ok(())
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An implementation of `SerializeTuple`, `SerializeTupleStruct` and
 /// `SerializeTupleVariant` for serializing to XML.
@@ -307,4 +318,25 @@ where
     fn end(self) -> Result<Self::Ok, Self::Error> {
         <Self as ser::SerializeTuple>::end(self)
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#[test]
+fn test_serialize_map_entries() {
+    use serde::ser::SerializeMap;
+
+    let mut buffer = Vec::new();
+
+    {
+        let mut ser = Serializer::new(&mut buffer);
+        let mut map = Map::new(&mut ser);
+        map.serialize_entry("name", "Bob").unwrap();
+        map.serialize_entry("age", "5").unwrap();
+    }
+
+    assert_eq!(
+        String::from_utf8(buffer).unwrap(),
+        "<name>Bob</name><age>5</age>"
+    );
 }
