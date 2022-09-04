@@ -547,6 +547,397 @@ mod without_root {
                     </Untagged>");
         }
     }
+
+    mod with_indent {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        macro_rules! serialize_as {
+            ($name:ident: $data:expr => $expected:literal) => {
+                #[test]
+                fn $name() {
+                    let mut ser = Serializer::new(String::new());
+                    ser.indent(' ', 2);
+
+                    assert_eq!($data.serialize(ser).unwrap(), $expected);
+                }
+            };
+        }
+
+        /// Checks that attempt to serialize given `$data` results to a
+        /// serialization error `$kind` with `$reason`
+        macro_rules! err {
+            ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = Serializer::new(&mut buffer);
+
+                    match $data.serialize(ser) {
+                        Err(DeError::$kind(e)) => assert_eq!(e, $reason),
+                        e => panic!(
+                            "Expected `{}({})`, found `{:?}`",
+                            stringify!($kind),
+                            $reason,
+                            e
+                        ),
+                    }
+                    assert_eq!(buffer, "");
+                }
+            };
+        }
+
+        err!(false_: false => Unsupported("cannot serialize `bool` without defined root tag"));
+        err!(true_:  true  => Unsupported("cannot serialize `bool` without defined root tag"));
+
+        err!(i8_:    -42i8                => Unsupported("cannot serialize `i8` without defined root tag"));
+        err!(i16_:   -4200i16             => Unsupported("cannot serialize `i16` without defined root tag"));
+        err!(i32_:   -42000000i32         => Unsupported("cannot serialize `i32` without defined root tag"));
+        err!(i64_:   -42000000000000i64   => Unsupported("cannot serialize `i64` without defined root tag"));
+        err!(isize_: -42000000000000isize => Unsupported("cannot serialize `i64` without defined root tag"));
+
+        err!(u8_:    42u8                => Unsupported("cannot serialize `u8` without defined root tag"));
+        err!(u16_:   4200u16             => Unsupported("cannot serialize `u16` without defined root tag"));
+        err!(u32_:   42000000u32         => Unsupported("cannot serialize `u32` without defined root tag"));
+        err!(u64_:   42000000000000u64   => Unsupported("cannot serialize `u64` without defined root tag"));
+        err!(usize_: 42000000000000usize => Unsupported("cannot serialize `u64` without defined root tag"));
+
+        serde_if_integer128! {
+            err!(i128_: -420000000000000000000000000000i128 => Unsupported("cannot serialize `i128` without defined root tag"));
+            err!(u128_:  420000000000000000000000000000u128 => Unsupported("cannot serialize `u128` without defined root tag"));
+        }
+
+        err!(f32_: 4.2f32 => Unsupported("cannot serialize `f32` without defined root tag"));
+        err!(f64_: 4.2f64 => Unsupported("cannot serialize `f64` without defined root tag"));
+
+        err!(char_non_escaped: 'h'  => Unsupported("cannot serialize `char` without defined root tag"));
+        err!(char_lt:          '<'  => Unsupported("cannot serialize `char` without defined root tag"));
+        err!(char_gt:          '>'  => Unsupported("cannot serialize `char` without defined root tag"));
+        err!(char_amp:         '&'  => Unsupported("cannot serialize `char` without defined root tag"));
+        err!(char_apos:        '\'' => Unsupported("cannot serialize `char` without defined root tag"));
+        err!(char_quot:        '"'  => Unsupported("cannot serialize `char` without defined root tag"));
+
+        err!(str_non_escaped: "non-escaped string" => Unsupported("cannot serialize `&str` without defined root tag"));
+        err!(str_escaped:  "<\"escaped & string'>" => Unsupported("cannot serialize `&str` without defined root tag"));
+
+        err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("cannot serialize `&[u8]` without defined root tag"));
+
+        serialize_as!(option_none: Option::<Unit>::None => "");
+        serialize_as!(option_some: Some(Unit) => "<Unit/>");
+
+        err!(unit: () => Unsupported("cannot serialize `()` without defined root tag"));
+        serialize_as!(unit_struct: Unit => "<Unit/>");
+
+        serialize_as!(newtype: Newtype(true) => "<Newtype>true</Newtype>");
+
+        err!(seq: vec![1, 2, 3] => Unsupported("cannot serialize sequence without defined root tag"));
+        err!(tuple:
+            ("<\"&'>", "with\t\r\n spaces", 3usize)
+            => Unsupported("cannot serialize unnamed tuple without defined root tag"));
+        serialize_as!(tuple_struct:
+            Tuple(42.0, "answer")
+            => "<Tuple>42</Tuple>\n\
+                <Tuple>answer</Tuple>");
+
+        err!(map:
+            BTreeMap::from([("$text", 1), ("_2", 3)])
+            => Unsupported("cannot serialize map without defined root tag"));
+        serialize_as!(struct_:
+            Struct {
+                float: 42.0,
+                string: "answer"
+            }
+            => "<Struct>\n  \
+                    <float>42</float>\n  \
+                    <string>answer</string>\n\
+                </Struct>");
+        serialize_as!(nested_struct:
+            NestedStruct {
+                nested: Nested { float: 42.0 },
+                string: "answer",
+            }
+            => "<NestedStruct>\n  \
+                    <nested>\n    \
+                        <float>42</float>\n  \
+                    </nested>\n  \
+                    <string>answer</string>\n\
+                </NestedStruct>");
+        // serde serializes flatten structs as maps, and we do not support
+        // serialization of maps without root tag
+        err!(flatten_struct:
+            FlattenStruct {
+                nested: Nested { float: 42.0 },
+                string: "answer",
+            }
+            => Unsupported("cannot serialize map without defined root tag"));
+        serialize_as!(empty_struct:
+            Empty {}
+            => "<Empty/>");
+        serialize_as!(text:
+            Text {
+                float: 42.0,
+                string: "answer"
+            }
+            => "<Text>\n  \
+                    42\n  \
+                    <string>answer</string>\n\
+                </Text>");
+
+        mod enum_ {
+            use super::*;
+
+            mod externally_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(unit:
+                    ExternallyTagged::Unit
+                    => "<Unit/>");
+                serialize_as!(newtype:
+                    ExternallyTagged::Newtype(true)
+                    => "<Newtype>true</Newtype>");
+                serialize_as!(tuple_struct:
+                    ExternallyTagged::Tuple(42.0, "answer")
+                    => "<Tuple>42</Tuple>\n\
+                        <Tuple>answer</Tuple>");
+                serialize_as!(struct_:
+                    ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<Struct>\n  \
+                            <float>42</float>\n  \
+                            <string>answer</string>\n\
+                        </Struct>");
+                serialize_as!(nested_struct:
+                    ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<Holder>\n  \
+                            <nested>\n    \
+                                <float>42</float>\n  \
+                            </nested>\n  \
+                            <string>answer</string>\n\
+                        </Holder>");
+                serialize_as!(flatten_struct:
+                    ExternallyTagged::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<Flatten>\n  \
+                            <float>42</float>\n  \
+                            <string>answer</string>\n\
+                        </Flatten>");
+                serialize_as!(empty_struct:
+                    ExternallyTagged::Empty {}
+                    => "<Empty/>");
+                serialize_as!(text:
+                    ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<Text>\n  \
+                            42\n  \
+                            <string>answer</string>\n\
+                        </Text>");
+            }
+
+            mod internally_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(unit:
+                    InternallyTagged::Unit
+                    => "<InternallyTagged>\n  \
+                            <tag>Unit</tag>\n\
+                        </InternallyTagged>");
+                // serde serializes internally tagged newtype structs by delegating
+                // serialization to the inner type and augmenting it with a tag
+                serialize_as!(newtype:
+                    InternallyTagged::Newtype(Nested { float: 42.0 })
+                    => "<Nested>\n  \
+                            <tag>Newtype</tag>\n  \
+                            <float>42</float>\n\
+                        </Nested>");
+                serialize_as!(struct_:
+                    InternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<InternallyTagged>\n  \
+                            <tag>Struct</tag>\n  \
+                            <float>42</float>\n  \
+                            <string>answer</string>\n\
+                        </InternallyTagged>");
+                serialize_as!(nested_struct:
+                    InternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<InternallyTagged>\n  \
+                            <tag>Holder</tag>\n  \
+                            <nested>\n    \
+                                <float>42</float>\n  \
+                            </nested>\n  \
+                            <string>answer</string>\n\
+                        </InternallyTagged>");
+                // serde serializes flatten structs as maps, and we do not support
+                // serialization of maps without root tag
+                err!(flatten_struct:
+                    InternallyTagged::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => Unsupported("cannot serialize map without defined root tag"));
+                serialize_as!(empty_struct:
+                    InternallyTagged::Empty {}
+                    => "<InternallyTagged>\n  \
+                            <tag>Empty</tag>\n\
+                        </InternallyTagged>");
+                serialize_as!(text:
+                    InternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<InternallyTagged>\n  \
+                            <tag>Text</tag>\n  \
+                            42\n  \
+                            <string>answer</string>\n\
+                        </InternallyTagged>");
+            }
+
+            mod adjacently_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(unit:
+                    AdjacentlyTagged::Unit
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Unit</tag>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(newtype:
+                    AdjacentlyTagged::Newtype(true)
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Newtype</tag>\n  \
+                            <content>true</content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(tuple_struct:
+                    AdjacentlyTagged::Tuple(42.0, "answer")
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Tuple</tag>\n  \
+                            <content>42</content>\n  \
+                            <content>answer</content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(struct_:
+                    AdjacentlyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Struct</tag>\n  \
+                            <content>\n    \
+                                <float>42</float>\n    \
+                                <string>answer</string>\n  \
+                            </content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(nested_struct:
+                    AdjacentlyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Holder</tag>\n  \
+                            <content>\n    \
+                                <nested>\n      \
+                                    <float>42</float>\n    \
+                                </nested>\n    \
+                                <string>answer</string>\n  \
+                            </content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(flatten_struct:
+                    AdjacentlyTagged::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Flatten</tag>\n  \
+                            <content>\n    \
+                                <float>42</float>\n    \
+                                <string>answer</string>\n  \
+                            </content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(empty_struct:
+                    AdjacentlyTagged::Empty {}
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Empty</tag>\n  \
+                            <content/>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(text:
+                    AdjacentlyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Text</tag>\n  \
+                            <content>\n    \
+                                42\n    \
+                                <string>answer</string>\n  \
+                            </content>\n\
+                        </AdjacentlyTagged>");
+            }
+
+            mod untagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                err!(unit: Untagged::Unit
+                    => Unsupported("cannot serialize `()` without defined root tag"));
+                err!(newtype: Untagged::Newtype(true)
+                    => Unsupported("cannot serialize `bool` without defined root tag"));
+                err!(tuple_struct: Untagged::Tuple(42.0, "answer")
+                    => Unsupported("cannot serialize unnamed tuple without defined root tag"));
+                serialize_as!(struct_:
+                    Untagged::Struct {
+                        float: 42.0,
+                        string: "answer",
+                    }
+                    => "<Untagged>\n  \
+                            <float>42</float>\n  \
+                            <string>answer</string>\n\
+                        </Untagged>");
+                serialize_as!(nested_struct:
+                    Untagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => "<Untagged>\n  \
+                            <nested>\n    \
+                                <float>42</float>\n  \
+                            </nested>\n  \
+                            <string>answer</string>\n\
+                        </Untagged>");
+                err!(flatten_struct:
+                    Untagged::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }
+                    => Unsupported("cannot serialize map without defined root tag"));
+                serialize_as!(empty_struct:
+                    Untagged::Empty {}
+                    => "<Untagged/>");
+                serialize_as!(text:
+                    Untagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }
+                    => "<Untagged>\n  \
+                            42\n  \
+                            <string>answer</string>\n\
+                        </Untagged>");
+            }
+        }
+    }
 }
 
 mod with_root {
