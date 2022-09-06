@@ -2412,6 +2412,154 @@ mod test {
     /// Tests for reader that generates events that borrow from the provided buffer
     mod buffered {
         check!(&mut Vec::new());
+
+        /// Tests for https://github.com/tafia/quick-xml/issues/469
+        mod small_buffers {
+            use crate::events::{BytesCData, BytesDecl, BytesStart, BytesText, Event};
+            use crate::reader::Reader;
+            use pretty_assertions::assert_eq;
+            use std::io::BufReader;
+
+            #[test]
+            fn decl() {
+                let xml = "<?xml ?>";
+                //         ^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("?>").next().unwrap().0 + 1;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Decl(BytesDecl::from_start(BytesStart::borrowed(b"xml ", 3)))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn pi() {
+                let xml = "<?pi?>";
+                //         ^^^^^ data that fit into buffer
+                let size = xml.match_indices("?>").next().unwrap().0 + 1;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::PI(BytesText::from_escaped(&b"pi"[..]))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn empty() {
+                let xml = "<empty/>";
+                //         ^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("/>").next().unwrap().0 + 1;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Empty(BytesStart::borrowed_name(b"empty"))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn cdata1() {
+                let xml = "<![CDATA[cdata]]>";
+                //         ^^^^^^^^^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("]]>").next().unwrap().0 + 1;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::CData(BytesCData::from_str("cdata"))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn cdata2() {
+                let xml = "<![CDATA[cdata]]>";
+                //         ^^^^^^^^^^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("]]>").next().unwrap().0 + 2;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::CData(BytesCData::from_str("cdata"))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn comment1() {
+                let xml = "<!--comment-->";
+                //         ^^^^^^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("-->").next().unwrap().0 + 1;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Comment(BytesText::from_escaped(&b"comment"[..]))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+
+            #[test]
+            fn comment2() {
+                let xml = "<!--comment-->";
+                //         ^^^^^^^^^^^^^ data that fit into buffer
+                let size = xml.match_indices("-->").next().unwrap().0 + 2;
+                let br = BufReader::with_capacity(size, xml.as_bytes());
+                let mut reader = Reader::from_reader(br);
+                let mut buf = Vec::new();
+
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Text(BytesText::from_plain(b""))
+                );
+                assert_eq!(
+                    reader.read_event(&mut buf).unwrap(),
+                    Event::Comment(BytesText::from_escaped(&b"comment"[..]))
+                );
+                assert_eq!(reader.read_event(&mut buf).unwrap(), Event::Eof);
+            }
+        }
     }
 
     /// Tests for reader that generates events that borrow from the input
