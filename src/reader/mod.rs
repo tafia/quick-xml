@@ -742,25 +742,50 @@ impl BangType {
 
     /// If element is finished, returns its content up to `>` symbol and
     /// an index of this symbol, otherwise returns `None`
+    ///
+    /// # Parameters
+    /// - `buf`: buffer with data consumed on previous iterations
+    /// - `chunk`: data read on current iteration and not yet consumed from reader
     #[inline(always)]
-    fn parse<'b>(&self, chunk: &'b [u8], offset: usize) -> Option<(&'b [u8], usize)> {
+    fn parse<'b>(&self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
         for i in memchr::memchr_iter(b'>', chunk) {
             match self {
                 // Need to read at least 6 symbols (`!---->`) for properly finished comment
                 // <!----> - XML comment
                 //  012345 - i
-                Self::Comment => {
-                    if offset + i > 4 && chunk[..i].ends_with(b"--") {
+                Self::Comment if buf.len() + i > 4 => {
+                    if chunk[..i].ends_with(b"--") {
                         // We cannot strip last `--` from the buffer because we need it in case of
                         // check_comments enabled option. XML standard requires that comment
                         // will not end with `--->` sequence because this is a special case of
                         // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
                         return Some((&chunk[..i], i + 1)); // +1 for `>`
                     }
+                    // End sequence `-|->` was splitted at |
+                    //        buf --/   \-- chunk
+                    if i == 1 && buf.ends_with(b"-") && chunk[0] == b'-' {
+                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                    }
+                    // End sequence `--|>` was splitted at |
+                    //         buf --/   \-- chunk
+                    if i == 0 && buf.ends_with(b"--") {
+                        return Some((&[], i + 1)); // +1 for `>`
+                    }
                 }
+                Self::Comment => {}
                 Self::CData => {
                     if chunk[..i].ends_with(b"]]") {
-                        return Some((&chunk[..i - 2], i + 1)); // +1 for `>`
+                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                    }
+                    // End sequence `]|]>` was splitted at |
+                    //        buf --/   \-- chunk
+                    if i == 1 && buf.ends_with(b"]") && chunk[0] == b']' {
+                        return Some((&chunk[..i], i + 1)); // +1 for `>`
+                    }
+                    // End sequence `]]|>` was splitted at |
+                    //         buf --/   \-- chunk
+                    if i == 0 && buf.ends_with(b"]]") {
+                        return Some((&[], i + 1)); // +1 for `>`
                     }
                 }
                 Self::DocType => {
@@ -1021,7 +1046,7 @@ mod test {
                                 $(.$await)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[")))
+                            Some((BangType::CData, Bytes(b"![CDATA[]]")))
                         );
                         assert_eq!(position, 11);
                     }
@@ -1042,7 +1067,7 @@ mod test {
                                 $(.$await)?
                                 .unwrap()
                                 .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content")))
+                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content]]")))
                         );
                         assert_eq!(position, 28);
                     }
