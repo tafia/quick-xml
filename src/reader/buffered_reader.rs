@@ -406,7 +406,7 @@ impl Reader<BufReader<File>> {
 
 #[cfg(test)]
 mod test {
-    use crate::reader::test::check;
+    use crate::reader::test::{check, small_buffers};
     use crate::reader::XmlSource;
 
     /// Default buffer constructor just pass the byte array from the test
@@ -420,6 +420,11 @@ mod test {
         read_until_close,
         identity,
         &mut Vec::new()
+    );
+
+    small_buffers!(
+        #[test]
+        read_event_into: std::io::BufReader<_>
     );
 
     #[cfg(feature = "encoding")]
