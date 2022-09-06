@@ -1751,8 +1751,157 @@ mod test {
         };
     }
 
-    // Export a macro for the child modules:
+    /// Tests for https://github.com/tafia/quick-xml/issues/469
+    macro_rules! small_buffers {
+        (
+            #[$test:meta]
+            $read_event:ident: $BufReader:ty
+            $(, $async:ident, $await:ident)?
+        ) => {
+            mod small_buffers {
+                use crate::events::{BytesCData, BytesDecl, BytesStart, BytesText, Event};
+                use crate::reader::Reader;
+                use pretty_assertions::assert_eq;
+
+                #[$test]
+                $($async)? fn decl() {
+                    let xml = "<?xml ?>";
+                    //         ^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("?>").next().unwrap().0 + 1;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3)))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn pi() {
+                    let xml = "<?pi?>";
+                    //         ^^^^^ data that fit into buffer
+                    let size = xml.match_indices("?>").next().unwrap().0 + 1;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::PI(BytesText::new("pi"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn empty() {
+                    let xml = "<empty/>";
+                    //         ^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("/>").next().unwrap().0 + 1;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Empty(BytesStart::new("empty"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn cdata1() {
+                    let xml = "<![CDATA[cdata]]>";
+                    //         ^^^^^^^^^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("]]>").next().unwrap().0 + 1;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::CData(BytesCData::new("cdata"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn cdata2() {
+                    let xml = "<![CDATA[cdata]]>";
+                    //         ^^^^^^^^^^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("]]>").next().unwrap().0 + 2;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::CData(BytesCData::new("cdata"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn comment1() {
+                    let xml = "<!--comment-->";
+                    //         ^^^^^^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("-->").next().unwrap().0 + 1;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Comment(BytesText::new("comment"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+
+                #[$test]
+                $($async)? fn comment2() {
+                    let xml = "<!--comment-->";
+                    //         ^^^^^^^^^^^^^ data that fit into buffer
+                    let size = xml.match_indices("-->").next().unwrap().0 + 2;
+                    let br = <$BufReader>::with_capacity(size, xml.as_bytes());
+                    let mut reader = Reader::from_reader(br);
+                    let mut buf = Vec::new();
+
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Comment(BytesText::new("comment"))
+                    );
+                    assert_eq!(
+                        reader.$read_event(&mut buf) $(.$await)? .unwrap(),
+                        Event::Eof
+                    );
+                }
+            }
+        };
+    }
+
+    // Export macros for the child modules:
     // - buffered_reader
     // - slice_reader
     pub(super) use check;
+    pub(super) use small_buffers;
 }
