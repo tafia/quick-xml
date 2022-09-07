@@ -19,8 +19,19 @@
 - [#490]: Removed `$unflatten=` special prefix for fields for serde (de)serializer, because:
   - it is useless for deserializer
   - serializer was rewritten and does not require it anymore
+- [#490]: In addition to the `$value` special name for a field a new `$text`
+  special name was added:
+  - `$text` is used if you want to map field to text content only. No markup is
+    expected (but text can represent a list as defined by `xs:list` type)
+  - `$value` is used if you want to map elements with different names to one field,
+    that should be represented either by an `enum`, or by sequence of `enum`s
+    (`Vec`, tuple, etc.), or by string. Use it when you want to map field to any
+    content of the field, text or markup
+
+  Refer to [documentation] for details.
 
 [#490]: https://github.com/tafia/quick-xml/pull/490
+[documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
 ## 0.26.0 -- 2022-10-23
 

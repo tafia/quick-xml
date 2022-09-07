@@ -34,7 +34,7 @@ where
 fn string_borrow() {
     #[derive(Debug, Deserialize, PartialEq)]
     struct BorrowedText<'a> {
-        #[serde(rename = "$value")]
+        #[serde(rename = "$text")]
         text: &'a str,
     }
 
@@ -43,52 +43,57 @@ fn string_borrow() {
     assert_eq!(borrowed_item.text, "Hello world");
 }
 
-/// Test for https://github.com/tafia/quick-xml/issues/231
-#[test]
-fn implicit_value() {
-    use serde_value::Value;
+/// Tests for deserializing into specially named field `$text` which represent
+/// textual content of an XML element
+mod text {
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-    let item: Value = from_str(r#"<root>content</root>"#).unwrap();
+    /// Test for https://github.com/tafia/quick-xml/issues/231
+    #[test]
+    fn implicit() {
+        use serde_value::Value;
 
-    assert_eq!(
-        item,
-        Value::Map(
-            vec![(
-                Value::String("$value".into()),
-                Value::String("content".into())
-            )]
-            .into_iter()
-            .collect()
-        )
-    );
-}
+        let item: Value = from_str(r#"<root>content</root>"#).unwrap();
 
-#[test]
-fn explicit_value() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Item {
-        #[serde(rename = "$value")]
-        content: String,
+        assert_eq!(
+            item,
+            Value::Map(
+                vec![(
+                    Value::String("$text".into()),
+                    Value::String("content".into())
+                )]
+                .into_iter()
+                .collect()
+            )
+        );
     }
 
-    let item: Item = from_str(r#"<root>content</root>"#).unwrap();
-
-    assert_eq!(
-        item,
-        Item {
-            content: "content".into()
+    #[test]
+    fn explicit() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item {
+            #[serde(rename = "$text")]
+            content: String,
         }
-    );
-}
 
-#[test]
-fn without_value() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Item;
+        let item: Item = from_str(r#"<root>content</root>"#).unwrap();
 
-    let item: Item = from_str(r#"<root>content</root>"#).unwrap();
+        assert_eq!(
+            item,
+            Item {
+                content: "content".into()
+            }
+        );
+    }
 
-    assert_eq!(item, Item);
+    #[test]
+    fn without() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item;
+
+        let _: Item = from_str(r#"<root>content</root>"#).unwrap();
+    }
 }
 
 /// Tests calling `deserialize_ignored_any`
@@ -219,10 +224,10 @@ mod trivial {
         /// fields of this struct.
         ///
         /// Because we want to get access to unnamed content of the tag (usually, this internal
-        /// XML node called `#text`) we use a rename to a special name `$value`
+        /// XML node called `$text`) we use a rename to a special name `$text`
         #[derive(Debug, Deserialize, PartialEq)]
         struct Trivial<T> {
-            #[serde(rename = "$value")]
+            #[serde(rename = "$text")]
             value: T,
         }
 
@@ -236,9 +241,9 @@ mod trivial {
 
                     match from_str::<Trivial<$type>>(&format!("<outer>{}</outer>", $value)) {
                         // Expected unexpected start element `<root>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"root"),
+                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("root"))`, but got `{:?}`"#,
+                            r#"Expected `Err(DeError::Custom("missing field `$text`"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -723,7 +728,7 @@ mod seq {
             }
 
             /// Mixed content assumes, that some elements will have an internal
-            /// name `$value`, so, unless field named the same, it is expected
+            /// name `$text` or `$value`, so, unless field named the same, it is expected
             /// to fail
             #[test]
             fn mixed_content() {
@@ -1438,7 +1443,7 @@ mod seq {
             }
 
             /// Mixed content assumes, that some elements will have an internal
-            /// name `$value`, so, unless field named the same, it is expected
+            /// name `$text` or `$value`, so, unless field named the same, it is expected
             /// to fail
             #[test]
             fn mixed_content() {
@@ -5746,7 +5751,7 @@ mod xml_schema_lists {
         #[derive(Debug, Deserialize, PartialEq)]
         struct List<T> {
             // Give it a special name that means text content of the XML node
-            #[serde(rename = "$value")]
+            #[serde(rename = "$text")]
             list: Vec<T>,
         }
 

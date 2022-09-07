@@ -46,7 +46,7 @@ fn serialize_struct_value_number() {
     #[derive(Serialize)]
     struct Person {
         name: String,
-        #[serde(rename = "$value")]
+        #[serde(rename = "$text")]
         age: u32,
     }
 
@@ -62,7 +62,7 @@ fn serialize_struct_value_string() {
     #[derive(Serialize)]
     struct Person {
         name: String,
-        #[serde(rename = "$value")]
+        #[serde(rename = "$text")]
         age: String,
     }
 
@@ -144,8 +144,8 @@ struct Nested {
 struct Empty {}
 
 #[derive(Serialize)]
-struct Value {
-    #[serde(rename = "$value")]
+struct Text {
+    #[serde(rename = "$text")]
     float: f64,
     string: &'static str,
 }
@@ -171,8 +171,8 @@ enum ExternallyTagged {
         string: &'static str,
     },
     Empty {},
-    Value {
-        #[serde(rename = "$value")]
+    Text {
+        #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
@@ -199,8 +199,8 @@ enum InternallyTagged {
         string: &'static str,
     },
     Empty {},
-    Value {
-        #[serde(rename = "$value")]
+    Text {
+        #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
@@ -226,8 +226,8 @@ enum AdjacentlyTagged {
         string: &'static str,
     },
     Empty {},
-    Value {
-        #[serde(rename = "$value")]
+    Text {
+        #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
@@ -253,8 +253,8 @@ enum Untagged {
         string: &'static str,
     },
     Empty {},
-    Value {
-        #[serde(rename = "$value")]
+    Text {
+        #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
@@ -310,8 +310,8 @@ mod with_root {
     serialize_as!(empty_struct:
         Empty {}
         => "<root/>");
-    serialize_as!(value:
-        Value {
+    serialize_as!(text:
+        Text {
             float: 42.0,
             string: "answer"
         }
@@ -357,12 +357,12 @@ mod with_root {
             serialize_as!(empty_struct:
                 ExternallyTagged::Empty {}
                 => "<Empty/>");
-            serialize_as!(value:
-                ExternallyTagged::Value {
+            serialize_as!(text:
+                ExternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
                 }
-                => r#"<Value string="answer">42</Value>"#);
+                => r#"<Text string="answer">42</Text>"#);
         }
 
         mod internally_tagged {
@@ -396,12 +396,12 @@ mod with_root {
             serialize_as!(empty_struct:
                 InternallyTagged::Empty {}
                 => r#"<root tag="Empty"/>"#);
-            serialize_as!(value:
-                InternallyTagged::Value {
+            serialize_as!(text:
+                InternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
                 }
-                => r#"<root tag="Value" string="answer">42</root>"#);
+                => r#"<root tag="Text" string="answer">42</root>"#);
         }
 
         mod adjacently_tagged {
@@ -438,12 +438,12 @@ mod with_root {
             serialize_as!(empty_struct:
                 AdjacentlyTagged::Empty {}
                 => r#"<root tag="Empty"><content/></root>"#);
-            serialize_as!(value:
-                AdjacentlyTagged::Value {
+            serialize_as!(text:
+                AdjacentlyTagged::Text {
                     float: 42.0,
                     string: "answer",
                 }
-                => r#"<root tag="Value"><content string="answer">42</content></root>"#);
+                => r#"<root tag="Text"><content string="answer">42</content></root>"#);
         }
 
         mod untagged {
@@ -482,8 +482,8 @@ mod with_root {
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<root/>");
-            serialize_as!(value:
-                Untagged::Value {
+            serialize_as!(text:
+                Untagged::Text {
                     float: 42.0,
                     string: "answer"
                 }

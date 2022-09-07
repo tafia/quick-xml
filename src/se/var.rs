@@ -1,5 +1,5 @@
 use crate::{
-    de::INNER_VALUE,
+    de::{TEXT_KEY, VALUE_KEY},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
     se::key::QNameSerializer,
@@ -134,7 +134,7 @@ where
         value.serialize(&mut serializer)?;
 
         if !self.buffer.is_empty() {
-            if self.buffer[0] == b'<' || key == INNER_VALUE {
+            if self.buffer[0] == b'<' || key == VALUE_KEY || key == TEXT_KEY {
                 // Drains buffer, moves it to children
                 self.children.append(&mut self.buffer);
             } else {

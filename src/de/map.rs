@@ -4,7 +4,7 @@ use crate::{
     de::escape::EscapedDeserializer,
     de::seq::{not_in, TagFilter},
     de::simple_type::SimpleTypeDeserializer,
-    de::{str2bool, DeEvent, Deserializer, XmlRead, INNER_VALUE},
+    de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     errors::serialize::DeError,
     events::attributes::IterState,
     events::BytesStart,
@@ -49,19 +49,19 @@ enum ValueSource {
     Text,
     /// Next value should be deserialized from an element with an any name, except
     /// elements with a name matching one of the struct fields. Corresponding tag
-    /// name will always be associated with a field with name [`INNER_VALUE`].
+    /// name will always be associated with a field with name [`VALUE_KEY`].
     ///
     /// That state is set when call to [`peek()`] returns a [`Start`] event, which
     /// [`name()`] is not listed in the [list of known fields] (which for a struct
     /// is a list of field names, and for a map that is an empty list), _and_
-    /// struct has a field with a special name [`INNER_VALUE`].
+    /// struct has a field with a special name [`VALUE_KEY`].
     ///
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
     /// the whole element and how is will be done determined by the value deserializer.
     /// The [`MapAccess`] do not consume any events in that state.
     ///
-    /// Because in that state any encountered `<tag>` is mapped to the [`INNER_VALUE`]
+    /// Because in that state any encountered `<tag>` is mapped to the [`VALUE_KEY`]
     /// field, it is possible to use tag name as an enum discriminator, so `enum`s
     /// can be deserialized from that XMLs:
     ///
@@ -96,9 +96,6 @@ enum ValueSource {
     /// That is possible, because value deserializer have access to the full content
     /// of a `<variant1>...</variant1>` or `<variant2>...</variant2>` node, including
     /// the tag name.
-    ///
-    /// Currently, processing of that enum variant is fully equivalent to the
-    /// processing of a [`Text`] variant. Split of variants made for clarity.
     ///
     /// [`Start`]: DeEvent::Start
     /// [`peek()`]: Deserializer::peek()
@@ -136,7 +133,7 @@ enum ValueSource {
     /// variant based on the tag name. If that is needed, then [`Content`] variant
     /// of this enum should be used. Such usage is enabled by annotating a struct
     /// field as "content" field, which implemented as given the field a special
-    /// [`INNER_VALUE`] name.
+    /// [`VALUE_KEY`] name.
     ///
     /// [`Start`]: DeEvent::Start
     /// [`peek()`]: Deserializer::peek()
@@ -180,11 +177,11 @@ where
     /// List of field names of the struct. It is empty for maps
     fields: &'static [&'static str],
     /// If `true`, then the deserialized struct has a field with a special name:
-    /// [`INNER_VALUE`]. That field should be deserialized from the text content
-    /// of an XML node:
+    /// [`VALUE_KEY`]. That field should be deserialized from the whole content
+    /// of an XML node, including tag name:
     ///
     /// ```xml
-    /// <tag>value for INNER_VALUE field<tag>
+    /// <tag>value for VALUE_KEY field<tag>
     /// ```
     has_value_field: bool,
 }
@@ -205,7 +202,7 @@ where
             start,
             source: ValueSource::Unknown,
             fields,
-            has_value_field: fields.contains(&INNER_VALUE),
+            has_value_field: fields.contains(&VALUE_KEY),
         })
     }
 }
@@ -239,12 +236,22 @@ where
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
+                // We shouldn't have both `$value` and `$text` fields in the same
+                // struct, so if we have `$value` field, the we should deserialize
+                // text content to `$value`
+                DeEvent::Text(_) | DeEvent::CData(_) if self.has_value_field => {
+                    self.source = ValueSource::Content;
+                    // Deserialize `key` from special attribute name which means
+                    // that value should be taken from the text content of the
+                    // XML node
+                    seed.deserialize(VALUE_KEY.into_deserializer()).map(Some)
+                }
                 DeEvent::Text(_) | DeEvent::CData(_) => {
                     self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
-                    seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
+                    seed.deserialize(TEXT_KEY.into_deserializer()).map(Some)
                 }
                 // Used to deserialize collections of enums, like:
                 // <root>
@@ -264,7 +271,7 @@ where
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
                     self.source = ValueSource::Content;
-                    seed.deserialize(INNER_VALUE.into_deserializer()).map(Some)
+                    seed.deserialize(VALUE_KEY.into_deserializer()).map(Some)
                 }
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
@@ -299,7 +306,7 @@ where
             //   text value
             // </any-tag>
             // The whole map represented by an `<any-tag>` element, the map key
-            // is implicit and equals to the `INNER_VALUE` constant, and the value
+            // is implicit and equals to the `TEXT_KEY` constant, and the value
             // is a `Text` or a `CData` event (the value deserializer will see one
             // of that events)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
@@ -322,7 +329,7 @@ where
             //   <any>...</any>
             // </any-tag>
             // The whole map represented by an `<any-tag>` element, the map key
-            // is implicit and equals to the `INNER_VALUE` constant, and the value
+            // is implicit and equals to the `VALUE_KEY` constant, and the value
             // is a `Start` event (the value deserializer will see that event)
             ValueSource::Content => seed.deserialize(MapValueDeserializer {
                 map: self,
@@ -425,7 +432,7 @@ where
     /// ```
     ///
     /// The whole map represented by an `<any-tag>` element, the map key is
-    /// implicit and equals to the [`INNER_VALUE`] constant, and the value is
+    /// implicit and equals to the [`VALUE_KEY`] constant, and the value is
     /// a [`Text`], a [`CData`], or a [`Start`] event (the value deserializer
     /// will see one of those events). In the first two cases the value of this
     /// field do not matter (because we already see the textual event and there
@@ -435,7 +442,7 @@ where
     ///
     /// ```ignore
     /// struct AnyName {
-    ///   #[serde(rename = "$value")]
+    ///   #[serde(rename = "$text")]
     ///   any_name: String,
     /// }
     /// ```
@@ -444,7 +451,7 @@ where
     /// Changing this can be valuable for <https://github.com/tafia/quick-xml/issues/383>,
     /// but those fields should be explicitly marked that they want to get any
     /// possible markup as a `String` and that mark is different from marking them
-    /// as accepting "text content" which the currently `$value` means.
+    /// as accepting "text content" which the currently `$text` means.
     ///
     /// [`Text`]: DeEvent::Text
     /// [`CData`]: DeEvent::CData

@@ -119,15 +119,18 @@ quick-xml follows its convention for deserialization, including the
 
 ### Parsing the "value" of a tag
 
-If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`, you can use the special name `$value`:
+If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`,
+you can use either the special name `$text`, or the special name `$value`:
 
 ```rust,ignore
 struct Foo {
     pub abc: String,
-    #[serde(rename = "$value")]
+    #[serde(rename = "$text")]
     pub body: String,
 }
 ```
+
+Read about the difference in the [documentation](https://docs.rs/quick-xml/latest/quick_xml/de/index.html#difference-between-text-and-value-special-names).
 
 ### Serializing unit variants as primitives
 

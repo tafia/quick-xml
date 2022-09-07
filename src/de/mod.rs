@@ -1,4 +1,232 @@
 //! Serde `Deserializer` module
+//!
+//! # Difference between `$text` and `$value` special names
+//!
+//! quick-xml supports two special names for fields -- `$text` and `$value`.
+//! Although they may seem the same, there is a distinction. Two different
+//! names is required mostly for serialization, because quick-xml should know
+//! how you want to serialize certain constructs, which could be represented
+//! through XML in multiple different ways.
+//!
+//! The only difference in how complex types and sequences are serialized.
+//! If you doubt which one you should select, begin with [`$value`](#value).
+//!
+//! ## `$text`
+//! `$text` is used when you want to write your XML as a text or a CDATA content.
+//! More formally, field with that name represents simple type definition with
+//! `{variety} = atomic` or `{variety} = union` whose basic members are all atomic,
+//! as described in the [specification].
+//!
+//! As a result, not all types of such fields can be serialized. Only serialization
+//! of following types are supported:
+//! - all primitive types (strings, numbers, booleans)
+//! - unit variants of enumerations (serializes to a name of a variant)
+//! - newtypes (delegates serialization to inner type)
+//! - [`Option`] of above (`None` serializes to nothing)
+//! - sequences (including tuples and tuple variants of enumerations) of above,
+//!   excluding `None` and empty string elements (because it will not be possible
+//!   to deserialize them back). The elements are separated by space(s)
+//! - unit type `()` and unit structs (serializes to nothing)
+//!
+//! Complex types, such as structs and maps, are not supported in this field.
+//! If you want them, you should use `$value`.
+//!
+//! Sequences serialized to a space-delimited string, that is why only certain
+//! types are allowed in this mode:
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct AnyName {
+//!     #[serde(rename = "$text")]
+//!     field: Vec<usize>,
+//! }
+//!
+//! let obj = AnyName { field: vec![1, 2, 3] };
+//! let xml = to_string(&obj).unwrap();
+//! assert_eq!(xml, "<AnyName>1 2 3</AnyName>");
+//!
+//! let object: AnyName = from_str(&xml).unwrap();
+//! assert_eq!(object, obj);
+//! ```
+//!
+//! ## `$value`
+//! > Note: a name `#content` would better explain the purpose of that field,
+//! > but `$value` is used for compatibility with other XML serde crates, which
+//! > uses that name. This allow you to switch XML crate more smoothly if required.
+//!
+//! Representation of primitive types in `$value` does not differ from their
+//! representation in `$text` field. The difference is how sequences are serialized.
+//! `$value` serializes each sequence item as a separate XML element. The name
+//! of that element is taken from serialized type, and because only `enum`s provide
+//! such name (their variant name), only they should be used for such fields.
+//!
+//! `$value` fields does not support `struct` types with fields, the serialization
+//! of such types would end with an `Err(Unsupported)`. Unit structs and unit
+//! type `()` serializing to nothing and can be deserialized from any content.
+//!
+//! Serialization and deserialization of `$value` field performed as usual, except
+//! that name for an XML element will be given by the serialized type, instead of
+//! field. The latter allow to serialize enumerated types, where variant is encoded
+//! as a tag name, and, so, represent an XSD `xs:choice` schema by the Rust `enum`.
+//!
+//! In the example below, field will be serialized as `<field/>`, because elements
+//! get their names from the field name. It cannot be deserialized, because `Enum`
+//! expects elements `<A/>`, `<B/>` or `<C/>`, but `AnyName` looked only for `<field/>`:
+//!
+//! ```no_run
+//! # use serde::{Deserialize, Serialize};
+//! #[derive(Deserialize, Serialize)]
+//! enum Enum { A, B, C }
+//!
+//! #[derive(Deserialize, Serialize)]
+//! struct AnyName {
+//!     // <field/>
+//!     field: Enum,
+//! }
+//! ```
+//!
+//! If you rename field to `$value`, then `field` would be serialized as `<A/>`,
+//! `<B/>` or `<C/>`, depending on the its content. It is also possible to
+//! deserialize it from the same elements:
+//!
+//! ```no_run
+//! # use serde::{Deserialize, Serialize};
+//! # #[derive(Deserialize, Serialize)]
+//! # enum Enum { A, B, C }
+//! #
+//! #[derive(Deserialize, Serialize)]
+//! struct AnyName {
+//!     // <A/>, <B/> or <C/>
+//!     #[serde(rename = "$value")]
+//!     field: Enum,
+//! }
+//! ```
+//!
+//! ### Primitives and sequences of primitives
+//!
+//! Sequences serialized to a list of elements. Note, that types that does not
+//! produce their own tag (i. e. primitives) are written as is, without delimiters:
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct AnyName {
+//!     #[serde(rename = "$value")]
+//!     field: Vec<usize>,
+//! }
+//!
+//! let obj = AnyName { field: vec![1, 2, 3] };
+//! let xml = to_string(&obj).unwrap();
+//! // Note, that types that does not produce their own tag are written as is!
+//! assert_eq!(xml, "<AnyName>123</AnyName>");
+//!
+//! let object: AnyName = from_str("<AnyName>123</AnyName>").unwrap();
+//! assert_eq!(object, AnyName { field: vec![123] });
+//!
+//! // `1 2 3` is mapped to a single `usize` element
+//! // It is impossible to deserialize list of primitives to such field
+//! from_str::<AnyName>("<AnyName>1 2 3</AnyName>").unwrap_err();
+//! ```
+//!
+//! A particular case of that example is a string `$value` field, which probably
+//! would be a most used example of that attribute:
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct AnyName {
+//!     #[serde(rename = "$value")]
+//!     field: String,
+//! }
+//!
+//! let obj = AnyName { field: "content".to_string() };
+//! let xml = to_string(&obj).unwrap();
+//! assert_eq!(xml, "<AnyName>content</AnyName>");
+//! ```
+//!
+//! ### Structs and sequences of structs
+//!
+//! Note, that structures does not have serializable name as well (name of the
+//! type are never used), so it is impossible to serialize non-unit struct or
+//! sequence of non-unit structs in `$value` field. (sequences of) unit structs
+//! are serialized as empty string, although, because units itself serializing
+//! to nothing:
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct Unit;
+//!
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct AnyName {
+//!     // #[serde(default)] is required to deserialization of empty lists
+//!     // This is a general note, not related to $value
+//!     #[serde(rename = "$value", default)]
+//!     field: Vec<Unit>,
+//! }
+//!
+//! let obj = AnyName { field: vec![Unit, Unit, Unit] };
+//! let xml = to_string(&obj).unwrap();
+//! assert_eq!(xml, "<AnyName/>");
+//!
+//! let object: AnyName = from_str("<AnyName/>").unwrap();
+//! assert_eq!(object, AnyName { field: vec![] });
+//!
+//! let object: AnyName = from_str("<AnyName></AnyName>").unwrap();
+//! assert_eq!(object, AnyName { field: vec![] });
+//!
+//! let object: AnyName = from_str("<AnyName><A/><B/><C/></AnyName>").unwrap();
+//! assert_eq!(object, AnyName { field: vec![Unit, Unit, Unit] });
+//! ```
+//!
+//! ### Enums and sequences of enums
+//!
+//! Enumerations uses the variant name as an element name:
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct AnyName {
+//!     #[serde(rename = "$value")]
+//!     field: Vec<Enum>,
+//! }
+//!
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! enum Enum { A, B, C }
+//!
+//! let obj = AnyName { field: vec![Enum::A, Enum::B, Enum::C] };
+//! let xml = to_string(&obj).unwrap();
+//! assert_eq!(
+//!     xml,
+//!     "<AnyName>\
+//!         <A/>\
+//!         <B/>\
+//!         <C/>\
+//!      </AnyName>"
+//! );
+//!
+//! let object: AnyName = from_str(&xml).unwrap();
+//! assert_eq!(object, obj);
+//! ```
+//!
+//! ----------------------------------------------------------------------------
+//!
+//! You can have either `$text` or `$value` field in your structs. Unfortunately,
+//! that is not enforced, so you can theoretically have both, but you should
+//! avoid that.
+//!
+//! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
 // Macros should be defined before the modules that using them
 // Also, macros should be imported before using them
@@ -124,7 +352,10 @@ use std::io::BufRead;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
 
-pub(crate) const INNER_VALUE: &str = "$value";
+/// Data represented by a text node or a CDATA node. XML markup is not expected
+pub(crate) const TEXT_KEY: &str = "$text";
+/// Data represented by any XML markup inside
+pub(crate) const VALUE_KEY: &str = "$value";
 pub(crate) const PRIMITIVE_PREFIX: &str = "$primitive=";
 
 /// Simplified event which contains only these variants that used by deserializer
@@ -274,7 +505,7 @@ where
     /// Set the maximum number of events that could be skipped during deserialization
     /// of sequences.
     ///
-    /// If `<element>` contains more than specified nested elements, `#text` or
+    /// If `<element>` contains more than specified nested elements, `$text` or
     /// CDATA nodes, then [`DeError::TooManyEvents`] will be returned during
     /// deserialization of sequence field (any type that uses [`deserialize_seq`]
     /// for the deserialization, for example, `Vec<T>`).
@@ -316,7 +547,7 @@ where
     ///
     /// - `<another-item>`
     /// - `<some-element>`
-    /// - `#text(with text)`
+    /// - `$text(with text)`
     /// - `</some-element>`
     /// - `<yet-another-element/>` (virtual start event)
     /// - `<yet-another-element/>` (vitrual end event)
@@ -981,7 +1212,7 @@ mod tests {
             let checkpoint = de.skip_checkpoint();
             assert_eq!(checkpoint, 0);
 
-            // Skip `#text` node and consume <inner/> after it
+            // Skip `$text` node and consume <inner/> after it
             de.skip().unwrap();
             assert_eq!(
                 de.read,
