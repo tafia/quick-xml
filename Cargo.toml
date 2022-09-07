@@ -161,7 +161,7 @@ escape-html = []
 overlapped-lists = []
 
 ## Enables support for [`serde`] serialization and deserialization
-serialize = ["serde"]
+serialize = ["serde/derive"]
 
 [package.metadata.docs.rs]
 # document all features
