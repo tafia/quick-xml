@@ -164,8 +164,21 @@ escape-html = []
 ## [`Deserializer`]: crate::de::Deserializer
 overlapped-lists = []
 
-## Enables support for [`serde`] serialization and deserialization
-serialize = ["serde"]
+## Enables serialization of some types using [`serde`]. Probably your rarely will
+## need this feature enabled.
+##
+## This feature does NOT provide XML serializer or deserializer. You should use
+## the `serialize` feature for that instead.
+# Cannot name "serde" to avoid clash with dependency.
+# "dep:" prefix only avalible from Rust 1.60
+serde-types = ["serde/derive"]
+
+## Enables support for [`serde`] serialization and deserialization. When this
+## feature is enabled, quick-xml provides serializer and deserializer for XML.
+##
+## This feature does NOT enables serializaton of the types inside quick-xml.
+## If you need that, use the `serde-types` feature.
+serialize = ["serde"] # "dep:" prefix only avalible from Rust 1.60
 
 [package.metadata.docs.rs]
 # document all features

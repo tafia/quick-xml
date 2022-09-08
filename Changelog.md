@@ -40,6 +40,8 @@
   ```
 - [#523]: Fix incorrect handling of `xs:list`s with encoded spaces: they still
   act as delimiters, which is confirmed also by mature XmlBeans Java library
+- [#473]: Fix a hidden requirement to enable serde's `derive` feature to get
+  quick-xml's `serialize` feature for `edition = 2021` or `resolver = 2` crates
 
 ### Misc Changes
 
@@ -65,7 +67,9 @@
 
   Refer to [documentation] for details.
 - [#521]: MSRV bumped to 1.52.
+- [#473]: `serde` feature that used to make some types serializable, renamed to `serde-types`
 
+[#473]: https://github.com/tafia/quick-xml/issues/473
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#500]: https://github.com/tafia/quick-xml/issues/500
 [#514]: https://github.com/tafia/quick-xml/issues/514

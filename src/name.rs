@@ -16,7 +16,7 @@ use std::fmt::{self, Debug, Formatter};
 ///
 /// [qualified name]: https://www.w3.org/TR/xml-names11/#dt-qualname
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 pub struct QName<'a>(pub &'a [u8]);
 impl<'a> QName<'a> {
     /// Converts this name to an internal slice representation.
@@ -133,7 +133,7 @@ impl<'a> AsRef<[u8]> for QName<'a> {
 ///
 /// [local (unqualified) name]: https://www.w3.org/TR/xml-names11/#dt-localname
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 pub struct LocalName<'a>(&'a [u8]);
 impl<'a> LocalName<'a> {
     /// Converts this name to an internal slice representation.
@@ -183,7 +183,7 @@ impl<'a> From<QName<'a>> for LocalName<'a> {
 ///
 /// [namespace prefix]: https://www.w3.org/TR/xml-names11/#dt-prefix
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 pub struct Prefix<'a>(&'a [u8]);
 impl<'a> Prefix<'a> {
     /// Extracts internal slice
@@ -225,7 +225,7 @@ pub enum PrefixDeclaration<'a> {
 ///
 /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 pub struct Namespace<'a>(pub &'a [u8]);
 impl<'a> Namespace<'a> {
     /// Converts this namespace to an internal slice representation.
