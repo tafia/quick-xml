@@ -100,6 +100,74 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
     Ok(String::from_utf8(writer)?)
 }
 
+/// Almost all characters can form a name. Citation from <https://www.w3.org/TR/xml11/#sec-xml11>:
+///
+/// > The overall philosophy of names has changed since XML 1.0. Whereas XML 1.0
+/// > provided a rigid definition of names, wherein everything that was not permitted
+/// > was forbidden, XML 1.1 names are designed so that everything that is not
+/// > forbidden (for a specific reason) is permitted. Since Unicode will continue
+/// > to grow past version 4.0, further changes to XML can be avoided by allowing
+/// > almost any character, including those not yet assigned, in names.
+///
+/// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
+const fn is_xml11_name_start_char(ch: char) -> bool {
+    match ch {
+        ':'
+        | 'A'..='Z'
+        | '_'
+        | 'a'..='z'
+        | '\u{00C0}'..='\u{00D6}'
+        | '\u{00D8}'..='\u{00F6}'
+        | '\u{00F8}'..='\u{02FF}'
+        | '\u{0370}'..='\u{037D}'
+        | '\u{037F}'..='\u{1FFF}'
+        | '\u{200C}'..='\u{200D}'
+        | '\u{2070}'..='\u{218F}'
+        | '\u{2C00}'..='\u{2FEF}'
+        | '\u{3001}'..='\u{D7FF}'
+        | '\u{F900}'..='\u{FDCF}'
+        | '\u{FDF0}'..='\u{FFFD}'
+        | '\u{10000}'..='\u{EFFFF}' => true,
+        _ => false,
+    }
+}
+/// <https://www.w3.org/TR/xml11/#NT-NameChar>
+const fn is_xml11_name_char(ch: char) -> bool {
+    match ch {
+        '-' | '.' | '0'..='9' | '\u{00B7}' | '\u{0300}'..='\u{036F}' | '\u{203F}'..='\u{2040}' => {
+            true
+        }
+        _ => is_xml11_name_start_char(ch),
+    }
+}
+
+/// Helper struct to self-defense from errors
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(self) struct XmlName<'n>(&'n str);
+
+impl<'n> XmlName<'n> {
+    /// Checks correctness of the XML name according to [XML 1.1 specification]
+    ///
+    /// [XML 1.1 specification]: https://www.w3.org/TR/REC-xml/#NT-Name
+    pub fn try_from(name: &'n str) -> Result<XmlName<'n>, DeError> {
+        //TODO: Customization point: allow user to decide if he want to reject or encode the name
+        match name.chars().next() {
+            Some(ch) if !is_xml11_name_start_char(ch) => Err(DeError::Unsupported(
+                format!("character `{ch}` is not allowed at the start of an XML name `{name}`")
+                    .into(),
+            )),
+            _ => match name.matches(|ch| !is_xml11_name_char(ch)).next() {
+                Some(s) => Err(DeError::Unsupported(
+                    format!("character `{s}` is not allowed in an XML name `{name}`").into(),
+                )),
+                None => Ok(XmlName(name)),
+            },
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A Serializer
 pub struct Serializer<'r, W: Write> {
     writer: Writer<W>,
