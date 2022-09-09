@@ -5,7 +5,7 @@
 
 use crate::errors::serialize::DeError;
 use crate::escapei::_escape;
-use crate::se::QuoteLevel;
+use crate::se::{Indent, QuoteLevel};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -327,30 +327,33 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 /// - CDATA content (`<...><![CDATA[cdata]]></...>`)
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
-pub struct SimpleTypeSerializer<W: Write> {
+pub struct SimpleTypeSerializer<'i, W: Write> {
     /// Writer to which this serializer writes content
     pub writer: W,
     /// Target for which element is serializing. Affects additional characters to escape.
     pub target: QuoteTarget,
     /// Defines which XML characters need to be escaped
     pub level: QuoteLevel,
+    /// Indent that should be written before the content if content is not an empty string
+    pub(crate) indent: Indent<'i>,
 }
 
-impl<W: Write> SimpleTypeSerializer<W> {
+impl<'i, W: Write> SimpleTypeSerializer<'i, W> {
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
+        self.indent.write_indent(&mut self.writer)?;
         Ok(self
             .writer
             .write_str(&escape_list(value, self.target, self.level))?)
     }
 }
 
-impl<W: Write> Serializer for SimpleTypeSerializer<W> {
+impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
-    type SerializeSeq = SimpleSeq<W>;
-    type SerializeTuple = SimpleSeq<W>;
-    type SerializeTupleStruct = SimpleSeq<W>;
+    type SerializeSeq = SimpleSeq<'i, W>;
+    type SerializeTuple = SimpleSeq<'i, W>;
+    type SerializeTupleStruct = SimpleSeq<'i, W>;
     type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
@@ -359,6 +362,9 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
     write_primitive!();
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
+        if value.is_empty() {
+            self.indent = Indent::None;
+        }
         self.write_str(value)?;
         Ok(self.writer)
     }
@@ -394,6 +400,7 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
             target: self.target,
             level: self.level,
             first: true,
+            indent: self.indent,
         })
     }
 
@@ -457,15 +464,17 @@ impl<W: Write> Serializer for SimpleTypeSerializer<W> {
 }
 
 /// Serializer for a sequence of atomic values delimited by space
-pub struct SimpleSeq<W: Write> {
+pub struct SimpleSeq<'i, W: Write> {
     writer: W,
     target: QuoteTarget,
     level: QuoteLevel,
     /// If `true`, nothing was written yet
     first: bool,
+    /// Indent that should be written before the content if content is not an empty string
+    indent: Indent<'i>,
 }
 
-impl<W: Write> SerializeSeq for SimpleSeq<W> {
+impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -473,7 +482,11 @@ impl<W: Write> SerializeSeq for SimpleSeq<W> {
     where
         T: ?Sized + Serialize,
     {
-        if !self.first {
+        // Write indent for the first element and delimiter for others
+        //FIXME: sequence with only empty strings will be serialized as indent only + delimiters
+        if self.first {
+            self.indent.write_indent(&mut self.writer)?;
+        } else {
             self.writer.write_char(' ')?;
         }
         self.first = false;
@@ -491,7 +504,7 @@ impl<W: Write> SerializeSeq for SimpleSeq<W> {
     }
 }
 
-impl<W: Write> SerializeTuple for SimpleSeq<W> {
+impl<'i, W: Write> SerializeTuple for SimpleSeq<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -509,7 +522,7 @@ impl<W: Write> SerializeTuple for SimpleSeq<W> {
     }
 }
 
-impl<W: Write> SerializeTupleStruct for SimpleSeq<W> {
+impl<'i, W: Write> SerializeTupleStruct for SimpleSeq<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -940,6 +953,7 @@ mod tests {
                         writer: String::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
@@ -959,6 +973,7 @@ mod tests {
                         writer: &mut buffer,
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
                     };
 
                     match $data.serialize(ser).unwrap_err() {

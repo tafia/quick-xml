@@ -171,9 +171,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n").map_err(Error::Io)?;
-                self.writer
-                    .write_all(&i.indents[..i.indents_len])
-                    .map_err(Error::Io)?;
+                self.writer.write_all(i.current()).map_err(Error::Io)?;
             }
         }
         self.write(before)?;
@@ -196,9 +194,7 @@ impl<W: Write> Writer<W> {
     pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n").map_err(Error::Io)?;
-            self.writer
-                .write_all(&i.indents[..i.indents_len])
-                .map_err(Error::Io)?;
+            self.writer.write_all(i.current()).map_err(Error::Io)?;
         }
         Ok(())
     }
@@ -337,7 +333,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
 }
 
 #[derive(Clone)]
-struct Indentation {
+pub(crate) struct Indentation {
     should_line_break: bool,
     indent_char: u8,
     indent_size: usize,
@@ -346,8 +342,8 @@ struct Indentation {
 }
 
 impl Indentation {
-    fn new(indent_char: u8, indent_size: usize) -> Indentation {
-        Indentation {
+    pub fn new(indent_char: u8, indent_size: usize) -> Self {
+        Self {
             should_line_break: false,
             indent_char,
             indent_size,
@@ -356,15 +352,22 @@ impl Indentation {
         }
     }
 
-    fn grow(&mut self) {
+    /// Increase indentation by one level
+    pub fn grow(&mut self) {
         self.indents_len += self.indent_size;
         if self.indents_len > self.indents.len() {
             self.indents.resize(self.indents_len, self.indent_char);
         }
     }
 
-    fn shrink(&mut self) {
+    /// Decrease indentation by one level. Do nothing, if level already zero
+    pub fn shrink(&mut self) {
         self.indents_len = self.indents_len.saturating_sub(self.indent_size);
+    }
+
+    /// Returns indent string for current level
+    pub fn current(&self) -> &[u8] {
+        &self.indents[..self.indents_len]
     }
 }
 

@@ -829,7 +829,7 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
 mod tests {
     use super::*;
     use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-    use crate::se::QuoteLevel;
+    use crate::se::{Indent, QuoteLevel};
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
     use serde::{Deserialize, Serialize};
@@ -866,6 +866,7 @@ mod tests {
                         writer: String::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
                     })
                     .unwrap(),
                     xml

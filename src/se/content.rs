@@ -3,7 +3,7 @@
 use crate::errors::serialize::DeError;
 use crate::se::element::{ElementSerializer, Struct};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{QuoteLevel, XmlName};
+use crate::se::{Indent, QuoteLevel, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -39,23 +39,39 @@ macro_rules! write_primitive {
 /// sequences and maps are serialized. Unlike `SimpleTypeSerializer` it supports
 /// any types in sequences and serializes them as list of elements, but that has
 /// drawbacks. Sequence of primitives would be serialized without delimiters and
-/// it will be impossible to distinguish between them.
-pub struct ContentSerializer<W: Write> {
+/// it will be impossible to distinguish between them. Even worse, when serializing
+/// with indent, sequence of strings become one big string with additional content
+/// and it would be impossible to distinguish between content of the original
+/// strings and inserted indent characters.
+pub struct ContentSerializer<'i, W: Write> {
     pub writer: W,
     /// Defines which XML characters need to be escaped in text content
     pub level: QuoteLevel,
+    /// Current indentation level. Note, that `Indent::None` means that there is
+    /// no indentation at all, but `write_indent == false` means only, that indent
+    /// writing is disabled in this instantiation of `ContentSerializer`, but
+    /// child serializers should have access to the actual state of indentation.
+    pub(super) indent: Indent<'i>,
+    /// If `true`, then current indent will be written before writing the content,
+    /// but only if content is not empty.
+    pub write_indent: bool,
     //TODO: add settings to disallow consequent serialization of primitives
 }
 
-impl<W: Write> ContentSerializer<W> {
+impl<'i, W: Write> ContentSerializer<'i, W> {
     /// Turns this serializer into serializer of a text content
     #[inline]
-    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<W> {
+    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<'i, W> {
         //TODO: Customization point: choose between CDATA and Text representation
         SimpleTypeSerializer {
             writer: self.writer,
             target: QuoteTarget::Text,
             level: self.level,
+            indent: if self.write_indent {
+                self.indent
+            } else {
+                Indent::None
+            },
         }
     }
 
@@ -66,12 +82,15 @@ impl<W: Write> ContentSerializer<W> {
         ContentSerializer {
             writer: &mut self.writer,
             level: self.level,
+            indent: self.indent.borrow(),
+            write_indent: self.write_indent,
         }
     }
 
     /// Writes `name` as self-closed tag
     #[inline]
     pub(super) fn write_empty(mut self, name: XmlName) -> Result<W, DeError> {
+        self.write_indent()?;
         self.writer.write_char('<')?;
         self.writer.write_str(name.0)?;
         self.writer.write_str("/>")?;
@@ -81,8 +100,9 @@ impl<W: Write> ContentSerializer<W> {
     /// Writes simple type content between `name` tags
     pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<W, DeError>
     where
-        S: FnOnce(SimpleTypeSerializer<W>) -> Result<W, DeError>,
+        S: FnOnce(SimpleTypeSerializer<'i, W>) -> Result<W, DeError>,
     {
+        self.write_indent()?;
         self.writer.write_char('<')?;
         self.writer.write_str(name.0)?;
         self.writer.write_char('>')?;
@@ -94,19 +114,27 @@ impl<W: Write> ContentSerializer<W> {
         writer.write_char('>')?;
         Ok(writer)
     }
+
+    pub(super) fn write_indent(&mut self) -> Result<(), DeError> {
+        if self.write_indent {
+            self.indent.write_indent(&mut self.writer)?;
+            self.write_indent = false;
+        }
+        Ok(())
+    }
 }
 
-impl<W: Write> Serializer for ContentSerializer<W> {
+impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = ElementSerializer<'static, W>;
+    type SerializeTupleVariant = ElementSerializer<'i, W>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
-    type SerializeStructVariant = Struct<'static, W>;
+    type SerializeStructVariant = Struct<'i, W>;
 
     write_primitive!(serialize_bool(bool));
 
@@ -129,8 +157,16 @@ impl<W: Write> Serializer for ContentSerializer<W> {
     write_primitive!(serialize_f64(f64));
 
     write_primitive!(serialize_char(char));
-    write_primitive!(serialize_str(&str));
     write_primitive!(serialize_bytes(&[u8]));
+
+    #[inline]
+    fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
+        if value.is_empty() {
+            Ok(self.writer)
+        } else {
+            self.into_simple_type_serializer().serialize_str(value)
+        }
+    }
 
     /// Does not write anything
     #[inline]
@@ -261,7 +297,7 @@ impl<W: Write> Serializer for ContentSerializer<W> {
     }
 }
 
-impl<W: Write> SerializeSeq for ContentSerializer<W> {
+impl<'i, W: Write> SerializeSeq for ContentSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -270,6 +306,8 @@ impl<W: Write> SerializeSeq for ContentSerializer<W> {
         T: ?Sized + Serialize,
     {
         value.serialize(self.new_seq_element_serializer())?;
+        // Write indent for next element
+        self.write_indent = true;
         Ok(())
     }
 
@@ -279,7 +317,7 @@ impl<W: Write> SerializeSeq for ContentSerializer<W> {
     }
 }
 
-impl<W: Write> SerializeTuple for ContentSerializer<W> {
+impl<'i, W: Write> SerializeTuple for ContentSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -297,7 +335,7 @@ impl<W: Write> SerializeTuple for ContentSerializer<W> {
     }
 }
 
-impl<W: Write> SerializeTupleStruct for ContentSerializer<W> {
+impl<'i, W: Write> SerializeTupleStruct for ContentSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -442,6 +480,8 @@ pub(super) mod tests {
                     let ser = ContentSerializer {
                         writer: String::new(),
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
+                        write_indent: false,
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
@@ -460,6 +500,8 @@ pub(super) mod tests {
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
+                        write_indent: false,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
@@ -609,6 +651,199 @@ pub(super) mod tests {
                 => r#"<AttributesBefore key="answer"><val>42</val></AttributesBefore>"#);
             serialize_as!(enum_after: Enum::AttributesAfter { key: "answer", val: 42 }
                 => r#"<AttributesAfter val="42"><key>answer</key></AttributesAfter>"#);
+        }
+    }
+
+    mod with_indent {
+        use super::Struct;
+        use super::*;
+        use crate::writer::Indentation;
+        use pretty_assertions::assert_eq;
+
+        /// Checks that given `$data` successfully serialized as `$expected`
+        macro_rules! serialize_as {
+            ($name:ident: $data:expr => $expected:literal) => {
+                #[test]
+                fn $name() {
+                    let ser = ContentSerializer {
+                        writer: String::new(),
+                        level: QuoteLevel::Full,
+                        indent: Indent::Owned(Indentation::new(b' ', 2)),
+                        write_indent: false,
+                    };
+
+                    let buffer = $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
+                }
+            };
+        }
+
+        /// Checks that attempt to serialize given `$data` results to a
+        /// serialization error `$kind` with `$reason`
+        macro_rules! err {
+            ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = ContentSerializer {
+                        writer: &mut buffer,
+                        level: QuoteLevel::Full,
+                        indent: Indent::Owned(Indentation::new(b' ', 2)),
+                        write_indent: false,
+                    };
+
+                    match $data.serialize(ser).unwrap_err() {
+                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        e => panic!(
+                            "Expected `{}({})`, found `{:?}`",
+                            stringify!($kind),
+                            $reason,
+                            e
+                        ),
+                    }
+                    // We can write something before fail
+                    // assert_eq!(buffer, "");
+                }
+            };
+        }
+
+        serialize_as!(false_: false => "false");
+        serialize_as!(true_:  true  => "true");
+
+        serialize_as!(i8_:    -42i8                => "-42");
+        serialize_as!(i16_:   -4200i16             => "-4200");
+        serialize_as!(i32_:   -42000000i32         => "-42000000");
+        serialize_as!(i64_:   -42000000000000i64   => "-42000000000000");
+        serialize_as!(isize_: -42000000000000isize => "-42000000000000");
+
+        serialize_as!(u8_:    42u8                => "42");
+        serialize_as!(u16_:   4200u16             => "4200");
+        serialize_as!(u32_:   42000000u32         => "42000000");
+        serialize_as!(u64_:   42000000000000u64   => "42000000000000");
+        serialize_as!(usize_: 42000000000000usize => "42000000000000");
+
+        serde_if_integer128! {
+            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+        }
+
+        serialize_as!(f32_: 4.2f32 => "4.2");
+        serialize_as!(f64_: 4.2f64 => "4.2");
+
+        serialize_as!(char_non_escaped: 'h' => "h");
+        serialize_as!(char_lt:   '<' => "&lt;");
+        serialize_as!(char_gt:   '>' => "&gt;");
+        serialize_as!(char_amp:  '&' => "&amp;");
+        serialize_as!(char_apos: '\'' => "&apos;");
+        serialize_as!(char_quot: '"' => "&quot;");
+        //TODO: add a setting to escape leading/trailing spaces, in order to
+        // pretty-print does not change the content
+        serialize_as!(char_space: ' ' => " ");
+
+        serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
+        serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+
+        err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+
+        serialize_as!(option_none: Option::<Enum>::None => "");
+        serialize_as!(option_some: Some(Enum::Unit) => "<Unit/>");
+
+        serialize_as!(unit: () => "");
+        serialize_as!(unit_struct: Unit => "");
+        serialize_as!(unit_struct_escaped: UnitEscaped => "");
+
+        // Unlike SimpleTypeSerializer, enumeration values serialized as tags
+        serialize_as!(enum_unit: Enum::Unit => "<Unit/>");
+        err!(enum_unit_escaped: Enum::UnitEscaped
+            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+
+        // Newtypes recursively applies ContentSerializer
+        serialize_as!(newtype: Newtype(42) => "42");
+        serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+
+        // Note that sequences of primitives serialized without delimiters other that indent!
+        serialize_as!(seq: vec![1, 2, 3]
+            => "1\n\
+                2\n\
+                3");
+        serialize_as!(seq_empty: Vec::<usize>::new() => "");
+        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+            => "&lt;&quot;&amp;&apos;&gt;\n\
+                with\t\r\n spaces\n\
+                3");
+        serialize_as!(tuple_struct: Tuple("first", 42)
+            => "first\n\
+                42");
+        serialize_as!(enum_tuple: Enum::Tuple("first", 42)
+            => "<Tuple>first</Tuple>\n\
+                <Tuple>42</Tuple>");
+
+        // Structured types cannot be serialized without surrounding tag, which
+        // only `enum` can provide
+        err!(map: BTreeMap::from([("_1", 2), ("_3", 4)])
+            => Unsupported("serialization of map types is not supported in `$value` field"));
+        err!(struct_: Struct { key: "answer", val: (42, 42) }
+            => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+        serialize_as!(enum_struct: Enum::Struct { key: "answer", val: (42, 42) }
+            => "<Struct>\n  \
+                    <key>answer</key>\n  \
+                    <val>42</val>\n  \
+                    <val>42</val>\n\
+                </Struct>");
+
+        /// Special field name `$text` should be serialized as text content
+        mod text {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            err!(map: BTreeMap::from([("$text", 2), ("_3", 4)])
+                => Unsupported("serialization of map types is not supported in `$value` field"));
+            err!(struct_:
+                Text {
+                    before: "answer",
+                    content: (42, 42),
+                    after: "answer",
+                }
+                => Unsupported("serialization of struct `Text` is not supported in `$value` field"));
+            serialize_as!(enum_struct:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: (42, 42),
+                    after: "answer",
+                }
+                => "<Text>\n  \
+                        <before>answer</before>\n  \
+                        42 42\n  \
+                        <after>answer</after>\n\
+                    </Text>");
+        }
+
+        mod attributes {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            err!(map_attr: BTreeMap::from([("@key1", 1), ("@key2", 2)])
+                => Unsupported("serialization of map types is not supported in `$value` field"));
+            err!(map_mixed: BTreeMap::from([("@key1", 1), ("key2", 2)])
+                => Unsupported("serialization of map types is not supported in `$value` field"));
+
+            err!(struct_: Attributes { key: "answer", val: (42, 42) }
+                => Unsupported("serialization of struct `Attributes` is not supported in `$value` field"));
+            err!(struct_before: AttributesBefore { key: "answer", val: 42 }
+                => Unsupported("serialization of struct `AttributesBefore` is not supported in `$value` field"));
+            err!(struct_after: AttributesAfter { key: "answer", val: 42 }
+                => Unsupported("serialization of struct `AttributesAfter` is not supported in `$value` field"));
+
+            serialize_as!(enum_: Enum::Attributes { key: "answer", val: (42, 42) }
+                => r#"<Attributes key="answer" val="42 42"/>"#);
+            serialize_as!(enum_before: Enum::AttributesBefore { key: "answer", val: 42 }
+                => "<AttributesBefore key=\"answer\">\n  \
+                        <val>42</val>\n\
+                    </AttributesBefore>");
+            serialize_as!(enum_after: Enum::AttributesAfter { key: "answer", val: 42 }
+                => "<AttributesAfter val=\"42\">\n  \
+                        <key>answer</key>\n\
+                    </AttributesAfter>");
         }
     }
 }
