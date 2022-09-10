@@ -16,6 +16,14 @@
 
 ### Misc Changes
 
+## 0.24.1 -- 2022-09-10
+
+### Bug Fixes
+
+- [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
+
+[#469]: https://github.com/tafia/quick-xml/issues/469
+
 ## 0.24.0 -- 2022-08-28
 
 ### New Features
