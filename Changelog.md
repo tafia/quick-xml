@@ -10,6 +10,14 @@
 
 ## Unreleased
 
+## 0.23.1 -- 2022-09-11
+
+### Bug Fixes
+
+- [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
+
+[#469]: https://github.com/tafia/quick-xml/issues/469
+
 ## 0.23.0 -- 2022-05-08
 
 - feat: add support for `i128` / `u128` in attributes or text/CDATA content
