@@ -90,6 +90,7 @@ impl Parser {
         let len = buf.len();
         match bang_type {
             BangType::Comment if buf.starts_with(b"!--") => {
+                debug_assert!(buf.ends_with(b"--"));
                 if self.check_comments {
                     // search if '--' not in comments
                     if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
@@ -105,7 +106,11 @@ impl Parser {
                 )))
             }
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
-                Ok(Event::CData(BytesCData::wrap(&buf[8..], self.decoder())))
+                debug_assert!(buf.ends_with(b"]]"));
+                Ok(Event::CData(BytesCData::wrap(
+                    &buf[8..len - 2],
+                    self.decoder(),
+                )))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 let start = buf[8..]

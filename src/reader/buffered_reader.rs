@@ -117,7 +117,7 @@ macro_rules! impl_buffered_source {
                     // somewhere sane rather than at the EOF
                     Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
                     Ok(available) => {
-                        if let Some((consumed, used)) = bang_type.parse(available, read) {
+                        if let Some((consumed, used)) = bang_type.parse(buf, available) {
                             buf.extend_from_slice(consumed);
 
                             self $(.$reader)? .consume(used);
@@ -406,7 +406,7 @@ impl Reader<BufReader<File>> {
 
 #[cfg(test)]
 mod test {
-    use crate::reader::test::check;
+    use crate::reader::test::{check, small_buffers};
     use crate::reader::XmlSource;
 
     /// Default buffer constructor just pass the byte array from the test
@@ -420,6 +420,11 @@ mod test {
         read_until_close,
         identity,
         &mut Vec::new()
+    );
+
+    small_buffers!(
+        #[test]
+        read_event_into: std::io::BufReader<_>
     );
 
     #[cfg(feature = "encoding")]
