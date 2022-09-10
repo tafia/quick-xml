@@ -30,6 +30,14 @@
 [#468]: https://github.com/tafia/quick-xml/pull/468
 [#469]: https://github.com/tafia/quick-xml/issues/469
 
+## 0.24.1 -- 2022-09-10
+
+### Bug Fixes
+
+- [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
+
+[#469]: https://github.com/tafia/quick-xml/issues/469
+
 ## 0.24.0 -- 2022-08-28
 
 ### New Features
@@ -268,6 +276,14 @@
 [#456]: https://github.com/tafia/quick-xml/pull/456
 [#459]: https://github.com/tafia/quick-xml/pull/459
 [#467]: https://github.com/tafia/quick-xml/pull/467
+
+## 0.23.1 -- 2022-09-11
+
+### Bug Fixes
+
+- [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
+
+[#469]: https://github.com/tafia/quick-xml/issues/469
 
 ## 0.23.0 -- 2022-05-08
 
