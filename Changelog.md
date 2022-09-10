@@ -16,10 +16,19 @@
 
 ### Misc Changes
 
+## 0.25.0 -- 2022-09-10
+
+### Bug Fixes
+
+- [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
+
+### Misc Changes
+
 - [#468]: Content of `DeError::Unsupported` changed from `&'static str` to `Cow<'static, str>`
 - [#468]: Ensure that map keys are restricted to only types that can be serialized as primitives
 
 [#468]: https://github.com/tafia/quick-xml/pull/468
+[#469]: https://github.com/tafia/quick-xml/issues/469
 
 ## 0.24.0 -- 2022-08-28
 
