@@ -11,19 +11,19 @@ use std::fmt::Write;
 /// that would be filtered on higher level.
 ///
 /// [not allowed]: https://www.w3.org/TR/REC-xml/#sec-common-syn
-pub struct XmlNameSerializer<W: Write> {
+pub struct QNameSerializer<W: Write> {
     /// Writer to which this serializer writes content
     pub writer: W,
 }
 
-impl<W: Write> XmlNameSerializer<W> {
+impl<W: Write> QNameSerializer<W> {
     #[inline]
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
         Ok(self.writer.write_str(value)?)
     }
 }
 
-impl<W: Write> Serializer for XmlNameSerializer<W> {
+impl<W: Write> Serializer for QNameSerializer<W> {
     type Ok = W;
     type Error = DeError;
 
@@ -188,7 +188,7 @@ mod tests {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = XmlNameSerializer {
+                let ser = QNameSerializer {
                     writer: String::new(),
                 };
 
@@ -205,7 +205,7 @@ mod tests {
             #[test]
             fn $name() {
                 let mut buffer = String::new();
-                let ser = XmlNameSerializer {
+                let ser = QNameSerializer {
                     writer: &mut buffer,
                 };
 

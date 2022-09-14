@@ -2,7 +2,7 @@ use crate::{
     de::{INNER_VALUE, UNFLATTEN_PREFIX},
     errors::{serialize::DeError, Error},
     events::{BytesEnd, BytesStart, Event},
-    se::key::XmlNameSerializer,
+    se::key::QNameSerializer,
     se::Serializer,
     writer::Writer,
 };
@@ -65,7 +65,7 @@ where
         key: &K,
         value: &V,
     ) -> Result<(), DeError> {
-        let key = key.serialize(XmlNameSerializer {
+        let key = key.serialize(QNameSerializer {
             writer: String::new(),
         })?;
 
