@@ -557,6 +557,52 @@ mod seq {
             .unwrap();
             assert_eq!(data, vec![(), (), ()]);
         }
+
+        /// This test ensures that composition of deserializer building blocks plays well
+        #[test]
+        fn list_of_struct() {
+            #[derive(Debug, PartialEq, Default, Deserialize)]
+            #[serde(default)]
+            struct Struct {
+                attribute: Option<String>,
+                element: Option<String>,
+            }
+
+            let data: Vec<Struct> = from_str(
+                r#"
+                <struct/>
+                <struct attribute="value"/>
+                <struct>
+                    <element>value</element>
+                </struct>
+                <struct attribute="value">
+                    <element>value</element>
+                </struct>
+                "#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                vec![
+                    Struct {
+                        attribute: None,
+                        element: None,
+                    },
+                    Struct {
+                        attribute: Some("value".to_string()),
+                        element: None,
+                    },
+                    Struct {
+                        attribute: None,
+                        element: Some("value".to_string()),
+                    },
+                    Struct {
+                        attribute: Some("value".to_string()),
+                        element: Some("value".to_string()),
+                    },
+                ]
+            );
+        }
     }
 
     /// Tests where each sequence item have an identical name in an XML.
@@ -1145,6 +1191,62 @@ mod seq {
                     "#,
                 )
                 .unwrap_err();
+            }
+
+            /// This test ensures that composition of deserializer building blocks
+            /// plays well
+            #[test]
+            fn list_of_struct() {
+                #[derive(Debug, PartialEq, Default, Deserialize)]
+                #[serde(default)]
+                struct Struct {
+                    attribute: Option<String>,
+                    element: Option<String>,
+                }
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: [Struct; 4],
+                }
+
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                        <item attribute="value"/>
+                        <item>
+                            <element>value</element>
+                        </item>
+                        <item attribute="value">
+                            <element>value</element>
+                        </item>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+                assert_eq!(
+                    data,
+                    List {
+                        item: [
+                            Struct {
+                                attribute: None,
+                                element: None,
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: None,
+                            },
+                            Struct {
+                                attribute: None,
+                                element: Some("value".to_string()),
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: Some("value".to_string()),
+                            },
+                        ],
+                    }
+                );
             }
 
             /// Checks that sequences represented by elements can contain sequences,
@@ -1908,6 +2010,62 @@ mod seq {
                     "#,
                 )
                 .unwrap_err();
+            }
+
+            /// This test ensures that composition of deserializer building blocks
+            /// plays well
+            #[test]
+            fn list_of_struct() {
+                #[derive(Debug, PartialEq, Default, Deserialize)]
+                #[serde(default)]
+                struct Struct {
+                    attribute: Option<String>,
+                    element: Option<String>,
+                }
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: Vec<Struct>,
+                }
+
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                        <item attribute="value"/>
+                        <item>
+                            <element>value</element>
+                        </item>
+                        <item attribute="value">
+                            <element>value</element>
+                        </item>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+                assert_eq!(
+                    data,
+                    List {
+                        item: vec![
+                            Struct {
+                                attribute: None,
+                                element: None,
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: None,
+                            },
+                            Struct {
+                                attribute: None,
+                                element: Some("value".to_string()),
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: Some("value".to_string()),
+                            },
+                        ],
+                    }
+                );
             }
 
             /// Checks that sequences represented by elements can contain sequences,
