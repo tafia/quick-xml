@@ -42,11 +42,23 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         Ok(self.writer)
     }
 
-    /// We cannot store anything, so the absence of a unit and presence of it
-    /// does not differ, so serialization of unit returns `Err(Unsupported)`
+    /// Because unit type can be represented only by empty string which is not
+    /// a valid XML name, serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
             "unit type `()` cannot be serialized as an XML tag name".into(),
+        ))
+    }
+
+    /// Because unit struct can be represented only by empty string which is not
+    /// a valid XML name, serialization of unit struct returns `Err(Unsupported)`
+    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
+        Err(DeError::Unsupported(
+            format!(
+                "unit struct `{}` cannot be serialized as an XML tag name",
+                name
+            )
+            .into(),
         ))
     }
 
@@ -153,10 +165,6 @@ mod tests {
 
     #[derive(Debug, Serialize, PartialEq)]
     struct Unit;
-
-    #[derive(Debug, Serialize, PartialEq)]
-    #[serde(rename = "<\"&'>")]
-    struct UnitEscaped;
 
     #[derive(Debug, Serialize, PartialEq)]
     struct Newtype(bool);
@@ -269,8 +277,8 @@ mod tests {
 
     err!(unit: ()
         => Unsupported("unit type `()` cannot be serialized as an XML tag name"));
-    serialize_as!(unit_struct: Unit => "Unit");
-    serialize_as!(unit_struct_escaped: UnitEscaped => "<\"&'>");
+    err!(unit_struct: Unit
+        => Unsupported("unit struct `Unit` cannot be serialized as an XML tag name"));
 
     serialize_as!(enum_unit: Enum::Unit => "Unit");
     serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<\"&'>");

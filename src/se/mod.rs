@@ -52,10 +52,6 @@ macro_rules! write_primitive {
             value.serialize(self)
         }
 
-        fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-            self.serialize_str(name)
-        }
-
         fn serialize_unit_variant(
             self,
             _name: &'static str,
