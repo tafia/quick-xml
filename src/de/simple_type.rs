@@ -899,6 +899,7 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize)]
+    #[serde(transparent)]
     struct Any(IgnoredAny);
     impl PartialEq for Any {
         fn eq(&self, _other: &Any) -> bool {
@@ -951,9 +952,6 @@ mod tests {
                 }
             };
         }
-
-        deserialized_to!(any_owned: String = "&lt;escaped&#x20;string" => "<escaped string");
-        deserialized_to!(any_borrowed: &str = "non-escaped string" => "non-escaped string");
 
         deserialized_to!(false_: bool = "false" => false);
         deserialized_to!(true_: bool  = "true" => true);
