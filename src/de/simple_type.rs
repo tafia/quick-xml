@@ -977,12 +977,12 @@ mod tests {
         deserialized_to!(char_unescaped: char = "h" => 'h');
         deserialized_to!(char_escaped: char = "&lt;" => '<');
 
-        deserialized_to!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
+        deserialized_to!(string: String = "&lt;escaped&#32;string" => "<escaped string");
         deserialized_to!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        err!(escaped_str: &str = "escaped&#x20;string"
+        err!(escaped_str: &str = "escaped&#32;string"
                 => Custom("invalid type: string \"escaped string\", expected a borrowed string"));
 
-        err!(byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+        err!(byte_buf: ByteBuf = "&lt;escaped&#32;string"
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
         err!(borrowed_bytes: Bytes = "non-escaped string"
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
@@ -993,7 +993,7 @@ mod tests {
         deserialized_to!(unit: () = "<root>anything</root>" => ());
         deserialized_to!(unit_struct: Unit = "<root>anything</root>" => Unit);
 
-        deserialized_to!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        deserialized_to!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
         deserialized_to!(newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
 
         err!(seq: Vec<()> = "non-escaped string"
@@ -1172,12 +1172,12 @@ mod tests {
         simple!(utf8, char_unescaped: char = "h" => 'h');
         simple!(utf8, char_escaped: char = "&lt;" => '<');
 
-        simple!(utf8, string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+        simple!(utf8, string: String = "&lt;escaped&#32;string" => "<escaped string");
+        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, option_none: Option<&str> = "" => None);
@@ -1186,7 +1186,7 @@ mod tests {
         simple!(utf8, unit: () = "any data" => ());
         simple!(utf8, unit_struct: Unit = "any data" => Unit);
 
-        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
         simple!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
 
         err!(utf8, map: HashMap<(), ()> = "any data"
@@ -1256,8 +1256,8 @@ mod tests {
         utf16!(char_unescaped: char = "h" => 'h');
         utf16!(char_escaped: char = "&lt;" => '<');
 
-        utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+        utf16!(string: String = "&lt;escaped&#32;string" => "<escaped string");
+        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#32;string"
                      => "binary data content is not supported by XML format");
 
         utf16!(option_none: Option<()> = "" => None);
@@ -1266,7 +1266,7 @@ mod tests {
         utf16!(unit: () = "any data" => ());
         utf16!(unit_struct: Unit = "any data" => Unit);
 
-        utf16!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        utf16!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
 
         // UTF-16 data never borrow because data was decoded not in-place
         err!(utf16, newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")
