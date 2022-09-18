@@ -25,7 +25,7 @@ pub struct EscapedDeserializer<'a> {
 }
 
 impl<'a> EscapedDeserializer<'a> {
-    pub const fn new(escaped_value: Cow<'a, [u8]>, decoder: Decoder, escaped: bool) -> Self {
+    pub fn new(escaped_value: Cow<'a, [u8]>, decoder: Decoder, escaped: bool) -> Self {
         EscapedDeserializer {
             decoder,
             escaped_value,

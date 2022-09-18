@@ -203,7 +203,7 @@ where
 }
 
 #[cfg(not(feature = "escape-html"))]
-const fn named_entity(name: &str) -> Option<&str> {
+fn named_entity(name: &str) -> Option<&str> {
     // match over strings are not allowed in const functions
     let s = match name.as_bytes() {
         b"lt" => "<",
@@ -216,7 +216,7 @@ const fn named_entity(name: &str) -> Option<&str> {
     Some(s)
 }
 #[cfg(feature = "escape-html")]
-const fn named_entity(name: &str) -> Option<&str> {
+fn named_entity(name: &str) -> Option<&str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
     //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json

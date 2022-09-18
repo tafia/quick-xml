@@ -21,7 +21,7 @@ pub struct QName<'a>(pub &'a [u8]);
 impl<'a> QName<'a> {
     /// Converts this name to an internal slice representation.
     #[inline(always)]
-    pub const fn into_inner(self) -> &'a [u8] {
+    pub fn into_inner(self) -> &'a [u8] {
         self.0
     }
 
@@ -138,7 +138,7 @@ pub struct LocalName<'a>(&'a [u8]);
 impl<'a> LocalName<'a> {
     /// Converts this name to an internal slice representation.
     #[inline(always)]
-    pub const fn into_inner(self) -> &'a [u8] {
+    pub fn into_inner(self) -> &'a [u8] {
         self.0
     }
 }
@@ -188,7 +188,7 @@ pub struct Prefix<'a>(&'a [u8]);
 impl<'a> Prefix<'a> {
     /// Extracts internal slice
     #[inline(always)]
-    pub const fn into_inner(self) -> &'a [u8] {
+    pub fn into_inner(self) -> &'a [u8] {
         self.0
     }
 }
@@ -253,7 +253,7 @@ impl<'a> Namespace<'a> {
     /// [non-normalized]: https://www.w3.org/TR/REC-xml/#AVNormalize
     /// [IRI reference]: https://datatracker.ietf.org/doc/html/rfc3987
     #[inline(always)]
-    pub const fn into_inner(self) -> &'a [u8] {
+    pub fn into_inner(self) -> &'a [u8] {
         self.0
     }
     //TODO: implement value normalization and use it when comparing namespaces

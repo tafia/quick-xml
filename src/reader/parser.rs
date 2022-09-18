@@ -236,7 +236,7 @@ impl Parser {
     ///
     /// If `encoding` feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
-    pub const fn decoder(&self) -> Decoder {
+    pub fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: self.encoding.encoding(),

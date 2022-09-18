@@ -546,7 +546,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
 
     /// Constructor for tests
     #[inline]
-    const fn new(content: CowRef<'de, 'a>, escaped: bool, decoder: Decoder) -> Self {
+    fn new(content: CowRef<'de, 'a>, escaped: bool, decoder: Decoder) -> Self {
         Self {
             content,
             escaped,

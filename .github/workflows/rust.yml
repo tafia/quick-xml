@@ -10,6 +10,13 @@ jobs:
     - name: Check fmt
       run: cargo fmt -- --check
 
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@1.46.0
+    - run: cargo check
+
   test:
     strategy:
       matrix:

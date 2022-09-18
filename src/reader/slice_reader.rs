@@ -353,7 +353,7 @@ mod test {
     use crate::reader::XmlSource;
 
     /// Default buffer constructor just pass the byte array from the test
-    const fn identity<T>(input: T) -> T {
+    fn identity<T>(input: T) -> T {
         input
     }
 

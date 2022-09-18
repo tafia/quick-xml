@@ -61,7 +61,7 @@ pub struct Writer<W: Write> {
 
 impl<W: Write> Writer<W> {
     /// Creates a `Writer` from a generic writer.
-    pub const fn new(inner: W) -> Writer<W> {
+    pub fn new(inner: W) -> Writer<W> {
         Writer {
             writer: inner,
             indent: None,

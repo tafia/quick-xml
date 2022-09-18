@@ -72,7 +72,7 @@ pub struct BytesStart<'a> {
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], name_len: usize) -> Self {
+    pub(crate) fn wrap(content: &'a [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
@@ -344,7 +344,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub const fn from_start(start: BytesStart<'a>) -> Self {
+    pub fn from_start(start: BytesStart<'a>) -> Self {
         Self { content: start }
     }
 
@@ -549,7 +549,7 @@ pub struct BytesEnd<'a> {
 impl<'a> BytesEnd<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(name: Cow<'a, [u8]>) -> Self {
+    pub(crate) fn wrap(name: Cow<'a, [u8]>) -> Self {
         BytesEnd { name }
     }
 

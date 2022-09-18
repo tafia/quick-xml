@@ -117,7 +117,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// Note, that attempt to serialize a non-struct (including unit structs
     /// and newtype structs) will end up to an error. Use `with_root` to create
     /// serializer with explicitly defined root element name
-    pub const fn new(writer: W) -> Self {
+    pub fn new(writer: W) -> Self {
         Self::with_root(Writer::new(writer), None)
     }
 
@@ -169,7 +169,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     ///     r#"<root question="The Ultimate Question of Life, the Universe, and Everything" answer="42"/>"#
     /// );
     /// ```
-    pub const fn with_root(writer: Writer<W>, root_tag: Option<&'r str>) -> Self {
+    pub fn with_root(writer: Writer<W>, root_tag: Option<&'r str>) -> Self {
         Self { writer, root_tag }
     }
 
