@@ -16,6 +16,11 @@
 
 ### Misc Changes
 
+- [#481]: Removed the uses of `const fn` added in version 0.24 in favor of a lower minimum
+  supported Rust version (1.46.0).  Minimum supported Rust version is now verified in the CI.
+
+[#481]: https://github.com/tafia/quick-xml/pull/481
+
 ## 0.25.0 -- 2022-09-10
 
 ### Bug Fixes

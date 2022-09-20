@@ -61,7 +61,7 @@ impl Decoder {
     ///
     /// [`decode`]: Self::decode
     #[cfg(feature = "encoding")]
-    pub const fn encoding(&self) -> &'static Encoding {
+    pub fn encoding(&self) -> &'static Encoding {
         self.encoding
     }
 
