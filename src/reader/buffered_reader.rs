@@ -398,7 +398,7 @@ impl<R: BufRead> Reader<R> {
     }
 
     /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
-    pub fn read_text_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
+    pub fn read_to_end_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
         read_to_string_impl(self.buffer_position(), &mut self.reader, self.parser.clone(), end, buf)
     }
 }

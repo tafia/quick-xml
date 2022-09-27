@@ -528,7 +528,7 @@ impl<R: BufRead> NsReader<R> {
     }
 
     /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
-    pub fn read_text_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
+    pub fn read_to_end_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
         let parser = self.parser.clone();
         let bp = self.buffer_position();
         read_to_string_impl(bp,  self.reader.get_mut(), parser, end, buf)

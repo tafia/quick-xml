@@ -36,7 +36,7 @@ fn test_read_to_string() {
         let mut buf = Vec::new();
         match reader.read_event_into(&mut buf).unwrap() {
             Start(x) if x.local_name().as_ref() == b"sheetData" => {
-                assert_eq!(reader.read_text_to_string(x.name(), &mut Vec::new()).unwrap().as_slice(), b"<row><v>5</v></row><row><v>3</v></row>");
+                assert_eq!(reader.read_to_end_to_string(x.name(), &mut Vec::new()).unwrap().as_slice(), b"<row><v>5</v></row><row><v>3</v></row>");
                 return;
             }
             _ => {}
