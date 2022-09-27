@@ -4,6 +4,8 @@ use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
 use std::borrow::Cow;
+use std::fs::File;
+use std::io::BufReader;
 
 #[cfg(feature = "serialize")]
 use serde::{Deserialize, Serialize};
@@ -26,6 +28,21 @@ fn test_sample() {
     println!("{}", count);
 }
 
+
+#[test]
+fn test_read_to_string() {
+    let mut reader = Reader::from_str("<sheetData><row><v>5</v></row><row><v>3</v></row></sheetData>");
+    loop {
+        let mut buf = Vec::new();
+        match reader.read_event_into(&mut buf).unwrap() {
+            Start(x) if x.local_name().as_ref() == b"sheetData" => {
+                assert_eq!(reader.read_text_to_string(x.name(), &mut Vec::new()).unwrap().as_slice(), b"<row><v>5</v></row><row><v>3</v></row>");
+                return;
+            }
+            _ => {}
+        }
+    }
+}
 #[test]
 fn test_attributes_empty() {
     let src = "<a att1='a' att2='b'/>";
