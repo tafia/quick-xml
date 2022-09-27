@@ -536,7 +536,8 @@ impl<R: BufRead> NsReader<R> {
     ) -> Result<&'b str> {
         let parser = std::mem::take(&mut self.reader.parser);
         let bp = self.buffer_position();
-        let (result, parser) = read_to_string_impl(bp, self.reader.get_mut(), parser, end, buf, output_buf);
+        let (result, parser) =
+            read_to_string_impl(bp, self.reader.get_mut(), parser, end, buf, output_buf);
         self.reader.parser = parser;
         result
     }
