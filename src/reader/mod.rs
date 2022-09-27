@@ -1,5 +1,6 @@
 //! Contains high-level interface for a pull-based XML parser.
 
+use std::io::{BufRead, Read};
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
 use std::ops::Range;
@@ -298,6 +299,8 @@ mod parser;
 mod slice_reader;
 
 pub use ns_reader::NsReader;
+use std::io;
+use crate::name::QName;
 
 /// Range of input in bytes, that corresponds to some piece of XML
 pub type Span = Range<usize>;
@@ -1929,4 +1932,69 @@ mod test {
     // - slice_reader
     pub(super) use check;
     pub(super) use small_buffers;
+}
+
+fn read_to_string_impl<R: BufRead>(starting_buffer_position: usize, reader: &mut R, parser: Parser, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
+    // Initialize a new XMLParser
+    let reader = StoredReader::new(
+        reader, starting_buffer_position
+    );
+    let mut temp_reader: Reader<StoredReader<&mut R>> = Reader {
+        reader,
+        parser
+    };
+
+    let range = temp_reader.read_to_end_into(end, buf)?;
+    Ok(temp_reader.into_inner().get_stored_value(range.start, range.end))
+}
+
+/// Wraps an existing Reader and stores all the bytes read out of the `inner`.
+struct StoredReader<R> {
+    inner: R,
+    initial_offset: usize,
+    stored: Vec<u8>
+}
+
+impl<R: Read> Read for StoredReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let result = self.inner.read(buf);
+        if let Ok(size) = &result {
+            self.stored.extend_from_slice(&buf[0..*size]);
+        }
+        result
+    }
+}
+
+impl<R> StoredReader<R> {
+    fn new(inner: R, initial_offset: usize) -> Self {
+        Self {
+            inner, initial_offset, stored: Vec::new()
+        }
+    }
+    fn get_stored_value(mut self, start: usize, end: usize) -> Vec<u8> {
+        // Pray that the start is 0 so we don't have to allocate
+        let start = start - self.initial_offset;
+        let end = end - self.initial_offset;
+
+        if start == 0 {
+            self.stored.truncate(end);
+            self.stored
+        } else {
+            unimplemented!()
+        }
+    }
+}
+
+impl<R: BufRead> BufRead for StoredReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        let result = self.inner.fill_buf();
+        if let Ok(x) = result {
+            self.stored.extend_from_slice(x);
+        };
+        result
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt)
+    }
 }

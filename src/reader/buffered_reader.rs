@@ -2,6 +2,8 @@
 //! underlying byte stream.
 
 use std::fs::File;
+use std::io::Read;
+
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
@@ -10,7 +12,7 @@ use memchr;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
+use crate::reader::{BangType, is_whitespace, read_to_string_impl, ReadElementState, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -241,60 +243,12 @@ macro_rules! impl_buffered_source {
 
 // Make it public for use in async implementations
 pub(super) use impl_buffered_source;
+use crate::reader::parser::Parser;
 
 /// Implementation of `XmlSource` for any `BufRead` reader using a user-given
 /// `Vec<u8>` as buffer that will be borrowed by events.
 impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
     impl_buffered_source!();
-}
-
-use std::io::{Read};
-struct StoredReader<R> {
-    inner: R,
-    initial_offset: usize,
-    stored: Vec<u8>
-}
-
-impl<R: Read> Read for StoredReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let result = self.inner.read(buf);
-        if let Ok(size) = &result {
-            self.stored.extend_from_slice(&buf[0..*size]);
-        }
-        result
-    }
-}
-impl<R> StoredReader<R> {
-    fn new(inner: R, initial_offset: usize) -> Self {
-        Self {
-            inner, initial_offset, stored: Vec::new()
-        }
-    }
-    fn get_stored_value(mut self, start: usize, end: usize) -> Vec<u8> {
-        // Pray that the start is 0 so we don't have to allocate
-        let start = start - self.initial_offset;
-        let end = end - self.initial_offset;
-
-        if start == 0 {
-            self.stored.truncate(end);
-            self.stored
-        } else {
-            unimplemented!()
-        }
-    }
-}
-impl<R: BufRead> BufRead for StoredReader<R> {
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        let result = self.inner.fill_buf();
-        if let Ok(x) = result {
-            self.stored.extend_from_slice(x);
-        };
-        result
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.inner.consume(amt)
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -443,21 +397,12 @@ impl<R: BufRead> Reader<R> {
         }))
     }
 
-    /// sample
+    /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
     pub fn read_text_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
-        // Initialize a new XMLParser
-        let bp = self.buffer_position();
-        let reader = StoredReader ::new(
-        &mut self.reader, bp
-        );
-        let mut temp_reader: Reader<StoredReader<&mut R>> = Reader {
-            reader, parser: self.parser.clone()
-        };
-
-        let range = temp_reader.read_to_end_into(end, buf)?;
-        Ok(temp_reader.into_inner().get_stored_value(range.start, range.end))
+        read_to_string_impl(self.buffer_position(), &mut self.reader, self.parser.clone(), end, buf)
     }
 }
+
 
 impl Reader<BufReader<File>> {
     /// Creates an XML reader from a file path.

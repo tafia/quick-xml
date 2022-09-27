@@ -13,7 +13,7 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Reader, Span, XmlSource};
+use crate::reader::{read_to_string_impl, Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -525,6 +525,13 @@ impl<R: BufRead> NsReader<R> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
         self.reader.read_to_end_into(end, buf)
+    }
+
+    /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
+    pub fn read_text_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
+        let parser = self.parser.clone();
+        let bp = self.buffer_position();
+        read_to_string_impl(bp,  self.reader.get_mut(), parser, end, buf)
     }
 }
 
