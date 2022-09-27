@@ -1,8 +1,9 @@
 //! Contains high-level interface for a pull-based XML parser.
 
-use std::io::{BufRead, Read};
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
+use std::borrow::Cow;
+use std::io::{BufRead, Read};
 use std::ops::Range;
 
 use crate::encoding::Decoder;
@@ -298,9 +299,9 @@ mod ns_reader;
 mod parser;
 mod slice_reader;
 
+use crate::name::QName;
 pub use ns_reader::NsReader;
 use std::io;
-use crate::name::QName;
 
 /// Range of input in bytes, that corresponds to some piece of XML
 pub type Span = Range<usize>;
@@ -1934,28 +1935,33 @@ mod test {
     pub(super) use small_buffers;
 }
 
-fn read_to_string_impl<R: BufRead>(starting_buffer_position: usize, reader: &mut R, parser: Parser, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
+fn read_to_string_impl<'b, R: BufRead>(
+    starting_buffer_position: usize,
+    reader: &mut R,
+    parser: Parser,
+    end: QName,
+    temporary_buf: &mut Vec<u8>,
+    output_buf: &'b mut Vec<u8>,
+) -> (Result<&'b str>, Parser) {
     // Initialize a new XMLParser
-    let reader = StoredReader::new(
-        reader, starting_buffer_position
-    );
-    let mut temp_reader: Reader<StoredReader<&mut R>> = Reader {
-        reader,
-        parser
-    };
+    let reader = StoredReader::new(reader, starting_buffer_position, output_buf);
+    let mut temp_reader: Reader<StoredReader<&mut R>> = Reader { reader, parser };
 
-    let range = temp_reader.read_to_end_into(end, buf)?;
-    Ok(temp_reader.into_inner().get_stored_value(range.start, range.end))
+    let range = temp_reader.read_to_end_into(end, temporary_buf);
+
+    let Reader { reader, parser } = temp_reader;
+    let as_str = range.and_then(|r| reader.get_stored_value(r.start, r.end));
+    (as_str, parser)
 }
 
 /// Wraps an existing Reader and stores all the bytes read out of the `inner`.
-struct StoredReader<R> {
+struct StoredReader<'a, R> {
     inner: R,
     initial_offset: usize,
-    stored: Vec<u8>
+    stored: &'a mut Vec<u8>,
 }
 
-impl<R: Read> Read for StoredReader<R> {
+impl<'a, R: Read> Read for StoredReader<'a, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let result = self.inner.read(buf);
         if let Ok(size) = &result {
@@ -1965,27 +1971,28 @@ impl<R: Read> Read for StoredReader<R> {
     }
 }
 
-impl<R> StoredReader<R> {
-    fn new(inner: R, initial_offset: usize) -> Self {
+impl<'a, R> StoredReader<'a, R> {
+    fn new(inner: R, initial_offset: usize, buffer: &'a mut Vec<u8>) -> Self {
         Self {
-            inner, initial_offset, stored: Vec::new()
+            inner,
+            initial_offset,
+            stored: buffer,
         }
     }
-    fn get_stored_value(mut self, start: usize, end: usize) -> Vec<u8> {
+    fn get_stored_value(mut self, start: usize, end: usize) -> Result<&'a str> {
         // Pray that the start is 0 so we don't have to allocate
-        let start = start - self.initial_offset;
         let end = end - self.initial_offset;
 
-        if start == 0 {
-            self.stored.truncate(end);
-            self.stored
-        } else {
-            unimplemented!()
-        }
+        // Since read_to_end_impl will read all text from the current (initial) position to the end tag,
+        // the start must be equals to the initial position
+        assert_eq!(start, self.initial_offset);
+        self.stored.truncate(end);
+
+        Ok(std::str::from_utf8(self.stored)?)
     }
 }
 
-impl<R: BufRead> BufRead for StoredReader<R> {
+impl<'a, R: BufRead> BufRead for StoredReader<'a, R> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         let result = self.inner.fill_buf();
         if let Ok(x) = result {

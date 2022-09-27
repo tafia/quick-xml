@@ -528,10 +528,17 @@ impl<R: BufRead> NsReader<R> {
     }
 
     /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
-    pub fn read_to_end_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
-        let parser = self.parser.clone();
+    pub fn read_to_end_to_string<'b>(
+        &mut self,
+        end: QName,
+        buf: &mut Vec<u8>,
+        output_buf: &'b mut Vec<u8>,
+    ) -> Result<&'b str> {
+        let parser = std::mem::take(&mut self.reader.parser);
         let bp = self.buffer_position();
-        read_to_string_impl(bp,  self.reader.get_mut(), parser, end, buf)
+        let (result, parser) = read_to_string_impl(bp, self.reader.get_mut(), parser, end, buf, output_buf);
+        self.reader.parser = parser;
+        result
     }
 }
 

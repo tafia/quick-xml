@@ -2,9 +2,8 @@
 //! underlying byte stream.
 
 use std::fs::File;
-use std::io::Read;
 
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 
 use memchr;
@@ -12,7 +11,10 @@ use memchr;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{BangType, is_whitespace, read_to_string_impl, ReadElementState, Reader, Span, XmlSource};
+use crate::reader::{
+    is_whitespace, parser::Parser, read_to_string_impl, BangType, ReadElementState, Reader, Span,
+    XmlSource,
+};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -243,7 +245,6 @@ macro_rules! impl_buffered_source {
 
 // Make it public for use in async implementations
 pub(super) use impl_buffered_source;
-use crate::reader::parser::Parser;
 
 /// Implementation of `XmlSource` for any `BufRead` reader using a user-given
 /// `Vec<u8>` as buffer that will be borrowed by events.
@@ -398,11 +399,25 @@ impl<R: BufRead> Reader<R> {
     }
 
     /// Same as `read_to_end_into` but returns all the bytes read instead of the indices.
-    pub fn read_to_end_to_string(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Vec<u8>> {
-        read_to_string_impl(self.buffer_position(), &mut self.reader, self.parser.clone(), end, buf)
+    pub fn read_text_into<'b>(
+        &mut self,
+        end: QName,
+        buf: &mut Vec<u8>,
+        output_buf: &'b mut Vec<u8>,
+    ) -> Result<&'b str> {
+        let current_parser = std::mem::take(&mut self.parser);
+        let (result, current_parser) = read_to_string_impl(
+            current_parser.offset,
+            &mut self.reader,
+            current_parser,
+            end,
+            buf,
+            output_buf,
+        );
+        self.parser = current_parser;
+        result
     }
 }
-
 
 impl Reader<BufReader<File>> {
     /// Creates an XML reader from a file path.

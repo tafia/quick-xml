@@ -28,15 +28,21 @@ fn test_sample() {
     println!("{}", count);
 }
 
-
 #[test]
 fn test_read_to_string() {
-    let mut reader = Reader::from_str("<sheetData><row><v>5</v></row><row><v>3</v></row></sheetData>");
+    let mut reader =
+        Reader::from_str("<sheetData><row><v>5</v></row><row><v>3</v></row></sheetData>");
     loop {
         let mut buf = Vec::new();
         match reader.read_event_into(&mut buf).unwrap() {
             Start(x) if x.local_name().as_ref() == b"sheetData" => {
-                assert_eq!(reader.read_to_end_to_string(x.name(), &mut Vec::new()).unwrap().as_slice(), b"<row><v>5</v></row><row><v>3</v></row>");
+                let mut buf = Vec::new();
+                assert_eq!(
+                    reader
+                        .read_text_into(x.name(), &mut Vec::new(), &mut buf)
+                        .unwrap(),
+                    "<row><v>5</v></row><row><v>3</v></row>"
+                );
                 return;
             }
             _ => {}
