@@ -35,10 +35,12 @@ bench = false
 [[bench]]
 name = "microbenches"
 harness = false
+path = "benches/microbenches.rs"
 
 [[bench]]
 name = "macrobenches"
 harness = false
+path = "benches/macrobenches.rs"
 
 [features]
 default = []
@@ -175,27 +177,34 @@ rustdoc-args = ["--cfg", "docs_rs"]
 [[test]]
 name = "encodings"
 required-features = ["encoding"]
+path = "tests/encodings.rs"
 
 [[test]]
 name = "serde_attrs"
 required-features = ["serialize"]
+path = "tests/serde_attrs.rs"
 
 [[test]]
 name = "serde_roundtrip"
 required-features = ["serialize"]
+path = "tests/serde_roundtrip.rs"
 
 [[test]]
 name = "serde-de"
 required-features = ["serialize"]
+path = "tests/serde-de.rs"
 
 [[test]]
 name = "serde-se"
 required-features = ["serialize"]
+path = "tests/serde-se.rs"
 
 [[test]]
 name = "serde-migrated"
 required-features = ["serialize"]
+path = "tests/serde-migrated.rs"
 
 [[test]]
 name = "async-tokio"
 required-features = ["async-tokio"]
+path = "tests/async-tokio.rs"
