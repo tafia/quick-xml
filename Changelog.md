@@ -18,8 +18,11 @@
 
 - [#481]: Removed the uses of `const fn` added in version 0.24 in favor of a lower minimum
   supported Rust version (1.46.0).  Minimum supported Rust version is now verified in the CI.
+- [#489]: Reduced the size of the package uploaded into the crates.io by excluding
+  tests, examples, and benchmarks.
 
 [#481]: https://github.com/tafia/quick-xml/pull/481
+[#489]: https://github.com/tafia/quick-xml/pull/489
 
 ## 0.25.0 -- 2022-09-10
 
