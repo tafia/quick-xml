@@ -21,6 +21,7 @@ use memchr;
 /// itself can be used to borrow from.
 impl<'a> Reader<&'a [u8]> {
     /// Creates an XML reader from a string slice.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &'a str) -> Self {
         // Rust strings are guaranteed to be UTF-8, so lock the encoding
         #[cfg(feature = "encoding")]

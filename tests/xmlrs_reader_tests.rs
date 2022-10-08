@@ -433,7 +433,7 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
                 Ok(c) => format!("Characters({})", &c),
                 Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
             },
-            Ok((_, Event::Eof)) => format!("EndDocument"),
+            Ok((_, Event::Eof)) => "EndDocument".to_string(),
             Err(e) => format!("Error: {}", e),
         };
         if let Some((n, spec)) = spec_lines.next() {

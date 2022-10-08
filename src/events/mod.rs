@@ -119,7 +119,7 @@ impl<'a> BytesStart<'a> {
     /// Converts the event into an owned event without taking ownership of Event
     pub fn to_owned(&self) -> BytesStart<'static> {
         BytesStart {
-            buf: Cow::Owned(self.buf.to_owned().into()),
+            buf: Cow::Owned(self.buf.clone().into_owned()),
             name_len: self.name_len,
         }
     }

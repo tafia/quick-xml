@@ -21,8 +21,8 @@ fn main() -> Result<(), quick_xml::Error> {
     let mut found_tables = Vec::new();
     loop {
         match reader.read_event_into(&mut buf)? {
-            Event::Start(element) => match element.name().as_ref() {
-                b"w:tbl" => {
+            Event::Start(element) => {
+                if let b"w:tbl" = element.name().as_ref() {
                     count += 1;
                     let mut stats = TableStat {
                         index: count,
@@ -57,8 +57,7 @@ fn main() -> Result<(), quick_xml::Error> {
                         }
                     }
                 }
-                _ => {}
-            },
+            }
             Event::Eof => break,
             _ => {}
         }

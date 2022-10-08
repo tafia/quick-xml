@@ -19,7 +19,7 @@ use std::{borrow::Cow, ops::Range};
 ///
 /// [`unescape_value`]: Self::unescape_value
 /// [`decode_and_unescape_value`]: Self::decode_and_unescape_value
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Attribute<'a> {
     /// The key to uniquely define the attribute.
     ///
@@ -537,6 +537,7 @@ impl IterState {
 
     /// Skip all characters up to first space symbol or end-of-input
     #[inline]
+    #[allow(clippy::manual_map)]
     fn skip_value(&self, slice: &[u8], offset: usize) -> Option<usize> {
         let mut iter = (offset..).zip(slice[offset..].iter());
 
@@ -776,7 +777,7 @@ impl IterState {
             None => {
                 // Because we reach end-of-input, stop iteration on next call
                 self.state = State::Done;
-                return Some(Err(AttrError::ExpectedQuote(slice.len(), quote)));
+                Some(Err(AttrError::ExpectedQuote(slice.len(), quote)))
             }
         }
     }

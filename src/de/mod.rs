@@ -2372,6 +2372,7 @@ where
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &'de str) -> Self {
         let mut reader = Reader::from_str(s);
         reader

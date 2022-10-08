@@ -531,6 +531,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Creates a deserializer from a part of value at specified range
+    #[allow(clippy::ptr_arg)]
     pub fn from_part(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,

@@ -6,11 +6,12 @@ use serde::de::{Deserialize, Deserializer, Error, Visitor};
 #[cfg(feature = "serialize")]
 use serde::ser::{Serialize, Serializer};
 
+#[allow(clippy::ptr_arg)]
 pub fn write_cow_string(f: &mut Formatter, cow_string: &Cow<[u8]>) -> fmt::Result {
     match cow_string {
         Cow::Owned(s) => {
             write!(f, "Owned(")?;
-            write_byte_string(f, &s)?;
+            write_byte_string(f, s)?;
         }
         Cow::Borrowed(s) => {
             write!(f, "Borrowed(")?;

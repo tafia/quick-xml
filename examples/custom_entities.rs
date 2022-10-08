@@ -40,8 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
             }
-            Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                b"test" => {
+            Ok(Event::Start(ref e)) => {
+                if let b"test" = e.name().as_ref() {
                     let attributes = e
                         .attributes()
                         .map(|a| {
@@ -55,8 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .collect::<Vec<_>>();
                     println!("attributes values: {:?}", attributes);
                 }
-                _ => (),
-            },
+            }
             Ok(Event::Text(ref e)) => {
                 println!(
                     "text value: {}",
