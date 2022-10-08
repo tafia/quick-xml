@@ -802,7 +802,7 @@ impl BangType {
         None
     }
     #[inline]
-    fn to_err(self) -> Error {
+    fn to_err(&self) -> Error {
         let bang_str = match self {
             Self::CData => "CData",
             Self::Comment => "Comment",
@@ -849,10 +849,7 @@ impl ReadElementState {
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
 pub(crate) fn is_whitespace(b: u8) -> bool {
-    match b {
-        b' ' | b'\r' | b'\n' | b'\t' => true,
-        _ => false,
-    }
+    matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

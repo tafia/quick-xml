@@ -538,6 +538,7 @@ impl NsReader<BufReader<File>> {
 impl<'i> NsReader<&'i [u8]> {
     /// Creates an XML reader from a string slice.
     #[inline]
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &'i str) -> Self {
         Self::new(Reader::from_str(s))
     }

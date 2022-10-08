@@ -181,8 +181,7 @@ where
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
-                if pat.starts_with('#') {
-                    let entity = &pat[1..]; // starts after the #
+                if let Some(entity) = pat.strip_prefix('#') {
                     let codepoint = parse_number(entity, start..end)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
                 } else if let Some(value) = named_entity(pat) {
@@ -1691,8 +1690,8 @@ fn named_entity(name: &str) -> Option<&str> {
 }
 
 fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
-    let code = if bytes.starts_with('x') {
-        parse_hexadecimal(&bytes[1..])
+    let code = if let Some(hex_digits) = bytes.strip_prefix('x') {
+        parse_hexadecimal(hex_digits)
     } else {
         parse_decimal(bytes)
     }?;
