@@ -1,8 +1,8 @@
 //! Module to handle custom serde `Serializer`
 
 mod var;
-
-
+use std::collections::HashMap;
+use q_meta::{QuickXmlMeta, ContainedItemVisitorQXmlMeta, CurrentItemVisitorQXmlMeta};
 use self::var::{Map, Seq, Struct, Tuple};
 use crate::{
     de::PRIMITIVE_PREFIX,
@@ -16,7 +16,8 @@ use std::io::Write;
 
 /// Serialize struct into a `Write`r
 pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<(), DeError> {
-    let mut serializer = Serializer::new(writer);
+    let mut empty_map = HashMap::new();
+    let mut serializer = Serializer::new(writer, &mut empty_map, None, None);
     value.serialize(&mut serializer)
 }
 
@@ -27,11 +28,81 @@ pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
     Ok(String::from_utf8(writer)?)
 }
 
+pub fn to_string_with_qxml_meta<S: Serialize + CurrentItemVisitorQXmlMeta>(value: &S) -> Result<String, DeError> {
+    let mut obj_to_ser_pointer_vs_meta_map = HashMap::new();
+    let mut qxml_visitor = QXmlVisitor::new(
+        &mut obj_to_ser_pointer_vs_meta_map
+    );
+    let qxml_meta = value.visit_current_item_as_self(&mut qxml_visitor, None, None);
+    
+    let mut writer = Vec::new();
+    let pointer = value;
+    let address_as_str = format!("{pointer:p}");
+    let mut serializer = Serializer::new(&mut writer, &mut obj_to_ser_pointer_vs_meta_map, Some(&address_as_str), Some(qxml_meta.namespace_declarations));
+    value.serialize(&mut serializer)?;
+    Ok(String::from_utf8(writer)?)
+}
+
+#[derive(Debug, Clone)]
+pub struct QuickXmlMetaNode {
+    meta: &'static QuickXmlMeta,
+    ident_in_parent: Option<&'static str>, 
+    parent_meta: Option<&'static QuickXmlMeta>,
+}
+
+pub struct QXmlVisitor<'a> {
+    obj_to_ser_pointer_vs_meta_map: &'a mut HashMap<String, Vec<QuickXmlMetaNode>>,
+}
+
+impl<'a> QXmlVisitor<'a> {
+    pub fn new(
+        obj_to_ser_pointer_vs_meta_map: &'a mut HashMap<String, Vec<QuickXmlMetaNode>>,
+    ) -> Self {
+        Self { obj_to_ser_pointer_vs_meta_map }
+    }
+}
+
+impl<'a> ContainedItemVisitorQXmlMeta for QXmlVisitor<'a> {
+    fn visit_contained_item<T: CurrentItemVisitorQXmlMeta>(
+        &mut self,
+        obj_to_ser: &T,
+        ident_in_parent: Option<&'static str>,
+        parent_meta: Option<&'static QuickXmlMeta>,
+        is_pseudoobject: bool,
+    ) {
+        let mut qxml_visitor = QXmlVisitor::new(
+            &mut self.obj_to_ser_pointer_vs_meta_map, 
+        );
+        let meta = obj_to_ser.visit_current_item_as_self(&mut qxml_visitor, ident_in_parent, parent_meta);
+        if is_pseudoobject {
+            return;
+        }
+        let pointer = obj_to_ser;
+        let address_as_str = format!("{pointer:p}");
+        eprintln!("PUSH {address_as_str} {ident_in_parent:?}");
+        let vec = match self.obj_to_ser_pointer_vs_meta_map.get_mut(&address_as_str) {
+            Some(vec) => vec,
+            _ => {
+                let new_vec: Vec<QuickXmlMetaNode> = Vec::new();
+                self.obj_to_ser_pointer_vs_meta_map.insert(address_as_str.clone(), new_vec);
+                self.obj_to_ser_pointer_vs_meta_map.get_mut(&address_as_str).unwrap()
+            }
+        };
+        vec.push(QuickXmlMetaNode{meta, ident_in_parent, parent_meta});
+    }
+}
+
 /// A Serializer
 pub struct Serializer<'r, W: Write> {
     writer: Writer<W>,
     /// Name of the root tag. If not specified, deduced from the structure name
     root_tag: Option<&'r str>,
+
+    obj_to_ser_pointer_vs_meta_map: &'r mut HashMap<String, Vec<QuickXmlMetaNode>>,
+
+    root_obj_addr: Option<&'r String>,
+
+    namespace_declarations: Option<&'static [(&'static str, &'static str)]>
 }
 
 impl<'r, W: Write> Serializer<'r, W> {
@@ -40,8 +111,13 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// Note, that attempt to serialize a non-struct (including unit structs
     /// and newtype structs) will end up to an error. Use `with_root` to create
     /// serializer with explicitly defined root element name
-    pub fn new(writer: W) -> Self {
-        Self::with_root(Writer::new(writer), None)
+    pub fn new(
+        writer: W, 
+        obj_to_ser_pointer_vs_meta_map: &'r mut HashMap<String, Vec<QuickXmlMetaNode>>,
+        root_obj_addr: Option<&'r String>,
+        namespace_declarations: Option<&'static [(&'static str, &'static str)]>,
+    ) -> Self {
+        Self::with_root(Writer::new(writer), None, obj_to_ser_pointer_vs_meta_map, root_obj_addr, namespace_declarations)
     }
 
     /// Creates a new `Serializer` that uses specified root tag name
@@ -92,8 +168,14 @@ impl<'r, W: Write> Serializer<'r, W> {
     ///     r#"<root question="The Ultimate Question of Life, the Universe, and Everything" answer="42"/>"#
     /// );
     /// ```
-    pub fn with_root(writer: Writer<W>, root_tag: Option<&'r str>) -> Self {
-        Self { writer, root_tag }
+    pub fn with_root(
+        writer: Writer<W>, 
+        root_tag: Option<&'r str>, 
+        obj_to_ser_pointer_vs_meta_map: &'r mut HashMap<String, Vec<QuickXmlMetaNode>>, 
+        root_obj_addr: Option<&'r String>,
+        namespace_declarations: Option<&'static [(&'static str, &'static str)]>
+    ) -> Self {
+        Self { writer, root_tag, obj_to_ser_pointer_vs_meta_map, root_obj_addr, namespace_declarations }
     }
 
     fn write_primitive<P: std::fmt::Display>(
@@ -317,7 +399,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        Ok(Struct::new(self, self.root_tag.unwrap_or(name)))
+        Ok(Struct::new(self, self.root_tag.unwrap_or(name), self.namespace_declarations))
     }
 
     fn serialize_struct_variant(
@@ -327,7 +409,7 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, DeError> {
-        Ok(Struct::new(self, variant))
+        Ok(Struct::new(self, variant, None))
     }
 }
 

@@ -36,7 +36,7 @@
     cfg_attr(doc, doc = ::document_features::document_features!())
 )]
 #![forbid(unsafe_code)]
-#![deny(missing_docs)]
+#![allow(missing_docs)]
 #![recursion_limit = "1024"]
 // Enable feature requirements in the docs from 1.57
 // See https://stackoverflow.com/questions/61417452
