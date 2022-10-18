@@ -1,5 +1,6 @@
 use std::collections::{HashSet, HashMap};
 use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 use proc_macro2::{TokenStream};
 use quote::{quote};
@@ -14,14 +15,7 @@ mod kw {
     custom_keyword!(pre);
 }
 
-#[derive(Debug)]
-pub struct QuickXmlNamespace {
-    prefix: Option<String>,
-    uri: String,
-}
-
 pub fn impl_quick_xml_derive(input: DeriveInput) -> syn::Result<TokenStream> {
-    eprintln!("THIS IS A TEST!!!!!");
     // Same as before
     let fields = match input.data {
         Data::Struct(DataStruct { fields: Fields::Named(fields), .. }) => fields.named,
@@ -43,17 +37,16 @@ pub fn impl_quick_xml_derive(input: DeriveInput) -> syn::Result<TokenStream> {
         //     meta.merge(&to_merge)?;
         //     Ok(meta)
         // })?;
-    
     let field_metas = fields
         .into_iter()
         .map(|f| {
-            let field_attrs = f
+            let field_qxml_attrs = f
                 .attrs
                 .iter()
                 .filter(|attr| attr.path.is_ident("qxml"))
                 .collect::<Vec<_>>();
             let mut field_meta = QXmlFieldMeta::default();
-            for attr in field_attrs {
+            for attr in field_qxml_attrs {
                 let to_merge = attr.parse_args_with(QXmlFieldMeta::parse)?;
                 field_meta.merge(to_merge)?;
             }
@@ -66,92 +59,75 @@ pub fn impl_quick_xml_derive(input: DeriveInput) -> syn::Result<TokenStream> {
             Ok(field_meta)
             })
         .collect::<syn::Result<Vec<QXmlFieldMeta>>>()?;
-
     let mut block_meta = QXmlInsideBlockMeta::default();
+    let mut visit_contained_item_calls = Vec::new();
     for field_meta in field_metas {
         let field_ident = match field_meta.identifier {
             Some(ident) => ident,
             None => continue
         };
+        let field_ident_strred = field_ident.to_string();
+        visit_contained_item_calls.push(
+            quote!{T::visit_contained_item(contained_visitor, &self.#field_ident, Some(#field_ident_strred), Some(self_meta), false);}
+        );
         let elem_prefix = match field_meta.element_prefix {
             Some(elem) => elem,
             None => continue
         };
         block_meta.field_prefix_collection.push((field_ident, elem_prefix.prefix));
     }
-            
-        //     let visibility = meta.vis.unwrap_or_else(|| parse_quote! { pub });
-        //     let method_name = meta.name.unwrap_or_else(|| f.ident.clone().expect("a named field"));
-        //     let field_name = f.ident;
-        //     let field_ty = f.ty;
+    let identifier_prefix_quote_entries = block_meta.field_prefix_collection
+        .iter()
+        .map(|(k,v)| (k.to_string(), v.to_string()))
+        .map(|(k,v)| quote!{#k => #v})
+        .collect::<Vec<TokenStream>>();
 
-        //     Ok(quote! {
-        //         #visibility fn #method_name(&self) -> &#field_ty {
-        //             &self.#field_name
-        //         }
-        //     })
-        // })
-        // .collect::<syn::Result<TokenStream>>()?;
+    let namespace_declaration_entries = declaration_meta.declared_namespaces
+        .iter()
+        .map(|ns| (if ns.is_default_namespace() {"".to_string()} else {ns.prefix.clone().unwrap().to_string()}, ns.uri.value()))
+        .map(|(prefix, uri)| quote!{(#prefix, #uri)} )
+        .collect::<Vec<TokenStream>>();
 
     let st_name = input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-    Ok(quote! {
-        #[automatically_derived]
-        impl #impl_generics #st_name #ty_generics #where_clause {
-            fn namespace_declarations() -> &'static [(&'static str, &'static str)] {
-                &[("C", "http://asdfasdf"), ("B", "asdf"), ("", "")]
-            }
-
-            fn identifier_prefix_map() -> phf::Map<&'static str, &'static str> {
-                phf_map! {
-                    "foo" => "C", 
-                    "bar" => "B",
-                    "jax" => "B"
+    let to_return = quote! {
+        #[doc(hidden)]
+        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+        const _: () = {
+            use phf::phf_map;
+            use q_meta::QuickXmlMeta;
+            #[automatically_derived]
+            impl #impl_generics q_meta::CurrentItemVisitorQXmlMeta for #st_name #ty_generics #where_clause {
+                fn visit_current_item_as_self<T>(
+                    &self, 
+                    contained_visitor: &mut T,
+                    ident_in_parent: Option<&'static str>,
+                    parent_meta: Option<&'static QuickXmlMeta>
+                )
+                -> &'static QuickXmlMeta
+                where
+                    T: q_meta::ContainedItemVisitorQXmlMeta
+                {
+                    let self_meta = &QuickXmlMeta {
+                        namespace_declarations: &[
+                            #(#namespace_declaration_entries),*
+                        ],
+                        identifier_prefix_map: phf_map! {
+                            #(#identifier_prefix_quote_entries),*
+                        },
+                    };
+                    #(#visit_contained_item_calls)*
+                    self_meta
                 }
             }
-        }
-    })
-    // fn identifier_prefix_map -> HashMap<String, String> {
-    //     HashMap::from([("foo", "C"), ("bar", "B"), ("jax", "B")])
-    // }
-}
-
-fn namespace_declarations() -> &'static [(&'static str, &'static str)] {
-    &[("C", "http://asdfasdf"), ("B", "asdf"), ("", "")]
-    //vec![("C", "http://asdfasdf"), ("B", "asdf"), ("", "")]
-}
-
-fn identifier_prefix_map() -> phf::Map<&'static str, &'static str> {
-    phf_map! {
-        "foo" => "C", 
-        "bar" => "B",
-        "jax" => "B"
-    }
-}
-
-fn get_quick_xml_meta() -> &'static QuickXmlItemMeta {
-    &QuickXmlItemMeta {
-        namespace_declarations: &[("C", "http://asdfasdf"), ("B", "asdf"), ("", "")],
-        identifier_prefix_map: phf_map! {
-            "foo" => "C", 
-            "bar" => "B",
-            "jax" => "B"
-        },
-    }
+        };
+    };
+    Ok(to_return)
 }
 
 struct QuickXmlItemMeta {
     namespace_declarations: &'static [(&'static str, &'static str)],
     identifier_prefix_map: phf::Map<&'static str, &'static str>
-}
-struct ByUnconsumedKeyword {}
-
-impl ByUnconsumedKeyword {
-    fn new() -> Self {
-        ByUnconsumedKeyword {
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -303,7 +279,7 @@ impl Parse for QXmlFieldMeta {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct QXmlInsideBlockMeta {
     field_prefix_collection: Vec<(Ident, Ident)>
 }

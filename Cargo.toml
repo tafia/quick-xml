@@ -17,7 +17,8 @@ encoding_rs = { version = "0.8", optional = true }
 serde = { version = "1.0", optional = true }
 tokio = { version = "1.20", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.5"
-quick-xml-derived = { path = "quick-xml-derived" }
+quick_xml_derived = { path = "quick-xml-derived" }
+q_meta = { path = "quick-xml-derived/q_meta"}
 
 [dev-dependencies]
 criterion = "0.3"
@@ -27,6 +28,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
 tokio = { version = "1.20", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
+phf = { version = "0.11.1", features = ["macros"] }
+q_meta = { path = "quick-xml-derived/q_meta"}
+
 
 [lib]
 bench = false
@@ -114,7 +118,7 @@ serialize = ["serde"]
 
 [package.metadata.docs.rs]
 # document all features
-all-features = true
+all-features = false
 # defines the configuration attribute `docs_rs` to enable feature requirements
 # See https://stackoverflow.com/questions/61417452
 rustdoc-args = ["--cfg", "docs_rs"]
@@ -133,6 +137,10 @@ required-features = ["serialize"]
 
 [[test]]
 name = "serde-migrated"
+required-features = ["serialize"]
+
+[[test]]
+name = "serde-namespace-se"
 required-features = ["serialize"]
 
 [[test]]

@@ -1,0 +1,8 @@
+[package]
+name = "q_meta"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+phf = { version = "0.11.1", features = ["macros"] }
+syllogism = "0.1.3"
