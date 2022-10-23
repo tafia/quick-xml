@@ -117,8 +117,6 @@ This has largely been inspired by [serde-xml-rs](https://github.com/RReverser/se
 quick-xml follows its convention for deserialization, including the
 [`$value`](https://github.com/RReverser/serde-xml-rs#parsing-the-value-of-a-tag) special name.
 
-Original [quick-xml] was developed by @tafia and abandoned around end of 2021.
-
 ### Parsing the "value" of a tag
 
 If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`, you can use the special name `$value`:
@@ -200,5 +198,3 @@ Any PR is welcomed!
 ## License
 
 MIT
-
-[quick-xml]: https://github.com/tafia/quick-xml
