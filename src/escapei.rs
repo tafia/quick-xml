@@ -94,7 +94,7 @@ pub fn partial_escape(raw: &str) -> Cow<str> {
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
+pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
     let bytes = raw.as_bytes();
     let mut escaped = None;
     let mut iter = bytes.iter();
@@ -112,7 +112,17 @@ fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
             b'\'' => escaped.extend_from_slice(b"&apos;"),
             b'&' => escaped.extend_from_slice(b"&amp;"),
             b'"' => escaped.extend_from_slice(b"&quot;"),
-            _ => unreachable!("Only '<', '>','\', '&' and '\"' are escaped"),
+
+            // This set of escapes handles characters that should be escaped
+            // in elements of xs:lists, because those characters works as
+            // delimiters of list elements
+            b'\t' => escaped.extend_from_slice(b"&#9;"),
+            b'\r' => escaped.extend_from_slice(b"&#10;"),
+            b'\n' => escaped.extend_from_slice(b"&#13;"),
+            b' ' => escaped.extend_from_slice(b"&#32;"),
+            _ => unreachable!(
+                "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"
+            ),
         }
         pos = new_pos + 1;
     }

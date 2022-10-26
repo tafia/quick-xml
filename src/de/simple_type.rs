@@ -828,10 +828,26 @@ impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
+    use crate::se::{Indent, QuoteLevel};
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
+
+    macro_rules! simple_only {
+        ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
+            #[test]
+            fn $name() {
+                let decoder = Decoder::$encoding();
+                let xml = $xml;
+                let de = SimpleTypeDeserializer::new(CowRef::Input(xml.as_ref()), true, decoder);
+                let data: $type = Deserialize::deserialize(de).unwrap();
+
+                assert_eq!(data, $result);
+            }
+        };
+    }
 
     macro_rules! simple {
         ($encoding:ident, $name:ident: $type:ty = $xml:expr => $result:expr) => {
@@ -843,6 +859,18 @@ mod tests {
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
                 assert_eq!(data, $result);
+
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    data.serialize(SimpleTypeSerializer {
+                        writer: String::new(),
+                        target: QuoteTarget::Text,
+                        level: QuoteLevel::Full,
+                        indent: Indent::None,
+                    })
+                    .unwrap(),
+                    xml
+                );
             }
         };
     }
@@ -869,22 +897,22 @@ mod tests {
         };
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Unit;
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Newtype(String);
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct BorrowedNewtype<'a>(&'a str);
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Struct {
         key: String,
         val: usize,
     }
 
-    #[derive(Debug, Deserialize, PartialEq)]
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     enum Enum {
         Unit,
         Newtype(String),
@@ -899,6 +927,7 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize)]
+    #[serde(transparent)]
     struct Any(IgnoredAny);
     impl PartialEq for Any {
         fn eq(&self, _other: &Any) -> bool {
@@ -909,9 +938,27 @@ mod tests {
     /// Tests for deserialize atomic and union values, as defined in XSD specification
     mod atomic {
         use super::*;
+        use crate::se::simple_type::AtomicSerializer;
         use pretty_assertions::assert_eq;
 
         /// Checks that given `$input` successfully deserializing into given `$result`
+        macro_rules! deserialized_to_only {
+            ($name:ident: $type:ty = $input:literal => $result:expr) => {
+                #[test]
+                fn $name() {
+                    let de = AtomicDeserializer {
+                        content: Content::Input($input),
+                        escaped: true,
+                    };
+                    let data: $type = Deserialize::deserialize(de).unwrap();
+
+                    assert_eq!(data, $result);
+                }
+            };
+        }
+
+        /// Checks that given `$input` successfully deserializing into given `$result`
+        /// and the result is serialized back to the `$input`
         macro_rules! deserialized_to {
             ($name:ident: $type:ty = $input:literal => $result:expr) => {
                 #[test]
@@ -923,6 +970,17 @@ mod tests {
                     let data: $type = Deserialize::deserialize(de).unwrap();
 
                     assert_eq!(data, $result);
+
+                    // Roundtrip to ensure that serializer corresponds to deserializer
+                    assert_eq!(
+                        data.serialize(AtomicSerializer {
+                            writer: String::new(),
+                            target: QuoteTarget::Text,
+                            level: QuoteLevel::Full,
+                        })
+                        .unwrap(),
+                        $input
+                    );
                 }
             };
         }
@@ -952,9 +1010,6 @@ mod tests {
             };
         }
 
-        deserialized_to!(any_owned: String = "&lt;escaped&#x20;string" => "<escaped string");
-        deserialized_to!(any_borrowed: &str = "non-escaped string" => "non-escaped string");
-
         deserialized_to!(false_: bool = "false" => false);
         deserialized_to!(true_: bool  = "true" => true);
 
@@ -979,24 +1034,29 @@ mod tests {
         deserialized_to!(char_unescaped: char = "h" => 'h');
         deserialized_to!(char_escaped: char = "&lt;" => '<');
 
-        deserialized_to!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        deserialized_to!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        err!(escaped_str: &str = "escaped&#x20;string"
+        deserialized_to!(string: String = "&lt;escaped&#32;string" => "<escaped string");
+        // Serializer will escape space. Because borrowing has meaning only for deserializer,
+        // no need to test roundtrip here, it is already tested with non-borrowing version
+        deserialized_to_only!(borrowed_str: &str = "non-escaped string" => "non-escaped string");
+        err!(escaped_str: &str = "escaped&#32;string"
                 => Custom("invalid type: string \"escaped string\", expected a borrowed string"));
 
-        err!(byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+        err!(byte_buf: ByteBuf = "&lt;escaped&#32;string"
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
         err!(borrowed_bytes: Bytes = "non-escaped string"
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
 
         deserialized_to!(option_none: Option<&str> = "" => None);
-        deserialized_to!(option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
+        deserialized_to!(option_some: Option<&str> = "non-escaped-string" => Some("non-escaped-string"));
 
-        deserialized_to!(unit: () = "<root>anything</root>" => ());
-        deserialized_to!(unit_struct: Unit = "<root>anything</root>" => Unit);
+        deserialized_to_only!(unit: () = "<root>anything</root>" => ());
+        deserialized_to_only!(unit_struct: Unit = "<root>anything</root>" => Unit);
 
-        deserialized_to!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
-        deserialized_to!(newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+        deserialized_to!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
+        // Serializer will escape space. Because borrowing has meaning only for deserializer,
+        // no need to test roundtrip here, it is already tested with non-borrowing version
+        deserialized_to_only!(newtype_borrowed: BorrowedNewtype = "non-escaped string"
+                => BorrowedNewtype("non-escaped string"));
 
         err!(seq: Vec<()> = "non-escaped string"
                 => Unsupported("sequences are not supported as `xs:list` items"));
@@ -1020,8 +1080,8 @@ mod tests {
         err!(enum_other: Enum = "any data"
                 => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        deserialized_to!(identifier: Id = "Field" => Id::Field);
-        deserialized_to!(ignored_any: Any = "any data" => Any(IgnoredAny));
+        deserialized_to_only!(identifier: Id = "Field" => Id::Field);
+        deserialized_to_only!(ignored_any: Any = "any data" => Any(IgnoredAny));
 
         /// Checks that deserialization from an owned content is working
         #[test]
@@ -1174,22 +1234,28 @@ mod tests {
         simple!(utf8, char_unescaped: char = "h" => 'h');
         simple!(utf8, char_escaped: char = "&lt;" => '<');
 
-        simple!(utf8, string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#x20;string"
+        simple!(utf8, string: String = "&lt;escaped string" => "<escaped string");
+        err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
-        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+        err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
         simple!(utf8, option_none: Option<&str> = "" => None);
         simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
 
-        simple!(utf8, unit: () = "any data" => ());
-        simple!(utf8, unit_struct: Unit = "any data" => Unit);
+        simple_only!(utf8, unit: () = "any data" => ());
+        simple_only!(utf8, unit_struct: Unit = "any data" => Unit);
 
-        simple!(utf8, newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
-        simple!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string" => BorrowedNewtype("non-escaped string"));
+        // Serializer will not escape space because this is unnecessary.
+        // Because borrowing has meaning only for deserializer, no need to test
+        // roundtrip here, it is already tested for strings where compatible list
+        // of escaped characters is used
+        simple_only!(utf8, newtype_owned: Newtype = "&lt;escaped&#32;string"
+            => Newtype("<escaped string".into()));
+        simple_only!(utf8, newtype_borrowed: BorrowedNewtype = "non-escaped string"
+            => BorrowedNewtype("non-escaped string"));
 
         err!(utf8, map: HashMap<(), ()> = "any data"
              => Unsupported("maps are not supported for XSD `simpleType`s"));
@@ -1206,8 +1272,8 @@ mod tests {
         err!(utf8, enum_other: Enum = "any data"
              => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
-        simple!(utf8, identifier: Id = "Field" => Id::Field);
-        simple!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
+        simple_only!(utf8, identifier: Id = "Field" => Id::Field);
+        simple_only!(utf8, ignored_any: Any = "any data" => Any(IgnoredAny));
     }
 
     #[cfg(feature = "encoding")]
@@ -1225,7 +1291,7 @@ mod tests {
 
         macro_rules! utf16 {
             ($name:ident: $type:ty = $xml:literal => $result:expr) => {
-                simple!(utf16, $name: $type = to_utf16($xml) => $result);
+                simple_only!(utf16, $name: $type = to_utf16($xml) => $result);
             };
         }
 
@@ -1258,8 +1324,8 @@ mod tests {
         utf16!(char_unescaped: char = "h" => 'h');
         utf16!(char_escaped: char = "&lt;" => '<');
 
-        utf16!(string: String = "&lt;escaped&#x20;string" => "<escaped string");
-        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#x20;string"
+        utf16!(string: String = "&lt;escaped&#32;string" => "<escaped string");
+        unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#32;string"
                      => "binary data content is not supported by XML format");
 
         utf16!(option_none: Option<()> = "" => None);
@@ -1268,7 +1334,7 @@ mod tests {
         utf16!(unit: () = "any data" => ());
         utf16!(unit_struct: Unit = "any data" => Unit);
 
-        utf16!(newtype_owned: Newtype = "&lt;escaped&#x20;string" => Newtype("<escaped string".into()));
+        utf16!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
 
         // UTF-16 data never borrow because data was decoded not in-place
         err!(utf16, newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")

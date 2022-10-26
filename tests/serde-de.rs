@@ -34,7 +34,7 @@ where
 fn string_borrow() {
     #[derive(Debug, Deserialize, PartialEq)]
     struct BorrowedText<'a> {
-        #[serde(rename = "$value")]
+        #[serde(rename = "$text")]
         text: &'a str,
     }
 
@@ -43,52 +43,57 @@ fn string_borrow() {
     assert_eq!(borrowed_item.text, "Hello world");
 }
 
-/// Test for https://github.com/tafia/quick-xml/issues/231
-#[test]
-fn implicit_value() {
-    use serde_value::Value;
+/// Tests for deserializing into specially named field `$text` which represent
+/// textual content of an XML element
+mod text {
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-    let item: Value = from_str(r#"<root>content</root>"#).unwrap();
+    /// Test for https://github.com/tafia/quick-xml/issues/231
+    #[test]
+    fn implicit() {
+        use serde_value::Value;
 
-    assert_eq!(
-        item,
-        Value::Map(
-            vec![(
-                Value::String("$value".into()),
-                Value::String("content".into())
-            )]
-            .into_iter()
-            .collect()
-        )
-    );
-}
+        let item: Value = from_str(r#"<root>content</root>"#).unwrap();
 
-#[test]
-fn explicit_value() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Item {
-        #[serde(rename = "$value")]
-        content: String,
+        assert_eq!(
+            item,
+            Value::Map(
+                vec![(
+                    Value::String("$text".into()),
+                    Value::String("content".into())
+                )]
+                .into_iter()
+                .collect()
+            )
+        );
     }
 
-    let item: Item = from_str(r#"<root>content</root>"#).unwrap();
-
-    assert_eq!(
-        item,
-        Item {
-            content: "content".into()
+    #[test]
+    fn explicit() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item {
+            #[serde(rename = "$text")]
+            content: String,
         }
-    );
-}
 
-#[test]
-fn without_value() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Item;
+        let item: Item = from_str(r#"<root>content</root>"#).unwrap();
 
-    let item: Item = from_str(r#"<root>content</root>"#).unwrap();
+        assert_eq!(
+            item,
+            Item {
+                content: "content".into()
+            }
+        );
+    }
 
-    assert_eq!(item, Item);
+    #[test]
+    fn without() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Item;
+
+        let _: Item = from_str(r#"<root>content</root>"#).unwrap();
+    }
 }
 
 /// Tests calling `deserialize_ignored_any`
@@ -219,10 +224,10 @@ mod trivial {
         /// fields of this struct.
         ///
         /// Because we want to get access to unnamed content of the tag (usually, this internal
-        /// XML node called `#text`) we use a rename to a special name `$value`
+        /// XML node called `$text`) we use a rename to a special name `$text`
         #[derive(Debug, Deserialize, PartialEq)]
         struct Trivial<T> {
-            #[serde(rename = "$value")]
+            #[serde(rename = "$text")]
             value: T,
         }
 
@@ -236,9 +241,9 @@ mod trivial {
 
                     match from_str::<Trivial<$type>>(&format!("<outer>{}</outer>", $value)) {
                         // Expected unexpected start element `<root>`
-                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"root"),
+                        Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("root"))`, but got `{:?}`"#,
+                            r#"Expected `Err(DeError::Custom("missing field `$text`"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -276,7 +281,7 @@ mod trivial {
             in_struct!(true_: bool = "<root>true</root>", true);
             in_struct!(char_: char = "<root>r</root>", 'r');
 
-            in_struct!(string:   String  = "<root>escaped&#x20;string</root>", "escaped string".into());
+            in_struct!(string: String = "<root>escaped&#x20;string</root>", "escaped string".into());
 
             /// XML does not able to store binary data
             #[test]
@@ -339,7 +344,7 @@ mod trivial {
             in_struct!(char_: char = "<root><![CDATA[r]]></root>", 'r');
 
             // Escape sequences does not processed inside CDATA section
-            in_struct!(string:   String  = "<root><![CDATA[escaped&#x20;string]]></root>", "escaped&#x20;string".into());
+            in_struct!(string: String = "<root><![CDATA[escaped&#x20;string]]></root>", "escaped&#x20;string".into());
 
             /// XML does not able to store binary data
             #[test]
@@ -557,6 +562,53 @@ mod seq {
             .unwrap();
             assert_eq!(data, vec![(), (), ()]);
         }
+
+        /// This test ensures that composition of deserializer building blocks plays well
+        #[test]
+        fn list_of_struct() {
+            #[derive(Debug, PartialEq, Default, Deserialize)]
+            #[serde(default)]
+            struct Struct {
+                #[serde(rename = "@attribute")]
+                attribute: Option<String>,
+                element: Option<String>,
+            }
+
+            let data: Vec<Struct> = from_str(
+                r#"
+                <struct/>
+                <struct attribute="value"/>
+                <struct>
+                    <element>value</element>
+                </struct>
+                <struct attribute="value">
+                    <element>value</element>
+                </struct>
+                "#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                vec![
+                    Struct {
+                        attribute: None,
+                        element: None,
+                    },
+                    Struct {
+                        attribute: Some("value".to_string()),
+                        element: None,
+                    },
+                    Struct {
+                        attribute: None,
+                        element: Some("value".to_string()),
+                    },
+                    Struct {
+                        attribute: Some("value".to_string()),
+                        element: Some("value".to_string()),
+                    },
+                ]
+            );
+        }
     }
 
     /// Tests where each sequence item have an identical name in an XML.
@@ -677,7 +729,7 @@ mod seq {
             }
 
             /// Mixed content assumes, that some elements will have an internal
-            /// name `$value`, so, unless field named the same, it is expected
+            /// name `$text` or `$value`, so, unless field named the same, it is expected
             /// to fail
             #[test]
             fn mixed_content() {
@@ -1147,6 +1199,63 @@ mod seq {
                 .unwrap_err();
             }
 
+            /// This test ensures that composition of deserializer building blocks
+            /// plays well
+            #[test]
+            fn list_of_struct() {
+                #[derive(Debug, PartialEq, Default, Deserialize)]
+                #[serde(default)]
+                struct Struct {
+                    #[serde(rename = "@attribute")]
+                    attribute: Option<String>,
+                    element: Option<String>,
+                }
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: [Struct; 4],
+                }
+
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                        <item attribute="value"/>
+                        <item>
+                            <element>value</element>
+                        </item>
+                        <item attribute="value">
+                            <element>value</element>
+                        </item>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+                assert_eq!(
+                    data,
+                    List {
+                        item: [
+                            Struct {
+                                attribute: None,
+                                element: None,
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: None,
+                            },
+                            Struct {
+                                attribute: None,
+                                element: Some("value".to_string()),
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: Some("value".to_string()),
+                            },
+                        ],
+                    }
+                );
+            }
+
             /// Checks that sequences represented by elements can contain sequences,
             /// represented by [`xs:list`s](https://www.w3schools.com/xml/el_list.asp)
             mod xs_list {
@@ -1336,7 +1445,7 @@ mod seq {
             }
 
             /// Mixed content assumes, that some elements will have an internal
-            /// name `$value`, so, unless field named the same, it is expected
+            /// name `$text` or `$value`, so, unless field named the same, it is expected
             /// to fail
             #[test]
             fn mixed_content() {
@@ -1910,6 +2019,63 @@ mod seq {
                 .unwrap_err();
             }
 
+            /// This test ensures that composition of deserializer building blocks
+            /// plays well
+            #[test]
+            fn list_of_struct() {
+                #[derive(Debug, PartialEq, Default, Deserialize)]
+                #[serde(default)]
+                struct Struct {
+                    #[serde(rename = "@attribute")]
+                    attribute: Option<String>,
+                    element: Option<String>,
+                }
+
+                #[derive(Debug, PartialEq, Deserialize)]
+                struct List {
+                    item: Vec<Struct>,
+                }
+
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                        <item attribute="value"/>
+                        <item>
+                            <element>value</element>
+                        </item>
+                        <item attribute="value">
+                            <element>value</element>
+                        </item>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+                assert_eq!(
+                    data,
+                    List {
+                        item: vec![
+                            Struct {
+                                attribute: None,
+                                element: None,
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: None,
+                            },
+                            Struct {
+                                attribute: None,
+                                element: Some("value".to_string()),
+                            },
+                            Struct {
+                                attribute: Some("value".to_string()),
+                                element: Some("value".to_string()),
+                            },
+                        ],
+                    }
+                );
+            }
+
             /// Checks that sequences represented by elements can contain sequences,
             /// represented by `xs:list`s
             mod xs_list {
@@ -1919,6 +2085,7 @@ mod seq {
                 #[derive(Debug, Deserialize, PartialEq)]
                 struct List {
                     /// Outer list mapped to elements, inner -- to `xs:list`.
+                    ///
                     /// `#[serde(default)]` is required to correctly deserialize
                     /// empty sequence, because without elements the field
                     /// also is missing and derived `Deserialize` implementation
@@ -1968,7 +2135,7 @@ mod seq {
                 fn element() {
                     #[derive(Debug, Deserialize, PartialEq)]
                     struct List {
-                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        /// List mapped to elements, inner -- to `xs:list`.
                         ///
                         /// `#[serde(default)]` is not required, because correct
                         /// XML will always contains at least 1 element.
@@ -3222,7 +3389,7 @@ mod seq {
                 fn element() {
                     #[derive(Debug, Deserialize, PartialEq)]
                     struct List {
-                        /// Outer list mapped to elements, inner -- to `xs:list`.
+                        /// List mapped to elements, String -- to `xs:list`.
                         ///
                         /// `#[serde(default)]` is not required, because correct
                         /// XML will always contains at least 1 element.
@@ -4375,6 +4542,12 @@ mod seq {
 
 macro_rules! maplike_errors {
     ($type:ty) => {
+        maplike_errors!($type, $type);
+    };
+    (
+        $attributes:ty,
+        $mixed:ty
+    ) => {
         mod non_closed {
             use super::*;
 
@@ -4382,7 +4555,7 @@ macro_rules! maplike_errors {
             /// earlier than error about missing fields
             #[test]
             fn missing_field() {
-                let data = from_str::<$type>(r#"<root>"#);
+                let data = from_str::<$mixed>(r#"<root>"#);
 
                 match data {
                     Err(DeError::UnexpectedEof) => (),
@@ -4392,7 +4565,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn attributes() {
-                let data = from_str::<$type>(r#"<root float="42" string="answer">"#);
+                let data = from_str::<$attributes>(r#"<root float="42" string="answer">"#);
 
                 match data {
                     Err(DeError::UnexpectedEof) => (),
@@ -4402,7 +4575,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn elements_root() {
-                let data = from_str::<$type>(r#"<root float="42"><string>answer</string>"#);
+                let data = from_str::<$mixed>(r#"<root float="42"><string>answer</string>"#);
 
                 match data {
                     Err(DeError::UnexpectedEof) => (),
@@ -4412,7 +4585,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn elements_child() {
-                let data = from_str::<$type>(r#"<root float="42"><string>answer"#);
+                let data = from_str::<$mixed>(r#"<root float="42"><string>answer"#);
 
                 match data {
                     Err(DeError::UnexpectedEof) => (),
@@ -4429,7 +4602,7 @@ macro_rules! maplike_errors {
             /// earlier than error about missing fields
             #[test]
             fn missing_field() {
-                let data = from_str::<$type>(r#"<root></mismatched>"#);
+                let data = from_str::<$mixed>(r#"<root></mismatched>"#);
 
                 match data {
                     Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
@@ -4439,7 +4612,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn attributes() {
-                let data = from_str::<$type>(
+                let data = from_str::<$attributes>(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root float="42" string="answer"></mismatched>"#,
                 );
@@ -4452,7 +4625,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn elements_root() {
-                let data = from_str::<$type>(
+                let data = from_str::<$mixed>(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root float="42"><string>answer</string></mismatched>"#,
                 );
@@ -4465,7 +4638,7 @@ macro_rules! maplike_errors {
 
             #[test]
             fn elements_child() {
-                let data = from_str::<$type>(
+                let data = from_str::<$mixed>(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root float="42"><string>answer</mismatched></root>"#,
                 );
@@ -4535,22 +4708,40 @@ mod struct_ {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// Type where all struct fields represented by elements
     #[derive(Debug, Deserialize, PartialEq)]
-    struct Struct {
+    struct Elements {
+        float: f64,
+        string: String,
+    }
+
+    /// Type where all struct fields represented by attributes
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Attributes {
+        #[serde(rename = "@float")]
+        float: f64,
+        #[serde(rename = "@string")]
+        string: String,
+    }
+
+    /// Type where one field represented by an attribute and one by an element
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Mixed {
+        #[serde(rename = "@float")]
         float: f64,
         string: String,
     }
 
     #[test]
     fn elements() {
-        let data: Struct = from_str(
+        let data: Elements = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root><float>42</float><string>answer</string></root>"#,
         )
         .unwrap();
         assert_eq!(
             data,
-            Struct {
+            Elements {
                 float: 42.0,
                 string: "answer".into()
             }
@@ -4559,7 +4750,7 @@ mod struct_ {
 
     #[test]
     fn excess_elements() {
-        let data: Struct = from_str(
+        let data: Elements = from_str(
             r#"
             <root>
                 <before/>
@@ -4572,7 +4763,7 @@ mod struct_ {
         .unwrap();
         assert_eq!(
             data,
-            Struct {
+            Elements {
                 float: 42.0,
                 string: "answer".into()
             }
@@ -4581,14 +4772,14 @@ mod struct_ {
 
     #[test]
     fn attributes() {
-        let data: Struct = from_str(
+        let data: Attributes = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root float="42" string="answer"/>"#,
         )
         .unwrap();
         assert_eq!(
             data,
-            Struct {
+            Attributes {
                 float: 42.0,
                 string: "answer".into()
             }
@@ -4597,13 +4788,13 @@ mod struct_ {
 
     #[test]
     fn excess_attributes() {
-        let data: Struct = from_str(
+        let data: Attributes = from_str(
             r#"<root before="1" float="42" in-the-middle="2" string="answer" after="3"/>"#,
         )
         .unwrap();
         assert_eq!(
             data,
-            Struct {
+            Attributes {
                 float: 42.0,
                 string: "answer".into()
             }
@@ -4612,7 +4803,7 @@ mod struct_ {
 
     #[test]
     fn attribute_and_element() {
-        let data: Struct = from_str(
+        let data: Mixed = from_str(
             r#"
             <root float="42">
                 <string>answer</string>
@@ -4623,7 +4814,7 @@ mod struct_ {
 
         assert_eq!(
             data,
-            Struct {
+            Mixed {
                 float: 42.0,
                 string: "answer".into()
             }
@@ -4632,40 +4823,40 @@ mod struct_ {
 
     #[test]
     fn namespaces() {
-        let data: Struct = from_str(
+        let data: Elements = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root xmlns:namespace="http://name.space"><namespace:float>42</namespace:float><string>answer</string></root>"#,
         )
         .unwrap();
         assert_eq!(
             data,
-            Struct {
+            Elements {
                 float: 42.0,
                 string: "answer".into()
             }
         );
     }
 
-    maplike_errors!(Struct);
+    maplike_errors!(Attributes, Mixed);
 }
 
 mod nested_struct {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Struct {
-        nested: Nested,
-        string: String,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Nested {
-        float: f32,
-    }
-
     #[test]
     fn elements() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            nested: Nested,
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            float: f32,
+        }
+
         let data: Struct = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root><string>answer</string><nested><float>42</float></nested></root>"#,
@@ -4682,6 +4873,19 @@ mod nested_struct {
 
     #[test]
     fn attributes() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            nested: Nested,
+            #[serde(rename = "@string")]
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            #[serde(rename = "@float")]
+            float: f32,
+        }
+
         let data: Struct = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root string="answer"><nested float="42"/></root>"#,
@@ -4701,22 +4905,22 @@ mod flatten_struct {
     use super::*;
     use pretty_assertions::assert_eq;
 
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Struct {
-        #[serde(flatten)]
-        nested: Nested,
-        string: String,
-    }
-
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct Nested {
-        //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
-        float: String,
-    }
-
     #[test]
     #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
     fn elements() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            #[serde(flatten)]
+            nested: Nested,
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+            float: String,
+        }
+
         let data: Struct = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root><float>42</float><string>answer</string></root>"#,
@@ -4733,6 +4937,21 @@ mod flatten_struct {
 
     #[test]
     fn attributes() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Struct {
+            #[serde(flatten)]
+            nested: Nested,
+            #[serde(rename = "@string")]
+            string: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Nested {
+            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+            #[serde(rename = "@float")]
+            float: String,
+        }
+
         let data: Struct = from_str(
             // Comment for prevent unnecessary formatting - we use the same style in all tests
             r#"<root float="42" string="answer"/>"#,
@@ -4757,10 +4976,19 @@ mod enum_ {
         float: String,
     }
 
+    /// Type where all struct fields represented by attributes
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct NestedAttr {
+        //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+        #[serde(rename = "@float")]
+        float: String,
+    }
+
     mod externally_tagged {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        /// Type where all fields of struct variants represented by elements
         #[derive(Debug, Deserialize, PartialEq)]
         enum Node {
             Unit,
@@ -4778,6 +5006,28 @@ mod enum_ {
             Flatten {
                 #[serde(flatten)]
                 nested: Nested,
+                string: String,
+            },
+        }
+
+        /// Type where all fields of struct variants represented by attributes
+        #[derive(Debug, Deserialize, PartialEq)]
+        enum NodeAttr {
+            Struct {
+                #[serde(rename = "@float")]
+                float: f64,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Holder {
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Flatten {
+                #[serde(flatten)]
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
                 string: String,
             },
         }
@@ -4828,14 +5078,14 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<Struct float="42" string="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Struct {
+                    NodeAttr::Struct {
                         float: 42.0,
                         string: "answer".into()
                     }
@@ -4880,15 +5130,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<Holder string="answer"><nested float="42"/></Holder>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Holder {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Holder {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -4918,15 +5168,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<Flatten float="42" string="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Flatten {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Flatten {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -4937,6 +5187,7 @@ mod enum_ {
     mod internally_tagged {
         use super::*;
 
+        /// Type where all fields of struct variants and a tag represented by elements
         #[derive(Debug, Deserialize, PartialEq)]
         #[serde(tag = "tag")]
         enum Node {
@@ -4944,8 +5195,8 @@ mod enum_ {
             /// Primitives (such as `bool`) are not supported by serde in the internally tagged mode
             Newtype(NewtypeContent),
             // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
-            //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
             Struct {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
                 float: String,
                 string: String,
             },
@@ -4956,6 +5207,34 @@ mod enum_ {
             Flatten {
                 #[serde(flatten)]
                 nested: Nested,
+                string: String,
+            },
+        }
+
+        /// Type where all fields of struct variants and a tag represented by attributes
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(tag = "@tag")]
+        enum NodeAttr {
+            Unit,
+            /// Primitives (such as `bool`) are not supported by serde in the internally tagged mode
+            Newtype(NewtypeContent),
+            // Tuple(f64, String),// Tuples are not supported in the internally tagged mode
+            Struct {
+                //TODO: change to f64 after fixing https://github.com/serde-rs/serde/issues/1183
+                #[serde(rename = "@float")]
+                float: String,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Holder {
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Flatten {
+                #[serde(flatten)]
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
                 string: String,
             },
         }
@@ -4977,8 +5256,8 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
-                assert_eq!(data, Node::Unit);
+                let data: NodeAttr = from_str(r#"<root tag="Unit"/>"#).unwrap();
+                assert_eq!(data, NodeAttr::Unit);
             }
         }
 
@@ -5000,12 +5279,12 @@ mod enum_ {
             #[test]
             #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Newtype" value="true"/>"#,
                 )
                 .unwrap();
-                assert_eq!(data, Node::Newtype(NewtypeContent { value: true }));
+                assert_eq!(data, NodeAttr::Newtype(NewtypeContent { value: true }));
             }
         }
 
@@ -5031,14 +5310,14 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Struct" float="42" string="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Struct {
+                    NodeAttr::Struct {
                         float: "42".into(),
                         string: "answer".into()
                     }
@@ -5067,15 +5346,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Holder" string="answer"><nested float="42"/></root>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Holder {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Holder {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -5104,15 +5383,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Flatten" float="42" string="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Flatten {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Flatten {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -5123,6 +5402,8 @@ mod enum_ {
     mod adjacently_tagged {
         use super::*;
 
+        /// Type where all fields of struct variants, tag and content fields
+        /// represented by elements
         #[derive(Debug, Deserialize, PartialEq)]
         #[serde(tag = "tag", content = "content")]
         enum Node {
@@ -5145,10 +5426,52 @@ mod enum_ {
             },
         }
 
+        /// Type where all fields of struct variants, tag and content fields
+        /// represented by attributes
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(tag = "@tag", content = "@content")]
+        enum NodeAttrSimple {
+            Unit,
+            Newtype(bool),
+        }
+
+        /// Type where all fields of struct variants and a tag represented by attributes
+        /// content cannot be represented by attribute because this is a complex struct
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(tag = "@tag", content = "content")]
+        enum NodeAttrComplex {
+            //TODO: serde bug https://github.com/serde-rs/serde/issues/1904
+            // Tuple(f64, String),
+            Struct {
+                #[serde(rename = "@float")]
+                float: f64,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Holder {
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Flatten {
+                #[serde(flatten)]
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+        }
+
         /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
         #[derive(Debug, Deserialize, PartialEq)]
         #[serde(tag = "tag", content = "content")]
         enum Workaround {
+            Tuple(f64, String),
+        }
+
+        /// Workaround for serde bug https://github.com/serde-rs/serde/issues/1904
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(tag = "@tag", content = "@content")]
+        enum WorkaroundAttr {
             Tuple(f64, String),
         }
 
@@ -5164,8 +5487,8 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(r#"<root tag="Unit"/>"#).unwrap();
-                assert_eq!(data, Node::Unit);
+                let data: NodeAttrSimple = from_str(r#"<root tag="Unit"/>"#).unwrap();
+                assert_eq!(data, NodeAttrSimple::Unit);
             }
         }
 
@@ -5185,8 +5508,12 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(r#"<root tag="Newtype" content="true"/>"#).unwrap();
-                assert_eq!(data, Node::Newtype(true));
+                let data: NodeAttrSimple = from_str(
+                    // Comment for prevent unnecessary formatting - we use the same style in all tests
+                    r#"<root tag="Newtype" content="true"/>"#,
+                )
+                .unwrap();
+                assert_eq!(data, NodeAttrSimple::Newtype(true));
             }
         }
 
@@ -5205,12 +5532,12 @@ mod enum_ {
             #[test]
             #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn attributes() {
-                let data: Workaround = from_str(
-                    // Comment for prevent unnecessary formatting - we use the same style in all tests
-                    r#"<root tag="Tuple" content="42"><content>answer</content></root>"#,
+                let data: WorkaroundAttr = from_str(
+                    // We cannot have two attributes with the same name, so both values stored in one attribute
+                    r#"<root tag="Tuple" content="42 answer"/>"#,
                 )
                 .unwrap();
-                assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
+                assert_eq!(data, WorkaroundAttr::Tuple(42.0, "answer".into()));
             }
         }
 
@@ -5235,14 +5562,14 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttrComplex = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Struct"><content float="42" string="answer"/></root>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Struct {
+                    NodeAttrComplex::Struct {
                         float: 42.0,
                         string: "answer".into()
                     }
@@ -5279,13 +5606,13 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttrComplex = from_str(
                     r#"<root tag="Holder"><content string="answer"><nested float="42"/></content></root>"#,
                 ).unwrap();
                 assert_eq!(
                     data,
-                    Node::Holder {
-                        nested: Nested { float: "42".into() },
+                    NodeAttrComplex::Holder {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -5313,15 +5640,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttrComplex = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root tag="Flatten"><content float="42" string="answer"/></root>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Flatten {
-                        nested: Nested { float: "42".into() },
+                    NodeAttrComplex::Flatten {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -5333,6 +5660,7 @@ mod enum_ {
         use super::*;
         use pretty_assertions::assert_eq;
 
+        /// Type where all fields of struct variants represented by elements
         #[derive(Debug, Deserialize, PartialEq)]
         #[serde(untagged)]
         enum Node {
@@ -5353,6 +5681,33 @@ mod enum_ {
                 nested: Nested,
                 // Can't use "string" as name because in that case this variant
                 // will have no difference from `Struct` variant
+                string2: String,
+            },
+        }
+
+        /// Type where all fields of struct variants represented by attributes
+        #[derive(Debug, Deserialize, PartialEq)]
+        #[serde(untagged)]
+        enum NodeAttr {
+            // serde bug https://github.com/serde-rs/serde/issues/1904
+            // Tuple(f64, String),
+            Struct {
+                #[serde(rename = "@float")]
+                float: f64,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Holder {
+                nested: NestedAttr,
+                #[serde(rename = "@string")]
+                string: String,
+            },
+            Flatten {
+                #[serde(flatten)]
+                nested: NestedAttr,
+                // Can't use "string" as name because in that case this variant
+                // will have no difference from `Struct` variant
+                #[serde(rename = "@string2")]
                 string2: String,
             },
         }
@@ -5411,14 +5766,14 @@ mod enum_ {
             #[test]
             #[ignore = "Prime cause: deserialize_any under the hood + https://github.com/serde-rs/serde/issues/1183"]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root float="42" string="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Struct {
+                    NodeAttr::Struct {
                         float: 42.0,
                         string: "answer".into()
                     }
@@ -5448,15 +5803,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root string="answer"><nested float="42"/></root>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Holder {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Holder {
+                        nested: NestedAttr { float: "42".into() },
                         string: "answer".into()
                     }
                 );
@@ -5486,15 +5841,15 @@ mod enum_ {
 
             #[test]
             fn attributes() {
-                let data: Node = from_str(
+                let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
                     r#"<root float="42" string2="answer"/>"#,
                 )
                 .unwrap();
                 assert_eq!(
                     data,
-                    Node::Flatten {
-                        nested: Nested { float: "42".into() },
+                    NodeAttr::Flatten {
+                        nested: NestedAttr { float: "42".into() },
                         string2: "answer".into()
                     }
                 );
@@ -5545,6 +5900,7 @@ mod xml_schema_lists {
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct List<T> {
+            #[serde(rename = "@list")]
             list: Vec<T>,
         }
 
@@ -5588,7 +5944,7 @@ mod xml_schema_lists {
         #[derive(Debug, Deserialize, PartialEq)]
         struct List<T> {
             // Give it a special name that means text content of the XML node
-            #[serde(rename = "$value")]
+            #[serde(rename = "$text")]
             list: Vec<T>,
         }
 
@@ -5679,6 +6035,7 @@ fn from_str_should_ignore_encoding() {
 
     #[derive(Debug, PartialEq, Deserialize)]
     struct A {
+        #[serde(rename = "@a")]
         a: String,
     }
 

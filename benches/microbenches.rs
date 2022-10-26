@@ -24,7 +24,7 @@ volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea d
 purus. Consequat id porta nibh venenatis cras sed felis.";
 
 /// Benchmarks the `Reader::read_event` function with all XML well-formless
-/// checks disabled (with and without trimming content of #text nodes)
+/// checks disabled (with and without trimming content of $text nodes)
 fn read_event(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_event");
     group.bench_function("trim_text = false", |b| {
@@ -70,7 +70,7 @@ fn read_event(c: &mut Criterion) {
 }
 
 /// Benchmarks the `NsReader::read_resolved_event_into` function with all XML well-formless
-/// checks disabled (with and without trimming content of #text nodes)
+/// checks disabled (with and without trimming content of $text nodes)
 fn read_resolved_event_into(c: &mut Criterion) {
     let mut group = c.benchmark_group("NsReader::read_resolved_event_into");
     group.bench_function("trim_text = false", |b| {

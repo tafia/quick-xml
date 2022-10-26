@@ -52,10 +52,6 @@ macro_rules! write_primitive {
             value.serialize(self)
         }
 
-        fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-            self.serialize_str(name)
-        }
-
         fn serialize_unit_variant(
             self,
             _name: &'static str,
@@ -77,38 +73,214 @@ macro_rules! write_primitive {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-mod key;
-mod var;
+mod content;
+mod element;
+pub(crate) mod key;
+pub(crate) mod simple_type;
 
-use self::var::{Map, Seq, Struct, Tuple};
-use crate::{
-    de::PRIMITIVE_PREFIX,
-    errors::serialize::DeError,
-    events::{BytesEnd, BytesStart, BytesText, Event},
-    writer::Writer,
-};
+use self::content::ContentSerializer;
+use self::element::ElementSerializer;
+use crate::errors::serialize::DeError;
+use crate::writer::Indentation;
 use serde::ser::{self, Serialize};
 use serde::serde_if_integer128;
-use std::io::Write;
+use std::fmt::Write;
+use std::str::from_utf8;
 
 /// Serialize struct into a `Write`r
-pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<(), DeError> {
-    let mut serializer = Serializer::new(writer);
-    value.serialize(&mut serializer)
+pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<W, DeError> {
+    value.serialize(Serializer::new(writer))
 }
 
 /// Serialize struct into a `String`
 pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
-    let mut writer = Vec::new();
-    to_writer(&mut writer, value)?;
-    Ok(String::from_utf8(writer)?)
+    to_writer(String::new(), value)
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Defines which characters would be escaped in [`Text`] events and attribute
+/// values.
+///
+/// [`Text`]: crate::events::Event::Text
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuoteLevel {
+    /// Performs escaping, escape all characters that could have special meaning
+    /// in the XML. This mode is compatible with SGML specification.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `>`      | `&gt;`
+    /// `&`      | `&amp;`
+    /// `"`      | `&quot;`
+    /// `'`      | `&apos;`
+    Full,
+    /// Performs escaping that is compatible with SGML specification.
+    ///
+    /// This level adds escaping of `>` to the `Minimal` level, which is [required]
+    /// for compatibility with SGML.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `>`      | `&gt;`
+    /// `&`      | `&amp;`
+    ///
+    /// [required]: https://www.w3.org/TR/xml11/#syntax
+    Partial,
+    /// Performs the minimal possible escaping, escape only strictly necessary
+    /// characters.
+    ///
+    /// Characters that will be replaced:
+    ///
+    /// Original | Replacement
+    /// ---------|------------
+    /// `<`      | `&lt;`
+    /// `&`      | `&amp;`
+    Minimal,
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Implements serialization method by forwarding it to the serializer created by
+/// the helper method [`Serializer::ser`].
+macro_rules! forward {
+    ($name:ident($ty:ty)) => {
+        fn $name(self, value: $ty) -> Result<Self::Ok, Self::Error> {
+            self.ser(&concat!("`", stringify!($ty), "`"))?.$name(value)
+        }
+    };
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Almost all characters can form a name. Citation from <https://www.w3.org/TR/xml11/#sec-xml11>:
+///
+/// > The overall philosophy of names has changed since XML 1.0. Whereas XML 1.0
+/// > provided a rigid definition of names, wherein everything that was not permitted
+/// > was forbidden, XML 1.1 names are designed so that everything that is not
+/// > forbidden (for a specific reason) is permitted. Since Unicode will continue
+/// > to grow past version 4.0, further changes to XML can be avoided by allowing
+/// > almost any character, including those not yet assigned, in names.
+///
+/// <https://www.w3.org/TR/xml11/#NT-NameStartChar>
+const fn is_xml11_name_start_char(ch: char) -> bool {
+    match ch {
+        ':'
+        | 'A'..='Z'
+        | '_'
+        | 'a'..='z'
+        | '\u{00C0}'..='\u{00D6}'
+        | '\u{00D8}'..='\u{00F6}'
+        | '\u{00F8}'..='\u{02FF}'
+        | '\u{0370}'..='\u{037D}'
+        | '\u{037F}'..='\u{1FFF}'
+        | '\u{200C}'..='\u{200D}'
+        | '\u{2070}'..='\u{218F}'
+        | '\u{2C00}'..='\u{2FEF}'
+        | '\u{3001}'..='\u{D7FF}'
+        | '\u{F900}'..='\u{FDCF}'
+        | '\u{FDF0}'..='\u{FFFD}'
+        | '\u{10000}'..='\u{EFFFF}' => true,
+        _ => false,
+    }
+}
+/// <https://www.w3.org/TR/xml11/#NT-NameChar>
+const fn is_xml11_name_char(ch: char) -> bool {
+    match ch {
+        '-' | '.' | '0'..='9' | '\u{00B7}' | '\u{0300}'..='\u{036F}' | '\u{203F}'..='\u{2040}' => {
+            true
+        }
+        _ => is_xml11_name_start_char(ch),
+    }
+}
+
+/// Helper struct to self-defense from errors
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(self) struct XmlName<'n>(&'n str);
+
+impl<'n> XmlName<'n> {
+    /// Checks correctness of the XML name according to [XML 1.1 specification]
+    ///
+    /// [XML 1.1 specification]: https://www.w3.org/TR/REC-xml/#NT-Name
+    pub fn try_from(name: &'n str) -> Result<XmlName<'n>, DeError> {
+        //TODO: Customization point: allow user to decide if he want to reject or encode the name
+        match name.chars().next() {
+            Some(ch) if !is_xml11_name_start_char(ch) => Err(DeError::Unsupported(
+                format!("character `{ch}` is not allowed at the start of an XML name `{name}`")
+                    .into(),
+            )),
+            _ => match name.matches(|ch| !is_xml11_name_char(ch)).next() {
+                Some(s) => Err(DeError::Unsupported(
+                    format!("character `{s}` is not allowed in an XML name `{name}`").into(),
+                )),
+                None => Ok(XmlName(name)),
+            },
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub(crate) enum Indent<'i> {
+    None,
+    Owned(Indentation),
+    Borrow(&'i mut Indentation),
+}
+
+impl<'i> Indent<'i> {
+    pub fn borrow(&mut self) -> Indent {
+        match self {
+            Self::None => Indent::None,
+            Self::Owned(ref mut i) => Indent::Borrow(i),
+            Self::Borrow(i) => Indent::Borrow(i),
+        }
+    }
+
+    pub fn increase(&mut self) {
+        match self {
+            Self::None => {}
+            Self::Owned(i) => i.grow(),
+            Self::Borrow(i) => i.grow(),
+        }
+    }
+
+    pub fn decrease(&mut self) {
+        match self {
+            Self::None => {}
+            Self::Owned(i) => i.shrink(),
+            Self::Borrow(i) => i.shrink(),
+        }
+    }
+
+    pub fn write_indent<W: std::fmt::Write>(&mut self, mut writer: W) -> Result<(), DeError> {
+        match self {
+            Self::None => {}
+            Self::Owned(i) => {
+                writer.write_char('\n')?;
+                writer.write_str(from_utf8(i.current())?)?;
+            }
+            Self::Borrow(i) => {
+                writer.write_char('\n')?;
+                writer.write_str(from_utf8(i.current())?)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A Serializer
 pub struct Serializer<'r, W: Write> {
-    writer: Writer<W>,
+    ser: ContentSerializer<'r, W>,
     /// Name of the root tag. If not specified, deduced from the structure name
-    root_tag: Option<&'r str>,
+    root_tag: Option<XmlName<'r>>,
 }
 
 impl<'r, W: Write> Serializer<'r, W> {
@@ -118,10 +290,19 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// and newtype structs) will end up to an error. Use `with_root` to create
     /// serializer with explicitly defined root element name
     pub fn new(writer: W) -> Self {
-        Self::with_root(Writer::new(writer), None)
+        Self {
+            ser: ContentSerializer {
+                writer,
+                level: QuoteLevel::Full,
+                indent: Indent::None,
+                write_indent: false,
+            },
+            root_tag: None,
+        }
     }
 
-    /// Creates a new `Serializer` that uses specified root tag name
+    /// Creates a new `Serializer` that uses specified root tag name. `name` should
+    /// be valid [XML name], otherwise error is returned.
     ///
     /// # Examples
     ///
@@ -131,14 +312,13 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
     /// # use quick_xml::se::Serializer;
-    /// use quick_xml::writer::Writer;
     ///
-    /// let mut buffer = Vec::new();
-    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
-    /// let mut ser = Serializer::with_root(writer, Some("root"));
+    /// let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
     ///
-    /// "node".serialize(&mut ser).unwrap();
-    /// assert_eq!(String::from_utf8(buffer).unwrap(), "node");
+    /// assert_eq!(
+    ///     "node".serialize(ser).unwrap(),
+    ///     "<root>node</root>"
+    /// );
     /// ```
     ///
     /// When serializing a struct, newtype struct, unit struct or tuple `root_tag`
@@ -147,8 +327,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// # use serde::Serialize;
-    /// use quick_xml::se::Serializer;
-    /// use quick_xml::writer::Writer;
+    /// # use quick_xml::se::Serializer;
     ///
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct Struct {
@@ -156,144 +335,107 @@ impl<'r, W: Write> Serializer<'r, W> {
     ///     answer: u32,
     /// }
     ///
-    /// let mut buffer = Vec::new();
-    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
-    /// let mut ser = Serializer::with_root(writer, Some("root"));
+    /// let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
     ///
-    /// Struct {
+    /// let data = Struct {
     ///     question: "The Ultimate Question of Life, the Universe, and Everything".into(),
     ///     answer: 42,
-    /// }.serialize(&mut ser).unwrap();
+    /// };
+    ///
     /// assert_eq!(
-    ///     String::from_utf8(buffer.clone()).unwrap(),
-    ///     r#"<root question="The Ultimate Question of Life, the Universe, and Everything" answer="42"/>"#
+    ///     data.serialize(ser).unwrap(),
+    ///     "<root>\
+    ///         <question>The Ultimate Question of Life, the Universe, and Everything</question>\
+    ///         <answer>42</answer>\
+    ///      </root>"
     /// );
     /// ```
-    pub fn with_root(writer: Writer<W>, root_tag: Option<&'r str>) -> Self {
-        Self { writer, root_tag }
+    ///
+    /// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+    pub fn with_root(writer: W, root_tag: Option<&'r str>) -> Result<Self, DeError> {
+        Ok(Self {
+            ser: ContentSerializer {
+                writer,
+                level: QuoteLevel::Full,
+                indent: Indent::None,
+                write_indent: false,
+            },
+            root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
+        })
     }
 
-    fn write_primitive<P: std::fmt::Display>(
-        &mut self,
-        value: P,
-        escaped: bool,
-    ) -> Result<(), DeError> {
-        let value = value.to_string();
-        let event = if escaped {
-            BytesText::from_escaped(&value)
+    /// Configure indent for a serializer
+    pub fn indent(&mut self, indent_char: char, indent_size: usize) -> &mut Self {
+        self.ser.indent = Indent::Owned(Indentation::new(indent_char as u8, indent_size));
+        self
+    }
+
+    /// Creates actual serializer or returns an error if root tag is not defined.
+    /// In that case `err` contains the name of type that cannot be serialized.
+    fn ser(self, err: &str) -> Result<ElementSerializer<'r, W>, DeError> {
+        if let Some(key) = self.root_tag {
+            Ok(ElementSerializer { ser: self.ser, key })
         } else {
-            BytesText::new(&value)
-        };
-        self.writer.write_event(Event::Text(event))?;
-        Ok(())
+            Err(DeError::Unsupported(
+                format!("cannot serialize {} without defined root tag", err).into(),
+            ))
+        }
     }
 
-    /// Writes self-closed tag `<tag_name/>` into inner writer
-    fn write_self_closed(&mut self, tag_name: &str) -> Result<(), DeError> {
-        self.writer
-            .write_event(Event::Empty(BytesStart::new(tag_name)))?;
-        Ok(())
-    }
-
-    /// Writes a serialized `value` surrounded by `<tag_name>...</tag_name>`
-    fn write_paired<T: ?Sized + Serialize>(
-        &mut self,
-        tag_name: &str,
-        value: &T,
-    ) -> Result<(), DeError> {
-        self.writer
-            .write_event(Event::Start(BytesStart::new(tag_name)))?;
-        value.serialize(&mut *self)?;
-        self.writer
-            .write_event(Event::End(BytesEnd::new(tag_name)))?;
-        Ok(())
+    /// Creates actual serializer using root tag or a specified `key` if root tag
+    /// is not defined. Returns an error if root tag is not defined and a `key`
+    /// does not conform [XML rules](XmlName::try_from) for names.
+    fn ser_name(self, key: &'static str) -> Result<ElementSerializer<'r, W>, DeError> {
+        Ok(ElementSerializer {
+            ser: self.ser,
+            key: match self.root_tag {
+                Some(key) => key,
+                None => XmlName::try_from(key)?,
+            },
+        })
     }
 }
 
-impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
-    type Ok = ();
+impl<'r, W: Write> ser::Serializer for Serializer<'r, W> {
+    type Ok = W;
     type Error = DeError;
 
-    type SerializeSeq = Seq<'r, 'w, W>;
-    type SerializeTuple = Tuple<'r, 'w, W>;
-    type SerializeTupleStruct = Tuple<'r, 'w, W>;
-    type SerializeTupleVariant = Tuple<'r, 'w, W>;
-    type SerializeMap = Map<'r, 'w, W>;
-    type SerializeStruct = Struct<'r, 'w, W>;
-    type SerializeStructVariant = Struct<'r, 'w, W>;
+    type SerializeSeq = <ElementSerializer<'r, W> as ser::Serializer>::SerializeSeq;
+    type SerializeTuple = <ElementSerializer<'r, W> as ser::Serializer>::SerializeTuple;
+    type SerializeTupleStruct = <ElementSerializer<'r, W> as ser::Serializer>::SerializeTupleStruct;
+    type SerializeTupleVariant =
+        <ElementSerializer<'r, W> as ser::Serializer>::SerializeTupleVariant;
+    type SerializeMap = <ElementSerializer<'r, W> as ser::Serializer>::SerializeMap;
+    type SerializeStruct = <ElementSerializer<'r, W> as ser::Serializer>::SerializeStruct;
+    type SerializeStructVariant =
+        <ElementSerializer<'r, W> as ser::Serializer>::SerializeStructVariant;
 
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, DeError> {
-        self.write_primitive(if v { "true" } else { "false" }, true)
-    }
+    forward!(serialize_bool(bool));
 
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
+    forward!(serialize_i8(i8));
+    forward!(serialize_i16(i16));
+    forward!(serialize_i32(i32));
+    forward!(serialize_i64(i64));
 
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
+    forward!(serialize_u8(u8));
+    forward!(serialize_u16(u16));
+    forward!(serialize_u32(u32));
+    forward!(serialize_u64(u64));
 
     serde_if_integer128! {
-        fn serialize_i128(self, v: i128) -> Result<Self::Ok, DeError> {
-            self.write_primitive(v, true)
-        }
-
-        fn serialize_u128(self, v: u128) -> Result<Self::Ok, DeError> {
-            self.write_primitive(v, true)
-        }
+        forward!(serialize_i128(i128));
+        forward!(serialize_u128(u128));
     }
 
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
+    forward!(serialize_f32(f32));
+    forward!(serialize_f64(f64));
 
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, true)
-    }
-
-    fn serialize_char(self, v: char) -> Result<Self::Ok, DeError> {
-        self.write_primitive(v, false)
-    }
-
-    fn serialize_str(self, value: &str) -> Result<Self::Ok, DeError> {
-        self.write_primitive(value, false)
-    }
-
-    fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, DeError> {
-        // TODO: I imagine you'd want to use base64 here.
-        // Not sure how to roundtrip effectively though...
-        Err(DeError::Unsupported(
-            "`serialize_bytes` not supported yet".into(),
-        ))
-    }
+    forward!(serialize_char(char));
+    forward!(serialize_str(&str));
+    forward!(serialize_bytes(&[u8]));
 
     fn serialize_none(self) -> Result<Self::Ok, DeError> {
-        Ok(())
+        Ok(self.ser.writer)
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, DeError> {
@@ -301,25 +443,21 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, DeError> {
-        self.serialize_none()
+        self.ser("`()`")?.serialize_unit()
     }
 
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, DeError> {
-        self.write_self_closed(self.root_tag.unwrap_or(name))
+        self.ser_name(name)?.serialize_unit_struct(name)
     }
 
     fn serialize_unit_variant(
         self,
-        _name: &'static str,
-        _variant_index: u32,
+        name: &'static str,
+        variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        if variant.starts_with(PRIMITIVE_PREFIX) {
-            let variant = variant.split_at(PRIMITIVE_PREFIX.len()).1;
-            self.write_primitive(variant, false)
-        } else {
-            self.write_self_closed(variant)
-        }
+        self.ser_name(name)?
+            .serialize_unit_variant(name, variant_index, variant)
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -327,85 +465,67 @@ impl<'r, 'w, W: Write> ser::Serializer for &'w mut Serializer<'r, W> {
         name: &'static str,
         value: &T,
     ) -> Result<Self::Ok, DeError> {
-        self.write_paired(self.root_tag.unwrap_or(name), value)
+        self.ser_name(name)?.serialize_newtype_struct(name, value)
     }
 
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
         self,
-        _name: &'static str,
-        _variant_index: u32,
+        name: &'static str,
+        variant_index: u32,
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, DeError> {
-        // Flatten structs in enums are serialized as newtype struct variant + map.
-        // As serialize_map should write `root_tag` for ordinal maps (because it's
-        // only way for maps), and for enums this method already written a tag name
-        // (`variant`), we need to clear root tag before writing content and restore
-        // it after
-        let root = self.root_tag.take();
-        let result = self.write_paired(variant, value);
-        self.root_tag = root;
-        result
+        self.ser_name(name)?
+            .serialize_newtype_variant(name, variant_index, variant, value)
     }
 
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, DeError> {
-        Ok(Seq::new(self))
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, DeError> {
+        self.ser("sequence")?.serialize_seq(len)
     }
 
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, DeError> {
-        let tag = match self.root_tag {
-            Some(tag) => tag,
-            None => {
-                return Err(DeError::Custom(
-                    "root tag name must be specified when serialize unnamed tuple".into(),
-                ))
-            }
-        };
-        Ok(Tuple::new(self, tag))
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, DeError> {
+        self.ser("unnamed tuple")?.serialize_tuple(len)
     }
 
     fn serialize_tuple_struct(
         self,
         name: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleStruct, DeError> {
-        Ok(Tuple::new(self, self.root_tag.unwrap_or(name)))
+        self.ser_name(name)?.serialize_tuple_struct(name, len)
     }
 
     fn serialize_tuple_variant(
         self,
-        _name: &'static str,
-        _variant_index: u32,
+        name: &'static str,
+        variant_index: u32,
         variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant, DeError> {
-        Ok(Tuple::new(self, variant))
+        self.ser_name(name)?
+            .serialize_tuple_variant(name, variant_index, variant, len)
     }
 
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, DeError> {
-        if let Some(tag) = self.root_tag {
-            // TODO: Write self-closed tag if map is empty
-            self.writer
-                .write_event(Event::Start(BytesStart::new(tag)))?;
-        }
-        Ok(Map::new(self))
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, DeError> {
+        self.ser("map")?.serialize_map(len)
     }
 
     fn serialize_struct(
         self,
         name: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeStruct, DeError> {
-        Ok(Struct::new(self, self.root_tag.unwrap_or(name)))
+        self.ser_name(name)?.serialize_struct(name, len)
     }
 
     fn serialize_struct_variant(
         self,
-        _name: &'static str,
-        _variant_index: u32,
+        name: &'static str,
+        variant_index: u32,
         variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeStructVariant, DeError> {
-        Ok(Struct::new(self, variant))
+        self.ser_name(name)?
+            .serialize_struct_variant(name, variant_index, variant, len)
     }
 }

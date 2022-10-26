@@ -11,19 +11,19 @@ use std::fmt::Write;
 /// that would be filtered on higher level.
 ///
 /// [not allowed]: https://www.w3.org/TR/REC-xml/#sec-common-syn
-pub struct XmlNameSerializer<W: Write> {
+pub struct QNameSerializer<W: Write> {
     /// Writer to which this serializer writes content
     pub writer: W,
 }
 
-impl<W: Write> XmlNameSerializer<W> {
+impl<W: Write> QNameSerializer<W> {
     #[inline]
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
         Ok(self.writer.write_str(value)?)
     }
 }
 
-impl<W: Write> Serializer for XmlNameSerializer<W> {
+impl<W: Write> Serializer for QNameSerializer<W> {
     type Ok = W;
     type Error = DeError;
 
@@ -42,11 +42,23 @@ impl<W: Write> Serializer for XmlNameSerializer<W> {
         Ok(self.writer)
     }
 
-    /// We cannot store anything, so the absence of a unit and presence of it
-    /// does not differ, so serialization of unit returns `Err(Unsupported)`
+    /// Because unit type can be represented only by empty string which is not
+    /// a valid XML name, serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
             "unit type `()` cannot be serialized as an XML tag name".into(),
+        ))
+    }
+
+    /// Because unit struct can be represented only by empty string which is not
+    /// a valid XML name, serialization of unit struct returns `Err(Unsupported)`
+    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
+        Err(DeError::Unsupported(
+            format!(
+                "unit struct `{}` cannot be serialized as an XML tag name",
+                name
+            )
+            .into(),
         ))
     }
 
@@ -155,10 +167,6 @@ mod tests {
     struct Unit;
 
     #[derive(Debug, Serialize, PartialEq)]
-    #[serde(rename = "<\"&'>")]
-    struct UnitEscaped;
-
-    #[derive(Debug, Serialize, PartialEq)]
     struct Newtype(bool);
 
     #[derive(Debug, Serialize, PartialEq)]
@@ -188,7 +196,7 @@ mod tests {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = XmlNameSerializer {
+                let ser = QNameSerializer {
                     writer: String::new(),
                 };
 
@@ -205,7 +213,7 @@ mod tests {
             #[test]
             fn $name() {
                 let mut buffer = String::new();
-                let ser = XmlNameSerializer {
+                let ser = QNameSerializer {
                     writer: &mut buffer,
                 };
 
@@ -269,8 +277,8 @@ mod tests {
 
     err!(unit: ()
         => Unsupported("unit type `()` cannot be serialized as an XML tag name"));
-    serialize_as!(unit_struct: Unit => "Unit");
-    serialize_as!(unit_struct_escaped: UnitEscaped => "<\"&'>");
+    err!(unit_struct: Unit
+        => Unsupported("unit struct `Unit` cannot be serialized as an XML tag name"));
 
     serialize_as!(enum_unit: Enum::Unit => "Unit");
     serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<\"&'>");

@@ -180,11 +180,6 @@ required-features = ["encoding"]
 path = "tests/encodings.rs"
 
 [[test]]
-name = "serde_attrs"
-required-features = ["serialize"]
-path = "tests/serde_attrs.rs"
-
-[[test]]
 name = "serde_roundtrip"
 required-features = ["serialize"]
 path = "tests/serde_roundtrip.rs"

@@ -188,6 +188,15 @@ pub mod serialize {
         /// An attempt to deserialize to a type, that is not supported by the XML
         /// store at current position, for example, attempt to deserialize `struct`
         /// from attribute or attempt to deserialize binary data.
+        ///
+        /// Serialized type cannot be represented in an XML due to violation of the
+        /// XML rules in the final XML document. For example, attempt to serialize
+        /// a `HashMap<{integer}, ...>` would cause this error because [XML name]
+        /// cannot start from a digit or a hyphen (minus sign). The same result
+        /// would occur if map key is a complex type that cannot be serialized as
+        /// a primitive type (i.e. string, char, bool, unit struct or unit variant).
+        ///
+        /// [XML name]: https://www.w3.org/TR/REC-xml/#sec-common-syn
         Unsupported(Cow<'static, str>),
         /// Too many events were skipped while deserializing a sequence, event limit
         /// exceeded. The limit was provided as an argument

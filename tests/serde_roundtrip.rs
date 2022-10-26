@@ -51,23 +51,3 @@ fn round_trip_list_of_enums() {
     let deserialized_nodes: Nodes = from_str(serialized_nodes.as_str()).unwrap();
     assert_eq!(deserialized_nodes, nodes);
 }
-
-#[test]
-fn test_parse_unflatten_field() {
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    struct Unflatten {
-        #[serde(rename = "$unflatten=NewKey")]
-        field: String,
-    }
-
-    let source = "<Unflatten><NewKey>Foo</NewKey></Unflatten>";
-    let expected = Unflatten {
-        field: "Foo".to_string(),
-    };
-
-    let parsed: Unflatten = ::quick_xml::de::from_str(source).unwrap();
-    assert_eq!(&parsed, &expected);
-
-    let stringified = to_string(&parsed).unwrap();
-    assert_eq!(&stringified, source);
-}

@@ -119,46 +119,18 @@ quick-xml follows its convention for deserialization, including the
 
 ### Parsing the "value" of a tag
 
-If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`, you can use the special name `$value`:
+If you have an input of the form `<foo abc="xyz">bar</foo>`, and you want to get at the `bar`,
+you can use either the special name `$text`, or the special name `$value`:
 
 ```rust,ignore
 struct Foo {
     pub abc: String,
-    #[serde(rename = "$value")]
+    #[serde(rename = "$text")]
     pub body: String,
 }
 ```
 
-### Unflattening structs into verbose XML
-
-If your XML files look like `<root><first>value</first><second>value</second></root>`, you can
-(de)serialize them with the special name prefix `$unflatten=`:
-
-```rust,ignore
-struct Root {
-    #[serde(rename = "$unflatten=first")]
-    first: String,
-    #[serde(rename = "$unflatten=second")]
-    other_field: String,
-}
-```
-
-### Serializing unit variants as primitives
-
-The `$primitive` prefix lets you serialize enum variants without associated values (internally referred to as _unit variants_) as primitive strings rather than self-closing tags. Consider the following definitions:
-
-```rust,ignore
-enum Foo {
-    #[serde(rename = "$primitive=Bar")]
-    Bar
-}
-
-struct Root {
-    foo: Foo
-}
-```
-
-Serializing `Root { foo: Foo::Bar }` will then yield `<Root foo="Bar"/>` instead of `<Root><Bar/></Root>`.
+Read about the difference in the [documentation](https://docs.rs/quick-xml/latest/quick_xml/de/index.html#difference-between-text-and-value-special-names).
 
 ### Performance
 
