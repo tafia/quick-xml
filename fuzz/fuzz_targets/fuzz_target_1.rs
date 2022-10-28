@@ -1,5 +1,5 @@
 #![no_main]
-#[macro_use] extern crate libfuzzer_sys;
+use libfuzzer_sys::fuzz_target;
 
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
@@ -12,20 +12,22 @@ fuzz_target!(|data: &[u8]| {
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))=> {
-                if e.unescaped().is_err() {
-                    break;
-                }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 for a in e.attributes() {
-                    if a.ok().map_or(false, |a| a.unescaped_value().is_err()) {
+                    if a.ok().map_or(false, |a| a.unescape_value().is_err()) {
                         break;
                     }
                 }
             }
             Ok(Event::Text(ref e)) | Ok(Event::Comment(ref e))
-            | Ok(Event::CData(ref e)) | Ok(Event::PI(ref e))
+            | Ok(Event::PI(ref e))
             | Ok(Event::DocType(ref e)) => {
-                if e.unescaped().is_err() {
+                if e.unescape().is_err() {
+                    break;
+                }
+            }
+            Ok(Event::CData(e)) => {
+                if e.escape().is_err() {
                     break;
                 }
             }
