@@ -609,6 +609,26 @@ mod seq {
                 ]
             );
         }
+
+        /// Test for https://github.com/tafia/quick-xml/issues/500
+        #[test]
+        fn list_of_enum() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            enum Enum {
+                One,
+                Two,
+            }
+
+            let data: Vec<Enum> = from_str(
+                r#"
+                <One/>
+                <Two/>
+                <One/>
+                "#,
+            )
+            .unwrap();
+            assert_eq!(data, vec![Enum::One, Enum::Two, Enum::One]);
+        }
     }
 
     /// Tests where each sequence item have an identical name in an XML.

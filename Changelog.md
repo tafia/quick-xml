@@ -18,6 +18,14 @@
   In particular, that means that maps with numeric and numeric-like keys (for
   example, `"42"`) no longer can be serialized because [XML name] cannot start
   from a digit
+- [#500]: Fix deserialization of top-level sequences of enums, like
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!-- list of enum Enum { A, B, С } -->
+  <A/>
+  <B/>
+  <C/>
+  ```
 
 ### Misc Changes
 
@@ -44,6 +52,7 @@
   Refer to [documentation] for details.
 
 [#490]: https://github.com/tafia/quick-xml/pull/490
+[#500]: https://github.com/tafia/quick-xml/issues/500
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
