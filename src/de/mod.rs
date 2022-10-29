@@ -345,7 +345,7 @@ use crate::{
     name::QName,
     reader::Reader,
 };
-use serde::de::{self, Deserialize, DeserializeOwned, Visitor};
+use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use std::borrow::Cow;
 #[cfg(feature = "overlapped-lists")]
 use std::collections::VecDeque;
@@ -967,7 +967,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_seq(seq::TopLevelSeqAccess::new(self)?)
+        visitor.visit_seq(self)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -1021,6 +1021,32 @@ where
         }
     }
 }
+
+/// An accessor to sequence elements forming a value for top-level sequence of XML
+/// elements.
+///
+/// Technically, multiple top-level elements violates XML rule of only one top-level
+/// element, but we consider this as several concatenated XML documents.
+impl<'de, 'a, R> SeqAccess<'de> for &'a mut Deserializer<'de, R>
+where
+    R: XmlRead<'de>,
+{
+    type Error = DeError;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        match self.peek()? {
+            DeEvent::Eof => Ok(None),
+
+            // Start(tag), End(tag), Text, CData
+            _ => seed.deserialize(&mut **self).map(Some),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Trait used by the deserializer for iterating over input. This is manually
 /// "specialized" for iterating over `&[u8]`.

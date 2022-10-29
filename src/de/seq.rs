@@ -1,7 +1,6 @@
-use crate::de::{DeError, DeEvent, Deserializer, XmlRead};
+use crate::de::DeError;
 use crate::encoding::Decoder;
 use crate::events::BytesStart;
-use serde::de::{DeserializeSeed, SeqAccess};
 
 /// Check if tag `start` is included in the `fields` list. `decoder` is used to
 /// get a string representation of a tag.
@@ -63,44 +62,6 @@ impl<'de> TagFilter<'de> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
             Self::Exclude(fields) => not_in(fields, start, decoder),
-        }
-    }
-}
-
-/// A SeqAccess
-pub struct TopLevelSeqAccess<'de, 'a, R>
-where
-    R: XmlRead<'de>,
-{
-    /// Deserializer used to deserialize sequence items
-    de: &'a mut Deserializer<'de, R>,
-}
-
-impl<'a, 'de, R> TopLevelSeqAccess<'de, 'a, R>
-where
-    R: XmlRead<'de>,
-{
-    /// Creates a new accessor to a top-level sequence of XML elements.
-    pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
-        Ok(Self { de })
-    }
-}
-
-impl<'de, 'a, R> SeqAccess<'de> for TopLevelSeqAccess<'de, 'a, R>
-where
-    R: XmlRead<'de>,
-{
-    type Error = DeError;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, DeError>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        match self.de.peek()? {
-            DeEvent::Eof => Ok(None),
-
-            // Start(tag), End(tag), Text, CData
-            _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }
 }
