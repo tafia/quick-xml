@@ -333,7 +333,6 @@ macro_rules! deserialize_primitives {
 mod escape;
 mod key;
 mod map;
-mod seq;
 mod simple_type;
 mod var;
 
