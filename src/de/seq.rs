@@ -74,20 +74,6 @@ where
 {
     /// Deserializer used to deserialize sequence items
     de: &'a mut Deserializer<'de, R>,
-    /// Filter that determines whether a tag is a part of this sequence.
-    ///
-    /// When feature `overlapped-lists` is not activated, iteration will stop
-    /// when found a tag that does not pass this filter.
-    ///
-    /// When feature `overlapped-lists` is activated, all tags, that not pass
-    /// this check, will be skipped.
-    filter: TagFilter<'de>,
-
-    /// Checkpoint after which all skipped events should be returned. All events,
-    /// that was skipped before creating this checkpoint, will still stay buffered
-    /// and will not be returned
-    #[cfg(feature = "overlapped-lists")]
-    checkpoint: usize,
 }
 
 impl<'a, 'de, R> TopLevelSeqAccess<'de, 'a, R>
@@ -96,29 +82,7 @@ where
 {
     /// Creates a new accessor to a top-level sequence of XML elements.
     pub fn new(de: &'a mut Deserializer<'de, R>) -> Result<Self, DeError> {
-        let filter = if let DeEvent::Start(e) = de.peek()? {
-            // Clone is cheap if event borrows from the input
-            TagFilter::Include(e.clone())
-        } else {
-            TagFilter::Exclude(&[])
-        };
-        Ok(Self {
-            #[cfg(feature = "overlapped-lists")]
-            checkpoint: de.skip_checkpoint(),
-
-            de,
-            filter,
-        })
-    }
-}
-
-#[cfg(feature = "overlapped-lists")]
-impl<'de, 'a, R> Drop for TopLevelSeqAccess<'de, 'a, R>
-where
-    R: XmlRead<'de>,
-{
-    fn drop(&mut self) {
-        self.de.start_replay(self.checkpoint);
+        Ok(Self { de })
     }
 }
 
@@ -132,24 +96,11 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
-        loop {
-            break match self.de.peek()? {
-                // If we see a tag that we not interested, skip it
-                #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
-                    self.de.skip()?;
-                    continue;
-                }
-                // Stop iteration when list elements ends
-                #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
-                DeEvent::End(_) => Ok(None),
-                DeEvent::Eof => Ok(None),
+        match self.de.peek()? {
+            DeEvent::Eof => Ok(None),
 
-                // Start(tag), Text, CData
-                _ => seed.deserialize(&mut *self.de).map(Some),
-            };
+            // Start(tag), End(tag), Text, CData
+            _ => seed.deserialize(&mut *self.de).map(Some),
         }
     }
 }
