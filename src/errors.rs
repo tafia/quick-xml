@@ -96,7 +96,7 @@ pub enum IllFormedError {
     /// mostly artificial, but you can enable it in the [configuration].
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-comments
-    /// [configuration]: crate::reader::Reader::check_comments
+    /// [configuration]: crate::reader::Config::check_comments
     DoubleHyphenInComment,
 }
 

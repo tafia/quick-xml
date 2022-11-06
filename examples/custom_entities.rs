@@ -25,7 +25,7 @@ const DATA: &str = r#"
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = Reader::from_str(DATA);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
 
     let mut custom_entities: HashMap<String, String> = HashMap::new();
     let entity_re = Regex::new(r#"<!ENTITY\s+([^ \t\r\n]+)\s+"([^"]*)"\s*>"#)?;

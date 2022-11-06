@@ -283,7 +283,7 @@ impl<R: BufRead> Reader<R> {
     ///                 <tag2>Test 2</tag2>
     ///              </tag1>"#;
     /// let mut reader = Reader::from_str(xml);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     /// let mut count = 0;
     /// let mut buf = Vec::new();
     /// let mut txt = Vec::new();
@@ -368,7 +368,7 @@ impl<R: BufRead> Reader<R> {
     ///         </inner>
     ///     </outer>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     /// let mut buf = Vec::new();
     ///
     /// let start = BytesStart::new("outer");
@@ -390,8 +390,8 @@ impl<R: BufRead> Reader<R> {
     /// [`End`]: Event::End
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`read_to_end()`]: Self::read_to_end
-    /// [`expand_empty_elements`]: Self::expand_empty_elements
-    /// [`check_end_names`]: Self::check_end_names
+    /// [`expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    /// [`check_end_names`]: crate::reader::Config::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         Ok(read_to_end!(self, end, buf, read_event_impl, {

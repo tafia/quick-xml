@@ -6,7 +6,7 @@ use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{is_whitespace, BangType, ParseState};
+use crate::reader::{is_whitespace, BangType, Config, ParseState};
 
 use memchr;
 
@@ -19,18 +19,8 @@ pub(super) struct ReaderState {
     pub offset: usize,
     /// Defines how to process next byte
     pub state: ParseState,
-    /// Expand empty element into an opening and closing element
-    pub expand_empty_elements: bool,
-    /// Trims leading whitespace in Text events, skip the element if text is empty
-    pub trim_text_start: bool,
-    /// Trims trailing whitespace in Text events.
-    pub trim_text_end: bool,
-    /// Trims trailing whitespaces from markup names in closing tags `</a >`
-    pub trim_markup_names_in_closing_tags: bool,
-    /// Check if [`Event::End`] nodes match last [`Event::Start`] node
-    pub check_end_names: bool,
-    /// Check if comments contains `--` (false per default)
-    pub check_comments: bool,
+    /// User-defined settings that affect parsing
+    pub config: Config,
     /// All currently Started elements which didn't have a matching
     /// End element yet.
     ///
@@ -68,7 +58,7 @@ impl ReaderState {
     pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
         let mut content = bytes;
 
-        if self.trim_text_end {
+        if self.config.trim_text_end {
             // Skip the ending '<'
             let len = bytes
                 .iter()
@@ -91,7 +81,7 @@ impl ReaderState {
         match bang_type {
             BangType::Comment if buf.starts_with(b"!--") => {
                 debug_assert!(buf.ends_with(b"--"));
-                if self.check_comments {
+                if self.config.check_comments {
                     // search if '--' not in comments
                     if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
                         .position(|p| buf[3 + p + 1] == b'-')
@@ -130,13 +120,13 @@ impl ReaderState {
     }
 
     /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
-    /// end name matches the last opened start name if `self.check_end_names` is set.
+    /// end name matches the last opened start name if `self.config.check_end_names` is set.
     pub fn emit_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // Strip the `/` character. `content` contains data between `</` and `>`
         let content = &buf[1..];
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
-        let name = if self.trim_markup_names_in_closing_tags {
+        let name = if self.config.trim_markup_names_in_closing_tags {
             if let Some(pos_end_name) = content.iter().rposition(|&b| !is_whitespace(b)) {
                 &content[..pos_end_name + 1]
             } else {
@@ -151,7 +141,7 @@ impl ReaderState {
         // Get the index in self.opened_buffer of the name of the last opened tag
         match self.opened_starts.pop() {
             Some(start) => {
-                if self.check_end_names {
+                if self.config.check_end_names {
                     let expected = &self.opened_buffer[start..];
                     if name != expected {
                         let expected = decoder.decode(expected).unwrap_or_default().into_owned();
@@ -224,7 +214,7 @@ impl ReaderState {
             let name_len = if name_end < len { name_end } else { len - 1 };
             let event = BytesStart::wrap(&content[..len - 1], name_len);
 
-            if self.expand_empty_elements {
+            if self.config.expand_empty_elements {
                 self.state = ParseState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&content[..name_len]);
@@ -273,12 +263,7 @@ impl Default for ReaderState {
         Self {
             offset: 0,
             state: ParseState::Init,
-            expand_empty_elements: false,
-            trim_text_start: false,
-            trim_text_end: false,
-            trim_markup_names_in_closing_tags: true,
-            check_end_names: true,
-            check_comments: false,
+            config: Config::default(),
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
 

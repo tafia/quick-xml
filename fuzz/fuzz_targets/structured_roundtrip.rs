@@ -84,12 +84,13 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
     // The str should be valid as we just generated it, unwrapping **should** be safe.
     let mut reader = Reader::from_str(std::str::from_utf8(&xml).unwrap());
     let mut config_iter = driver.reader_config.iter();
-    reader.check_comments(*config_iter.next().unwrap_or(&false));
-    reader.check_end_names(*config_iter.next().unwrap_or(&false));
-    reader.expand_empty_elements(*config_iter.next().unwrap_or(&false));
-    reader.trim_markup_names_in_closing_tags(*config_iter.next().unwrap_or(&false));
-    reader.trim_text(*config_iter.next().unwrap_or(&false));
-    reader.trim_text_end(*config_iter.next().unwrap_or(&false));
+    let config = reader.config_mut();
+    config.check_comments = *config_iter.next().unwrap_or(&false);
+    config.check_end_names = *config_iter.next().unwrap_or(&false);
+    config.expand_empty_elements = *config_iter.next().unwrap_or(&false);
+    config.trim_markup_names_in_closing_tags = *config_iter.next().unwrap_or(&false);
+    config.trim_text(*config_iter.next().unwrap_or(&false));
+    config.trim_text_end = *config_iter.next().unwrap_or(&false);
 
     loop {
         let event = black_box(reader.read_event()?);
@@ -99,12 +100,13 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
     }
 
     let mut reader = NsReader::from_reader(&xml[..]);
-    reader.check_comments(*config_iter.next().unwrap_or(&false));
-    reader.check_end_names(*config_iter.next().unwrap_or(&false));
-    reader.expand_empty_elements(*config_iter.next().unwrap_or(&false));
-    reader.trim_markup_names_in_closing_tags(*config_iter.next().unwrap_or(&false));
-    reader.trim_text(*config_iter.next().unwrap_or(&false));
-    reader.trim_text_end(*config_iter.next().unwrap_or(&false));
+    let config = reader.config_mut();
+    config.check_comments = *config_iter.next().unwrap_or(&false);
+    config.check_end_names = *config_iter.next().unwrap_or(&false);
+    config.expand_empty_elements = *config_iter.next().unwrap_or(&false);
+    config.trim_markup_names_in_closing_tags = *config_iter.next().unwrap_or(&false);
+    config.trim_text(*config_iter.next().unwrap_or(&false));
+    config.trim_text_end = *config_iter.next().unwrap_or(&false);
 
     loop {
         let event = black_box(reader.read_event()?);

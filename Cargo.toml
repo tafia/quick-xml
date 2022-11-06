@@ -85,7 +85,7 @@ async-tokio = ["tokio"]
 ## # }
 ## let xml = to_utf16le_with_bom(r#"<?xml encoding='UTF-16'><element/>"#);
 ## let mut reader = Reader::from_reader(xml.as_ref());
-## reader.trim_text(true);
+## reader.config_mut().trim_text(true);
 ##
 ## let mut buf = Vec::new();
 ## let mut unsupported = false;

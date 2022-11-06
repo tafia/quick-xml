@@ -19,7 +19,7 @@ mod check_comments {
         #[test]
         fn empty() {
             let mut reader = Reader::from_str("<!----><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -35,7 +35,7 @@ mod check_comments {
         #[test]
         fn normal() {
             let mut reader = Reader::from_str("<!-- comment --><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -51,7 +51,7 @@ mod check_comments {
         #[test]
         fn dashes_inside() {
             let mut reader = Reader::from_str("<!-- comment -- --><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -67,7 +67,7 @@ mod check_comments {
         #[test]
         fn three_dashes_in_the_end() {
             let mut reader = Reader::from_str("<!-- comment ---><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -83,7 +83,7 @@ mod check_comments {
         #[test]
         fn comment_is_gt() {
             let mut reader = Reader::from_str("<!-->--><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -99,7 +99,7 @@ mod check_comments {
         #[test]
         fn comment_is_dash_gt() {
             let mut reader = Reader::from_str("<!--->--><tag/>");
-            reader.check_comments(false);
+            reader.config_mut().check_comments = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -129,7 +129,7 @@ mod check_comments {
         #[test]
         fn empty() {
             let mut reader = Reader::from_str("<!----><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -145,7 +145,7 @@ mod check_comments {
         #[test]
         fn normal() {
             let mut reader = Reader::from_str("<!-- comment --><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -161,7 +161,7 @@ mod check_comments {
         #[test]
         fn dashes_inside() {
             let mut reader = Reader::from_str("<!-- comment -- --><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             match reader.read_event() {
                 Err(Error::IllFormed(cause)) => {
@@ -180,7 +180,7 @@ mod check_comments {
         #[test]
         fn three_dashes_in_the_end() {
             let mut reader = Reader::from_str("<!-- comment ---><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             match reader.read_event() {
                 Err(Error::IllFormed(cause)) => {
@@ -199,7 +199,7 @@ mod check_comments {
         #[test]
         fn comment_is_gt() {
             let mut reader = Reader::from_str("<!-->--><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -215,7 +215,7 @@ mod check_comments {
         #[test]
         fn comment_is_dash_gt() {
             let mut reader = Reader::from_str("<!--->--><tag/>");
-            reader.check_comments(true);
+            reader.config_mut().check_comments = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -240,7 +240,7 @@ mod check_end_names {
         #[test]
         fn matched_tags() {
             let mut reader = Reader::from_str("<tag><tag></tag></tag>");
-            reader.check_end_names(false);
+            reader.config_mut().check_end_names = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -264,7 +264,7 @@ mod check_end_names {
         #[test]
         fn mismatched_tags() {
             let mut reader = Reader::from_str("<tag><tag></mismatched></tag>");
-            reader.check_end_names(false);
+            reader.config_mut().check_end_names = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -293,7 +293,7 @@ mod check_end_names {
         #[test]
         fn matched_tags() {
             let mut reader = Reader::from_str("<tag><tag></tag></tag>");
-            reader.check_end_names(false);
+            reader.config_mut().check_end_names = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -317,7 +317,7 @@ mod check_end_names {
         #[test]
         fn mismatched_tags() {
             let mut reader = Reader::from_str("<tag><tag></mismatched></tag>");
-            reader.check_end_names(true);
+            reader.config_mut().check_end_names = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -355,7 +355,7 @@ mod expand_empty_elements {
     #[test]
     fn false_() {
         let mut reader = Reader::from_str("<root/>");
-        reader.expand_empty_elements(false);
+        reader.config_mut().expand_empty_elements = false;
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -368,7 +368,7 @@ mod expand_empty_elements {
     #[test]
     fn true_() {
         let mut reader = Reader::from_str("<root/>");
-        reader.expand_empty_elements(true);
+        reader.config_mut().expand_empty_elements = true;
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -393,9 +393,9 @@ mod trim_markup_names_in_closing_tags {
         #[test]
         fn check_end_names_false() {
             let mut reader = Reader::from_str("<root></root \t\r\n>");
-            reader.trim_markup_names_in_closing_tags(false);
+            reader.config_mut().trim_markup_names_in_closing_tags = false;
             // We need to disable checks, otherwise the error will be returned when read end
-            reader.check_end_names(false);
+            reader.config_mut().check_end_names = false;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -411,8 +411,8 @@ mod trim_markup_names_in_closing_tags {
         #[test]
         fn check_end_names_true() {
             let mut reader = Reader::from_str("<root></root \t\r\n>");
-            reader.trim_markup_names_in_closing_tags(false);
-            reader.check_end_names(true);
+            reader.config_mut().trim_markup_names_in_closing_tags = false;
+            reader.config_mut().check_end_names = true;
 
             assert_eq!(
                 reader.read_event().unwrap(),
@@ -435,7 +435,7 @@ mod trim_markup_names_in_closing_tags {
     #[test]
     fn true_() {
         let mut reader = Reader::from_str("<root></root \t\r\n>");
-        reader.trim_markup_names_in_closing_tags(true);
+        reader.config_mut().trim_markup_names_in_closing_tags = true;
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -466,7 +466,7 @@ mod trim_text {
     #[test]
     fn false_() {
         let mut reader = Reader::from_str(XML);
-        reader.trim_text(false);
+        reader.config_mut().trim_text(false);
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -542,7 +542,7 @@ mod trim_text {
     #[test]
     fn true_() {
         let mut reader = Reader::from_str(XML);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -587,7 +587,7 @@ mod trim_text_end {
     #[test]
     fn false_() {
         let mut reader = Reader::from_str(XML);
-        reader.trim_text_end(false);
+        reader.config_mut().trim_text_end = false;
 
         assert_eq!(
             reader.read_event().unwrap(),
@@ -665,7 +665,7 @@ mod trim_text_end {
     #[ignore = "currently it is hard to fix incorrect behavior, but this will much easy after parser rewrite"]
     fn true_() {
         let mut reader = Reader::from_str(XML);
-        reader.trim_text_end(true);
+        reader.config_mut().trim_text_end = true;
 
         assert_eq!(
             reader.read_event().unwrap(),
