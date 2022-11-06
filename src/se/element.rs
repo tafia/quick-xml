@@ -339,7 +339,7 @@ impl<'k, W: Write> Struct<'k, W> {
     /// If `key` has a magic value [`TEXT_KEY`], then `value` serialized as a
     /// [simple type].
     ///
-    /// If `key` has a magic value [`CONTENT_KEY`], then `value` serialized as a
+    /// If `key` has a magic value [`VALUE_KEY`], then `value` serialized as a
     /// [content] without wrapping in tags, otherwise it is wrapped in
     /// `<${key}>...</${key}>`.
     ///
