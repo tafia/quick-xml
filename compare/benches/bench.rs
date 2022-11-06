@@ -59,7 +59,7 @@ fn low_level_comparison(c: &mut Criterion) {
             |b, input| {
                 b.iter(|| {
                     let mut r = Reader::from_reader(input.as_bytes());
-                    r.check_end_names(false).check_comments(false);
+                    r.check_end_names(false);
                     let mut count = criterion::black_box(0);
                     let mut buf = Vec::new();
                     loop {

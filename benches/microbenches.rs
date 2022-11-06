@@ -30,7 +30,7 @@ fn read_event(c: &mut Criterion) {
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut r = Reader::from_str(SAMPLE);
-            r.check_end_names(false).check_comments(false);
+            r.check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
@@ -49,9 +49,7 @@ fn read_event(c: &mut Criterion) {
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
             let mut r = Reader::from_str(SAMPLE);
-            r.check_end_names(false)
-                .check_comments(false)
-                .trim_text(true);
+            r.trim_text(true).check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
@@ -76,7 +74,7 @@ fn read_resolved_event_into(c: &mut Criterion) {
     group.bench_function("trim_text = false", |b| {
         b.iter(|| {
             let mut r = NsReader::from_str(SAMPLE);
-            r.check_end_names(false).check_comments(false);
+            r.check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_resolved_event() {
@@ -95,9 +93,7 @@ fn read_resolved_event_into(c: &mut Criterion) {
     group.bench_function("trim_text = true", |b| {
         b.iter(|| {
             let mut r = NsReader::from_str(SAMPLE);
-            r.check_end_names(false)
-                .check_comments(false)
-                .trim_text(true);
+            r.trim_text(true).check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_resolved_event() {
@@ -124,9 +120,7 @@ fn one_event(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
-            r.check_end_names(false)
-                .check_comments(false)
-                .trim_text(true);
+            r.trim_text(true).check_end_names(false);
             match r.read_event() {
                 Ok(Event::Start(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
@@ -141,9 +135,7 @@ fn one_event(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
-            r.check_end_names(false)
-                .check_comments(false)
-                .trim_text(true);
+            r.trim_text(true).check_end_names(false);
             match r.read_event() {
                 Ok(Event::Comment(e)) => nbtxt += e.unescape().unwrap().len(),
                 something_else => panic!("Did not expect {:?}", something_else),
@@ -158,9 +150,7 @@ fn one_event(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(&src);
             let mut nbtxt = criterion::black_box(0);
-            r.check_end_names(false)
-                .check_comments(false)
-                .trim_text(true);
+            r.trim_text(true).check_end_names(false);
             match r.read_event() {
                 Ok(Event::CData(ref e)) => nbtxt += e.len(),
                 something_else => panic!("Did not expect {:?}", something_else),
@@ -178,7 +168,7 @@ fn attributes(c: &mut Criterion) {
     group.bench_function("with_checks = true", |b| {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
-            r.check_end_names(false).check_comments(false);
+            r.check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
@@ -199,7 +189,7 @@ fn attributes(c: &mut Criterion) {
     group.bench_function("with_checks = false", |b| {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
-            r.check_end_names(false).check_comments(false);
+            r.check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
@@ -220,7 +210,7 @@ fn attributes(c: &mut Criterion) {
     group.bench_function("try_get_attribute", |b| {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
-            r.check_end_names(false).check_comments(false);
+            r.check_end_names(false);
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
