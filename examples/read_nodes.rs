@@ -57,7 +57,7 @@ impl Translation {
         let event = reader.read_event_into(&mut element_buf)?;
         match event {
             Event::Text(ref e) => {
-                text = str::from_utf8(e.as_ref())?.into();
+                text = e.unescape()?;
                 println!("text node content: {}", text);
             }
             _ => (),
