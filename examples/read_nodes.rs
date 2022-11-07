@@ -1,6 +1,7 @@
 // example that separates logic for reading different top-level nodes of xml tree
 
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -49,27 +50,27 @@ impl Translation {
                 _ => (),
             }
         }
-        let mut text = Cow::Borrowed("");
         let mut element_buf = Vec::new();
         let event = reader.read_event_into(&mut element_buf)?;
-        match event {
-            Event::Text(ref e) => {
-                // You also can get an Empty or End event here, which corresponds to <Text/> and <Text></Text> pieces accordingly. I suppose you'd like to handle such situations correctly.
 
-                // Maybe for an example this is not necessary, but at least a comment about that would be worth.
-
-                // Translation also could be inside of CDATA section, so processing of CData event could be valuable.
-                text = e.unescape()?;
-                dbg!("text node content: {}", &text);
+        if let Event::Start(ref e) = event {
+            let name = e.name();
+            if name == QName(b"Text") {
+                let text_content = reader.read_text(e.name())?;
+                Ok(Translation {
+                    tag: tag.into(),
+                    lang: lang.into(),
+                    text: text_content.into(),
+                })
+            } else {
+                dbg!("Expected Event::Start for Text, got: {:?}", &event);
+                let name_string = reader.decoder().decode(name.as_ref())?;
+                Err(quick_xml::Error::UnexpectedToken(name_string.into()))
             }
-            _ => (),
+        } else {
+            let event_string = format!("{:?}", event);
+            Err(quick_xml::Error::UnexpectedToken(event_string))
         }
-
-        Ok(Translation {
-            tag: tag.into(),
-            lang: lang.into(),
-            text: text.into(),
-        })
     }
 }
 
