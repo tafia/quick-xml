@@ -14,17 +14,17 @@ const XML: &str = r#"
   </DefaultSettings>  
   <Localization>
     <Translation Tag="HELLO" Language="ja">
-        <Text>こんにちは</Text>
+      <Text>こんにちは</Text>
     </Translation>
     <Translation Tag="BYE" Language="ja">
-        <Text>さようなら</Text>
+      <Text>さようなら</Text>
     </Translation>
-     <Translation Tag="HELLO" Language="es">
-         <Text>Hola</Text>
-     </Translation>
-     <Translation Tag="BYE" Language="es">
-         <Text>Adiós</Text>
-     </Translation>
+    <Translation Tag="HELLO" Language="es">
+      <Text>Hola</Text>
+    </Translation>
+    <Translation Tag="BYE" Language="es">
+      <Text>Adiós</Text>
+    </Translation>
   </Localization>
 "#;
 
@@ -58,7 +58,7 @@ impl Translation {
         match event {
             Event::Text(ref e) => {
                 text = e.unescape()?;
-                println!("text node content: {}", text);
+                dbg!("text node content: {}", &text);
             }
             _ => (),
         }
