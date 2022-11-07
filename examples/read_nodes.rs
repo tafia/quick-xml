@@ -45,7 +45,7 @@ impl Translation {
         let mut lang = Cow::Borrowed("");
         // let (tag, lang) =
         for attr_result in element.attributes() {
-            let a = attr_result.unwrap();
+            let a = attr_result?;
             match a.key.as_ref() {
                 b"Language" => lang = a.unescape_value()?,
                 b"Tag" => tag = a.unescape_value()?,
