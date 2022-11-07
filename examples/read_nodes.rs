@@ -2,7 +2,9 @@
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::str;
 
 // Code doesn't work if DefaultSettings node is constructed like this:
@@ -40,7 +42,6 @@ impl Translation {
         reader: &mut Reader<&[u8]>,
         element: BytesStart,
     ) -> Result<Translation, quick_xml::Error> {
-        use std::borrow::Cow;
         let mut tag = Cow::Borrowed("");
         let mut lang = Cow::Borrowed("");
         // let (tag, lang) =
@@ -85,14 +86,30 @@ fn main() -> Result<(), quick_xml::Error> {
         match reader.read_event_into(&mut buf)? {
             Event::Start(element) => match element.name().as_ref() {
                 b"DefaultSettings" => {
+                    // note: real app would handle errors with good defaults or halt program with nice message
+                    // This example illustrates transforming an attribute's key and value into a String
                     settings = element
                         .attributes()
                         .map(|attr_result| {
-                            let a = attr_result.unwrap();
-                            (
-                                str::from_utf8(a.key.as_ref()).unwrap().to_string(),
-                                a.unescape_value().unwrap().to_string(),
-                            )
+                            match attr_result {
+                                Ok(a) => {
+                                    let key = String::from_utf8(a.key.local_name().as_ref().into())
+                                        .or_else(|err| {
+                                            dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
+                                            Ok::<String, Infallible>(String::new())
+                                        })
+                                        .unwrap();
+                                    let value = a.decode_and_unescape_value(&reader).or_else(|err| {
+                                            dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
+                                            Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
+                                    }).unwrap().to_string();
+                                    (key, value)
+                                },
+                                Err(err) => {
+                                     dbg!("unable to read key in DefaultSettings, err = {:?}", err);
+                                    (String::new(), String::new())
+                                }
+                            }
                         })
                         .collect();
                     println!("settings: {:?}", settings);
