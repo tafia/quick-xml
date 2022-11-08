@@ -28,6 +28,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
 tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
+anyhow = "1"
+
 
 [lib]
 bench = false
@@ -203,3 +205,7 @@ path = "tests/serde-migrated.rs"
 name = "async-tokio"
 required-features = ["async-tokio"]
 path = "tests/async-tokio.rs"
+
+[[example]]
+name = "read_nodes_serde"
+required-features = ["serialize"]
