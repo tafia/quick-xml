@@ -1,4 +1,6 @@
 // example that separates logic for reading different top-level nodes of xml tree
+// Note: for this specific data set using serde feature would simplify
+//       this simple data is purely to make it easier to understand the code
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
@@ -41,7 +43,7 @@ impl Translation {
     ) -> Result<Translation, quick_xml::Error> {
         let mut tag = Cow::Borrowed("");
         let mut lang = Cow::Borrowed("");
-        // let (tag, lang) =
+
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
@@ -123,7 +125,8 @@ fn main() -> Result<(), quick_xml::Error> {
                             }
                         })
                         .collect();
-                    println!("settings: {:?}", settings);
+                    assert_eq!(settings["Language"], "es");
+                    assert_eq!(settings["Greeting"], "HELLO");
                     reader.read_to_end(element.name())?;
                 }
                 b"Translation" => {
@@ -136,10 +139,11 @@ fn main() -> Result<(), quick_xml::Error> {
             _ => (),             // There are `Event` types not considered here
         }
     }
-    println!("translations...");
-    for item in translations {
-        // TODO: assert_eq so the reader can see the result without running the code
-        println!("{} {} {}", item.lang, item.tag, item.text);
-    }
+    dbg!("{:?}", &translations);
+    assert_eq!(translations.len(), 4);
+    assert_eq!(translations[2].tag, "HELLO");
+    assert_eq!(translations[2].text, "Hola");
+    assert_eq!(translations[2].lang, "es");
+
     Ok(())
 }
