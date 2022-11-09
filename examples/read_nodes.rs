@@ -47,8 +47,8 @@ impl Translation {
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
-                b"Language" => lang = a.unescape_value()?,
-                b"Tag" => tag = a.unescape_value()?,
+                b"Language" => lang = a.decode_and_unescape_value(reader)?,
+                b"Tag" => tag = a.decode_and_unescape_value(reader)?,
                 _ => (),
             }
         }
@@ -58,6 +58,7 @@ impl Translation {
         if let Event::Start(ref e) = event {
             let name = e.name();
             if name == QName(b"Text") {
+                // note: `read_text` does not support content as CDATA
                 let text_content = reader.read_text(e.name())?;
                 Ok(Translation {
                     tag: tag.into(),
