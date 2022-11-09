@@ -2,8 +2,7 @@
 // run example with:
 //    cargo run --example read_nodes_serde --features="serialize"
 
-use quick_xml::de::DeError;
-use quick_xml::de::Deserializer;
+use quick_xml::de::from_str;
 use serde::Deserialize;
 
 #[derive(Debug, PartialEq, Default, Deserialize)]
@@ -61,26 +60,6 @@ const ONE_TRANSLATION_XML: &str = r#"
       <Text>こんにちは</Text>
     </Translation>
 "#;
-
-/// Deserialize an instance of type T from a string of XML text.
-/// If deserialization was succeeded checks that all XML events were consumed
-fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
-where
-    T: Deserialize<'de>,
-{
-    let mut de = Deserializer::from_str(s);
-    let result = T::deserialize(&mut de);
-
-    // If type was deserialized, the whole XML document should be consumed
-    if let Ok(_) = result {
-        match <()>::deserialize(&mut de) {
-            Err(DeError::UnexpectedEof) => (),
-            e => panic!("Expected end `UnexpectedEof`, but got {:?}", e),
-        }
-    }
-
-    result
-}
 
 fn main() -> anyhow::Result<()> {
     let t: Translation = from_str(ONE_TRANSLATION_XML)?;
