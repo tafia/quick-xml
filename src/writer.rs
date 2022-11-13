@@ -10,6 +10,10 @@ use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Ev
 mod async_tokio;
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
+#[cfg(feature = "serialize")]
+use {crate::de::DeError, serde::Serialize};
+
+/// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
 /// # Examples
 ///
@@ -261,6 +265,72 @@ impl<W: Write> Writer<W> {
             start_tag: BytesStart::new(name.as_ref()),
         }
     }
+
+    /// Write an arbitrary serializable type
+    ///
+    /// Note: If you are attempting to write XML in a non-UTF-8 encoding, this may not
+    /// be safe to use. Rust basic types assume UTF-8 encodings.
+    ///
+    /// ```rust
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::events::{BytesStart, Event};
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::DeError;
+    /// # fn main() -> Result<(), DeError> {
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct MyData {
+    ///     question: String,
+    ///     answer: u32,
+    /// }
+    ///
+    /// let data = MyData {
+    ///     question: "The Ultimate Question of Life, the Universe, and Everything".into(),
+    ///     answer: 42,
+    /// };
+    ///
+    /// let mut buffer = Vec::new();
+    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+    ///
+    /// let start = BytesStart::new("root");
+    /// let end = start.to_end();
+    ///
+    /// writer.write_event(Event::Start(start.clone()))?;
+    /// writer.write_serializable("my_data", &data)?;
+    /// writer.write_event(Event::End(end))?;
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer)?,
+    ///     r#"<root>
+    ///     <my_data>
+    ///         <question>The Ultimate Question of Life, the Universe, and Everything</question>
+    ///         <answer>42</answer>
+    ///     </my_data>
+    /// </root>"#
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "serialize")]
+    pub fn write_serializable<T: Serialize>(
+        &mut self,
+        tag_name: &str,
+        content: &T,
+    ) -> std::result::Result<(), DeError> {
+        use crate::se::{Indent, Serializer};
+
+        self.write_indent()?;
+        let mut fmt = ToFmtWrite(&mut self.writer);
+        let mut serializer = Serializer::with_root(&mut fmt, Some(tag_name))?;
+
+        if let Some(indent) = &mut self.indent {
+            serializer.set_indent(Indent::Borrow(indent));
+        }
+
+        content.serialize(serializer)?;
+
+        Ok(())
+    }
 }
 
 /// A struct to write an element. Contains methods to add attributes and inner
@@ -341,14 +411,32 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         Ok(self.writer)
     }
 }
+#[cfg(feature = "serialize")]
+struct ToFmtWrite<T>(pub T);
+
+#[cfg(feature = "serialize")]
+impl<T> std::fmt::Write for ToFmtWrite<T>
+where
+    T: std::io::Write,
+{
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Indentation {
+    /// todo: this is an awkward fit as it has no impact on indentation logic, but it is
+    /// only applicable when an indentation exists. Potentially refactor later
     should_line_break: bool,
+    /// The character code to be used for indentations (e.g. ` ` or `\t`)
     indent_char: u8,
+    /// How many instances of the indent character ought to be used for each level of indentation
     indent_size: usize,
+    /// Used as a cache for the bytes used for indentation
     indents: Vec<u8>,
-    indents_len: usize,
+    /// The current amount of indentation
+    current_indent_len: usize,
 }
 
 impl Indentation {
@@ -358,26 +446,27 @@ impl Indentation {
             indent_char,
             indent_size,
             indents: vec![indent_char; 128],
-            indents_len: 0,
+            current_indent_len: 0, // invariant - needs to remain less than indents.len()
         }
     }
 
     /// Increase indentation by one level
     pub fn grow(&mut self) {
-        self.indents_len += self.indent_size;
-        if self.indents_len > self.indents.len() {
-            self.indents.resize(self.indents_len, self.indent_char);
+        self.current_indent_len += self.indent_size;
+        if self.current_indent_len > self.indents.len() {
+            self.indents
+                .resize(self.current_indent_len, self.indent_char);
         }
     }
 
     /// Decrease indentation by one level. Do nothing, if level already zero
     pub fn shrink(&mut self) {
-        self.indents_len = self.indents_len.saturating_sub(self.indent_size);
+        self.current_indent_len = self.current_indent_len.saturating_sub(self.indent_size);
     }
 
     /// Returns indent string for current level
     pub fn current(&self) -> &[u8] {
-        &self.indents[..self.indents_len]
+        &self.indents[..self.current_indent_len]
     }
 }
 
@@ -543,6 +632,71 @@ mod indentation {
     <paired attr1="value1" attr2="value2">
         <inner/>
     </paired>
+</paired>"#
+        );
+    }
+
+    #[cfg(feature = "serialize")]
+    #[test]
+    fn serializable() {
+        #[derive(Serialize)]
+        struct Foo {
+            #[serde(rename = "@attribute")]
+            attribute: &'static str,
+
+            element: Bar,
+            list: Vec<&'static str>,
+
+            #[serde(rename = "$text")]
+            text: &'static str,
+
+            val: String,
+        }
+
+        #[derive(Serialize)]
+        struct Bar {
+            baz: usize,
+            bat: usize,
+        }
+
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let content = Foo {
+            attribute: "attribute",
+            element: Bar { baz: 42, bat: 43 },
+            list: vec!["first element", "second element"],
+            text: "text",
+            val: "foo".to_owned(),
+        };
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+
+        writer
+            .write_event(Event::Start(start.clone()))
+            .expect("write start tag failed");
+        writer
+            .write_serializable("foo_element", &content)
+            .expect("write serializable inner contents failed");
+        writer
+            .write_event(Event::End(end))
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
+    <foo_element attribute="attribute">
+        <element>
+            <baz>42</baz>
+            <bat>43</bat>
+        </element>
+        <list>first element</list>
+        <list>second element</list>
+        text
+        <val>foo</val>
+    </foo_element>
 </paired>"#
         );
     }
