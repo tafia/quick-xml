@@ -12,9 +12,15 @@
 
 ### New Features
 
+- [#609]: Added `Writer::write_serializable` to provide the capability to serialize
+  arbitrary types using serde when using the lower-level `Writer` API.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+
+[#609]: https://github.com/tafia/quick-xml/issues/609
 
 
 ## 0.29.0 -- 2023-06-13
@@ -28,7 +34,7 @@
 ### Bug Fixes
 
 - [#603]: Fix a regression from [#581] that an XML comment or a processing
-  instruction between a <!DOCTYPE> and the root element in the file brokes
+  instruction between a <!DOCTYPE> and the root element in the file broke
   deserialization of structs by returning `DeError::ExpectedStart`
 - [#608]: Return a new error `Error::EmptyDocType` on empty doctype instead
   of crashing because of a debug assertion.
@@ -86,8 +92,8 @@
   to trim leading and trailing spaces from text events
 - [#565]: Allow deserialize special field names `$value` and `$text` into borrowed
   fields when use serde deserializer
-- [#568]: Rename `Writter::inner` into `Writter::get_mut`
-- [#568]: Add method `Writter::get_ref`
+- [#568]: Rename `Writer::inner` into `Writer::get_mut`
+- [#568]: Add method `Writer::get_ref`
 - [#569]: Rewrite the `Reader::read_event_into_async` as an async fn, making the future `Send` if possible.
 - [#571]: Borrow element names (`<element>`) when deserialize with serde.
   This change allow to deserialize into `HashMap<&str, T>`, for example

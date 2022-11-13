@@ -533,6 +533,12 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         self
     }
 
+    /// Set the indent object for a serializer
+    pub(crate) fn set_indent(&mut self, indent: Indent<'r>) -> &mut Self {
+        self.ser.indent = indent;
+        self
+    }
+
     /// Creates actual serializer or returns an error if root tag is not defined.
     /// In that case `err` contains the name of type that cannot be serialized.
     fn ser(self, err: &str) -> Result<ElementSerializer<'w, 'r, W>, DeError> {
