@@ -381,7 +381,7 @@ where
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
     map: &'m mut MapAccess<'de, 'a, R>,
-    /// Determines, should [`Deserializer::next_text_impl()`] expand the second
+    /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
     /// If this field is `true`, we process the following XML shape:
@@ -463,10 +463,14 @@ impl<'de, 'a, 'm, R> MapValueDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
-    /// Returns a text event, used inside [`deserialize_primitives!()`]
+    /// Returns a next string as concatenated content of consequent [`Text`] and
+    /// [`CData`] events, used inside [`deserialize_primitives!()`].
+    ///
+    /// [`Text`]: DeEvent::Text
+    /// [`CData`]: DeEvent::CData
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.next_text_impl(unescape, self.allow_start)
+    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(unescape, self.allow_start)
     }
 }
 
@@ -709,10 +713,14 @@ impl<'de, 'a, 'm, R> SeqValueDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
-    /// Returns a text event, used inside [`deserialize_primitives!()`]
+    /// Returns a next string as concatenated content of consequent [`Text`] and
+    /// [`CData`] events, used inside [`deserialize_primitives!()`].
+    ///
+    /// [`Text`]: DeEvent::Text
+    /// [`CData`]: DeEvent::CData
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.next_text_impl(unescape, true)
+    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(unescape, true)
     }
 }
 
