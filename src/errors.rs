@@ -39,6 +39,8 @@ pub enum Error {
     EscapeError(EscapeError),
     /// Specified namespace prefix is unknown, cannot resolve namespace for it
     UnknownPrefix(Vec<u8>),
+    /// Serialization error
+    NonSerializable(String),
 }
 
 impl From<IoError> for Error {
@@ -112,6 +114,7 @@ impl fmt::Display for Error {
                 write_byte_string(f, prefix)?;
                 f.write_str("'")
             }
+            Error::NonSerializable(e) => write!(f, "error while serializing value: {e}"),
         }
     }
 }

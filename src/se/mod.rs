@@ -366,7 +366,17 @@ impl<'r, W: Write> Serializer<'r, W> {
 
     /// Configure indent for a serializer
     pub fn indent(&mut self, indent_char: char, indent_size: usize) -> &mut Self {
-        self.ser.indent = Indent::Owned(Indentation::new(indent_char as u8, indent_size));
+        self.indent_with_len(indent_char, indent_size, 0)
+    }
+
+    /// Set initial indent level for a serializer
+    pub fn indent_with_len(
+        &mut self,
+        indent_char: char,
+        indent_size: usize,
+        indents_len: usize,
+    ) -> &mut Self {
+        self.ser.indent = Indent::Owned(Indentation::new(indent_char as u8, indent_size, indents_len));
         self
     }
 

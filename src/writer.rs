@@ -2,6 +2,9 @@
 
 use std::io::Write;
 
+#[cfg(feature = "serialize")]
+use serde::Serialize;
+
 use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
@@ -72,7 +75,7 @@ impl<W: Write> Writer<W> {
     pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
         Writer {
             writer: inner,
-            indent: Some(Indentation::new(indent_char, indent_size)),
+            indent: Some(Indentation::new(indent_char, indent_size, 0)),
         }
     }
 
@@ -330,6 +333,48 @@ impl<'a, W: Write> ElementWriter<'a, W> {
             .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)
     }
+
+    /// Serialize an arbitrary value inside the current element
+    #[cfg(feature = "serialize")]
+    pub fn write_serializable_content<T: Serialize>(self, content: T) -> Result<&'a mut Writer<W>> {
+        use crate::se::Serializer;
+
+        self.writer
+            .write_event(Event::Start(self.start_tag.borrow()))?;
+        self.writer.write_indent()?;
+
+        let indent = self.writer.indent.clone();
+        let mut serializer = Serializer::new(ToFmtWrite(self.writer.inner()));
+
+        if let Some(indent) = indent {
+            serializer.indent_with_len(
+                indent.indent_char as char,
+                indent.indent_size,
+                indent.indents_len,
+            );
+        }
+
+        if let Err(error) = content.serialize(serializer) {
+            return Err(Error::NonSerializable(error.to_string()));
+        }
+
+        self.writer
+            .write_event(Event::End(self.start_tag.to_end()))?;
+        Ok(self.writer)
+    }
+}
+
+#[cfg(feature = "serialize")]
+struct ToFmtWrite<T>(pub T);
+
+#[cfg(feature = "serialize")]
+impl<T> std::fmt::Write for ToFmtWrite<T>
+where
+    T: std::io::Write,
+{
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.0.write_all(s.as_bytes()).map_err(|_| std::fmt::Error)
+    }
 }
 
 #[derive(Clone)]
@@ -342,13 +387,13 @@ pub(crate) struct Indentation {
 }
 
 impl Indentation {
-    pub fn new(indent_char: u8, indent_size: usize) -> Self {
+    pub fn new(indent_char: u8, indent_size: usize, indents_len: usize) -> Self {
         Self {
             should_line_break: false,
             indent_char,
             indent_size,
             indents: vec![indent_char; 128],
-            indents_len: 0,
+            indents_len: indents_len,
         }
     }
 
@@ -611,6 +656,51 @@ mod indentation {
         <empty/>
     </inner>
 </outer>"#
+        );
+    }
+
+    #[cfg(feature = "serialize")]
+    #[derive(Serialize)]
+    struct Foo {
+        bar: Bar,
+        val: String,
+    }
+
+    #[cfg(feature = "serialize")]
+    #[derive(Serialize)]
+    struct Bar {
+        baz: usize,
+        bat: usize,
+    }
+
+    #[cfg(feature = "serialize")]
+    #[test]
+    fn element_writer_serialize() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+        let content = Foo {
+            bar: Bar { baz: 42, bat: 43 },
+            val: "foo".to_owned(),
+        };
+
+        writer
+            .create_element("paired")
+            .with_attribute(("attr1", "value1"))
+            .with_attribute(("attr2", "value2"))
+            .write_serializable_content(content)
+            .expect("failure");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
+    <Foo>
+        <bar>
+            <baz>42</baz>
+            <bat>43</bat>
+        </bar>
+        <val>foo</val>
+    </Foo>
+</paired>"#
         );
     }
 }

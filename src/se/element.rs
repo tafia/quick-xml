@@ -1486,7 +1486,7 @@ mod tests {
                         ser: ContentSerializer {
                             writer: String::new(),
                             level: QuoteLevel::Full,
-                            indent: Indent::Owned(Indentation::new(b' ', 2)),
+                            indent: Indent::Owned(Indentation::new(b' ', 2, 0)),
                             write_indent: false,
                         },
                         key: XmlName("root"),
@@ -1509,7 +1509,7 @@ mod tests {
                         ser: ContentSerializer {
                             writer: &mut buffer,
                             level: QuoteLevel::Full,
-                            indent: Indent::Owned(Indentation::new(b' ', 2)),
+                            indent: Indent::Owned(Indentation::new(b' ', 2, 0)),
                             write_indent: false,
                         },
                         key: XmlName("root"),
