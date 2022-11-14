@@ -30,19 +30,6 @@ where
     result
 }
 
-#[test]
-fn string_borrow() {
-    #[derive(Debug, Deserialize, PartialEq)]
-    struct BorrowedText<'a> {
-        #[serde(rename = "$text")]
-        text: &'a str,
-    }
-
-    let borrowed_item: BorrowedText = from_str("<text>Hello world</text>").unwrap();
-
-    assert_eq!(borrowed_item.text, "Hello world");
-}
-
 /// Tests for deserializing into specially named field `$text` which represent
 /// textual content of an XML element
 mod text {
@@ -6066,4 +6053,127 @@ fn from_str_should_ignore_encoding() {
             a: "€".to_string()
         }
     );
+}
+
+/// Checks that deserializer is able to borrow data from the input
+mod borrow {
+    use super::*;
+
+    /// Struct that should borrow input to be able to deserialize successfully.
+    /// serde implicitly borrow `&str` and `&[u8]` even without `#[serde(borrow)]`
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct BorrowedElement<'a> {
+        string: &'a str,
+    }
+
+    /// Struct that should borrow input to be able to deserialize successfully.
+    /// serde implicitly borrow `&str` and `&[u8]` even without `#[serde(borrow)]`
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct BorrowedAttribute<'a> {
+        #[serde(rename = "@string")]
+        string: &'a str,
+    }
+
+    /// Deserialization of all XML's in that module expected to pass because
+    /// unescaping is not required, so deserialized `Borrowed*` types can hold
+    /// references to the original buffer with an XML text
+    mod non_escaped {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn top_level() {
+            let data: &str = from_str(r#"<root>without escape sequences</root>"#).unwrap();
+            assert_eq!(data, "without escape sequences",);
+        }
+
+        #[test]
+        fn element() {
+            let data: BorrowedElement = from_str(
+                r#"
+                <root>
+                    <string>without escape sequences</string>
+                </root>"#,
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                BorrowedElement {
+                    string: "without escape sequences",
+                }
+            );
+        }
+
+        #[test]
+        fn attribute() {
+            let data: BorrowedAttribute =
+                from_str(r#"<root string="without escape sequences"/>"#).unwrap();
+            assert_eq!(
+                data,
+                BorrowedAttribute {
+                    string: "without escape sequences",
+                }
+            );
+        }
+    }
+
+    /// Deserialization of all XML's in that module expected to fail because
+    /// values requires unescaping that will lead to allocating an internal
+    /// buffer by deserializer, but the `Borrowed*` types couldn't take ownership
+    /// on it.
+    ///
+    /// The same behavior demonstrates the `serde_json` crate
+    mod escaped {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn top_level() {
+            match from_str::<&str>(
+                r#"<root>with escape sequence: &lt;</root>"#,
+            ) {
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"with escape sequence: <\", expected a borrowed string"
+                ),
+                e => panic!(
+                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    e
+                ),
+            }
+        }
+
+        #[test]
+        fn element() {
+            match from_str::<BorrowedElement>(
+                r#"
+                <root>
+                    <string>with escape sequence: &lt;</string>
+                </root>"#,
+            ) {
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"with escape sequence: <\", expected a borrowed string"
+                ),
+                e => panic!(
+                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    e
+                ),
+            }
+        }
+
+        #[test]
+        fn attribute() {
+            match from_str::<BorrowedAttribute>(r#"<root string="with &quot;escape&quot; sequences"/>"#) {
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"with \\\"escape\\\" sequences\", expected a borrowed string"
+                ),
+                e => panic!(
+                    "Expected `Err(Custom(invalid type: string \"with \"escape\" sequences\", expected a borrowed string))`, but found {:?}",
+                    e
+                ),
+            }
+        }
+    }
 }
