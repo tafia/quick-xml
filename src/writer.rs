@@ -2,12 +2,12 @@
 
 use std::io::Write;
 
-#[cfg(feature = "serialize")]
-use serde::Serialize;
-
 use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
+
+#[cfg(feature = "serialize")]
+use {crate::de::DeError, serde::Serialize};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
@@ -336,7 +336,10 @@ impl<'a, W: Write> ElementWriter<'a, W> {
 
     /// Serialize an arbitrary value inside the current element
     #[cfg(feature = "serialize")]
-    pub fn write_serializable_content<T: Serialize>(self, content: T) -> Result<&'a mut Writer<W>> {
+    pub fn write_serializable_content<T: Serialize>(
+        self,
+        content: T,
+    ) -> std::result::Result<&'a mut Writer<W>, DeError> {
         use crate::se::Serializer;
 
         self.writer
@@ -354,9 +357,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
             );
         }
 
-        if let Err(error) = content.serialize(serializer) {
-            return Err(Error::NonSerializable(error.to_string()));
-        }
+        content.serialize(serializer)?;
 
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
