@@ -661,22 +661,20 @@ mod indentation {
     }
 
     #[cfg(feature = "serialize")]
-    #[derive(Serialize)]
-    struct Foo {
-        bar: Bar,
-        val: String,
-    }
-
-    #[cfg(feature = "serialize")]
-    #[derive(Serialize)]
-    struct Bar {
-        baz: usize,
-        bat: usize,
-    }
-
-    #[cfg(feature = "serialize")]
     #[test]
     fn element_writer_serialize() {
+        #[derive(Serialize)]
+        struct Foo {
+            bar: Bar,
+            val: String,
+        }
+
+        #[derive(Serialize)]
+        struct Bar {
+            baz: usize,
+            bat: usize,
+        }
+
         let mut buffer = Vec::new();
         let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
         let content = Foo {
