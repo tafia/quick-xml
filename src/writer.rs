@@ -394,7 +394,7 @@ impl Indentation {
             indent_char,
             indent_size,
             indents: vec![indent_char; 128],
-            indents_len: indents_len,
+            indents_len,
         }
     }
 
