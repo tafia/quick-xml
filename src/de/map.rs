@@ -187,6 +187,8 @@ where
     /// <tag>value for VALUE_KEY field<tag>
     /// ```
     has_value_field: bool,
+    has_text_field: bool,
+    has_read_text_to_end: bool,
 }
 
 impl<'de, 'a, R> MapAccess<'de, 'a, R>
@@ -206,6 +208,8 @@ where
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
+            has_text_field: fields.contains(&TEXT_KEY),
+            has_read_text_to_end: false,
         })
     }
 }
@@ -234,6 +238,13 @@ where
             let de = QNameDeserializer::from_attr(QName(&slice[key]), decoder)?;
             seed.deserialize(de).map(Some)
         } else {
+            if self.has_text_field {
+                if self.has_read_text_to_end {
+                    return Ok(None)
+                }
+                self.de.peek_to_end_as_text(self.start.name())?;
+                self.has_read_text_to_end = true;
+            }
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 // We shouldn't have both `$value` and `$text` fields in the same

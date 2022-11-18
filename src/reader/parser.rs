@@ -65,7 +65,7 @@ impl Parser {
     /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
     ///
     /// [`Text`]: Event::Text
-    pub fn read_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
+    pub fn read_text<'b>(&mut self, bytes: &'b [u8]) -> Result<BytesText<'b>> {
         let mut content = bytes;
 
         if self.trim_text_end {
@@ -77,7 +77,7 @@ impl Parser {
             content = &bytes[..len];
         }
 
-        Ok(Event::Text(BytesText::wrap(content, self.decoder())))
+        Ok(BytesText::wrap(content, self.decoder()))
     }
 
     /// reads `BytesElement` starting with a `!`,

@@ -8,7 +8,7 @@ use std::path::Path;
 use memchr;
 
 use crate::errors::{Error, Result};
-use crate::events::Event;
+use crate::events::{Event, BytesText, BytesEnd};
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
@@ -391,7 +391,13 @@ impl<R: BufRead> Reader<R> {
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         Ok(read_to_end!(self, end, buf, read_event_impl, {
             buf.clear();
-        }))
+        }).0)
+    }
+
+    /// TODO: Document
+    pub fn read_text_into<'a>(&mut self, end: QName, buf: &'a mut Vec<u8>) -> Result<(BytesText<'a>, BytesEnd<'a>)> {
+        let (span, end_bytes) = read_to_end!(self, end, buf, read_event_impl, { });            
+        Ok((self.parser.read_text(&buf[0..span.len()])?, end_bytes))
     }
 }
 

@@ -10,7 +10,7 @@ use crate::reader::EncodingRef;
 use encoding_rs::{Encoding, UTF_8};
 
 use crate::errors::{Error, Result};
-use crate::events::Event;
+use crate::events::{Event, BytesText, BytesEnd};
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
@@ -153,7 +153,7 @@ impl<'a> Reader<&'a [u8]> {
     /// [`expand_empty_elements`]: Self::expand_empty_elements
     /// [`check_end_names`]: Self::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
-    pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
+    pub fn read_to_end(&mut self, end: QName) -> Result<(Span, BytesEnd<'a>)> {
         Ok(read_to_end!(self, end, (), read_event_impl, {}))
     }
 
@@ -222,12 +222,13 @@ impl<'a> Reader<&'a [u8]> {
     ///
     /// [`Start`]: Event::Start
     /// [`decoder()`]: Self::decoder()
-    pub fn read_text(&mut self, end: QName) -> Result<Cow<'a, str>> {
+    pub fn read_text(&mut self, end: QName) -> Result<(BytesText<'a>, BytesEnd<'a>)> {
         // self.reader will be changed, so store original reference
         let buffer = self.reader;
-        let span = self.read_to_end(end)?;
+        let (span, bytes_end) = self.read_to_end(end)?;
+        Ok((self.parser.read_text(&buffer[0..span.len()])?, bytes_end))
 
-        self.decoder().decode(&buffer[0..span.len()])
+        //self.decoder().decode(&buffer[0..span.len()])
     }
 }
 

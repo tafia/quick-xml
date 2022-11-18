@@ -150,7 +150,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         // We should name that lifetime due to https://github.com/rust-lang/rust/issues/63033`
         end: QName<'n>,
         buf: &mut Vec<u8>,
-    ) -> Result<Span> {
+    ) -> Result<(Span,BytesEnd<'n>)> {
         Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
     }
 

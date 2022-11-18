@@ -283,6 +283,8 @@ mod trivial {
 
             in_struct!(string: String = "<root>escaped&#x20;string</root>", "escaped string".into());
 
+            in_struct!(string_with_style_tags: String = "<root>style tags <em>in this document</em></root>", "style tags <em>in this document</em>".into());
+
             /// XML does not able to store binary data
             #[test]
             fn byte_buf() {

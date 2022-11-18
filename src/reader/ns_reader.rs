@@ -11,7 +11,7 @@ use std::ops::Deref;
 use std::path::Path;
 
 use crate::errors::Result;
-use crate::events::Event;
+use crate::events::{Event, BytesText};
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
 use crate::reader::{Reader, Span, XmlSource};
 
@@ -759,7 +759,7 @@ impl<'i> NsReader<&'i [u8]> {
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
-        self.reader.read_to_end(end)
+        Ok(self.reader.read_to_end(end)?.0)
     }
 
     /// Reads content between start and end tags, including any markup. This
@@ -828,8 +828,8 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`Start`]: Event::Start
     /// [`decoder()`]: Reader::decoder()
     #[inline]
-    pub fn read_text(&mut self, end: QName) -> Result<Cow<'i, str>> {
-        self.reader.read_text(end)
+    pub fn read_text(&mut self, end: QName) -> Result<BytesText<'i>> {
+        Ok(self.reader.read_text(end)?.0)
     }
 }
 

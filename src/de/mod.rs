@@ -409,6 +409,9 @@ where
 
     #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
+
+    #[cfg(not(feature = "overlapped-lists"))]
+    peek_2: Option<DeEvent<'de>>,
 }
 
 /// Deserialize an instance of type `T` from a string of XML text.
@@ -498,6 +501,9 @@ where
 
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
+
+            #[cfg(not(feature = "overlapped-lists"))]
+            peek_2: None,
         }
     }
 
@@ -602,9 +608,27 @@ where
         }
         #[cfg(not(feature = "overlapped-lists"))]
         if let Some(e) = self.peek.take() {
+            self.peek = self.peek_2.take();
             return Ok(e);
         }
         self.reader.next()
+    }
+
+    #[cfg(not(feature = "overlapped-lists"))]
+    fn peek_to_end_as_text(&mut self, name: QName) -> Result<&DeEvent<'de>, DeError> {
+        if self.peek.is_none() && self.peek_2.is_none() {
+            let (peek_text, peek_end) = self.reader.read_text(name)?;
+            self.peek = Some(peek_text);
+            self.peek_2 = Some(peek_end);
+        }
+        match self.peek.as_ref() {
+            Some(v) => Ok(v),
+            // SAFETY: a `None` variant for `self.peek` would have been replaced
+            // by a `Some` variant in the code above.
+            // TODO: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
+            // if unsafe code will be allowed
+            None => unreachable!(),
+        }
     }
 
     /// Returns the mark after which all events, skipped by [`Self::skip()`] call,
@@ -1061,6 +1085,9 @@ pub trait XmlRead<'i> {
     /// when it cannot satisfy the lifetime.
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError>;
 
+    ///
+    fn read_text(&mut self, name: QName) -> Result<(DeEvent<'i>, DeEvent<'i>), DeError>;
+
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
 }
@@ -1102,6 +1129,14 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         }
     }
 
+    fn read_text(&mut self, name: QName) -> Result<(DeEvent<'static>, DeEvent<'static>), DeError> { 
+        match self.reader.read_text_into(name, &mut self.buf) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
+            Err(e) => Err(e.into()),
+            Ok((bytes_text, bytes_end)) => Ok((DeEvent::Text(bytes_text.into_owned()), DeEvent::End(bytes_end.into_owned()))),
+        }
+    }
+
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
     }
@@ -1137,6 +1172,14 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
+    }
+
+    fn read_text(&mut self, name: QName) -> Result<(DeEvent<'de>, DeEvent<'de>), DeError> {
+         match self.reader.read_text(name) {
+            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
+            Err(e) => Err(e.into()),
+            Ok((bytes_text, bytes_end)) => Ok((DeEvent::Text(bytes_text), DeEvent::End(bytes_end))),
+         }
     }
 
     fn decoder(&self) -> Decoder {

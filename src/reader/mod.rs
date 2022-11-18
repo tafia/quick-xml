@@ -198,7 +198,7 @@ macro_rules! read_until_open {
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
-            Ok(Some(bytes)) => $self.parser.read_text(bytes),
+            Ok(Some(bytes)) => Ok(Event::Text($self.parser.read_text(bytes)?)),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -276,7 +276,7 @@ macro_rules! read_to_end {
                 Ok(Event::Start(e)) if e.name() == $end => depth += 1,
                 Ok(Event::End(e)) if e.name() == $end => {
                     if depth == 0 {
-                        break start..end;
+                        break (start..end, e.into_owned());
                     }
                     depth -= 1;
                 }
