@@ -207,28 +207,33 @@ impl Parser {
     /// Converts content of a tag to a `Start` or an `Empty` event
     ///
     /// # Parameters
-    /// - `buf`: Content of a tag between `<` and `>`
-    pub fn read_start<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        let len = buf.len();
-        let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
-        if let Some(&b'/') = buf.last() {
+    /// - `content`: Content of a tag between `<` and `>`
+    pub fn read_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
+        let len = content.len();
+        let name_end = content
+            .iter()
+            .position(|&b| is_whitespace(b))
+            .unwrap_or(len);
+        if let Some(&b'/') = content.last() {
             // This is self-closed tag `<something/>`
-            let end = if name_end < len { name_end } else { len - 1 };
+            let name_len = if name_end < len { name_end } else { len - 1 };
+            let event = BytesStart::wrap(&content[..len - 1], name_len);
+
             if self.expand_empty_elements {
                 self.state = ParseState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&buf[..end]);
-                Ok(Event::Start(BytesStart::wrap(&buf[..len - 1], end)))
+                self.opened_buffer.extend(&content[..name_len]);
+                Ok(Event::Start(event))
             } else {
-                Ok(Event::Empty(BytesStart::wrap(&buf[..len - 1], end)))
+                Ok(Event::Empty(event))
             }
         } else {
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.extend(&buf[..name_end]);
-            Ok(Event::Start(BytesStart::wrap(buf, name_end)))
+            self.opened_buffer.extend(&content[..name_end]);
+            Ok(Event::Start(BytesStart::wrap(content, name_end)))
         }
     }
 
