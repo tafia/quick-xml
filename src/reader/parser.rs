@@ -204,13 +204,15 @@ impl Parser {
         }
     }
 
-    /// reads `BytesElement` starting with any character except `/`, `!` or ``?`
-    /// return `Start` or `Empty` event
+    /// Converts content of a tag to a `Start` or an `Empty` event
+    ///
+    /// # Parameters
+    /// - `buf`: Content of a tag between `<` and `>`
     pub fn read_start<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        // TODO: do this directly when reading bufreader ...
         let len = buf.len();
         let name_end = buf.iter().position(|&b| is_whitespace(b)).unwrap_or(len);
         if let Some(&b'/') = buf.last() {
+            // This is self-closed tag `<something/>`
             let end = if name_end < len { name_end } else { len - 1 };
             if self.expand_empty_elements {
                 self.state = ParseState::Empty;
