@@ -310,6 +310,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         let mut state = ReadElementState::Elem;
 
         if let Some((bytes, i)) = state.change(self) {
+            // Position now just after the `>` symbol
             *position += i;
             *self = &self[i..];
             return Ok(Some(bytes));

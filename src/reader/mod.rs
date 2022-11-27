@@ -168,7 +168,7 @@ macro_rules! read_event_impl {
     ) => {{
         let event = loop {
             match $self.parser.state {
-                ParseState::Init => {
+                ParseState::Init => { // Go to OpenedTag state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
                     // But we still need to remove BOM for consistency with no encoding
@@ -184,19 +184,21 @@ macro_rules! read_event_impl {
                     #[cfg(not(feature = "encoding"))]
                     $reader.remove_utf8_bom() $(.$await)? ?;
 
+                    // Go to OpenedTag state
                     match $self.$read_until_open($buf) $(.$await)? {
                         Ok(Ok(ev)) => break Ok(ev),
                         Ok(Err(b)) => $buf = b,
                         Err(err)   => break Err(err),
                     }
                 },
-                ParseState::ClosedTag => {
+                ParseState::ClosedTag => { // Go to OpenedTag state
                     match $self.$read_until_open($buf) $(.$await)? {
                         Ok(Ok(ev)) => break Ok(ev),
                         Ok(Err(b)) => $buf = b,
                         Err(err)   => break Err(err),
                     }
                 },
+                // Go to ClosedTag state in next two arms
                 ParseState::OpenedTag => break $self.$read_until_close($buf) $(.$await)?,
                 ParseState::Empty => break $self.parser.close_expanded_empty(),
                 ParseState::Exit => break Ok(Event::Eof),
@@ -210,6 +212,15 @@ macro_rules! read_event_impl {
     }};
 }
 
+/// Read bytes up to `<` and skip it. If current byte (after skipping all space
+/// characters if [`Parser::trim_text_start`] is `true`) is already `<`, then
+/// returns the next event, otherwise stay at position just after the `<` symbol.
+///
+/// Moves parser to the `OpenedTag` state.
+///
+/// This code is executed in two cases:
+/// - after start of parsing just after skipping BOM if it is present
+/// - after parsing `</tag>` or `<tag>`
 macro_rules! read_until_open {
     (
         $self:ident, $buf:ident,
@@ -225,6 +236,7 @@ macro_rules! read_until_open {
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if $reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
+            // Pass $buf to the next next iteration of parsing loop
             return Ok(Err($buf));
         }
 
@@ -232,6 +244,7 @@ macro_rules! read_until_open {
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
+            // Return Text event with `bytes` content
             Ok(Some(bytes)) => $self.parser.read_text(bytes).map(Ok),
             Ok(None) => Ok(Ok(Event::Eof)),
             Err(e) => Err(e),
@@ -239,6 +252,26 @@ macro_rules! read_until_open {
     }};
 }
 
+/// Read bytes up to the `>` and skip it. This method is expected to be called
+/// after seeing the `<` symbol and skipping it. Inspects the next (current)
+/// symbol and returns an appropriate [`Event`]:
+///
+/// |Symbol |Event
+/// |-------|-------------------------------------
+/// |`!`    |[`Comment`], [`CData`] or [`DocType`]
+/// |`/`    |[`End`]
+/// |`?`    |[`PI`]
+/// |_other_|[`Start`] or [`Empty`]
+///
+/// Moves parser to the `ClosedTag` state.
+///
+/// [`Comment`]: Event::Comment
+/// [`CData`]: Event::CData
+/// [`DocType`]: Event::DocType
+/// [`End`]: Event::End
+/// [`PI`]: Event::PI
+/// [`Start`]: Event::Start
+/// [`Empty`]: Event::Empty
 macro_rules! read_until_close {
     (
         $self:ident, $buf:ident,
@@ -371,10 +404,12 @@ enum ParseState {
     /// that symbol will be returned in the [`Event::Text`] event. After that
     /// the reader moves to the `OpenedTag` state.
     ClosedTag,
-    /// This state is used only if option `expand_empty_elements` is set to `true`.
+    /// This state is used only if option [`expand_empty_elements`] is set to `true`.
     /// Reader enters to this state when it is in a `ClosedTag` state and emits an
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
     /// after which reader returned to the `ClosedTag` state.
+    ///
+    /// [`expand_empty_elements`]: Parser::expand_empty_elements
     Empty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.

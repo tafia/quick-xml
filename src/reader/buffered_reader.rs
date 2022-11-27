@@ -168,9 +168,11 @@ macro_rules! impl_buffered_source {
                             self $(.$reader)? .consume(used);
                             read += used;
 
+                            // Position now just after the `>` symbol
                             *position += read;
                             break;
                         } else {
+                            // The `>` symbol not yet found, continue reading
                             buf.extend_from_slice(available);
 
                             let used = available.len();
