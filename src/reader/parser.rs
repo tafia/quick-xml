@@ -142,31 +142,40 @@ impl Parser {
         } else {
             &buf[1..]
         };
-        if self.check_end_names {
-            let decoder = self.decoder();
-            let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
-                *offset -= buf.len();
-                Err(Error::EndEventMismatch {
-                    expected,
-                    found: decoder.decode(found).unwrap_or_default().into_owned(),
-                })
-            };
-            match self.opened_starts.pop() {
-                Some(start) => {
+
+        let decoder = self.decoder();
+        let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
+            *offset -= buf.len();
+            Err(Error::EndEventMismatch {
+                expected,
+                found: decoder.decode(found).unwrap_or_default().into_owned(),
+            })
+        };
+
+        // Get the index in self.opened_buffer of the name of the last opened tag
+        match self.opened_starts.pop() {
+            Some(start) => {
+                if self.check_end_names {
                     let expected = &self.opened_buffer[start..];
                     if name != expected {
                         let expected = decoder.decode(expected).unwrap_or_default().into_owned();
-                        mismatch_err(expected, name, &mut self.offset)
-                    } else {
+                        // #513: In order to allow error recovery we should drop content of the buffer
                         self.opened_buffer.truncate(start);
-                        Ok(Event::End(BytesEnd::wrap(name.into())))
+
+                        return mismatch_err(expected, name, &mut self.offset);
                     }
                 }
-                None => mismatch_err("".to_string(), &buf[1..], &mut self.offset),
+
+                self.opened_buffer.truncate(start);
             }
-        } else {
-            Ok(Event::End(BytesEnd::wrap(name.into())))
+            None => {
+                if self.check_end_names {
+                    return mismatch_err("".to_string(), &buf[1..], &mut self.offset);
+                }
+            }
         }
+
+        Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
     /// reads `BytesElement` starting with a `?`,
@@ -212,10 +221,11 @@ impl Parser {
                 Ok(Event::Empty(BytesStart::wrap(&buf[..len - 1], end)))
             }
         } else {
-            if self.check_end_names {
-                self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&buf[..name_end]);
-            }
+            // #514: Always store names event when .check_end_names == false,
+            // because checks can be temporary disabled and when they would be
+            // enabled, we should have that information
+            self.opened_starts.push(self.opened_buffer.len());
+            self.opened_buffer.extend(&buf[..name_end]);
             Ok(Event::Start(BytesStart::wrap(buf, name_end)))
         }
     }

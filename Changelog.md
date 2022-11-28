@@ -26,6 +26,8 @@
   <B/>
   <C/>
   ```
+- [#514]: Fix wrong reporting `Error::EndEventMismatch` after disabling and enabling
+  `.check_end_names`
 
 ### Misc Changes
 
@@ -53,6 +55,7 @@
 
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#500]: https://github.com/tafia/quick-xml/issues/500
+[#514]: https://github.com/tafia/quick-xml/issues/514
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
