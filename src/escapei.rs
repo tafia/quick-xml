@@ -117,8 +117,8 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
             // in elements of xs:lists, because those characters works as
             // delimiters of list elements
             b'\t' => escaped.extend_from_slice(b"&#9;"),
-            b'\r' => escaped.extend_from_slice(b"&#10;"),
-            b'\n' => escaped.extend_from_slice(b"&#13;"),
+            b'\n' => escaped.extend_from_slice(b"&#10;"),
+            b'\r' => escaped.extend_from_slice(b"&#13;"),
             b' ' => escaped.extend_from_slice(b"&#32;"),
             _ => unreachable!(
                 "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"

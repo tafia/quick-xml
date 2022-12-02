@@ -627,9 +627,9 @@ mod tests {
                 <root>2</root>\
                 <root>3</root>");
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
-        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+        serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
-                <root>with\t\r\n spaces</root>\
+                <root>with\t\n\r spaces</root>\
                 <root>3</root>");
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\
@@ -747,7 +747,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new());
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -874,7 +874,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new() => "");
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -1001,7 +1001,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new() => "");
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -1123,9 +1123,9 @@ mod tests {
                 // Note that sequences of primitives serialized without delimiters!
                 value!(seq: vec![1, 2, 3] => "123");
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\r\n spaces\
+                        with\t\n\r spaces\
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
@@ -1237,9 +1237,9 @@ mod tests {
                 // Note that sequences of primitives serialized without delimiters!
                 value!(seq: vec![1, 2, 3] => "123");
                 value!(seq_empty: Vec::<usize>::new() => "");
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\r\n spaces\
+                        with\t\n\r spaces\
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
@@ -1359,9 +1359,9 @@ mod tests {
                 // Note that sequences of primitives serialized without delimiters!
                 value!(seq: vec![1, 2, 3] => "123");
                 value!(seq_empty: Vec::<usize>::new() => "");
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\r\n spaces\
+                        with\t\n\r spaces\
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
@@ -1588,9 +1588,9 @@ mod tests {
                 <root>2</root>\n\
                 <root>3</root>");
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
-        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+        serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "<root>&lt;&quot;&amp;&apos;&gt;</root>\n\
-                <root>with\t\r\n spaces</root>\n\
+                <root>with\t\n\r spaces</root>\n\
                 <root>3</root>");
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\n\
@@ -1708,7 +1708,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new());
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -1847,7 +1847,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new());
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -1986,7 +1986,7 @@ mod tests {
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
                 text!(seq_empty: Vec::<usize>::new());
-                text!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
                         3");
@@ -2107,9 +2107,9 @@ mod tests {
 
                 value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\n  \
-                        with\t\r\n spaces\n  \
+                        with\t\n\r spaces\n  \
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first\n  42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
@@ -2233,9 +2233,9 @@ mod tests {
                 // Note that sequences of primitives serialized without delimiters!
                 value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\n  \
-                        with\t\r\n spaces\n  \
+                        with\t\n\r spaces\n  \
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first\n  42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
@@ -2367,9 +2367,9 @@ mod tests {
                 // Note that sequences of primitives serialized without delimiters!
                 value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt;\n  \
-                        with\t\r\n spaces\n  \
+                        with\t\n\r spaces\n  \
                         3");
                 value!(tuple_struct: Tuple("first", 42) => "first\n  42");
                 value!(enum_tuple: Enum::Tuple("first", 42)

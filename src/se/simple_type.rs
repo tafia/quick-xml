@@ -587,7 +587,7 @@ mod tests {
             #[test]
             fn text() {
                 assert_eq!(
-                    escape_item("text<\"'&> \t\r\ntext", QuoteTarget::Text, QuoteLevel::Full),
+                    escape_item("text<\"'&> \t\n\rtext", QuoteTarget::Text, QuoteLevel::Full),
                     "text&lt;&quot;&apos;&amp;&gt;&#32;&#9;&#10;&#13;text"
                 );
             }
@@ -596,7 +596,7 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Full
                     ),
@@ -608,7 +608,7 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Full
                     ),
@@ -625,7 +625,7 @@ mod tests {
             fn text() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::Text,
                         QuoteLevel::Partial
                     ),
@@ -637,7 +637,7 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Partial
                     ),
@@ -649,7 +649,7 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Partial
                     ),
@@ -666,7 +666,7 @@ mod tests {
             fn text() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::Text,
                         QuoteLevel::Minimal
                     ),
@@ -678,7 +678,7 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Minimal
                     ),
@@ -690,7 +690,7 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_item(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Minimal
                     ),
@@ -710,8 +710,8 @@ mod tests {
             #[test]
             fn text() {
                 assert_eq!(
-                    escape_list("text<\"'&> \t\r\ntext", QuoteTarget::Text, QuoteLevel::Full),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\r\ntext"
+                    escape_list("text<\"'&> \t\n\rtext", QuoteTarget::Text, QuoteLevel::Full),
+                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
                 );
             }
 
@@ -719,11 +719,11 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Full
                     ),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\r\ntext"
+                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
                 );
             }
 
@@ -731,11 +731,11 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Full
                     ),
-                    "text&lt;&quot;&apos;&amp;&gt; \t\r\ntext"
+                    "text&lt;&quot;&apos;&amp;&gt; \t\n\rtext"
                 );
             }
         }
@@ -748,11 +748,11 @@ mod tests {
             fn text() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::Text,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;\"'&amp;&gt; \t\r\ntext"
+                    "text&lt;\"'&amp;&gt; \t\n\rtext"
                 );
             }
 
@@ -760,11 +760,11 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;&quot;'&amp;&gt; \t\r\ntext"
+                    "text&lt;&quot;'&amp;&gt; \t\n\rtext"
                 );
             }
 
@@ -772,11 +772,11 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Partial
                     ),
-                    "text&lt;\"&apos;&amp;&gt; \t\r\ntext"
+                    "text&lt;\"&apos;&amp;&gt; \t\n\rtext"
                 );
             }
         }
@@ -789,11 +789,11 @@ mod tests {
             fn text() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::Text,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;\"'&amp;> \t\r\ntext"
+                    "text&lt;\"'&amp;> \t\n\rtext"
                 );
             }
 
@@ -801,11 +801,11 @@ mod tests {
             fn double_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::DoubleQAttr,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;&quot;'&amp;> \t\r\ntext"
+                    "text&lt;&quot;'&amp;> \t\n\rtext"
                 );
             }
 
@@ -813,11 +813,11 @@ mod tests {
             fn single_quote_attr() {
                 assert_eq!(
                     escape_list(
-                        "text<\"'&> \t\r\ntext",
+                        "text<\"'&> \t\n\rtext",
                         QuoteTarget::SingleQAttr,
                         QuoteLevel::Minimal
                     ),
-                    "text&lt;\"&apos;&amp;> \t\r\ntext"
+                    "text&lt;\"&apos;&amp;> \t\n\rtext"
                 );
             }
         }
@@ -925,7 +925,7 @@ mod tests {
 
         err!(seq: vec![1, 2, 3]
             => Unsupported("sequence cannot be serialized as an `xs:list` item"));
-        err!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+        err!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => Unsupported("tuple cannot be serialized as an `xs:list` item"));
         err!(tuple_struct: Tuple("first", 42)
             => Unsupported("tuple struct `Tuple` cannot be serialized as an `xs:list` item"));
@@ -1043,7 +1043,7 @@ mod tests {
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
         serialize_as!(seq_with_1_empty_str: vec![""] => "");
         serialize_as!(seq_with_2_empty_strs: vec!["", ""] => " ");
-        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+        serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "&lt;&quot;&amp;&apos;&gt; with&#9;&#10;&#13;&#32;spaces 3");
         serialize_as!(tuple_struct: Tuple("first", 42) => "first 42");
         err!(enum_tuple: Enum::Tuple("first", 42)
