@@ -28,6 +28,7 @@
   ```
 - [#514]: Fix wrong reporting `Error::EndEventMismatch` after disabling and enabling
   `.check_end_names`
+- [#517]: Fix swapped codes for `\r` and `\n` characters when escaping them
 
 ### Misc Changes
 
@@ -56,6 +57,7 @@
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#500]: https://github.com/tafia/quick-xml/issues/500
 [#514]: https://github.com/tafia/quick-xml/issues/514
+[#517]: https://github.com/tafia/quick-xml/issues/517
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
