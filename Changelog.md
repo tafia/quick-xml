@@ -38,6 +38,8 @@
   ```xml
   unwanted text<struct>...</struct>
   ```
+- [#523]: Fix incorrect handling of `xs:list`s with encoded spaces: they still
+  act as delimiters, which is confirmed also by mature XmlBeans Java library
 
 ### Misc Changes
 

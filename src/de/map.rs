@@ -311,15 +311,13 @@ where
             // of that events)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
             ValueSource::Text => match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    true,
-                    self.de.reader.decoder(),
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    // Comment to prevent auto-formatting
+                    e.decode(true)?,
                 )),
-                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    false,
-                    self.de.reader.decoder(),
+                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    // Comment to prevent auto-formatting
+                    e.decode()?,
                 )),
                 // SAFETY: We set `Text` only when we seen `Text` or `CData`
                 _ => unreachable!(),
@@ -777,17 +775,14 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
-                // Comment to prevent auto-formatting and keep Text and Cdata similar
-                e.into_inner(),
-                true,
-                self.map.de.reader.decoder(),
+            DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
+                // Comment to prevent auto-formatting
+                e.decode(true)?,
             )
             .deserialize_seq(visitor),
-            DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                e.into_inner(),
-                false,
-                self.map.de.reader.decoder(),
+            DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
+                // Comment to prevent auto-formatting
+                e.decode()?,
             )
             .deserialize_seq(visitor),
             // This is a sequence element. We cannot treat it as another flatten
@@ -795,16 +790,14 @@ where
             // it to `xs:simpleType` implementation
             DeEvent::Start(e) => {
                 let value = match self.map.de.next()? {
-                    DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        true,
-                        self.map.de.reader.decoder(),
+                    DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
+                        // Comment to prevent auto-formatting
+                        e.decode(true)?,
                     )
                     .deserialize_seq(visitor),
-                    DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        false,
-                        self.map.de.reader.decoder(),
+                    DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
+                        // Comment to prevent auto-formatting
+                        e.decode()?,
                     )
                     .deserialize_seq(visitor),
                     e => Err(DeError::Unsupported(

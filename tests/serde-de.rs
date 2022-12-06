@@ -6060,10 +6060,13 @@ mod xml_schema_lists {
             list!(bool_: bool = "<root>true false  true</root>" => vec![true, false, true]);
             list!(char_: char = "<root>4 2  j</root>" => vec!['4', '2', 'j']);
 
+            // Expanding of entity references happens before list parsing
+            // This is confirmed by XmlBeans (mature Java library) as well
             list!(string: String = "<root>first second  third&#x20;3</root>" => vec![
                 "first".to_string(),
                 "second".to_string(),
-                "third 3".to_string(),
+                "third".to_string(),
+                "3".to_string(),
             ]);
             err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
                 => Unsupported("byte arrays are not supported as `xs:list` items"));
