@@ -27,7 +27,7 @@ macro_rules! impl_buffered_source {
                         Ok(())
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e)),
+                    Err(e) => Err(Error::Io(e.into())),
                 };
             }
         }
@@ -43,7 +43,7 @@ macro_rules! impl_buffered_source {
                         Ok(None)
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e)),
+                    Err(e) => Err(Error::Io(e.into())),
                 };
             }
         }
@@ -69,7 +69,7 @@ macro_rules! impl_buffered_source {
                         Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                         Err(e) => {
                             *position += read;
-                            return Err(Error::Io(e));
+                            return Err(Error::Io(e.into()));
                         }
                     };
 
@@ -136,7 +136,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return Err(Error::Io(e));
+                        return Err(Error::Io(e.into()));
                     }
                 }
             }
@@ -181,7 +181,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return Err(Error::Io(e));
+                        return Err(Error::Io(e.into()));
                     }
                 };
             }
@@ -207,7 +207,7 @@ macro_rules! impl_buffered_source {
                         }
                     }
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e)),
+                    Err(e) => Err(Error::Io(e.into())),
                 };
             }
         }
@@ -232,7 +232,7 @@ macro_rules! impl_buffered_source {
                     Ok(n) if n.is_empty() => Ok(None),
                     Ok(n) => Ok(Some(n[0])),
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e)),
+                    Err(e) => Err(Error::Io(e.into())),
                 };
             }
         }

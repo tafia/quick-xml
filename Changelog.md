@@ -12,6 +12,10 @@
 
 ### New Features
 
+- [#521]: Implement `Clone` for all error types. This required changing `Error::Io` to contain
+  `Arc<std::io::Error>` instead of `std::io::Error` since `std::io::Error` does not implement
+  `Clone`.
+
 ### Bug Fixes
 
 - [#490]: Ensure that serialization of map keys always produces valid XML names.

@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use crate::encoding::UTF8_BOM;
-use crate::errors::{Error, Result};
+use crate::errors::Result;
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
@@ -163,7 +163,7 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub(crate) fn write(&mut self, value: &[u8]) -> Result<()> {
-        self.writer.write_all(value).map_err(Error::Io)
+        self.writer.write_all(value).map_err(Into::into)
     }
 
     #[inline]
