@@ -27,6 +27,11 @@
   sequence type (for example, `Vec` or tuple)
 - [#540]: Fix a compilation error (probably a rustc bug) in some circumstances.
   `Serializer::new` and `Serializer::with_root` now accepts only references to `Write`r.
+- [#520]: Merge consequent (delimited only by comments and processing instructions)
+  texts and CDATA when deserialize using serde deserializer. `DeEvent::Text` and
+  `DeEvent::CData` events was replaced by `DeEvent::Text` with merged content.
+  The same behavior for the `Reader` does not implemented (yet?) and should be
+  implemented manually
 
 ### Misc Changes
 

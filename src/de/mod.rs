@@ -77,11 +77,7 @@
 //! ```xml
 //! <...>text<![CDATA[cdata]]>text</...>
 //! ```
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
-//! </div>
+//! Mixed text / CDATA content represents one logical string, `"textcdatatext"` in that case.
 //! </td>
 //! <td>
 //!
@@ -90,9 +86,7 @@
 //! - [`Cow<str>`]
 //! - [`u32`], [`f32`] and other numeric types
 //! - `enum`s, like
-//!   ```ignore
-//!   // FIXME: #474, merging mixed text / CDATA
-//!   // content does not work yet
+//!   ```
 //!   # use pretty_assertions::assert_eq;
 //!   # use serde::Deserialize;
 //!   # #[derive(Debug, PartialEq)]
@@ -149,11 +143,6 @@
 //!   ...
 //! ]]></...>
 //! ```
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
-//! </div>
 //!
 //! [`xs:list`]: https://www.w3.org/TR/xmlschema11-2/#list-datatypes
 //! </td>
@@ -162,8 +151,6 @@
 //! Use any type that deserialized using [`deserialize_seq()`] call, for example:
 //!
 //! ```
-//! // FIXME: #474, merging mixed text / CDATA
-//! // content does not work yet
 //! type List = Vec<u32>;
 //! ```
 //!
@@ -520,8 +507,7 @@
 //! }
 //! # assert_eq!(AnyName::One { field1: () }, quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Two { field2: () }, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
-//! # assert_eq!(AnyName::Text("text".into()), quick_xml::de::from_str(r#"text"#).unwrap());
-//! # // TODO: After #474 parse mixed content
+//! # assert_eq!(AnyName::Text("text  cdata ".into()), quick_xml::de::from_str(r#"text <![CDATA[ cdata ]]>"#).unwrap());
 //! ```
 //! ```
 //! # use pretty_assertions::assert_eq;
@@ -544,8 +530,7 @@
 //! }
 //! # assert_eq!(AnyName::One,                     quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Two(Two { field2: () }), quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
-//! # assert_eq!(AnyName::Text,                    quick_xml::de::from_str(r#"text"#).unwrap());
-//! # // TODO: After #474 parse mixed content
+//! # assert_eq!(AnyName::Text,                    quick_xml::de::from_str(r#"text <![CDATA[ cdata ]]>"#).unwrap());
 //! ```
 //! ```
 //! # use pretty_assertions::assert_eq;
@@ -561,8 +546,7 @@
 //! }
 //! # assert_eq!(AnyName::One,   quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
-//! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"text"#).unwrap());
-//! # // TODO: After #474 parse mixed content
+//! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"text <![CDATA[ cdata ]]>"#).unwrap());
 //! ```
 //! <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
 //!
@@ -643,9 +627,8 @@
 //! #   quick_xml::de::from_str(r#"<any-tag field="..."><two>...</two></any-tag>"#).unwrap(),
 //! # );
 //! # assert_eq!(
-//! #   AnyName { field: (), any_name: Choice::Text("text".into()) },
-//! #   // TODO: After #474 parse mixed content
-//! #   quick_xml::de::from_str(r#"<any-tag field="...">text</any-tag>"#).unwrap(),
+//! #   AnyName { field: (), any_name: Choice::Text("text  cdata ".into()) },
+//! #   quick_xml::de::from_str(r#"<any-tag field="...">text <![CDATA[ cdata ]]></any-tag>"#).unwrap(),
 //! # );
 //! ```
 //! </td>
@@ -967,8 +950,7 @@
 //! from the full element (`<one>...</one>`), so they could use the element name
 //! to choose the right variant:
 //!
-//! ```ignore
-//! // FIXME: #474
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # type One = ();
@@ -985,9 +967,7 @@
 //! #   quick_xml::de::from_str(r#"<one>...</one>text <![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
 //! # );
 //! ```
-//! ```ignore
-//! // FIXME: #474, Custom("unknown variant `two`,
-//! //                      expected `one`")
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1010,11 +990,6 @@
 //!
 //! NOTE: consequent text and CDATA nodes are merged into the one text node,
 //! so you cannot have two adjacent string types in your sequence.
-//! </div>
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
 //! </div>
 //! </td>
 //! </tr>
@@ -1040,8 +1015,7 @@
 //! <td>
 //! A homogeneous sequence of elements with a fixed or dynamic size:
 //!
-//! ```ignore
-//! // FIXME: #474
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1059,8 +1033,7 @@
 //! #   quick_xml::de::from_str::<AnyName>(r#"<one>...</one>text <![CDATA[cdata]]><two>...</two><one>...</one>"#).unwrap(),
 //! # );
 //! ```
-//! ```ignore
-//! // FIXME: #474
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1088,11 +1061,6 @@
 //! NOTE: consequent text and CDATA nodes are merged into the one text node,
 //! so you cannot have two adjacent string types in your sequence.
 //! </div>
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
-//! </div>
 //! </td>
 //! </tr>
 //! <!-- 16 ==================================================================================== -->
@@ -1119,8 +1087,7 @@
 //!
 //! You MUST specify `#[serde(rename = "$value")]` on that field:
 //!
-//! ```ignore
-//! // FIXME: #474, Custom("duplicate field `$value`")
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # type One = ();
@@ -1157,8 +1124,7 @@
 //! #   ).unwrap(),
 //! # );
 //! ```
-//! ```ignore
-//! // FIXME: #474, Custom("duplicate field `$value`")
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # type One = ();
@@ -1204,11 +1170,6 @@
 //! NOTE: consequent text and CDATA nodes are merged into the one text node,
 //! so you cannot have two adjacent string types in your sequence.
 //! </div>
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
-//! </div>
 //! </td>
 //! </tr>
 //! <!-- 17 ==================================================================================== -->
@@ -1237,8 +1198,7 @@
 //!
 //! You MUST specify `#[serde(rename = "$value")]` on that field:
 //!
-//! ```ignore
-//! // FIXME: #474
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1282,8 +1242,7 @@
 //! #   ).unwrap(),
 //! # );
 //! ```
-//! ```ignore
-//! // FIXME: #474
+//! ```
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1331,11 +1290,6 @@
 //!
 //! NOTE: consequent text and CDATA nodes are merged into the one text node,
 //! so you cannot have two adjacent string types in your sequence.
-//! </div>
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Merging of the text / CDATA content is tracked in the issue [#474] and
-//! will be available in the next release.
 //! </div>
 //! </td>
 //! </tr>
@@ -1720,7 +1674,6 @@
 //!
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
-//! [#474]: https://github.com/tafia/quick-xml/issues/474
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
 
 // Macros should be defined before the modules that using them
@@ -2004,6 +1957,53 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
         )
     }
 
+    /// Read all consequent [`Text`] and [`CData`] events until non-text event
+    /// occurs. Content of all events would be appended to `result` and returned
+    /// as [`DeEvent::Text`].
+    ///
+    /// [`Text`]: PayloadEvent::Text
+    /// [`CData`]: PayloadEvent::CData
+    fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<DeEvent<'i>, DeError> {
+        loop {
+            match self.lookahead {
+                Ok(PayloadEvent::Text(_) | PayloadEvent::CData(_)) => {
+                    let text = self.next_text()?;
+
+                    let mut s = result.into_owned();
+                    s += &text;
+                    result = Cow::Owned(s);
+                }
+                _ => break,
+            }
+        }
+        Ok(DeEvent::Text(result))
+    }
+
+    /// Read one text event, panics if current event is not a text event
+    ///
+    /// |Event                  |XML                        |Handling
+    /// |-----------------------|---------------------------|----------------------------------------
+    /// |[`PayloadEvent::Start`]|`<tag>...</tag>`           |Possible panic (unreachable)
+    /// |[`PayloadEvent::End`]  |`</any-tag>`               |Possible panic (unreachable)
+    /// |[`PayloadEvent::Text`] |`text content`             |Unescapes `text content` and returns it
+    /// |[`PayloadEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
+    /// |[`PayloadEvent::Eof`]  |                           |Possible panic (unreachable)
+    #[inline(always)]
+    fn next_text(&mut self) -> Result<Cow<'i, str>, DeError> {
+        match self.next_impl()? {
+            PayloadEvent::Text(mut e) => {
+                if self.need_trim_end() {
+                    e.inplace_trim_end();
+                }
+                Ok(e.unescape()?)
+            }
+            PayloadEvent::CData(e) => Ok(e.decode()?),
+
+            // SAFETY: this method is called only when we peeked Text or CData
+            _ => unreachable!("Only `Text` and `CData` events can come here"),
+        }
+    }
+
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<DeEvent<'i>, DeError> {
         loop {
@@ -2014,9 +2014,9 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
                     if self.need_trim_end() && e.inplace_trim_end() {
                         continue;
                     }
-                    Ok(DeEvent::Text(e.unescape()?))
+                    self.drain_text(e.unescape()?)
                 }
-                PayloadEvent::CData(e) => Ok(DeEvent::Text(e.decode()?)),
+                PayloadEvent::CData(e) => self.drain_text(e.decode()?),
                 PayloadEvent::Eof => Ok(DeEvent::Eof),
             };
         }
@@ -2386,11 +2386,12 @@ where
         self.read_string_impl(true)
     }
 
-    /// Consumes a one XML element or an XML tree, returns associated text or
+    /// Consumes consequent [`Text`] and [`CData`] (both a referred below as a _text_)
+    /// events, merge them into one string. If there are no such events, returns
     /// an empty string.
     ///
-    /// If `allow_start` is `false`, then only one event is consumed. If that
-    /// event is [`DeEvent::Start`], then [`DeError::UnexpectedStart`] is returned.
+    /// If `allow_start` is `false`, then only text events is consumed, for other
+    /// events an error is returned (see table below).
     ///
     /// If `allow_start` is `true`, then first [`DeEvent::Text`] event is returned
     /// and all other content is skipped until corresponding end tag will be consumed.
@@ -2415,6 +2416,9 @@ where
     /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, consumes events up to `</tag>`
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    ///
+    /// [`Text`]: Event::Text
+    /// [`CData`]: Event::CData
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e),
@@ -3003,7 +3007,7 @@ mod tests {
                 ]
             );
 
-            // Drop all events thet represents <target> tree. Now unconsumed XML looks like:
+            // Drop all events that represents <target> tree. Now unconsumed XML looks like:
             //
             //   <skip>
             //     text

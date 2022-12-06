@@ -530,7 +530,8 @@ mod seq {
 
         #[test]
         fn mixed_content() {
-            from_str::<[(); 3]>(
+            // Text and CDATA represents a one logical text item
+            from_str::<[(); 2]>(
                 r#"
                 <element/>
                 text
@@ -547,7 +548,8 @@ mod seq {
                 "#,
             )
             .unwrap();
-            assert_eq!(data, vec![(), (), ()]);
+            // Text and CDATA represents a one logical text item
+            assert_eq!(data, vec![(), ()]);
         }
 
         /// This test ensures that composition of deserializer building blocks plays well
@@ -2432,8 +2434,9 @@ mod seq {
             fn mixed_content() {
                 #[derive(Debug, PartialEq, Deserialize)]
                 struct List {
+                    /// Text and CDATA represents a one logical text item
                     #[serde(rename = "$value")]
-                    item: [(); 3],
+                    item: [(); 2],
                 }
 
                 from_str::<List>(
@@ -3540,7 +3543,8 @@ mod seq {
                 assert_eq!(
                     data,
                     List {
-                        item: vec![(), (), ()],
+                        // Text and CDATA represents a one logical text item
+                        item: vec![(), ()],
                     }
                 );
             }
