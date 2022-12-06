@@ -520,6 +520,16 @@ where
         self.deserialize_tuple(len, visitor)
     }
 
+    /// Deserializes each `<tag>` in
+    /// ```xml
+    /// <any-tag>
+    ///   <tag>...</tag>
+    ///   <tag>...</tag>
+    ///   <tag>...</tag>
+    /// </any-tag>
+    /// ```
+    /// as a sequence item, where `<any-tag>` represents a Map in a [`Self::map`],
+    /// and a `<tag>` is a sequential field of that map.
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -621,7 +631,25 @@ impl<'de> TagFilter<'de> {
 
 /// An accessor to sequence elements forming a value for struct field.
 /// Technically, this sequence is flattened out into structure and sequence
-/// elements are overlapped with other fields of a structure
+/// elements are overlapped with other fields of a structure. Each call to
+/// [`Self::next_element_seed`] consumes a next sub-tree or consequent list
+/// of [`Text`] and [`CData`] events.
+///
+/// ```xml
+/// <>
+///   ...
+///   <item>The is the one item</item>
+///   This is <![CDATA[one another]]> item<!-- even when--> it splitted by comments
+///   <tag>...and that is the third!</tag>
+///   ...
+/// </>
+/// ```
+///
+/// Depending on [`Self::filter`], only some of that possible constructs would be
+/// an element.
+///
+/// [`Text`]: DeEvent::Text
+/// [`CData`]: DeEvent::CData
 struct MapValueSeqAccess<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
@@ -688,7 +716,7 @@ where
 
                 // Start(tag), Text, CData
                 _ => seed
-                    .deserialize(SeqValueDeserializer { map: self.map })
+                    .deserialize(SeqItemDeserializer { map: self.map })
                     .map(Some),
             };
         }
@@ -697,8 +725,8 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A deserializer for a value of sequence.
-struct SeqValueDeserializer<'de, 'a, 'm, R>
+/// A deserializer for a single item of a sequence.
+struct SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
@@ -707,7 +735,7 @@ where
     map: &'m mut MapAccess<'de, 'a, R>,
 }
 
-impl<'de, 'a, 'm, R> SeqValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R> SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
@@ -722,7 +750,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
@@ -770,6 +798,18 @@ where
         self.deserialize_tuple(len, visitor)
     }
 
+    /// This method deserializes a sequence inside of element that itself is a
+    /// sequence element:
+    ///
+    /// ```xml
+    /// <>
+    ///   ...
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   ...
+    /// </>
+    /// ```
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
