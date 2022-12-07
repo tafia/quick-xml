@@ -2,6 +2,8 @@
 //!
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
+use std::sync::mpsc;
+
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -17,6 +19,28 @@ fn issue115() {
             assert_eq!(v[0].clone().into_owned(), b"line 1\nline 2");
         }
         _ => (),
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/360
+#[test]
+fn issue360() {
+    let (tx, rx) = mpsc::channel::<Event>();
+
+    std::thread::spawn(move || {
+        let mut r = Reader::from_str("<tag1 attr1='line 1\nline 2'></tag1>");
+        loop {
+            let event = r.read_event().unwrap();
+            if event == Event::Eof {
+                tx.send(event).unwrap();
+                break;
+            } else {
+                tx.send(event).unwrap();
+            }
+        }
+    });
+    for event in rx.iter() {
+        println!("{:?}", event);
     }
 }
 
