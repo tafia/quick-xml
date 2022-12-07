@@ -3,8 +3,22 @@
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
 use quick_xml::events::{BytesStart, Event};
+use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/115
+#[test]
+fn issue115() {
+    let mut r = Reader::from_str("<tag1 attr1='line 1\nline 2'></tag1>");
+    match r.read_event() {
+        Ok(Event::Start(e)) if e.name() == QName(b"tag1") => {
+            let v = e.attributes().map(|a| a.unwrap().value).collect::<Vec<_>>();
+            assert_eq!(v[0].clone().into_owned(), b"line 1\nline 2");
+        }
+        _ => (),
+    }
+}
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/514
 mod issue514 {
