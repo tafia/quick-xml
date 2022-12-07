@@ -398,7 +398,7 @@ impl<R: BufRead> Reader<R> {
 impl Reader<BufReader<File>> {
     /// Creates an XML reader from a file path.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path).map_err(Error::Io)?;
+        let file = File::open(path)?;
         let reader = BufReader::new(file);
         Ok(Self::from_reader(reader))
     }
