@@ -7,12 +7,15 @@ use std::fmt;
 use std::io::Error as IoError;
 use std::str::Utf8Error;
 use std::string::FromUtf8Error;
+use std::sync::Arc;
 
 /// The error type used by this crate.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Error {
-    /// IO error
-    Io(IoError),
+    /// IO error.
+    ///
+    /// `Arc<IoError>` instead of `IoError` since `IoError` is not `Clone`.
+    Io(Arc<IoError>),
     /// Input decoding error. If `encoding` feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
     NonDecodable(Option<Utf8Error>),
@@ -45,7 +48,7 @@ impl From<IoError> for Error {
     /// Creates a new `Error::Io` from the given error
     #[inline]
     fn from(error: IoError) -> Error {
-        Error::Io(error)
+        Error::Io(Arc::new(error))
     }
 }
 
@@ -140,7 +143,7 @@ pub mod serialize {
     use std::num::{ParseFloatError, ParseIntError};
 
     /// (De)serialization error
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub enum DeError {
         /// Serde custom error
         Custom(String),

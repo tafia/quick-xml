@@ -12,6 +12,10 @@
 
 ### New Features
 
+- [#521]: Implement `Clone` for all error types. This required changing `Error::Io` to contain
+  `Arc<std::io::Error>` instead of `std::io::Error` since `std::io::Error` does not implement
+  `Clone`.
+
 ### Bug Fixes
 
 - [#490]: Ensure that serialization of map keys always produces valid XML names.
@@ -51,6 +55,7 @@
     that should be represented either by an `enum`, or by sequence of `enum`s
     (`Vec`, tuple, etc.), or by string. Use it when you want to map field to any
     content of the field, text or markup
+- [#521]: MSRV bumped to 1.52.
 
   Refer to [documentation] for details.
 
@@ -58,6 +63,7 @@
 [#500]: https://github.com/tafia/quick-xml/issues/500
 [#514]: https://github.com/tafia/quick-xml/issues/514
 [#517]: https://github.com/tafia/quick-xml/issues/517
+[#521]: https://github.com/tafia/quick-xml/pull/521
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 

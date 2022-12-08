@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use crate::encoding::UTF8_BOM;
-use crate::errors::{Error, Result};
+use crate::errors::Result;
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
@@ -163,15 +163,15 @@ impl<W: Write> Writer<W> {
     /// Writes bytes
     #[inline]
     pub(crate) fn write(&mut self, value: &[u8]) -> Result<()> {
-        self.writer.write_all(value).map_err(Error::Io)
+        self.writer.write_all(value).map_err(Into::into)
     }
 
     #[inline]
     fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<()> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
-                self.writer.write_all(b"\n").map_err(Error::Io)?;
-                self.writer.write_all(i.current()).map_err(Error::Io)?;
+                self.writer.write_all(b"\n")?;
+                self.writer.write_all(i.current())?;
             }
         }
         self.write(before)?;
@@ -193,8 +193,8 @@ impl<W: Write> Writer<W> {
     /// [`new_with_indent`]: Self::new_with_indent
     pub fn write_indent(&mut self) -> Result<()> {
         if let Some(ref i) = self.indent {
-            self.writer.write_all(b"\n").map_err(Error::Io)?;
-            self.writer.write_all(i.current()).map_err(Error::Io)?;
+            self.writer.write_all(b"\n")?;
+            self.writer.write_all(i.current())?;
         }
         Ok(())
     }

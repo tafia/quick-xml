@@ -8,7 +8,7 @@ use std::ops::Range;
 use pretty_assertions::assert_eq;
 
 /// Error for XML escape / unescape.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum EscapeError {
     /// Entity with Null character
     EntityWithNull(Range<usize>),
