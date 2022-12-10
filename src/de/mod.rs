@@ -1872,7 +1872,6 @@ macro_rules! deserialize_option {
     ($de:expr, $deserializer:ident, $visitor:ident) => {
         match $de.peek()? {
             DeEvent::Text(t) if t.is_empty() => $visitor.visit_none(),
-            DeEvent::CData(t) if t.is_empty() => $visitor.visit_none(),
             DeEvent::Eof => $visitor.visit_none(),
             _ => $visitor.visit_some($deserializer),
         }
@@ -1912,11 +1911,15 @@ pub enum DeEvent<'a> {
     Start(BytesStart<'a>),
     /// End tag `</tag>`.
     End(BytesEnd<'a>),
-    /// Escaped character data between `Start` and `End` element.
-    Text(BytesText<'a>),
-    /// Unescaped character data between `Start` and `End` element,
-    /// stored in `<![CDATA[...]]>`.
-    CData(BytesCData<'a>),
+    /// Decoded and concatenated content of consequent [`Text`] and [`CData`]
+    /// events. _Consequent_ means that events should follow each other or be
+    /// delimited only by (any count of) [`Comment`] or [`PI`] events.
+    ///
+    /// [`Text`]: Event::Text
+    /// [`CData`]: Event::CData
+    /// [`Comment`]: Event::Comment
+    /// [`PI`]: Event::PI
+    Text(Cow<'a, str>),
     /// End of XML document.
     Eof,
 }
@@ -1961,8 +1964,8 @@ impl<'i, R: XmlRead<'i>> XmlReader<R> {
         Ok(match self.reader.next()? {
             PayloadEvent::Start(e) => DeEvent::Start(e),
             PayloadEvent::End(e) => DeEvent::End(e),
-            PayloadEvent::Text(e) => DeEvent::Text(e),
-            PayloadEvent::CData(e) => DeEvent::CData(e),
+            PayloadEvent::Text(e) => DeEvent::Text(e.unescape()?),
+            PayloadEvent::CData(e) => DeEvent::Text(e.decode()?),
             PayloadEvent::Eof => DeEvent::Eof,
         })
     }
@@ -2306,9 +2309,8 @@ where
     /// If `allow_start` is `false`, then only one event is consumed. If that
     /// event is [`DeEvent::Start`], then [`DeError::UnexpectedStart`] is returned.
     ///
-    /// If `allow_start` is `true`, then first text of CDATA event inside it is
-    /// returned and all other content is skipped until corresponding end tag
-    /// will be consumed.
+    /// If `allow_start` is `true`, then first [`DeEvent::Text`] event is returned
+    /// and all other content is skipped until corresponding end tag will be consumed.
     ///
     /// # Handling events
     ///
@@ -2318,8 +2320,7 @@ where
     /// |------------------|---------------------------|----------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
     /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
-    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it
-    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
+    /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     ///
     /// Second event, consumed if [`DeEvent::Start`] was received and `allow_start == true`:
@@ -2329,19 +2330,16 @@ where
     /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
     /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
-    /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
-    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
+    /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, consumes events up to `</tag>`
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) => Ok(e.unescape()?),
-            DeEvent::CData(e) => Ok(e.decode()?),
+            DeEvent::Text(e) => Ok(e),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) => t.unescape()?,
-                    DeEvent::CData(t) => t.decode()?,
+                    DeEvent::Text(t) => t,
                     DeEvent::Start(s) => {
                         return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
                     }
@@ -2483,7 +2481,7 @@ where
                 Ok(value)
             }
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Text(_) | DeEvent::CData(_) => Err(DeError::ExpectedStart),
+            DeEvent::Text(_) => Err(DeError::ExpectedStart),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2494,17 +2492,16 @@ where
     /// Produces unit struct from any of following inputs:
     /// - any `<tag ...>...</tag>`
     /// - any `<tag .../>`
-    /// - any text content
-    /// - any CDATA content
+    /// - any consequent text / CDATA content (can consist of several parts
+    ///   delimited by comments and processing instructions)
     ///
     /// # Events handling
     ///
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|-------------------------------------------
-    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to corresponding `End` event
+    /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to and including corresponding `End` event
     /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`UnexpectedEnd("tag")`](DeError::UnexpectedEnd)
-    /// |[`DeEvent::Text`] |`text content`             |Calls `visitor.visit_unit()`. Text content is ignored
-    /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Calls `visitor.visit_unit()`. CDATA content is ignored
+    /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Calls `visitor.visit_unit()`. The content is ignored
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
@@ -2515,7 +2512,7 @@ where
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            DeEvent::Text(_) | DeEvent::CData(_) => visitor.visit_unit(),
+            DeEvent::Text(_) => visitor.visit_unit(),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
@@ -2556,11 +2553,15 @@ where
 
     /// Always call `visitor.visit_unit()` because returned value ignored in any case.
     ///
-    /// This method consumes any single [event][DeEvent] except the [`Start`][DeEvent::Start]
-    /// event, in which case all events up to corresponding [`End`][DeEvent::End] event will
-    /// be consumed.
+    /// This method consumes any single [event][DeEvent] except the [`Start`]
+    /// event, in which case all events up to and including corresponding [`End`]
+    /// event will be consumed.
     ///
-    /// This method returns error if current event is [`End`][DeEvent::End] or [`Eof`][DeEvent::Eof]
+    /// This method returns error if current event is [`End`] or [`Eof`].
+    ///
+    /// [`Start`]: DeEvent::Start
+    /// [`End`]: DeEvent::End
+    /// [`Eof`]: DeEvent::Eof
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -2605,7 +2606,7 @@ where
         match self.peek()? {
             DeEvent::Eof => Ok(None),
 
-            // Start(tag), End(tag), Text, CData
+            // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
         }
     }
@@ -2719,7 +2720,7 @@ mod tests {
     mod skip {
         use super::*;
         use crate::de::DeEvent::*;
-        use crate::events::{BytesEnd, BytesText};
+        use crate::events::BytesEnd;
         use pretty_assertions::assert_eq;
 
         /// Checks that `peek()` and `read()` behaves correctly after `skip()`
@@ -2756,7 +2757,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -2790,7 +2791,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -2818,7 +2819,7 @@ mod tests {
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                 ]
             );
 
@@ -2838,12 +2839,14 @@ mod tests {
             assert_eq!(
                 de.read,
                 vec![
-                    Text(BytesText::from_escaped("text")),
+                    // This comment here to keep the same formatting as others
+                    // otherwise rustfmt suggest one-line it
+                    Text(Cow::Borrowed("text")),
                     End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(de.next().unwrap(), Text(BytesText::from_escaped("text")));
+            assert_eq!(de.next().unwrap(), Text(Cow::Borrowed("text")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
@@ -2885,7 +2888,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -2906,7 +2909,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -2928,7 +2931,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(BytesText::from_escaped("text")),
+                    Text(Cow::Borrowed("text")),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -3218,7 +3221,7 @@ mod tests {
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="2""#, 3))
             );
-            assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
+            assert_eq!(de.next().unwrap(), Text(Cow::Borrowed("cdata content")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));

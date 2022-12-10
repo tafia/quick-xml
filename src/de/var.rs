@@ -41,7 +41,7 @@ where
                 seed.deserialize(QNameDeserializer::from_elem(e.name(), decoder)?)?,
                 false,
             ),
-            DeEvent::Text(_) | DeEvent::CData(_) => (
+            DeEvent::Text(_) => (
                 seed.deserialize(StrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
@@ -80,9 +80,9 @@ where
             DeEvent::Start(e) => self.de.read_to_end(e.name()),
             // Does not needed to deserialize using SimpleTypeDeserializer, because
             // it returns `()` when `deserialize_unit()` is requested
-            DeEvent::Text(_) | DeEvent::CData(_) => Ok(()),
+            DeEvent::Text(_) => Ok(()),
             // SAFETY: the other events are filtered in `variant_seed()`
-            _ => unreachable!("Only `Start`, `Text` or `CData` events are possible here"),
+            _ => unreachable!("Only `Start` or `Text` events are possible here"),
         }
     }
 
@@ -92,14 +92,9 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => {
-                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.unescape()?))
-                }
-                DeEvent::CData(e) => {
-                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.decode()?))
-                }
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
                 // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+                _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
             seed.deserialize(&mut *self.de)
@@ -112,12 +107,11 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.unescape()?)
-                    .deserialize_tuple(len, visitor),
-                DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
-                    .deserialize_tuple(len, visitor),
+                DeEvent::Text(e) => {
+                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
+                }
                 // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+                _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
             self.de.deserialize_tuple(len, visitor)
@@ -134,12 +128,10 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.unescape()?)
-                    .deserialize_struct("", fields, visitor),
-                DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e)
                     .deserialize_struct("", fields, visitor),
                 // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+                _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
             self.de.deserialize_struct("", fields, visitor)

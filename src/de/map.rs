@@ -239,14 +239,14 @@ where
                 // We shouldn't have both `$value` and `$text` fields in the same
                 // struct, so if we have `$value` field, the we should deserialize
                 // text content to `$value`
-                DeEvent::Text(_) | DeEvent::CData(_) if self.has_value_field => {
+                DeEvent::Text(_) if self.has_value_field => {
                     self.source = ValueSource::Content;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
                     seed.deserialize(VALUE_KEY.into_deserializer()).map(Some)
                 }
-                DeEvent::Text(_) | DeEvent::CData(_) => {
+                DeEvent::Text(_) => {
                     self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -307,19 +307,11 @@ where
             // </any-tag>
             // The whole map represented by an `<any-tag>` element, the map key
             // is implicit and equals to the `TEXT_KEY` constant, and the value
-            // is a `Text` or a `CData` event (the value deserializer will see one
-            // of that events)
+            // is a `Text` event (the value deserializer will see that event)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
             ValueSource::Text => match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
-                    // Comment to prevent auto-formatting
-                    e.unescape()?,
-                )),
-                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
-                    // Comment to prevent auto-formatting
-                    e.decode()?,
-                )),
-                // SAFETY: We set `Text` only when we seen `Text` or `CData`
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                // SAFETY: We set `Text` only when we seen `Text`
                 _ => unreachable!(),
             },
             // This arm processes the following XML shape:
@@ -431,7 +423,7 @@ where
     ///
     /// The whole map represented by an `<any-tag>` element, the map key is
     /// implicit and equals to the [`VALUE_KEY`] constant, and the value is
-    /// a [`Text`], a [`CData`], or a [`Start`] event (the value deserializer
+    /// a [`Text`], or a [`Start`] event (the value deserializer
     /// will see one of those events). In the first two cases the value of this
     /// field do not matter (because we already see the textual event and there
     /// no reasons to look "inside" something), but in the last case the primitives
@@ -452,7 +444,6 @@ where
     /// as accepting "text content" which the currently `$text` means.
     ///
     /// [`Text`]: DeEvent::Text
-    /// [`CData`]: DeEvent::CData
     /// [`Start`]: DeEvent::Start
     allow_start: bool,
 }
@@ -464,8 +455,8 @@ where
     /// Returns a next string as concatenated content of consequent [`Text`] and
     /// [`CData`] events, used inside [`deserialize_primitives!()`].
     ///
-    /// [`Text`]: DeEvent::Text
-    /// [`CData`]: DeEvent::CData
+    /// [`Text`]: crate::events::Event::Text
+    /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
         self.map.de.read_string_impl(self.allow_start)
@@ -631,8 +622,8 @@ impl<'de> TagFilter<'de> {
 /// Depending on [`Self::filter`], only some of that possible constructs would be
 /// an element.
 ///
-/// [`Text`]: DeEvent::Text
-/// [`CData`]: DeEvent::CData
+/// [`Text`]: crate::events::Event::Text
+/// [`CData`]: crate::events::Event::CData
 struct MapValueSeqAccess<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
@@ -697,7 +688,7 @@ where
                 // opened tag `self.map.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),
 
-                // Start(tag), Text, CData
+                // Start(tag), Text
                 _ => seed
                     .deserialize(SeqItemDeserializer { map: self.map })
                     .map(Some),
@@ -725,8 +716,8 @@ where
     /// Returns a next string as concatenated content of consequent [`Text`] and
     /// [`CData`] events, used inside [`deserialize_primitives!()`].
     ///
-    /// [`Text`]: DeEvent::Text
-    /// [`CData`]: DeEvent::CData
+    /// [`Text`]: crate::events::Event::Text
+    /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
         self.map.de.read_string_impl(true)
@@ -781,31 +772,17 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
-                // Comment to prevent auto-formatting
-                e.unescape()?,
-            )
-            .deserialize_seq(visitor),
-            DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
-                // Comment to prevent auto-formatting
-                e.decode()?,
-            )
-            .deserialize_seq(visitor),
+            DeEvent::Text(e) => {
+                SimpleTypeDeserializer::from_text_content(e).deserialize_seq(visitor)
+            }
             // This is a sequence element. We cannot treat it as another flatten
             // sequence if type will require `deserialize_seq` We instead forward
             // it to `xs:simpleType` implementation
             DeEvent::Start(e) => {
                 let value = match self.map.de.next()? {
-                    DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
-                        // Comment to prevent auto-formatting
-                        e.unescape()?,
-                    )
-                    .deserialize_seq(visitor),
-                    DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
-                        // Comment to prevent auto-formatting
-                        e.decode()?,
-                    )
-                    .deserialize_seq(visitor),
+                    DeEvent::Text(e) => {
+                        SimpleTypeDeserializer::from_text_content(e).deserialize_seq(visitor)
+                    }
                     e => Err(DeError::Unsupported(
                         format!("unsupported event {:?}", e).into(),
                     )),
@@ -814,8 +791,8 @@ where
                 self.map.de.read_to_end(e.name())?;
                 value
             }
-            // SAFETY: we use that deserializer only when Start(element), Text,
-            // or CData event Start(tag), Text, CData was peeked already
+            // SAFETY: we use that deserializer only when Start(element) or Text
+            // event was peeked already
             _ => unreachable!(),
         }
     }
