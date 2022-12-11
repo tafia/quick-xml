@@ -4844,6 +4844,86 @@ mod struct_ {
         );
     }
 
+    /// Checks that excess data before the struct correctly handled.
+    /// Any data not allowed before the struct
+    mod excess_data_before {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Space-only text events does not treated as data
+        #[test]
+        fn text_spaces_only() {
+            let data: Elements = from_str(
+                // Comment for prevent unnecessary formatting - we use the same style in all tests
+                " \t\n\r<root><float>42</float><string>answer</string></root>",
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Elements {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        /// Text events with non-space characters are not allowed
+        #[test]
+        fn text_non_spaces() {
+            match from_str::<Elements>(
+                "\nexcess text\t<root><float>42</float><string>answer</string></root>",
+            ) {
+                Err(DeError::ExpectedStart) => (),
+                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+            };
+        }
+
+        /// CDATA events are not allowed
+        #[test]
+        fn cdata() {
+            match from_str::<Elements>(
+                "<![CDATA[excess cdata]]><root><float>42</float><string>answer</string></root>",
+            ) {
+                Err(DeError::ExpectedStart) => (),
+                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+            };
+        }
+
+        /// Comments are ignored, so they are allowed
+        #[test]
+        fn comment() {
+            let data: Elements = from_str(
+                // Comment for prevent unnecessary formatting - we use the same style in all tests
+                "<!--comment--><root><float>42</float><string>answer</string></root>",
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Elements {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+
+        /// Processing instructions are ignored, so they are allowed
+        #[test]
+        fn pi() {
+            let data: Elements = from_str(
+                // Comment for prevent unnecessary formatting - we use the same style in all tests
+                "<?pi?><root><float>42</float><string>answer</string></root>",
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                Elements {
+                    float: 42.0,
+                    string: "answer".into()
+                }
+            );
+        }
+    }
+
     maplike_errors!(Attributes, Mixed);
 }
 
