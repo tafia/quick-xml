@@ -1952,6 +1952,20 @@ pub enum PayloadEvent<'a> {
     Eof,
 }
 
+impl<'a> PayloadEvent<'a> {
+    /// Ensures that all data is owned to extend the object's lifetime if necessary.
+    #[inline]
+    fn into_owned(self) -> PayloadEvent<'static> {
+        match self {
+            PayloadEvent::Start(e) => PayloadEvent::Start(e.into_owned()),
+            PayloadEvent::End(e) => PayloadEvent::End(e.into_owned()),
+            PayloadEvent::Text(e) => PayloadEvent::Text(e.into_owned()),
+            PayloadEvent::CData(e) => PayloadEvent::CData(e.into_owned()),
+            PayloadEvent::Eof => PayloadEvent::Eof,
+        }
+    }
+}
+
 /// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
 struct XmlReader<R> {
     /// A source of low-level XML events
@@ -2421,7 +2435,10 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
             .expand_empty_elements(true)
             .check_end_names(true)
             .trim_text(true);
-        Self::new(SliceReader { reader })
+        Self::new(SliceReader {
+            reader,
+            start_trimmer: StartTrimmer::default(),
+        })
     }
 }
 
@@ -2442,6 +2459,7 @@ where
 
         Self::new(IoReader {
             reader,
+            start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         })
     }
@@ -2606,6 +2624,53 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Helper struct that contains a state for an algorithm of converting events
+/// from raw events to semi-trimmed events that is independent from a way of
+/// events reading.
+struct StartTrimmer {
+    /// If `true`, then leading whitespace will be removed from next returned
+    /// [`Event::Text`]. This field is set to `true` after reading each event
+    /// except [`Event::Text`] and [`Event::CData`], so [`Event::Text`] events
+    /// read right after them does not trimmed.
+    trim_start: bool,
+}
+
+impl StartTrimmer {
+    /// Converts raw reader's event into a payload event.
+    /// Returns `None`, if event should be skipped.
+    #[inline(always)]
+    fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
+        let (event, trim_next_event) = match event {
+            Event::Start(e) => (PayloadEvent::Start(e), true),
+            Event::End(e) => (PayloadEvent::End(e), true),
+            Event::Eof => (PayloadEvent::Eof, true),
+
+            // Do not trim next text event after Text or CDATA event
+            Event::CData(e) => (PayloadEvent::CData(e), false),
+            Event::Text(mut e) => {
+                // If event is empty after trimming, skip it
+                if self.trim_start && e.inplace_trim_start() {
+                    return None;
+                }
+                (PayloadEvent::Text(e), false)
+            }
+
+            _ => return None,
+        };
+        self.trim_start = trim_next_event;
+        Some(event)
+    }
+}
+
+impl Default for StartTrimmer {
+    #[inline]
+    fn default() -> Self {
+        Self { trim_start: true }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// Trait used by the deserializer for iterating over input. This is manually
 /// "specialized" for iterating over `&[u8]`.
 ///
@@ -2630,27 +2695,20 @@ pub trait XmlRead<'i> {
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
     reader: Reader<R>,
+    start_trimmer: StartTrimmer,
     buf: Vec<u8>,
 }
 
 impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn next(&mut self) -> Result<PayloadEvent<'static>, DeError> {
-        let event = loop {
-            let e = self.reader.read_event_into(&mut self.buf)?;
-            match e {
-                Event::Start(e) => break Ok(PayloadEvent::Start(e.into_owned())),
-                Event::End(e) => break Ok(PayloadEvent::End(e.into_owned())),
-                Event::Text(e) => break Ok(PayloadEvent::Text(e.into_owned())),
-                Event::CData(e) => break Ok(PayloadEvent::CData(e.into_owned())),
-                Event::Eof => break Ok(PayloadEvent::Eof),
+        loop {
+            self.buf.clear();
 
-                _ => self.buf.clear(),
+            let event = self.reader.read_event_into(&mut self.buf)?;
+            if let Some(event) = self.start_trimmer.trim(event) {
+                return Ok(event.into_owned());
             }
-        };
-
-        self.buf.clear();
-
-        event
+        }
     }
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
@@ -2672,20 +2730,15 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
     reader: Reader<&'de [u8]>,
+    start_trimmer: StartTrimmer,
 }
 
 impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
-            let e = self.reader.read_event()?;
-            match e {
-                Event::Start(e) => break Ok(PayloadEvent::Start(e)),
-                Event::End(e) => break Ok(PayloadEvent::End(e)),
-                Event::Text(e) => break Ok(PayloadEvent::Text(e)),
-                Event::CData(e) => break Ok(PayloadEvent::CData(e)),
-                Event::Eof => break Ok(PayloadEvent::Eof),
-
-                _ => (),
+            let event = self.reader.read_event()?;
+            if let Some(event) = self.start_trimmer.trim(event) {
+                return Ok(event);
             }
         }
     }
@@ -3248,10 +3301,12 @@ mod tests {
 
         let mut reader1 = IoReader {
             reader: Reader::from_reader(s.as_bytes()),
+            start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
             reader: Reader::from_str(s),
+            start_trimmer: StartTrimmer::default(),
         };
 
         loop {
@@ -3277,6 +3332,7 @@ mod tests {
 
         let mut reader = SliceReader {
             reader: Reader::from_str(s),
+            start_trimmer: StartTrimmer::default(),
         };
 
         reader

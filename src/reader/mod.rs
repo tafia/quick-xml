@@ -848,7 +848,7 @@ impl ReadElementState {
 
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
-pub(crate) fn is_whitespace(b: u8) -> bool {
+pub(crate) const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 

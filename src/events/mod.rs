@@ -48,8 +48,10 @@ use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
+use crate::reader::is_whitespace;
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
+use std::mem::replace;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -693,6 +695,17 @@ impl<'a> BytesText<'a> {
             Cow::Owned(s) => Ok(s.into()),
         }
     }
+
+    /// Removes leading XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_start(&mut self) -> bool {
+        self.content = trim_cow(
+            replace(&mut self.content, Cow::Borrowed(b"")),
+            trim_xml_start,
+        );
+        self.content.is_empty()
+    }
 }
 
 impl<'a> Debug for BytesText<'a> {
@@ -938,6 +951,38 @@ fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
     match content.into() {
         Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
         Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+    }
+}
+
+/// Returns a byte slice with leading XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [first, rest @ ..] = bytes {
+        if is_whitespace(*first) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+fn trim_cow<'a, F>(value: Cow<'a, [u8]>, trim: F) -> Cow<'a, [u8]>
+where
+    F: FnOnce(&[u8]) -> &[u8],
+{
+    match value {
+        Cow::Borrowed(bytes) => Cow::Borrowed(trim(bytes)),
+        Cow::Owned(mut bytes) => {
+            let trimmed = trim(&bytes);
+            if trimmed.len() != bytes.len() {
+                bytes = trimmed.to_vec();
+            }
+            Cow::Owned(bytes)
+        }
     }
 }
 

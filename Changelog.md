@@ -16,6 +16,8 @@
   enums from textual content
 - [#556]: `to_writer` and `to_string` now accept `?Sized` types
 - [#556]: Add new `to_writer_with_root` and `to_string_with_root` helper functions
+- [#520]: Add method `BytesText::inplace_trim_start` to trim leading spaces from
+  text events
 
 ### Bug Fixes
 
@@ -31,6 +33,7 @@
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#510]: https://github.com/tafia/quick-xml/issues/510
+[#520]: https://github.com/tafia/quick-xml/pull/520
 [#537]: https://github.com/tafia/quick-xml/issues/537
 [#540]: https://github.com/tafia/quick-xml/issues/540
 [#541]: https://github.com/tafia/quick-xml/pull/541
