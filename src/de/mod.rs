@@ -684,20 +684,6 @@ where
         }
     }
 
-    fn next_start(&mut self) -> Result<Option<BytesStart<'de>>, DeError> {
-        loop {
-            let e = self.next()?;
-            match e {
-                DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(e) => {
-                    return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned()))
-                }
-                DeEvent::Eof => return Ok(None),
-                _ => (), // ignore texts
-            }
-        }
-    }
-
     #[inline]
     fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.next_text_impl(unescape, true)
@@ -860,15 +846,17 @@ where
     where
         V: Visitor<'de>,
     {
-        // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
-        if let Some(e) = self.next_start()? {
-            let name = e.name().as_ref().to_vec();
-            let map = map::MapAccess::new(self, e, fields)?;
-            let value = visitor.visit_map(map)?;
-            self.read_to_end(QName(&name))?;
-            Ok(value)
-        } else {
-            Err(DeError::ExpectedStart)
+        match self.next()? {
+            DeEvent::Start(e) => {
+                let name = e.name().as_ref().to_vec();
+                let map = map::MapAccess::new(self, e, fields)?;
+                let value = visitor.visit_map(map)?;
+                self.read_to_end(QName(&name))?;
+                Ok(value)
+            }
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Text(_) | DeEvent::CData(_) => Err(DeError::ExpectedStart),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
 
