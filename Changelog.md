@@ -33,6 +33,13 @@
 - [#514]: Fix wrong reporting `Error::EndEventMismatch` after disabling and enabling
   `.check_end_names`
 - [#517]: Fix swapped codes for `\r` and `\n` characters when escaping them
+- [#523]: Fix incorrect skipping text and CDATA content before any map-like structures
+  in serde deserializer, like
+  ```xml
+  unwanted text<struct>...</struct>
+  ```
+- [#523]: Fix incorrect handling of `xs:list`s with encoded spaces: they still
+  act as delimiters, which is confirmed also by mature XmlBeans Java library
 
 ### Misc Changes
 
@@ -64,6 +71,7 @@
 [#514]: https://github.com/tafia/quick-xml/issues/514
 [#517]: https://github.com/tafia/quick-xml/issues/517
 [#521]: https://github.com/tafia/quick-xml/pull/521
+[#523]: https://github.com/tafia/quick-xml/pull/523
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 

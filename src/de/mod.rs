@@ -239,7 +239,7 @@ macro_rules! deserialize_type {
             V: Visitor<'de>,
         {
             // No need to unescape because valid integer representations cannot be escaped
-            let text = self.next_text(false)?;
+            let text = self.read_string(false)?;
             visitor.$visit(text.parse()?)
         }
     };
@@ -272,7 +272,7 @@ macro_rules! deserialize_primitives {
             V: Visitor<'de>,
         {
             // No need to unescape because valid boolean representations cannot be escaped
-            let text = self.next_text(false)?;
+            let text = self.read_string(false)?;
 
             str2bool(&text, visitor)
         }
@@ -297,7 +297,7 @@ macro_rules! deserialize_primitives {
         where
             V: Visitor<'de>,
         {
-            let text = self.next_text(true)?;
+            let text = self.read_string(true)?;
             match text {
                 Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
                 Cow::Owned(string) => visitor.visit_string(string),
@@ -684,23 +684,9 @@ where
         }
     }
 
-    fn next_start(&mut self) -> Result<Option<BytesStart<'de>>, DeError> {
-        loop {
-            let e = self.next()?;
-            match e {
-                DeEvent::Start(e) => return Ok(Some(e)),
-                DeEvent::End(e) => {
-                    return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned()))
-                }
-                DeEvent::Eof => return Ok(None),
-                _ => (), // ignore texts
-            }
-        }
-    }
-
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.next_text_impl(unescape, true)
+    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
+        self.read_string_impl(unescape, true)
     }
 
     /// Consumes a one XML element or an XML tree, returns associated text or
@@ -735,7 +721,7 @@ where
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
-    fn next_text_impl(
+    fn read_string_impl(
         &mut self,
         unescape: bool,
         allow_start: bool,
@@ -860,15 +846,17 @@ where
     where
         V: Visitor<'de>,
     {
-        // Try to go to the next `<tag ...>...</tag>` or `<tag .../>`
-        if let Some(e) = self.next_start()? {
-            let name = e.name().as_ref().to_vec();
-            let map = map::MapAccess::new(self, e, fields)?;
-            let value = visitor.visit_map(map)?;
-            self.read_to_end(QName(&name))?;
-            Ok(value)
-        } else {
-            Err(DeError::ExpectedStart)
+        match self.next()? {
+            DeEvent::Start(e) => {
+                let name = e.name().as_ref().to_vec();
+                let map = map::MapAccess::new(self, e, fields)?;
+                let value = visitor.visit_map(map)?;
+                self.read_to_end(QName(&name))?;
+                Ok(value)
+            }
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Text(_) | DeEvent::CData(_) => Err(DeError::ExpectedStart),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
 
@@ -1744,10 +1732,10 @@ mod tests {
         assert_eq!(reader.next().unwrap(), DeEvent::Eof);
     }
 
-    /// Ensures, that [`Deserializer::next_text()`] never can get an `End` event,
+    /// Ensures, that [`Deserializer::read_string()`] never can get an `End` event,
     /// because parser reports error early
     #[test]
-    fn next_text() {
+    fn read_string() {
         match from_str::<String>(r#"</root>"#) {
             Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                 assert_eq!(expected, "");

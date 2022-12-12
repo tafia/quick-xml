@@ -311,15 +311,13 @@ where
             // of that events)
             // This case are checked by "xml_schema_lists::element" tests in tests/serde-de.rs
             ValueSource::Text => match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    true,
-                    self.de.reader.decoder(),
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    // Comment to prevent auto-formatting
+                    e.decode(true)?,
                 )),
-                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_cow(
-                    e.into_inner(),
-                    false,
-                    self.de.reader.decoder(),
+                DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
+                    // Comment to prevent auto-formatting
+                    e.decode()?,
                 )),
                 // SAFETY: We set `Text` only when we seen `Text` or `CData`
                 _ => unreachable!(),
@@ -381,7 +379,7 @@ where
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
     map: &'m mut MapAccess<'de, 'a, R>,
-    /// Determines, should [`Deserializer::next_text_impl()`] expand the second
+    /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
     /// If this field is `true`, we process the following XML shape:
@@ -463,10 +461,14 @@ impl<'de, 'a, 'm, R> MapValueDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
-    /// Returns a text event, used inside [`deserialize_primitives!()`]
+    /// Returns a next string as concatenated content of consequent [`Text`] and
+    /// [`CData`] events, used inside [`deserialize_primitives!()`].
+    ///
+    /// [`Text`]: DeEvent::Text
+    /// [`CData`]: DeEvent::CData
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.next_text_impl(unescape, self.allow_start)
+    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(unescape, self.allow_start)
     }
 }
 
@@ -518,6 +520,16 @@ where
         self.deserialize_tuple(len, visitor)
     }
 
+    /// Deserializes each `<tag>` in
+    /// ```xml
+    /// <any-tag>
+    ///   <tag>...</tag>
+    ///   <tag>...</tag>
+    ///   <tag>...</tag>
+    /// </any-tag>
+    /// ```
+    /// as a sequence item, where `<any-tag>` represents a Map in a [`Self::map`],
+    /// and a `<tag>` is a sequential field of that map.
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -619,7 +631,25 @@ impl<'de> TagFilter<'de> {
 
 /// An accessor to sequence elements forming a value for struct field.
 /// Technically, this sequence is flattened out into structure and sequence
-/// elements are overlapped with other fields of a structure
+/// elements are overlapped with other fields of a structure. Each call to
+/// [`Self::next_element_seed`] consumes a next sub-tree or consequent list
+/// of [`Text`] and [`CData`] events.
+///
+/// ```xml
+/// <>
+///   ...
+///   <item>The is the one item</item>
+///   This is <![CDATA[one another]]> item<!-- even when--> it splitted by comments
+///   <tag>...and that is the third!</tag>
+///   ...
+/// </>
+/// ```
+///
+/// Depending on [`Self::filter`], only some of that possible constructs would be
+/// an element.
+///
+/// [`Text`]: DeEvent::Text
+/// [`CData`]: DeEvent::CData
 struct MapValueSeqAccess<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
@@ -686,7 +716,7 @@ where
 
                 // Start(tag), Text, CData
                 _ => seed
-                    .deserialize(SeqValueDeserializer { map: self.map })
+                    .deserialize(SeqItemDeserializer { map: self.map })
                     .map(Some),
             };
         }
@@ -695,8 +725,8 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A deserializer for a value of sequence.
-struct SeqValueDeserializer<'de, 'a, 'm, R>
+/// A deserializer for a single item of a sequence.
+struct SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
@@ -705,18 +735,22 @@ where
     map: &'m mut MapAccess<'de, 'a, R>,
 }
 
-impl<'de, 'a, 'm, R> SeqValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R> SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
-    /// Returns a text event, used inside [`deserialize_primitives!()`]
+    /// Returns a next string as concatenated content of consequent [`Text`] and
+    /// [`CData`] events, used inside [`deserialize_primitives!()`].
+    ///
+    /// [`Text`]: DeEvent::Text
+    /// [`CData`]: DeEvent::CData
     #[inline]
-    fn next_text(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.next_text_impl(unescape, true)
+    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(unescape, true)
     }
 }
 
-impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R>
 where
     R: XmlRead<'de>,
 {
@@ -764,22 +798,31 @@ where
         self.deserialize_tuple(len, visitor)
     }
 
+    /// This method deserializes a sequence inside of element that itself is a
+    /// sequence element:
+    ///
+    /// ```xml
+    /// <>
+    ///   ...
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   ...
+    /// </>
+    /// ```
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
-                // Comment to prevent auto-formatting and keep Text and Cdata similar
-                e.into_inner(),
-                true,
-                self.map.de.reader.decoder(),
+            DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
+                // Comment to prevent auto-formatting
+                e.decode(true)?,
             )
             .deserialize_seq(visitor),
-            DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                e.into_inner(),
-                false,
-                self.map.de.reader.decoder(),
+            DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
+                // Comment to prevent auto-formatting
+                e.decode()?,
             )
             .deserialize_seq(visitor),
             // This is a sequence element. We cannot treat it as another flatten
@@ -787,16 +830,14 @@ where
             // it to `xs:simpleType` implementation
             DeEvent::Start(e) => {
                 let value = match self.map.de.next()? {
-                    DeEvent::Text(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        true,
-                        self.map.de.reader.decoder(),
+                    DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
+                        // Comment to prevent auto-formatting
+                        e.decode(true)?,
                     )
                     .deserialize_seq(visitor),
-                    DeEvent::CData(e) => SimpleTypeDeserializer::from_cow(
-                        e.into_inner(),
-                        false,
-                        self.map.de.reader.decoder(),
+                    DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
+                        // Comment to prevent auto-formatting
+                        e.decode()?,
                     )
                     .deserialize_seq(visitor),
                     e => Err(DeError::Unsupported(
