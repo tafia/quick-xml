@@ -16,6 +16,8 @@
 
 - [#530]: Fix an infinite loop leading to unbounded memory consumption that occurs when
   skipping events on malformed XML with the `overlapped-lists` feature active.
+- [#530]: Fix an error in the `Deserializer::read_to_end` when `overlapped-lists`
+  feature is active and malformed XML is parsed
 
 ### Misc Changes
 
