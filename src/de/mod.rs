@@ -2237,7 +2237,7 @@ where
                 }
                 Some(DeEvent::End(e)) if e.name() == name => {
                     if depth == 0 {
-                        return Ok(());
+                        break;
                     }
                     depth -= 1;
                 }
@@ -2247,9 +2247,29 @@ where
 
                 // If we do not have skipped events, use effective reading that will
                 // not allocate memory for events
-                None => return self.reader.read_to_end(name),
+                None => {
+                    // We should close all opened tags, because we could buffer
+                    // Start events, but not the corresponding End events. So we
+                    // keep reading events until we exit all nested tags.
+                    // `read_to_end()` will return an error if an Eof was encountered
+                    // preliminary (in case of malformed XML).
+                    //
+                    // <tag><tag></tag></tag>
+                    // ^^^^^^^^^^             - buffered in `self.read`, when `self.read_to_end()` is called, depth = 2
+                    //           ^^^^^^       - read by the first call of `self.reader.read_to_end()`
+                    //                 ^^^^^^ - read by the second call of `self.reader.read_to_end()`
+                    loop {
+                        self.reader.read_to_end(name)?;
+                        if depth == 0 {
+                            break;
+                        }
+                        depth -= 1;
+                    }
+                    break;
+                }
             }
         }
+        Ok(())
     }
     #[cfg(not(feature = "overlapped-lists"))]
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
