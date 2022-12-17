@@ -1896,6 +1896,7 @@ use std::borrow::Cow;
 #[cfg(feature = "overlapped-lists")]
 use std::collections::VecDeque;
 use std::io::BufRead;
+use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
 
@@ -1967,26 +1968,94 @@ impl<'a> PayloadEvent<'a> {
 }
 
 /// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
-struct XmlReader<R> {
+/// [`PayloadEvent::Text`] events, that followed by any event except
+/// [`PayloadEvent::Text`] or [`PayloadEvent::CData`], are trimmed from the end.
+struct XmlReader<'i, R: XmlRead<'i>> {
     /// A source of low-level XML events
     reader: R,
+    /// Intermediate event, that could be returned by the next call to `next()`.
+    /// If that is the `Text` event then leading spaces already trimmed, but
+    /// trailing spaces is not. Before the event will be returned, trimming of
+    /// the spaces could be necessary
+    lookahead: Result<PayloadEvent<'i>, DeError>,
 }
 
-impl<'i, R: XmlRead<'i>> XmlReader<R> {
+impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
+    fn new(mut reader: R) -> Self {
+        // Lookahead by one event immediately, so we do not need to check in the
+        // loop if we need lookahead or not
+        let lookahead = reader.next();
+
+        Self { reader, lookahead }
+    }
+
+    /// Read next event and put it in lookahead, return the current lookahead
+    #[inline(always)]
+    fn next_impl(&mut self) -> Result<PayloadEvent<'i>, DeError> {
+        replace(&mut self.lookahead, self.reader.next())
+    }
+
+    #[inline(always)]
+    fn need_trim_end(&self) -> bool {
+        // If next event is a text or CDATA, we should not trim trailing spaces
+        !matches!(
+            self.lookahead,
+            Ok(PayloadEvent::Text(_)) | Ok(PayloadEvent::CData(_))
+        )
+    }
+
     /// Return an input-borrowing event.
     fn next(&mut self) -> Result<DeEvent<'i>, DeError> {
-        Ok(match self.reader.next()? {
-            PayloadEvent::Start(e) => DeEvent::Start(e),
-            PayloadEvent::End(e) => DeEvent::End(e),
-            PayloadEvent::Text(e) => DeEvent::Text(e.unescape()?),
-            PayloadEvent::CData(e) => DeEvent::Text(e.decode()?),
-            PayloadEvent::Eof => DeEvent::Eof,
-        })
+        loop {
+            return match self.next_impl()? {
+                PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
+                PayloadEvent::End(e) => Ok(DeEvent::End(e)),
+                PayloadEvent::Text(mut e) => {
+                    if self.need_trim_end() && e.inplace_trim_end() {
+                        continue;
+                    }
+                    Ok(DeEvent::Text(e.unescape()?))
+                }
+                PayloadEvent::CData(e) => Ok(DeEvent::Text(e.decode()?)),
+                PayloadEvent::Eof => Ok(DeEvent::Eof),
+            };
+        }
     }
 
     #[inline]
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
-        self.reader.read_to_end(name)
+        match self.lookahead {
+            // We pre-read event with the same name that is required to be skipped.
+            // First call of `read_to_end` will end out pre-read event, the second
+            // will consume other events
+            Ok(PayloadEvent::Start(ref e)) if e.name() == name => {
+                let result1 = self.reader.read_to_end(name);
+                let result2 = self.reader.read_to_end(name);
+
+                // In case of error `next` returns `Eof`
+                self.lookahead = self.reader.next();
+                result1?;
+                result2?;
+            }
+            // We pre-read event with the same name that is required to be skipped.
+            // Because this is end event, we already consume the whole tree, so
+            // nothing to do, just update lookahead
+            Ok(PayloadEvent::End(ref e)) if e.name() == name => {
+                self.lookahead = self.reader.next();
+            }
+            Ok(_) => {
+                let result = self.reader.read_to_end(name);
+
+                // In case of error `next` returns `Eof`
+                self.lookahead = self.reader.next();
+                result?;
+            }
+            // Read next lookahead event, unpack error from the current lookahead
+            Err(_) => {
+                self.next_impl()?;
+            }
+        }
+        Ok(())
     }
 
     #[inline]
@@ -2003,7 +2072,7 @@ where
     R: XmlRead<'de>,
 {
     /// An XML reader that streams events into this deserializer
-    reader: XmlReader<R>,
+    reader: XmlReader<'de, R>,
 
     /// When deserializing sequences sometimes we have to skip unwanted events.
     /// That events should be stored and then replayed. This is a replay buffer,
@@ -2108,8 +2177,8 @@ where
     ///  - [`Deserializer::from_str`]
     ///  - [`Deserializer::from_reader`]
     fn new(reader: R) -> Self {
-        Deserializer {
-            reader: XmlReader { reader },
+        Self {
+            reader: XmlReader::new(reader),
 
             #[cfg(feature = "overlapped-lists")]
             read: VecDeque::new(),
@@ -3277,11 +3346,25 @@ mod tests {
         }
 
         #[test]
-        fn invalid_xml() {
+        fn invalid_xml1() {
             let mut de = Deserializer::from_str("<tag><tag></tag>");
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
+
+            match de.read_to_end(QName(b"tag")) {
+                Err(DeError::UnexpectedEof) => (),
+                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+            }
+            assert_eq!(de.next().unwrap(), Eof);
+        }
+
+        #[test]
+        fn invalid_xml2() {
+            let mut de = Deserializer::from_str("<tag><![CDATA[]]><tag></tag>");
+
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
+            assert_eq!(de.peek().unwrap(), &Text(Cow::Borrowed("")));
 
             match de.read_to_end(QName(b"tag")) {
                 Err(DeError::UnexpectedEof) => (),

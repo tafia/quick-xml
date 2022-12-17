@@ -706,6 +706,14 @@ impl<'a> BytesText<'a> {
         );
         self.content.is_empty()
     }
+
+    /// Removes trailing XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_end(&mut self) -> bool {
+        self.content = trim_cow(replace(&mut self.content, Cow::Borrowed(b"")), trim_xml_end);
+        self.content.is_empty()
+    }
 }
 
 impl<'a> Debug for BytesText<'a> {
@@ -962,6 +970,22 @@ const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
     // making the function const.
     while let [first, rest @ ..] = bytes {
         if is_whitespace(*first) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+/// Returns a byte slice with trailing XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [rest @ .., last] = bytes {
+        if is_whitespace(*last) {
             bytes = rest;
         } else {
             break;
