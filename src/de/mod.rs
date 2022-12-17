@@ -1924,13 +1924,70 @@ pub enum DeEvent<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Simplified event which contains only these variants that used by deserializer,
+/// but [`Text`] events not yet fully processed.
+///
+/// [`Text`] events should be trimmed if they does not surrounded by the other
+/// [`Text`] or [`CData`] events. This event contains intermediate state of [`Text`]
+/// event, where they are trimmed from the start, but not from the end. To trim
+/// end spaces we should lookahead by one deserializer event (i. e. skip all
+/// comments and processing instructions).
+///
+/// [`Text`]: Event::Text
+/// [`CData`]: Event::CData
+#[derive(Debug, PartialEq, Eq)]
+pub enum PayloadEvent<'a> {
+    /// Start tag (with attributes) `<tag attr="value">`.
+    Start(BytesStart<'a>),
+    /// End tag `</tag>`.
+    End(BytesEnd<'a>),
+    /// Escaped character data between `Start` and `End` element.
+    Text(BytesText<'a>),
+    /// Unescaped character data between `Start` and `End` element,
+    /// stored in `<![CDATA[...]]>`.
+    CData(BytesCData<'a>),
+    /// End of XML document.
+    Eof,
+}
+
+/// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
+struct XmlReader<R> {
+    /// A source of low-level XML events
+    reader: R,
+}
+
+impl<'i, R: XmlRead<'i>> XmlReader<R> {
+    /// Return an input-borrowing event.
+    fn next(&mut self) -> Result<DeEvent<'i>, DeError> {
+        Ok(match self.reader.next()? {
+            PayloadEvent::Start(e) => DeEvent::Start(e),
+            PayloadEvent::End(e) => DeEvent::End(e),
+            PayloadEvent::Text(e) => DeEvent::Text(e),
+            PayloadEvent::CData(e) => DeEvent::CData(e),
+            PayloadEvent::Eof => DeEvent::Eof,
+        })
+    }
+
+    #[inline]
+    fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
+        self.reader.read_to_end(name)
+    }
+
+    #[inline]
+    fn decoder(&self) -> Decoder {
+        self.reader.decoder()
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A structure that deserializes XML into Rust values.
 pub struct Deserializer<'de, R>
 where
     R: XmlRead<'de>,
 {
     /// An XML reader that streams events into this deserializer
-    reader: R,
+    reader: XmlReader<R>,
 
     /// When deserializing sequences sometimes we have to skip unwanted events.
     /// That events should be stored and then replayed. This is a replay buffer,
@@ -2036,7 +2093,7 @@ where
     ///  - [`Deserializer::from_reader`]
     fn new(reader: R) -> Self {
         Deserializer {
-            reader,
+            reader: XmlReader { reader },
 
             #[cfg(feature = "overlapped-lists")]
             read: VecDeque::new(),
@@ -2569,7 +2626,7 @@ where
 /// deserializer
 pub trait XmlRead<'i> {
     /// Return an input-borrowing event.
-    fn next(&mut self) -> Result<DeEvent<'i>, DeError>;
+    fn next(&mut self) -> Result<PayloadEvent<'i>, DeError>;
 
     /// Skips until end element is found. Unlike `next()` it will not allocate
     /// when it cannot satisfy the lifetime.
@@ -2589,15 +2646,15 @@ pub struct IoReader<R: BufRead> {
 }
 
 impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
-    fn next(&mut self) -> Result<DeEvent<'static>, DeError> {
+    fn next(&mut self) -> Result<PayloadEvent<'static>, DeError> {
         let event = loop {
             let e = self.reader.read_event_into(&mut self.buf)?;
             match e {
-                Event::Start(e) => break Ok(DeEvent::Start(e.into_owned())),
-                Event::End(e) => break Ok(DeEvent::End(e.into_owned())),
-                Event::Text(e) => break Ok(DeEvent::Text(e.into_owned())),
-                Event::CData(e) => break Ok(DeEvent::CData(e.into_owned())),
-                Event::Eof => break Ok(DeEvent::Eof),
+                Event::Start(e) => break Ok(PayloadEvent::Start(e.into_owned())),
+                Event::End(e) => break Ok(PayloadEvent::End(e.into_owned())),
+                Event::Text(e) => break Ok(PayloadEvent::Text(e.into_owned())),
+                Event::CData(e) => break Ok(PayloadEvent::CData(e.into_owned())),
+                Event::Eof => break Ok(PayloadEvent::Eof),
 
                 _ => self.buf.clear(),
             }
@@ -2630,15 +2687,15 @@ pub struct SliceReader<'de> {
 }
 
 impl<'de> XmlRead<'de> for SliceReader<'de> {
-    fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
+    fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
             let e = self.reader.read_event()?;
             match e {
-                Event::Start(e) => break Ok(DeEvent::Start(e)),
-                Event::End(e) => break Ok(DeEvent::End(e)),
-                Event::Text(e) => break Ok(DeEvent::Text(e)),
-                Event::CData(e) => break Ok(DeEvent::CData(e)),
-                Event::Eof => break Ok(DeEvent::Eof),
+                Event::Start(e) => break Ok(PayloadEvent::Start(e)),
+                Event::End(e) => break Ok(PayloadEvent::End(e)),
+                Event::Text(e) => break Ok(PayloadEvent::Text(e)),
+                Event::CData(e) => break Ok(PayloadEvent::CData(e)),
+                Event::Eof => break Ok(PayloadEvent::Eof),
 
                 _ => (),
             }
@@ -3211,7 +3268,7 @@ mod tests {
             let event1 = reader1.next().unwrap();
             let event2 = reader2.next().unwrap();
 
-            if let (DeEvent::Eof, DeEvent::Eof) = (&event1, &event2) {
+            if let (PayloadEvent::Eof, PayloadEvent::Eof) = (&event1, &event2) {
                 break;
             }
 
@@ -3242,13 +3299,13 @@ mod tests {
 
         loop {
             let event = reader.next().unwrap();
-            if let DeEvent::Eof = event {
+            if let PayloadEvent::Eof = event {
                 break;
             }
             events.push(event);
         }
 
-        use crate::de::DeEvent::*;
+        use crate::de::PayloadEvent::*;
 
         assert_eq!(
             events,
