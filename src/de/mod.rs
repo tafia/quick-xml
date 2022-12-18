@@ -2066,42 +2066,6 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A structure that deserializes XML into Rust values.
-pub struct Deserializer<'de, R>
-where
-    R: XmlRead<'de>,
-{
-    /// An XML reader that streams events into this deserializer
-    reader: XmlReader<'de, R>,
-
-    /// When deserializing sequences sometimes we have to skip unwanted events.
-    /// That events should be stored and then replayed. This is a replay buffer,
-    /// that streams events while not empty. When it exhausted, events will
-    /// requested from [`Self::reader`].
-    #[cfg(feature = "overlapped-lists")]
-    read: VecDeque<DeEvent<'de>>,
-    /// When deserializing sequences sometimes we have to skip events, because XML
-    /// is tolerant to elements order and even if in the XSD order is strictly
-    /// specified (using `xs:sequence`) most of XML parsers allows order violations.
-    /// That means, that elements, forming a sequence, could be overlapped with
-    /// other elements, do not related to that sequence.
-    ///
-    /// In order to support this, deserializer will scan events and skip unwanted
-    /// events, store them here. After call [`Self::start_replay()`] all events
-    /// moved from this to [`Self::read`].
-    #[cfg(feature = "overlapped-lists")]
-    write: VecDeque<DeEvent<'de>>,
-    /// Maximum number of events that can be skipped when processing sequences
-    /// that occur out-of-order. This field is used to prevent potential
-    /// denial-of-service (DoS) attacks which could cause infinite memory
-    /// consumption when parsing a very large amount of XML into a sequence field.
-    #[cfg(feature = "overlapped-lists")]
-    limit: Option<NonZeroUsize>,
-
-    #[cfg(not(feature = "overlapped-lists"))]
-    peek: Option<DeEvent<'de>>,
-}
-
 /// Deserialize an instance of type `T` from a string of XML text.
 pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
@@ -2164,6 +2128,44 @@ where
             e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
         }
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A structure that deserializes XML into Rust values.
+pub struct Deserializer<'de, R>
+where
+    R: XmlRead<'de>,
+{
+    /// An XML reader that streams events into this deserializer
+    reader: XmlReader<'de, R>,
+
+    /// When deserializing sequences sometimes we have to skip unwanted events.
+    /// That events should be stored and then replayed. This is a replay buffer,
+    /// that streams events while not empty. When it exhausted, events will
+    /// requested from [`Self::reader`].
+    #[cfg(feature = "overlapped-lists")]
+    read: VecDeque<DeEvent<'de>>,
+    /// When deserializing sequences sometimes we have to skip events, because XML
+    /// is tolerant to elements order and even if in the XSD order is strictly
+    /// specified (using `xs:sequence`) most of XML parsers allows order violations.
+    /// That means, that elements, forming a sequence, could be overlapped with
+    /// other elements, do not related to that sequence.
+    ///
+    /// In order to support this, deserializer will scan events and skip unwanted
+    /// events, store them here. After call [`Self::start_replay()`] all events
+    /// moved from this to [`Self::read`].
+    #[cfg(feature = "overlapped-lists")]
+    write: VecDeque<DeEvent<'de>>,
+    /// Maximum number of events that can be skipped when processing sequences
+    /// that occur out-of-order. This field is used to prevent potential
+    /// denial-of-service (DoS) attacks which could cause infinite memory
+    /// consumption when parsing a very large amount of XML into a sequence field.
+    #[cfg(feature = "overlapped-lists")]
+    limit: Option<NonZeroUsize>,
+
+    #[cfg(not(feature = "overlapped-lists"))]
+    peek: Option<DeEvent<'de>>,
 }
 
 impl<'de, R> Deserializer<'de, R>
