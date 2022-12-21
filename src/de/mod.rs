@@ -25,6 +25,8 @@
 //!     - [Primitives and sequences of primitives](#primitives-and-sequences-of-primitives)
 //!     - [Structs and sequences of structs](#structs-and-sequences-of-structs)
 //!     - [Enums and sequences of enums](#enums-and-sequences-of-enums)
+//! - [Frequently Used Patterns](#frequently-used-patterns)
+//!   - [`<element>` lists](#element-lists)
 //!
 //!
 //!
@@ -895,6 +897,8 @@
 //! Currently not working. The bug is tracked in [#510].
 //! </div>
 //!
+//! See also [Frequently Used Patterns](#element-lists).
+//!
 //! [field]: https://serde.rs/field-attrs.html#default
 //! [struct]: https://serde.rs/container-attrs.html#default
 //! </td>
@@ -1579,7 +1583,109 @@
 //! that is not enforced, so you can theoretically have both, but you should
 //! avoid that.
 //!
+//!
+//!
+//! Frequently Used Patterns
+//! ========================
+//!
+//! Some XML constructs used so frequent, that it is worth to document the recommended
+//! way to represent them in the Rust. The sections below describes them.
+//!
+//! ## `<element>` lists
+//! Many XML formats wrap lists of elements in the additional container,
+//! although this is not required by the XML rules:
+//!
+//! ```xml
+//! <root>
+//!   <field1/>
+//!   <field2/>
+//!   <list><!-- Container -->
+//!     <element/>
+//!     <element/>
+//!     <element/>
+//!   </list>
+//!   <field3/>
+//! </root>
+//! ```
+//! In this case, there is a great desire to describe this XML in this way:
+//! ```
+//! /// Represents <element/>
+//! type Element = ();
+//!
+//! /// Represents <root>...</root>
+//! struct AnyName {
+//!     // Incorrect
+//!     list: Vec<Element>,
+//! }
+//! ```
+//! This will not work, because potentially `<list>` element can have attributes
+//! and other elements inside. You should define the struct for the `<list>`
+//! explicitly, as you do that in the XSD for that XML:
+//! ```
+//! /// Represents <element/>
+//! type Element = ();
+//!
+//! /// Represents <root>...</root>
+//! struct AnyName {
+//!     // Correct
+//!     list: List,
+//! }
+//! /// Represents <list>...</list>
+//! struct List {
+//!     element: Vec<Element>,
+//! }
+//! ```
+//!
+//! If you want to simplify your API, you could write a simple function for unwrapping
+//! inner list and apply it via [`deserialize_with`]:
+//!
+//! ```
+//! # use pretty_assertions::assert_eq;
+//! use quick_xml::de::from_str;
+//! use serde::{Deserialize, Deserializer};
+//!
+//! /// Represents <element/>
+//! type Element = ();
+//!
+//! /// Represents <root>...</root>
+//! #[derive(Deserialize, Debug, PartialEq)]
+//! struct AnyName {
+//!     #[serde(deserialize_with = "unwrap_list")]
+//!     list: Vec<Element>,
+//! }
+//!
+//! fn unwrap_list<'de, D>(deserializer: D) -> Result<Vec<Element>, D::Error>
+//! where
+//!     D: Deserializer<'de>,
+//! {
+//!     /// Represents <list>...</list>
+//!     #[derive(Deserialize)]
+//!     struct List {
+//!         // default allows empty list
+//!         #[serde(default)]
+//!         element: Vec<Element>,
+//!     }
+//!     Ok(List::deserialize(deserializer)?.element)
+//! }
+//!
+//! assert_eq!(
+//!     AnyName { list: vec![(), (), ()] },
+//!     from_str("
+//!         <root>
+//!           <list>
+//!             <element/>
+//!             <element/>
+//!             <element/>
+//!           </list>
+//!         </root>
+//!     ").unwrap(),
+//! );
+//! ```
+//!
+//! Instead of writing such functions manually, you also could try <https://lib.rs/crates/serde-query>.
+//!
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
+//! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#474]: https://github.com/tafia/quick-xml/issues/474
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
 //! [#510]: https://github.com/tafia/quick-xml/issues/510
