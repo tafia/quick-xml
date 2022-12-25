@@ -3079,40 +3079,58 @@ mod tests {
         }
     }
 
-    #[test]
-    fn read_to_end() {
+    mod read_to_end {
+        use super::*;
         use crate::de::DeEvent::*;
+        use pretty_assertions::assert_eq;
 
-        let mut de = Deserializer::from_str(
-            r#"
-            <root>
-                <tag a="1"><tag>text</tag>content</tag>
-                <tag a="2"><![CDATA[cdata content]]></tag>
-                <self-closed/>
-            </root>
-            "#,
-        );
+        #[test]
+        fn complex() {
+            let mut de = Deserializer::from_str(
+                r#"
+                <root>
+                    <tag a="1"><tag>text</tag>content</tag>
+                    <tag a="2"><![CDATA[cdata content]]></tag>
+                    <self-closed/>
+                </root>
+                "#,
+            );
 
-        assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
 
-        assert_eq!(
-            de.next().unwrap(),
-            Start(BytesStart::from_content(r#"tag a="1""#, 3))
-        );
-        assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::from_content(r#"tag a="1""#, 3))
+            );
+            assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
-        assert_eq!(
-            de.next().unwrap(),
-            Start(BytesStart::from_content(r#"tag a="2""#, 3))
-        );
-        assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
-        assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
+            assert_eq!(
+                de.next().unwrap(),
+                Start(BytesStart::from_content(r#"tag a="2""#, 3))
+            );
+            assert_eq!(de.next().unwrap(), CData(BytesCData::new("cdata content")));
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
-        assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
-        assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
+            assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
-        assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
-        assert_eq!(de.next().unwrap(), Eof);
+            assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Eof);
+        }
+
+        #[test]
+        fn invalid_xml() {
+            let mut de = Deserializer::from_str("<tag><tag></tag>");
+
+            assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
+            assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
+
+            match de.read_to_end(QName(b"tag")) {
+                Err(DeError::UnexpectedEof) => (),
+                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+            }
+            assert_eq!(de.next().unwrap(), Eof);
+        }
     }
 
     #[test]
