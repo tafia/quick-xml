@@ -12,6 +12,14 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+## 0.27.0 -- 2022-12-25
+
+### New Features
+
 - [#521]: Implement `Clone` for all error types. This required changing `Error::Io` to contain
   `Arc<std::io::Error>` instead of `std::io::Error` since `std::io::Error` does not implement
   `Clone`.
