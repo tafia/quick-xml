@@ -14,7 +14,12 @@
 
 ### Bug Fixes
 
+- [#530]: Fix an infinite loop leading to unbounded memory consumption that occurs when
+  skipping events on malformed XML with the `overlapped-lists` feature active.
+
 ### Misc Changes
+
+[#530]: https://github.com/tafia/quick-xml/pull/530
 
 ## 0.27.0 -- 2022-12-25
 

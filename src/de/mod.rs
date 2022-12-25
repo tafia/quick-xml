@@ -2073,6 +2073,7 @@ where
     /// should be replayed after calling [`Self::start_replay()`].
     #[cfg(feature = "overlapped-lists")]
     #[inline]
+    #[must_use = "returned checkpoint should be used in `start_replay`"]
     fn skip_checkpoint(&self) -> usize {
         self.write.len()
     }
@@ -2100,16 +2101,21 @@ where
                         DeEvent::End(ref e) if e.name().as_ref() == end => {
                             self.skip_event(event)?;
                             if depth == 0 {
-                                return Ok(());
+                                break;
                             }
                             depth -= 1;
+                        }
+                        DeEvent::Eof => {
+                            self.skip_event(event)?;
+                            break;
                         }
                         _ => self.skip_event(event)?,
                     }
                 }
             }
-            _ => Ok(()),
+            _ => (),
         }
+        Ok(())
     }
 
     #[cfg(feature = "overlapped-lists")]
@@ -3056,6 +3062,20 @@ mod tests {
                 Err(DeError::TooManyEvents(count)) => assert_eq!(count.get(), 3),
                 e => panic!("Expected `Err(TooManyEvents(3))`, but found {:?}", e),
             }
+        }
+
+        /// Without handling Eof in `skip` this test failed with memory allocation
+        #[test]
+        fn invalid_xml() {
+            use crate::de::DeEvent::*;
+
+            let mut de = Deserializer::from_str("<root>");
+
+            // Cache all events
+            let checkpoint = de.skip_checkpoint();
+            de.skip().unwrap();
+            de.start_replay(checkpoint);
+            assert_eq!(de.read, vec![Start(BytesStart::new("root")), Eof]);
         }
     }
 
