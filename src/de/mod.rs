@@ -3155,11 +3155,11 @@ mod tests {
 
     #[test]
     fn borrowing_reader_parity() {
-        let s = r##"
+        let s = r#"
             <item name="hello" source="world.rs">Some text</item>
             <item2/>
             <item3 value="world" />
-    	"##;
+        "#;
 
         let mut reader1 = IoReader {
             reader: Reader::from_reader(s.as_bytes()),
@@ -3183,12 +3183,12 @@ mod tests {
 
     #[test]
     fn borrowing_reader_events() {
-        let s = r##"
+        let s = r#"
             <item name="hello" source="world.rs">Some text</item>
             <item2></item2>
             <item3/>
             <item4 value="world" />
-        "##;
+        "#;
 
         let mut reader = SliceReader {
             reader: Reader::from_str(s),
@@ -3229,27 +3229,6 @@ mod tests {
                 End(BytesEnd::new("item4")),
             ]
         )
-    }
-
-    #[test]
-    fn borrowing_read_to_end() {
-        let s = " <item /> ";
-        let mut reader = SliceReader {
-            reader: Reader::from_str(s),
-        };
-
-        reader
-            .reader
-            .trim_text(true)
-            .expand_empty_elements(true)
-            .check_end_names(true);
-
-        assert_eq!(
-            reader.next().unwrap(),
-            DeEvent::Start(BytesStart::from_content("item ", 4))
-        );
-        reader.read_to_end(QName(b"item")).unwrap();
-        assert_eq!(reader.next().unwrap(), DeEvent::Eof);
     }
 
     /// Ensures, that [`Deserializer::read_string()`] never can get an `End` event,
