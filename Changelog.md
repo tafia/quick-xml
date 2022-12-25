@@ -68,6 +68,7 @@
   Refer to [documentation] for details.
 - [#521]: MSRV bumped to 1.52.
 - [#473]: `serde` feature that used to make some types serializable, renamed to `serde-types`
+- [#528]: Added documentation for XML to `serde` mapping
 
 [#473]: https://github.com/tafia/quick-xml/issues/473
 [#490]: https://github.com/tafia/quick-xml/pull/490
@@ -76,6 +77,7 @@
 [#517]: https://github.com/tafia/quick-xml/issues/517
 [#521]: https://github.com/tafia/quick-xml/pull/521
 [#523]: https://github.com/tafia/quick-xml/pull/523
+[#528]: https://github.com/tafia/quick-xml/pull/528
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
