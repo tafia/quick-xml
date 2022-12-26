@@ -88,7 +88,7 @@
   by
 
   ```rust
-  #[serde(default)] // not needed because if struct is `serde(default)`
+  #[serde(default)] // not needed if struct is `serde(default)`
   name: Vec<T>,
   ```
 
