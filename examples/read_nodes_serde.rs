@@ -61,7 +61,7 @@ const ONE_TRANSLATION_XML: &str = r#"
     </Translation>
 "#;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), quick_xml::DeError> {
     let t: Translation = from_str(ONE_TRANSLATION_XML)?;
     assert_eq!(t.tag, "HELLO");
     assert_eq!(t.lang, "ja");
