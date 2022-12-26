@@ -100,6 +100,7 @@
 [#521]: https://github.com/tafia/quick-xml/pull/521
 [#523]: https://github.com/tafia/quick-xml/pull/523
 [#528]: https://github.com/tafia/quick-xml/pull/528
+[#531]: https://github.com/tafia/quick-xml/pull/531
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
