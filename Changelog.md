@@ -77,6 +77,20 @@
 - [#521]: MSRV bumped to 1.52.
 - [#473]: `serde` feature that used to make some types serializable, renamed to `serde-types`
 - [#528]: Added documentation for XML to `serde` mapping
+- [#531]: `Option<Vec<T>>` doesn't work as before.
+
+  Replace
+
+  ```rust
+  name: Option<Vec<T>>,
+  ```
+
+  by
+
+  ```rust
+  #[serde(default)] // not needed because if struct is `serde(default)`
+  name: Vec<T>,
+  ```
 
 [#473]: https://github.com/tafia/quick-xml/issues/473
 [#490]: https://github.com/tafia/quick-xml/pull/490
