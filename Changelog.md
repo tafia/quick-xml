@@ -14,12 +14,16 @@
 
 ### Bug Fixes
 
+### Misc Changes
+
+## 0.27.1 -- 2022-12-28
+
+### Bug Fixes
+
 - [#530]: Fix an infinite loop leading to unbounded memory consumption that occurs when
   skipping events on malformed XML with the `overlapped-lists` feature active.
 - [#530]: Fix an error in the `Deserializer::read_to_end` when `overlapped-lists`
   feature is active and malformed XML is parsed
-
-### Misc Changes
 
 [#530]: https://github.com/tafia/quick-xml/pull/530
 
