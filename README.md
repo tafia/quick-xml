@@ -110,6 +110,9 @@ assert_eq!(result, expected.as_bytes());
 ## Serde
 
 When using the `serialize` feature, quick-xml can be used with serde's `Serialize`/`Deserialize` traits.
+The mapping between XML and Rust types, and in particular the syntax that allows you to specify the
+distinction between *elements* and *attributes*, is described in detail in the documentation
+for [deserialization](https://docs.rs/quick-xml/latest/quick_xml/de/).
 
 ### Credits
 
@@ -124,6 +127,7 @@ you can use either the special name `$text`, or the special name `$value`:
 
 ```rust,ignore
 struct Foo {
+    #[serde(rename = "@abc")]
     pub abc: String,
     #[serde(rename = "$text")]
     pub body: String,
