@@ -313,7 +313,7 @@ where
             ValueSource::Text => match self.de.next()? {
                 DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
                     // Comment to prevent auto-formatting
-                    e.decode(true)?,
+                    e.unescape()?,
                 )),
                 DeEvent::CData(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(
                     // Comment to prevent auto-formatting
@@ -467,8 +467,8 @@ where
     /// [`Text`]: DeEvent::Text
     /// [`CData`]: DeEvent::CData
     #[inline]
-    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.read_string_impl(unescape, self.allow_start)
+    fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(self.allow_start)
     }
 }
 
@@ -728,8 +728,8 @@ where
     /// [`Text`]: DeEvent::Text
     /// [`CData`]: DeEvent::CData
     #[inline]
-    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.read_string_impl(unescape, true)
+    fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
+        self.map.de.read_string_impl(true)
     }
 }
 
@@ -783,7 +783,7 @@ where
         match self.map.de.next()? {
             DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
                 // Comment to prevent auto-formatting
-                e.decode(true)?,
+                e.unescape()?,
             )
             .deserialize_seq(visitor),
             DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(
@@ -798,7 +798,7 @@ where
                 let value = match self.map.de.next()? {
                     DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(
                         // Comment to prevent auto-formatting
-                        e.decode(true)?,
+                        e.unescape()?,
                     )
                     .deserialize_seq(visitor),
                     DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(

@@ -1734,7 +1734,7 @@ macro_rules! deserialize_type {
             V: Visitor<'de>,
         {
             // No need to unescape because valid integer representations cannot be escaped
-            let text = self.read_string(false)?;
+            let text = self.read_string()?;
             visitor.$visit(text.parse()?)
         }
     };
@@ -1766,8 +1766,7 @@ macro_rules! deserialize_primitives {
         where
             V: Visitor<'de>,
         {
-            // No need to unescape because valid boolean representations cannot be escaped
-            let text = self.read_string(false)?;
+            let text = self.read_string()?;
 
             str2bool(&text, visitor)
         }
@@ -1792,7 +1791,7 @@ macro_rules! deserialize_primitives {
         where
             V: Visitor<'de>,
         {
-            let text = self.read_string(true)?;
+            let text = self.read_string()?;
             match text {
                 Cow::Borrowed(string) => visitor.visit_borrowed_str(string),
                 Cow::Owned(string) => visitor.visit_string(string),
@@ -2297,8 +2296,8 @@ where
     }
 
     #[inline]
-    fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
-        self.read_string_impl(unescape, true)
+    fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
+        self.read_string_impl(true)
     }
 
     /// Consumes a one XML element or an XML tree, returns associated text or
@@ -2333,19 +2332,15 @@ where
     /// |[`DeEvent::Text`] |`text content`             |Unescapes `text content` and returns it, consumes events up to `</tag>`
     /// |[`DeEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged, consumes events up to `</tag>`
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
-    fn read_string_impl(
-        &mut self,
-        unescape: bool,
-        allow_start: bool,
-    ) -> Result<Cow<'de, str>, DeError> {
+    fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) => Ok(e.decode(unescape)?),
+            DeEvent::Text(e) => Ok(e.unescape()?),
             DeEvent::CData(e) => Ok(e.decode()?),
             DeEvent::Start(e) if allow_start => {
                 // allow one nested level
                 let inner = self.next()?;
                 let t = match inner {
-                    DeEvent::Text(t) => t.decode(unescape)?,
+                    DeEvent::Text(t) => t.unescape()?,
                     DeEvent::CData(t) => t.decode()?,
                     DeEvent::Start(s) => {
                         return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))

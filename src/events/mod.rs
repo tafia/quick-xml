@@ -693,28 +693,6 @@ impl<'a> BytesText<'a> {
             Cow::Owned(s) => Ok(s.into()),
         }
     }
-
-    /// Gets content of this text buffer in the specified encoding and optionally
-    /// unescapes it.
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, unescape: bool) -> Result<Cow<'a, str>> {
-        let text = match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        };
-        let text = if unescape {
-            //FIXME: need to take into account entities defined in the document
-            match unescape_with(&text, |_| None)? {
-                // Because result is borrowed, no replacements was done and we can use original string
-                Cow::Borrowed(_) => text,
-                Cow::Owned(s) => s.into(),
-            }
-        } else {
-            text
-        };
-        Ok(text)
-    }
 }
 
 impl<'a> Debug for BytesText<'a> {

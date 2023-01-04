@@ -93,7 +93,7 @@ where
         if self.is_text {
             match self.de.next()? {
                 DeEvent::Text(e) => {
-                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.decode(true)?))
+                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.unescape()?))
                 }
                 DeEvent::CData(e) => {
                     seed.deserialize(SimpleTypeDeserializer::from_text_content(e.decode()?))
@@ -112,7 +112,7 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.decode(true)?)
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.unescape()?)
                     .deserialize_tuple(len, visitor),
                 DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
                     .deserialize_tuple(len, visitor),
@@ -134,7 +134,7 @@ where
     {
         if self.is_text {
             match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.decode(true)?)
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.unescape()?)
                     .deserialize_struct("", fields, visitor),
                 DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
                     .deserialize_struct("", fields, visitor),
