@@ -1,9 +1,8 @@
 use crate::{
-    de::{escape::EscapedDeserializer, DeEvent, Deserializer, XmlRead},
+    de::{escape::VariantDeserializer, DeEvent, Deserializer, XmlRead},
     errors::serialize::DeError,
 };
 use serde::de::{self, DeserializeSeed, Deserializer as SerdeDeserializer, Visitor};
-use std::borrow::Cow;
 
 /// An enum access
 pub struct EnumAccess<'de, 'a, R>
@@ -35,11 +34,11 @@ where
     {
         let decoder = self.de.reader.decoder();
         let de = match self.de.peek()? {
-            DeEvent::Text(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, true),
+            DeEvent::Text(t) => VariantDeserializer::new(t.as_ref(), decoder, true),
             // Escape sequences does not processed inside CDATA section
-            DeEvent::CData(t) => EscapedDeserializer::new(Cow::Borrowed(t), decoder, false),
+            DeEvent::CData(t) => VariantDeserializer::new(t.as_ref(), decoder, false),
             DeEvent::Start(e) => {
-                EscapedDeserializer::new(Cow::Borrowed(e.local_name().into_inner()), decoder, false)
+                VariantDeserializer::new(e.local_name().into_inner(), decoder, false)
             }
             _ => {
                 return Err(DeError::Unsupported(

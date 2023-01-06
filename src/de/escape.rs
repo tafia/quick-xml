@@ -16,17 +16,17 @@ use std::borrow::Cow;
 /// when converting to float, we don't expect any escapable character
 /// anyway
 #[derive(Clone, Debug)]
-pub struct EscapedDeserializer<'a> {
+pub struct VariantDeserializer<'a> {
     decoder: Decoder,
-    /// Possible escaped value of text/CDATA or attribute value
-    escaped_value: Cow<'a, [u8]>,
+    /// Possible escaped value of text/CDATA or tag name value
+    escaped_value: &'a [u8],
     /// If `true`, value requires unescaping before using
     escaped: bool,
 }
 
-impl<'a> EscapedDeserializer<'a> {
-    pub fn new(escaped_value: Cow<'a, [u8]>, decoder: Decoder, escaped: bool) -> Self {
-        EscapedDeserializer {
+impl<'a> VariantDeserializer<'a> {
+    pub fn new(escaped_value: &'a [u8], decoder: Decoder, escaped: bool) -> Self {
+        Self {
             decoder,
             escaped_value,
             escaped,
@@ -40,14 +40,14 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            let value = self.decoder.decode(self.escaped_value.as_ref())?.parse()?;
+            let value = self.decoder.decode(self.escaped_value)?.parse()?;
 
             visitor.$visit(value)
         }
     };
 }
 
-impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
+impl<'de, 'a> serde::Deserializer<'de> for VariantDeserializer<'a> {
     type Error = DeError;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -61,7 +61,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        let decoded = self.decoder.decode(&self.escaped_value)?;
+        let decoded = self.decoder.decode(self.escaped_value)?;
         if self.escaped {
             match unescape(&decoded)? {
                 Cow::Borrowed(s) => visitor.visit_str(s),
@@ -104,7 +104,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        deserialize_bool(self.escaped_value.as_ref(), self.decoder, visitor)
+        deserialize_bool(self.escaped_value, self.decoder, visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -125,7 +125,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     where
         V: Visitor<'de>,
     {
-        if self.escaped_value.as_ref().is_empty() {
+        if self.escaped_value.is_empty() {
             visitor.visit_none()
         } else {
             visitor.visit_some(self)
@@ -176,7 +176,7 @@ impl<'de, 'a> serde::Deserializer<'de> for EscapedDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> EnumAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'a> EnumAccess<'de> for VariantDeserializer<'a> {
     type Error = DeError;
     type Variant = Self;
 
@@ -189,7 +189,7 @@ impl<'de, 'a> EnumAccess<'de> for EscapedDeserializer<'a> {
     }
 }
 
-impl<'de, 'a> VariantAccess<'de> for EscapedDeserializer<'a> {
+impl<'de, 'a> VariantAccess<'de> for VariantDeserializer<'a> {
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
