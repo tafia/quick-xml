@@ -14,7 +14,13 @@
 
 ### Bug Fixes
 
+- [#537]: Restore ability to deserialize attributes that represents XML namespace
+  mappings (`xmlns:xxx`) that was broken since [#490]
+
 ### Misc Changes
+
+[#490]: https://github.com/tafia/quick-xml/pull/490
+[#537]: https://github.com/tafia/quick-xml/issues/537
 
 ## 0.27.1 -- 2022-12-28
 
