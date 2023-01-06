@@ -1792,7 +1792,6 @@ macro_rules! deserialize_primitives {
     };
 }
 
-mod escape;
 mod key;
 mod map;
 mod simple_type;
