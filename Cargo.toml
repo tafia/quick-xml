@@ -213,6 +213,11 @@ required-features = ["serialize"]
 path = "tests/serde-migrated.rs"
 
 [[test]]
+name = "serde-issues"
+required-features = ["serialize"]
+path = "tests/serde-issues.rs"
+
+[[test]]
 name = "async-tokio"
 required-features = ["async-tokio"]
 path = "tests/async-tokio.rs"

@@ -1,6 +1,6 @@
-//! Regression tests found in various issues
+//! Regression tests found in various issues.
 //!
-//! Name each test as `issue<GH number>`
+//! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::reader::Reader;

@@ -35,9 +35,11 @@ fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, De
 /// Converts a name to an identifier string using the following rules:
 ///
 /// - if it is an [`attribute`] name, put `@` in front of the identifier
+/// - if it is a namespace binding (`xmlns` or `xmlns:xxx`) put the decoded name
+///   to the identifier
 /// - put the decoded [`local_name()`] of a name to the identifier
 ///
-/// The final identifier looks like `[@]local_name`
+/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding`
 /// (where `[]` means optional element).
 ///
 /// The deserializer also supports deserializing names as other primitive types:
@@ -72,10 +74,16 @@ pub struct QNameDeserializer<'d> {
 impl<'d> QNameDeserializer<'d> {
     /// Creates deserializer from name of an attribute
     pub fn from_attr(name: QName<'d>, decoder: Decoder) -> Result<Self, DeError> {
-        let local = decode_name(name, decoder)?;
+        // https://github.com/tafia/quick-xml/issues/537
+        // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
+        let field = if name.as_namespace_binding().is_some() {
+            decoder.decode(name.into_inner())?
+        } else {
+            decode_name(name, decoder)?
+        };
 
         Ok(Self {
-            name: Cow::Owned(format!("@{local}")),
+            name: Cow::Owned(format!("@{field}")),
         })
     }
 
