@@ -1,10 +1,12 @@
 use crate::{
-    de::{deserialize_bool, DeEvent, Deserializer, XmlRead},
+    de::simple_type::SimpleTypeDeserializer,
+    de::{deserialize_bool, DeEvent, Deserializer, XmlRead, TEXT_KEY},
     encoding::Decoder,
     errors::serialize::DeError,
     escape::unescape,
 };
-use serde::de::{self, DeserializeSeed, Deserializer as SerdeDeserializer, Visitor};
+use serde::de::value::StrDeserializer;
+use serde::de::{self, DeserializeSeed, Deserializer as _, Visitor};
 use serde::{forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
 
@@ -37,21 +39,29 @@ where
         V: DeserializeSeed<'de>,
     {
         let decoder = self.de.reader.decoder();
-        let de = match self.de.peek()? {
-            DeEvent::Text(t) => VariantDeserializer::new(t.as_ref(), decoder, true),
-            // Escape sequences does not processed inside CDATA section
-            DeEvent::CData(t) => VariantDeserializer::new(t.as_ref(), decoder, false),
-            DeEvent::Start(e) => {
-                VariantDeserializer::new(e.local_name().into_inner(), decoder, false)
-            }
-            _ => {
-                return Err(DeError::Unsupported(
-                    "Invalid event for Enum, expecting `Text` or `Start`".into(),
-                ))
-            }
+        let (name, is_text) = match self.de.peek()? {
+            DeEvent::Start(e) => (
+                seed.deserialize(VariantDeserializer::new(
+                    e.local_name().into_inner(),
+                    decoder,
+                    false,
+                ))?,
+                false,
+            ),
+            DeEvent::Text(_) | DeEvent::CData(_) => (
+                seed.deserialize(StrDeserializer::<DeError>::new(TEXT_KEY))?,
+                true,
+            ),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
+            DeEvent::Eof => return Err(DeError::UnexpectedEof),
         };
-        let name = seed.deserialize(de)?;
-        Ok((name, VariantAccess { de: self.de }))
+        Ok((
+            name,
+            VariantAccess {
+                de: self.de,
+                is_text,
+            },
+        ))
     }
 }
 
@@ -60,6 +70,9 @@ where
     R: XmlRead<'de>,
 {
     de: &'a mut Deserializer<'de, R>,
+    /// `true` if variant should be deserialized from a textual content
+    /// and `false` if from tag
+    is_text: bool,
 }
 
 impl<'de, 'a, R> de::VariantAccess<'de> for VariantAccess<'de, 'a, R>
@@ -70,9 +83,13 @@ where
 
     fn unit_variant(self) -> Result<(), DeError> {
         match self.de.next()? {
+            // Consume subtree
             DeEvent::Start(e) => self.de.read_to_end(e.name()),
+            // Does not needed to deserialize using SimpleTypeDeserializer, because
+            // it returns `()` when `deserialize_unit()` is requested
             DeEvent::Text(_) | DeEvent::CData(_) => Ok(()),
-            _ => unreachable!(),
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Start`, `Text` or `CData` events are possible here"),
         }
     }
 
@@ -80,14 +97,38 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de)
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => {
+                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.decode(true)?))
+                }
+                DeEvent::CData(e) => {
+                    seed.deserialize(SimpleTypeDeserializer::from_text_content(e.decode()?))
+                }
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+            }
+        } else {
+            seed.deserialize(&mut *self.de)
+        }
     }
 
     fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
     {
-        self.de.deserialize_tuple(len, visitor)
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.decode(true)?)
+                    .deserialize_tuple(len, visitor),
+                DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
+                    .deserialize_tuple(len, visitor),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+            }
+        } else {
+            self.de.deserialize_tuple(len, visitor)
+        }
     }
 
     fn struct_variant<V>(
@@ -98,7 +139,18 @@ where
     where
         V: Visitor<'de>,
     {
-        self.de.deserialize_struct("", fields, visitor)
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e.decode(true)?)
+                    .deserialize_struct("", fields, visitor),
+                DeEvent::CData(e) => SimpleTypeDeserializer::from_text_content(e.decode()?)
+                    .deserialize_struct("", fields, visitor),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` or `CData` events are possible here"),
+            }
+        } else {
+            self.de.deserialize_struct("", fields, visitor)
+        }
     }
 }
 
