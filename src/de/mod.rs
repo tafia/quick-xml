@@ -473,7 +473,7 @@
 //! <!-- 8 ===================================================================================== -->
 //! <tr>
 //! <td>
-//! An XML with different root tag names:
+//! An XML with different root tag names, as well as text / CDATA content:
 //!
 //! ```xml
 //! <one field1="...">...</one>
@@ -483,11 +483,17 @@
 //!   <field2>...</field2>
 //! </two>
 //! ```
+//! ```xml
+//! Text <![CDATA[or (mixed)
+//! CDATA]]> content
+//! ```
 //! </td>
 //! <td>
 //!
 //! An enum where each variant have a name of the possible root tag. The name of
 //! the enum itself does not matter.
+//!
+//! If you need to get a textual content, mark a variant with `#[serde(rename = "$text")]`.
 //!
 //! All these structs can be used to deserialize from any XML on the
 //! left side depending on amount of information that you want to get:
@@ -503,9 +509,19 @@
 //! enum AnyName {
 //!   One { #[serde(rename = "@field1")] field1: T },
 //!   Two { field2: U },
+//!
+//!   /// Use unit variant, if you do not care of a content.
+//!   /// You can use tuple variant if you want to parse
+//!   /// textual content as an xs:list.
+//!   /// Struct variants are not supported and will return
+//!   /// Err(Unsupported)
+//!   #[serde(rename = "$text")]
+//!   Text(String),
 //! }
 //! # assert_eq!(AnyName::One { field1: () }, quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Two { field2: () }, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! # assert_eq!(AnyName::Text("text".into()), quick_xml::de::from_str(r#"text"#).unwrap());
+//! # // TODO: After #474 parse mixed content
 //! ```
 //! ```
 //! # use pretty_assertions::assert_eq;
@@ -523,9 +539,13 @@
 //!   // `field1` content discarded
 //!   One,
 //!   Two(Two),
+//!   #[serde(rename = "$text")]
+//!   Text,
 //! }
 //! # assert_eq!(AnyName::One,                     quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Two(Two { field2: () }), quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! # assert_eq!(AnyName::Text,                    quick_xml::de::from_str(r#"text"#).unwrap());
+//! # // TODO: After #474 parse mixed content
 //! ```
 //! ```
 //! # use pretty_assertions::assert_eq;
@@ -535,12 +555,14 @@
 //! #[serde(rename_all = "snake_case")]
 //! enum AnyName {
 //!   One,
-//!   // the <two> will be mapped to this
+//!   // the <two> and textual content will be mapped to this
 //!   #[serde(other)]
 //!   Other,
 //! }
 //! # assert_eq!(AnyName::One,   quick_xml::de::from_str(r#"<one field1="...">...</one>"#).unwrap());
 //! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"<two><field2>...</field2></two>"#).unwrap());
+//! # assert_eq!(AnyName::Other, quick_xml::de::from_str(r#"text"#).unwrap());
+//! # // TODO: After #474 parse mixed content
 //! ```
 //! <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
 //!
@@ -569,10 +591,18 @@
 //!   <two>...</two>
 //! </any-tag>
 //! ```
+//! ```xml
+//! <any-tag field="...">
+//!   Text <![CDATA[or (mixed)
+//!   CDATA]]> content
+//! </any-tag>
+//! ```
 //! </td>
 //! <td>
 //!
 //! A structure with a field which type is an `enum`.
+//!
+//! If you need to get a textual content, mark a variant with `#[serde(rename = "$text")]`.
 //!
 //! Names of the enum, struct, and struct field with `Choice` type does not matter:
 //!
@@ -586,6 +616,14 @@
 //! enum Choice {
 //!   One,
 //!   Two,
+//!
+//!   /// Use unit variant, if you do not care of a content.
+//!   /// You can use tuple variant if you want to parse
+//!   /// textual content as an xs:list.
+//!   /// Struct variants are not supported and will return
+//!   /// Err(Unsupported)
+//!   #[serde(rename = "$text")]
+//!   Text(String),
 //! }
 //! # #[derive(Debug, PartialEq)]
 //! #[derive(Deserialize)]
@@ -603,6 +641,11 @@
 //! # assert_eq!(
 //! #   AnyName { field: (), any_name: Choice::Two },
 //! #   quick_xml::de::from_str(r#"<any-tag field="..."><two>...</two></any-tag>"#).unwrap(),
+//! # );
+//! # assert_eq!(
+//! #   AnyName { field: (), any_name: Choice::Text("text".into()) },
+//! #   // TODO: After #474 parse mixed content
+//! #   quick_xml::de::from_str(r#"<any-tag field="...">text</any-tag>"#).unwrap(),
 //! # );
 //! ```
 //! </td>
@@ -1023,8 +1066,7 @@
 //! # );
 //! ```
 //! ```ignore
-//! // FIXME: Custom("unknown variant `text`, expected
-//! //                one of `one`, `two`, `$value`")
+//! // FIXME: #474
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1033,7 +1075,7 @@
 //! enum Choice {
 //!   One,
 //!   Two,
-//!   #[serde(rename = "$value")]
+//!   #[serde(rename = "$text")]
 //!   Other(String),
 //! }
 //! type AnyName = Vec<Choice>;
@@ -1202,8 +1244,7 @@
 //! You MUST specify `#[serde(rename = "$value")]` on that field:
 //!
 //! ```ignore
-//! // FIXME: Custom("unknown variant `text`, expected
-//! //                one of `one`, `two`, `$value`")
+//! // FIXME: #474
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1212,7 +1253,7 @@
 //! enum Choice {
 //!   One,
 //!   Two,
-//!   #[serde(rename = "$value")]
+//!   #[serde(rename = "$text")]
 //!   Other(String),
 //! }
 //! # #[derive(Debug, PartialEq)]
@@ -1248,8 +1289,7 @@
 //! # );
 //! ```
 //! ```ignore
-//! // FIXME: Custom("unknown variant `text`, expected
-//! //                one of `one`, `two`, `$value`")
+//! // FIXME: #474
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # #[derive(Debug, PartialEq)]
@@ -1258,7 +1298,7 @@
 //! enum Choice {
 //!   One,
 //!   Two,
-//!   #[serde(rename = "$value")]
+//!   #[serde(rename = "$text")]
 //!   Other(String),
 //! }
 //! # #[derive(Debug, PartialEq)]
@@ -2433,8 +2473,7 @@ where
     where
         V: Visitor<'de>,
     {
-        let value = visitor.visit_enum(var::EnumAccess::new(self))?;
-        Ok(value)
+        visitor.visit_enum(var::EnumAccess::new(self))
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, DeError>

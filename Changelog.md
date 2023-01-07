@@ -12,6 +12,9 @@
 
 ### New Features
 
+- [#541]: Deserialize specially named `$text` enum variant in [externally tagged]
+  enums from textual content
+
 ### Bug Fixes
 
 - [#537]: Restore ability to deserialize attributes that represents XML namespace
@@ -19,8 +22,10 @@
 
 ### Misc Changes
 
+[externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#537]: https://github.com/tafia/quick-xml/issues/537
+[#541]: https://github.com/tafia/quick-xml/pull/541
 
 ## 0.27.1 -- 2022-12-28
 
