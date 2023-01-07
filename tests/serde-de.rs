@@ -5368,7 +5368,7 @@ mod enum_ {
             fn attributes() {
                 let data: NodeAttr = from_str(
                     // Comment for prevent unnecessary formatting - we use the same style in all tests
-                    r#"<root tag="Newtype" value="true"/>"#,
+                    r#"<root tag="Newtype"><value>true</value></root>"#,
                 )
                 .unwrap();
                 assert_eq!(data, NodeAttr::Newtype(NewtypeContent { value: true }));
