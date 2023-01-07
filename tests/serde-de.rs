@@ -5071,6 +5071,8 @@ mod enum_ {
         float: String,
     }
 
+    /// Enum tag selector is a name of the `<element>` or text / CDATA content
+    /// for a `$text` variant
     mod externally_tagged {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -5269,8 +5271,142 @@ mod enum_ {
                 );
             }
         }
+
+        /// Test deserialization of the specially named variant `$text`
+        mod text {
+            use super::*;
+
+            mod unit {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                enum Text {
+                    #[serde(rename = "$text")]
+                    Unit,
+                }
+
+                #[test]
+                fn text() {
+                    let data: Text = from_str(" text ").unwrap();
+                    assert_eq!(data, Text::Unit);
+                }
+
+                #[test]
+                fn cdata() {
+                    let data: Text = from_str("<![CDATA[ cdata ]]>").unwrap();
+                    assert_eq!(data, Text::Unit);
+                }
+
+                #[test]
+                #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
+                fn mixed() {
+                    let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
+                    assert_eq!(data, Text::Unit);
+                }
+            }
+
+            mod newtype {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                enum Text {
+                    #[serde(rename = "$text")]
+                    Newtype(String),
+                }
+
+                #[test]
+                fn text() {
+                    let data: Text = from_str(" text ").unwrap();
+                    assert_eq!(data, Text::Newtype("text".into()));
+                }
+
+                #[test]
+                fn cdata() {
+                    let data: Text = from_str("<![CDATA[ cdata ]]>").unwrap();
+                    assert_eq!(data, Text::Newtype(" cdata ".into()));
+                }
+
+                #[test]
+                #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
+                fn mixed() {
+                    let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
+                    assert_eq!(data, Text::Newtype("te  cdata  xt".into()));
+                }
+            }
+
+            /// Tuple variant deserialized as an `xs:list`, that is why spaces
+            /// are trimmed even in CDATA sections
+            mod tuple {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                enum Text {
+                    #[serde(rename = "$text")]
+                    Tuple(f64, String),
+                }
+
+                #[test]
+                fn text() {
+                    let data: Text = from_str(" 4.2 text ").unwrap();
+                    assert_eq!(data, Text::Tuple(4.2, "text".into()));
+                }
+
+                #[test]
+                fn cdata() {
+                    let data: Text = from_str("<![CDATA[ 4.2 cdata ]]>").unwrap();
+                    assert_eq!(data, Text::Tuple(4.2, "cdata".into()));
+                }
+
+                #[test]
+                #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
+                fn mixed() {
+                    let data: Text = from_str(" 4.2 <![CDATA[ cdata ]]>").unwrap();
+                    assert_eq!(data, Text::Tuple(4.2, "cdata".into()));
+                }
+            }
+
+            /// Struct variant cannot be directly deserialized from `Text` / `CData` events
+            mod struct_ {
+                use super::*;
+
+                #[derive(Debug, Deserialize, PartialEq)]
+                enum Text {
+                    #[serde(rename = "$text")]
+                    Struct { float: f64, string: String },
+                }
+
+                #[test]
+                fn text() {
+                    match from_str::<Text>(" text ") {
+                        Err(DeError::Unsupported(_)) => {}
+                        x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    }
+                }
+
+                #[test]
+                fn cdata() {
+                    match from_str::<Text>("<![CDATA[ cdata ]]>") {
+                        Err(DeError::Unsupported(_)) => {}
+                        x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    }
+                }
+
+                #[test]
+                fn mixed() {
+                    match from_str::<Text>(" te <![CDATA[ cdata ]]> xt ") {
+                        Err(DeError::Unsupported(_)) => {}
+                        x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    }
+                }
+            }
+        }
     }
 
+    /// Enum tag selector either an attribute "tag", or a tag "tag".
+    /// `$text` variant could be defined, but that name has no special meaning
     mod internally_tagged {
         use super::*;
 
@@ -5486,6 +5622,8 @@ mod enum_ {
         }
     }
 
+    /// Enum tag selector either an attribute "tag", or a tag "tag".
+    /// `$text` variant could be defined, but that name has no special meaning
     mod adjacently_tagged {
         use super::*;
 
@@ -5743,6 +5881,8 @@ mod enum_ {
         }
     }
 
+    /// Enum tags does not exist.
+    /// `$text` variant could be defined, but that name has no special meaning
     mod untagged {
         use super::*;
         use pretty_assertions::assert_eq;
