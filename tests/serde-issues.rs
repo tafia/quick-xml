@@ -241,6 +241,48 @@ fn issue500() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/510.
+#[test]
+fn issue510() {
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename = "ENTRY")]
+    struct Entry {
+        #[serde(rename = "CUE_V2")]
+        cues: Option<Vec<Cue>>,
+    }
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    // #[serde_with::serde_as]
+    struct Cue {
+        #[serde(rename = "@NAME")]
+        name: String,
+    }
+
+    let data: Entry = from_str(
+        "\
+        <ENTRY>\
+            <CUE_V2 NAME='foo'></CUE_V2>\
+            <CUE_V2 NAME='bar'></CUE_V2>\
+        </ENTRY>\
+    ",
+    )
+    .unwrap();
+
+    assert_eq!(
+        data,
+        Entry {
+            cues: Some(vec![
+                Cue {
+                    name: "foo".to_string(),
+                },
+                Cue {
+                    name: "bar".to_string(),
+                },
+            ]),
+        }
+    );
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.
 ///
 /// This test checks that special `xmlns:xxx` attributes uses full name of
