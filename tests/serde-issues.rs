@@ -2,9 +2,11 @@
 //!
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
+use pretty_assertions::assert_eq;
 use quick_xml::de::from_str;
 use quick_xml::se::to_string;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Regression tests for https://github.com/tafia/quick-xml/issues/252.
 mod issue252 {
@@ -76,6 +78,39 @@ mod issue252 {
             r#"<OptionalElements><a>a</a><b>b</b></OptionalElements>"#
         );
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/343.
+#[test]
+fn issue343() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Users {
+        users: HashMap<String, User>,
+    }
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Max(u16);
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct User {
+        max: Max,
+    }
+
+    let xml = "<Users>\
+                        <users>\
+                            <roger>\
+                                <max>10</max>\
+                            </roger>\
+                        </users>\
+                    </Users>";
+    let users: Users = from_str(xml).unwrap();
+
+    assert_eq!(
+        users,
+        Users {
+            users: HashMap::from([("roger".to_string(), User { max: Max(10) })]),
+        }
+    );
+    assert_eq!(to_string(&users).unwrap(), xml);
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.
