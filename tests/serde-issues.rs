@@ -142,6 +142,43 @@ fn issue349() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/429.
+#[test]
+fn issue429() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    enum State {
+        A,
+        B,
+        C,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct StateOuter {
+        #[serde(rename = "$text")]
+        state: State,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    pub struct Root {
+        state: StateOuter,
+    }
+
+    assert_eq!(
+        from_str::<Root>("<root><state>B</state></root>").unwrap(),
+        Root {
+            state: StateOuter { state: State::B }
+        }
+    );
+
+    assert_eq!(
+        to_string(&Root {
+            state: StateOuter { state: State::B }
+        })
+        .unwrap(),
+        "<Root><state>B</state></Root>"
+    );
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.
 ///
 /// This test checks that special `xmlns:xxx` attributes uses full name of
