@@ -113,6 +113,35 @@ fn issue343() {
     assert_eq!(to_string(&users).unwrap(), xml);
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/349.
+#[test]
+fn issue349() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Entity {
+        id: Id,
+    }
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Id {
+        #[serde(rename = "$value")]
+        content: Enum,
+    }
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[serde(rename_all = "kebab-case")]
+    enum Enum {
+        A(String),
+        B(String),
+    }
+
+    assert_eq!(
+        from_str::<Entity>("<entity><id><a>Id</a></id></entity>").unwrap(),
+        Entity {
+            id: Id {
+                content: Enum::A("Id".to_string()),
+            }
+        }
+    );
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.
 ///
 /// This test checks that special `xmlns:xxx` attributes uses full name of
