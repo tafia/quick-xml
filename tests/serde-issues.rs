@@ -179,6 +179,68 @@ fn issue429() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/500.
+#[test]
+fn issue500() {
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct TagOne {}
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct TagTwo {}
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    enum Tag {
+        TagOne(TagOne),
+        TagTwo(TagTwo),
+    }
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Root {
+        #[serde(rename = "$value", default)]
+        data: Vec<Tag>,
+    }
+
+    let data: Root = from_str(
+        "\
+        <root>\
+            <TagOne></TagOne>\
+            <TagTwo></TagTwo>\
+            <TagOne></TagOne>\
+        </root>\
+    ",
+    )
+    .unwrap();
+
+    assert_eq!(
+        data,
+        Root {
+            data: vec![
+                Tag::TagOne(TagOne {}),
+                Tag::TagTwo(TagTwo {}),
+                Tag::TagOne(TagOne {}),
+            ],
+        }
+    );
+
+    let data: Vec<Tag> = from_str(
+        "\
+        <TagOne></TagOne>\
+        <TagTwo></TagTwo>\
+        <TagOne></TagOne>\
+    ",
+    )
+    .unwrap();
+
+    assert_eq!(
+        data,
+        vec![
+            Tag::TagOne(TagOne {}),
+            Tag::TagTwo(TagTwo {}),
+            Tag::TagOne(TagOne {}),
+        ]
+    );
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.
 ///
 /// This test checks that special `xmlns:xxx` attributes uses full name of
