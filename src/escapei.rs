@@ -10,8 +10,6 @@ use pretty_assertions::assert_eq;
 /// Error for XML escape / unescape.
 #[derive(Clone, Debug)]
 pub enum EscapeError {
-    /// Entity with Null character
-    EntityWithNull(Range<usize>),
     /// Unrecognized escape symbol
     UnrecognizedSymbol(Range<usize>, String),
     /// Cannot find `;` after `&`
@@ -31,11 +29,6 @@ pub enum EscapeError {
 impl std::fmt::Display for EscapeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            EscapeError::EntityWithNull(e) => write!(
-                f,
-                "Error while escaping character at range {:?}: Null character entity not allowed",
-                e
-            ),
             EscapeError::UnrecognizedSymbol(rge, res) => write!(
                 f,
                 "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
@@ -183,7 +176,7 @@ where
                 let pat = &raw[start + 1..end];
                 if pat.starts_with('#') {
                     let entity = &pat[1..]; // starts after the #
-                    let codepoint = parse_number(entity, start..end)?;
+                    let codepoint = parse_number(entity)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
                 } else if let Some(value) = named_entity(pat) {
                     unescaped.push_str(value);
@@ -1690,15 +1683,12 @@ fn named_entity(name: &str) -> Option<&str> {
     Some(s)
 }
 
-fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
+fn parse_number(bytes: &str) -> Result<char, EscapeError> {
     let code = if bytes.starts_with('x') {
         parse_hexadecimal(&bytes[1..])
     } else {
         parse_decimal(bytes)
     }?;
-    if code == 0 {
-        return Err(EscapeError::EntityWithNull(range));
-    }
     match std::char::from_u32(code) {
         Some(c) => Ok(c),
         None => Err(EscapeError::InvalidCodepoint(code)),
@@ -1745,6 +1735,8 @@ fn test_unescape() {
     assert_eq!(unescape("&lt;test&gt;").unwrap(), "<test>");
     assert_eq!(unescape("&#x30;").unwrap(), "0");
     assert_eq!(unescape("&#48;").unwrap(), "0");
+    assert_eq!(unescape("&#0;").unwrap(), "\0");
+    assert_eq!(unescape("&#x0;").unwrap(), "\0");
     assert!(unescape("&foo;").is_err());
 }
 
