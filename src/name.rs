@@ -410,7 +410,10 @@ impl NamespaceResolver {
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
         // (default namespace) attribute.
         for a in start.attributes().with_checks(false) {
-            if let Ok(Attribute { key: k, value: v }) = a {
+            if let Ok(Attribute {
+                key: k, value: v, ..
+            }) = a
+            {
                 match k.as_namespace_binding() {
                     Some(PrefixDeclaration::Default) => {
                         let start = buffer.len();

@@ -1,4 +1,4 @@
-use quick_xml::events::attributes::Attribute;
+use quick_xml::events::attributes::{Attr, Attribute};
 use quick_xml::events::Event::*;
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -36,6 +36,7 @@ fn test_attributes_empty() {
                 Some(Ok(Attribute {
                     key: QName(b"att1"),
                     value: Cow::Borrowed(b"a"),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(
@@ -43,6 +44,7 @@ fn test_attributes_empty() {
                 Some(Ok(Attribute {
                     key: QName(b"att2"),
                     value: Cow::Borrowed(b"b"),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -64,6 +66,7 @@ fn test_attribute_equal() {
                 Some(Ok(Attribute {
                     key: QName(b"att1"),
                     value: Cow::Borrowed(b"a=b"),
+                    quote: Attr::DoubleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);

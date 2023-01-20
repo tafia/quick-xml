@@ -243,7 +243,7 @@ macro_rules! read_until_close {
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_element($buf, &mut $self.parser.offset)
+                .read_element($buf, &mut $self.parser.offset, &[])
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
@@ -697,7 +697,12 @@ trait XmlSource<'r, B> {
     ///
     /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
     /// [events]: crate::events::Event
-    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
+    fn read_element(
+        &mut self,
+        buf: B,
+        position: &mut usize,
+        custom_quotes: &[(u8, u8)],
+    ) -> Result<Option<&'r [u8]>>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
@@ -821,22 +826,35 @@ enum ReadElementState {
     SingleQ,
     /// Inside a double-quoted attribute value
     DoubleQ,
+    /// Inside a custom-quoted attribute value
+    CustomQ(u8, u8),
 }
 impl ReadElementState {
     /// Changes state by analyzing part of input.
     /// Returns a tuple with part of chunk up to element closing symbol `>`
     /// and a position after that symbol or `None` if such symbol was not found
     #[inline(always)]
-    fn change<'b>(&mut self, chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
+    fn change<'b>(
+        &mut self,
+        chunk: &'b [u8],
+        custom_quotes: &[(u8, u8)],
+    ) -> Option<(&'b [u8], usize)> {
         for i in memchr::memchr3_iter(b'>', b'\'', b'"', chunk) {
             *self = match (*self, chunk[i]) {
                 // only allowed to match `>` while we are in state `Elem`
                 (Self::Elem, b'>') => return Some((&chunk[..i], i + 1)),
                 (Self::Elem, b'\'') => Self::SingleQ,
                 (Self::Elem, b'\"') => Self::DoubleQ,
-
                 // the only end_byte that gets us out if the same character
                 (Self::SingleQ, b'\'') | (Self::DoubleQ, b'"') => Self::Elem,
+
+                (Self::Elem, q) => {
+                    if let Some((o, c)) = custom_quotes.iter().find(|(o, _)| *o == q) {
+                        Self::CustomQ(*o, *c)
+                    } else {
+                        *self
+                    }
+                }
 
                 // all other bytes: no state change
                 _ => *self,
@@ -1404,7 +1422,7 @@ mod test {
                     //                ^= 0
 
                     assert_eq!(
-                        $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                        $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                         None
                     );
                     assert_eq!(position, 0);
@@ -1423,7 +1441,7 @@ mod test {
                         //                 ^= 1
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b""))
                         );
                         assert_eq!(position, 1);
@@ -1437,7 +1455,7 @@ mod test {
                         //                    ^= 4
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b"tag"))
                         );
                         assert_eq!(position, 4);
@@ -1451,7 +1469,7 @@ mod test {
                         //                  ^= 2
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b":"))
                         );
                         assert_eq!(position, 2);
@@ -1465,7 +1483,7 @@ mod test {
                         //                     ^= 5
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b":tag"))
                         );
                         assert_eq!(position, 5);
@@ -1479,7 +1497,7 @@ mod test {
                         //                                                        ^= 38
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#))
                         );
                         assert_eq!(position, 38);
@@ -1499,7 +1517,7 @@ mod test {
                         //                  ^= 2
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b"/"))
                         );
                         assert_eq!(position, 2);
@@ -1513,7 +1531,7 @@ mod test {
                         //                     ^= 5
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b"tag/"))
                         );
                         assert_eq!(position, 5);
@@ -1527,7 +1545,7 @@ mod test {
                         //                   ^= 3
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b":/"))
                         );
                         assert_eq!(position, 3);
@@ -1541,7 +1559,7 @@ mod test {
                         //                      ^= 6
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(b":tag/"))
                         );
                         assert_eq!(position, 6);
@@ -1555,7 +1573,7 @@ mod test {
                         //                                                           ^= 41
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
+                            $source(&mut input).read_element(buf, &mut position, &[]) $(.$await)? .unwrap().map(Bytes),
                             Some(Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#))
                         );
                         assert_eq!(position, 41);

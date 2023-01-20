@@ -300,14 +300,19 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(bang_type.to_err())
     }
 
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
+    fn read_element(
+        &mut self,
+        _buf: (),
+        position: &mut usize,
+        custom_qs: &[(u8, u8)],
+    ) -> Result<Option<&'a [u8]>> {
         if self.is_empty() {
             return Ok(None);
         }
 
         let mut state = ReadElementState::Elem;
 
-        if let Some((bytes, i)) = state.change(self) {
+        if let Some((bytes, i)) = state.change(self, custom_qs) {
             *position += i;
             *self = &self[i..];
             return Ok(Some(bytes));
