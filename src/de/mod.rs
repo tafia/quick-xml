@@ -2335,27 +2335,19 @@ where
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e),
-            DeEvent::Start(e) if allow_start => {
-                // allow one nested level
-                let inner = self.next()?;
-                let t = match inner {
-                    DeEvent::Text(t) => t,
-                    DeEvent::Start(s) => {
-                        return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
-                    }
-                    // We can get End event in case of `<tag></tag>` or `<tag/>` input
-                    // Return empty text in that case
-                    DeEvent::End(end) if end.name() == e.name() => {
-                        return Ok("".into());
-                    }
-                    DeEvent::End(end) => {
-                        return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
-                    }
-                    DeEvent::Eof => return Err(DeError::UnexpectedEof),
-                };
-                self.read_to_end(e.name())?;
-                Ok(t)
-            }
+            // allow one nested level
+            DeEvent::Start(e) if allow_start => match self.next()? {
+                DeEvent::Text(t) => {
+                    self.read_to_end(e.name())?;
+                    Ok(t)
+                }
+                DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
+                // We can get End event in case of `<tag></tag>` or `<tag/>` input
+                // Return empty text in that case
+                DeEvent::End(end) if end.name() == e.name() => Ok("".into()),
+                DeEvent::End(end) => Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned())),
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
+            },
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
