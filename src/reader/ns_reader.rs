@@ -70,11 +70,11 @@ impl<R> NsReader<R> {
     pub(super) fn process_event<'i>(&mut self, event: Result<Event<'i>>) -> Result<Event<'i>> {
         match event {
             Ok(Event::Start(e)) => {
-                self.ns_resolver.push(&e);
+                self.ns_resolver.push(&e)?;
                 Ok(Event::Start(e))
             }
             Ok(Event::Empty(e)) => {
-                self.ns_resolver.push(&e);
+                self.ns_resolver.push(&e)?;
                 // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;

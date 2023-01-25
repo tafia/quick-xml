@@ -390,7 +390,7 @@ impl NamespaceEntry {
 /// A namespace management buffer.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
@@ -402,12 +402,62 @@ pub(crate) struct NamespaceResolver {
     nesting_level: i32,
 }
 
+/// That constant define the one of [reserved namespaces] for the xml standard.
+///
+/// The prefix `xml` is by definition bound to the namespace name
+/// `http://www.w3.org/XML/1998/namespace`. It may, but need not, be declared, and must not be
+/// undeclared or bound to any other namespace name. Other prefixes must not be bound to this
+/// namespace name, and it must not be declared as the default namespace.
+///
+/// [reserved namespaces]: https://www.w3.org/TR/xml-names11/#xmlReserved
+const RESERVED_NAMESPACE_XML: (Prefix, Namespace) = (
+    Prefix(b"xml"),
+    Namespace(b"http://www.w3.org/XML/1998/namespace"),
+);
+/// That constant define the one of [reserved namespaces] for the xml standard.
+///
+/// The prefix `xmlns` is used only to declare namespace bindings and is by definition bound
+/// to the namespace name `http://www.w3.org/2000/xmlns/`. It must not be declared or
+/// undeclared. Other prefixes must not be bound to this namespace name, and it must not be
+///  declared as the default namespace. Element names must not have the prefix `xmlns`.
+///
+/// [reserved namespaces]: https://www.w3.org/TR/xml-names11/#xmlReserved
+const RESERVED_NAMESPACE_XMLNS: (Prefix, Namespace) = (
+    Prefix(b"xmlns"),
+    Namespace(b"http://www.w3.org/2000/xmlns/"),
+);
+
+impl Default for NamespaceResolver {
+    fn default() -> Self {
+        let mut buffer = Vec::new();
+        let mut bindings = Vec::new();
+        for ent in &[RESERVED_NAMESPACE_XML, RESERVED_NAMESPACE_XMLNS] {
+            let prefix = ent.0.into_inner();
+            let uri = ent.1.into_inner();
+            bindings.push(NamespaceEntry {
+                start: buffer.len(),
+                prefix_len: prefix.len(),
+                value_len: uri.len(),
+                level: 0,
+            });
+            buffer.extend(prefix);
+            buffer.extend(uri);
+        }
+
+        Self {
+            buffer,
+            bindings,
+            nesting_level: 0,
+        }
+    }
+}
+
 impl NamespaceResolver {
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
     /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
-    pub fn push(&mut self, start: &BytesStart) {
+    pub fn push(&mut self, start: &BytesStart) -> Result<()> {
         self.nesting_level += 1;
         let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
@@ -425,7 +475,35 @@ impl NamespaceResolver {
                             level,
                         });
                     }
+                    Some(PrefixDeclaration::Named(b"xml")) => {
+                        if Namespace(&v) != RESERVED_NAMESPACE_XML.1 {
+                            // error, `xml` prefix explicitly set to different value
+                            return Err(Error::InvalidPrefixBind {
+                                prefix: b"xml".to_vec(),
+                                namespace: v.to_vec(),
+                            });
+                        }
+                        // don't add another NamespaceEntry for the `xml` namespace prefix
+                    }
+                    Some(PrefixDeclaration::Named(b"xmlns")) => {
+                        // error, `xmlns` prefix explicitly set
+                        return Err(Error::InvalidPrefixBind {
+                            prefix: b"xmlns".to_vec(),
+                            namespace: v.to_vec(),
+                        });
+                    }
                     Some(PrefixDeclaration::Named(prefix)) => {
+                        let ns = Namespace(&v);
+
+                        if ns == RESERVED_NAMESPACE_XML.1 || ns == RESERVED_NAMESPACE_XMLNS.1 {
+                            // error, non-`xml` prefix set to xml uri
+                            // error, non-`xmlns` prefix set to xmlns uri
+                            return Err(Error::InvalidPrefixBind {
+                                prefix: prefix.to_vec(),
+                                namespace: v.to_vec(),
+                            });
+                        }
+
                         let start = self.buffer.len();
                         self.buffer.extend_from_slice(prefix);
                         self.buffer.extend_from_slice(&v);
@@ -442,6 +520,7 @@ impl NamespaceResolver {
                 break;
             }
         }
+        Ok(())
     }
 
     /// Ends a top-most scope by popping all [namespace binding], that was added by
@@ -566,11 +645,13 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns='default'", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns='default'", 0))
+                .unwrap();
             assert_eq!(&resolver.buffer[s..], b"default");
 
             // Check that tags without namespaces does not change result
-            resolver.push(&BytesStart::from_content("", 0));
+            resolver.push(&BytesStart::from_content("", 0)).unwrap();
             assert_eq!(&resolver.buffer[s..], b"default");
             resolver.pop();
 
@@ -596,8 +677,12 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns='old'", 0));
-            resolver.push(&BytesStart::from_content(" xmlns='new'", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns='old'", 0))
+                .unwrap();
+            resolver
+                .push(&BytesStart::from_content(" xmlns='new'", 0))
+                .unwrap();
 
             assert_eq!(&resolver.buffer[s..], b"oldnew");
             assert_eq!(
@@ -635,8 +720,12 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns='old'", 0));
-            resolver.push(&BytesStart::from_content(" xmlns=''", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns='old'", 0))
+                .unwrap();
+            resolver
+                .push(&BytesStart::from_content(" xmlns=''", 0))
+                .unwrap();
 
             assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
@@ -676,11 +765,13 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns:p='default'", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns:p='default'", 0))
+                .unwrap();
             assert_eq!(&resolver.buffer[s..], b"pdefault");
 
             // Check that tags without namespaces does not change result
-            resolver.push(&BytesStart::from_content("", 0));
+            resolver.push(&BytesStart::from_content("", 0)).unwrap();
             assert_eq!(&resolver.buffer[s..], b"pdefault");
             resolver.pop();
 
@@ -706,8 +797,12 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns:p='old'", 0));
-            resolver.push(&BytesStart::from_content(" xmlns:p='new'", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns:p='old'", 0))
+                .unwrap();
+            resolver
+                .push(&BytesStart::from_content(" xmlns:p='new'", 0))
+                .unwrap();
 
             assert_eq!(&resolver.buffer[s..], b"poldpnew");
             assert_eq!(
@@ -745,8 +840,12 @@ mod namespaces {
             let mut resolver = NamespaceResolver::default();
             let s = resolver.buffer.len();
 
-            resolver.push(&BytesStart::from_content(" xmlns:p='old'", 0));
-            resolver.push(&BytesStart::from_content(" xmlns:p=''", 0));
+            resolver
+                .push(&BytesStart::from_content(" xmlns:p='old'", 0))
+                .unwrap();
+            resolver
+                .push(&BytesStart::from_content(" xmlns:p=''", 0))
+                .unwrap();
 
             assert_eq!(&resolver.buffer[s..], b"poldp");
             assert_eq!(
@@ -773,13 +872,229 @@ mod namespaces {
         }
     }
 
+    /// Tests for `xml` and `xmlns` built-in prefixes.
+    ///
+    /// See <https://www.w3.org/TR/xml-names11/#xmlReserved>
+    mod builtin_prefixes {
+        use super::*;
+
+        mod xml {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// `xml` prefix are always defined, it is not required to define it explicitly.
+            #[test]
+            fn undeclared() {
+                let name = QName(b"xml:random");
+                let namespace = RESERVED_NAMESPACE_XML.1;
+
+                let resolver = NamespaceResolver::default();
+
+                assert_eq!(
+                    resolver.resolve(name, true),
+                    (Bound(namespace), LocalName(b"random"))
+                );
+
+                assert_eq!(
+                    resolver.resolve(name, false),
+                    (Bound(namespace), LocalName(b"random"))
+                );
+                assert_eq!(resolver.find(name), Bound(namespace));
+            }
+
+            /// `xml` prefix can be declared but it must be bound to the value
+            /// `http://www.w3.org/XML/1998/namespace`
+            #[test]
+            fn rebound_to_correct_ns() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                resolver.push(
+                    &BytesStart::from_content(
+                        " xmlns:xml='http://www.w3.org/XML/1998/namespace'",
+                        0,
+                    ),
+                ).expect("`xml` prefix should be possible to bound to `http://www.w3.org/XML/1998/namespace`");
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// `xml` prefix cannot be re-declared to another namespace
+            #[test]
+            fn rebound_to_incorrect_ns() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(
+                    " xmlns:xml='not_correct_namespace'",
+                    0,
+                )) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"xml");
+                        assert_eq!(namespace, b"not_correct_namespace");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// `xml` prefix cannot be unbound
+            #[test]
+            fn unbound() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(" xmlns:xml=''", 0)) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"xml");
+                        assert_eq!(namespace, b"");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// Other prefix cannot be bound to `xml` namespace
+            #[test]
+            fn other_prefix_bound_to_xml_namespace() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(
+                    " xmlns:not_xml='http://www.w3.org/XML/1998/namespace'",
+                    0,
+                )) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"not_xml");
+                        assert_eq!(namespace, b"http://www.w3.org/XML/1998/namespace");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+        }
+
+        mod xmlns {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            /// `xmlns` prefix are always defined, it is forbidden to define it explicitly
+            #[test]
+            fn undeclared() {
+                let name = QName(b"xmlns:random");
+                let namespace = RESERVED_NAMESPACE_XMLNS.1;
+
+                let resolver = NamespaceResolver::default();
+
+                assert_eq!(
+                    resolver.resolve(name, true),
+                    (Bound(namespace), LocalName(b"random"))
+                );
+
+                assert_eq!(
+                    resolver.resolve(name, false),
+                    (Bound(namespace), LocalName(b"random"))
+                );
+                assert_eq!(resolver.find(name), Bound(namespace));
+            }
+
+            /// `xmlns` prefix cannot be re-declared event to its own namespace
+            #[test]
+            fn rebound_to_correct_ns() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(
+                    " xmlns:xmlns='http://www.w3.org/2000/xmlns/'",
+                    0,
+                )) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"xmlns");
+                        assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// `xmlns` prefix cannot be re-declared
+            #[test]
+            fn rebound_to_incorrect_ns() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(
+                    " xmlns:xmlns='not_correct_namespace'",
+                    0,
+                )) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"xmlns");
+                        assert_eq!(namespace, b"not_correct_namespace");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// `xmlns` prefix cannot be unbound
+            #[test]
+            fn unbound() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(" xmlns:xmlns=''", 0)) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"xmlns");
+                        assert_eq!(namespace, b"");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+
+            /// Other prefix cannot be bound to `xmlns` namespace
+            #[test]
+            fn other_prefix_bound_to_xmlns_namespace() {
+                let mut resolver = NamespaceResolver::default();
+                let s = resolver.buffer.len();
+                match resolver.push(&BytesStart::from_content(
+                    " xmlns:not_xmlns='http://www.w3.org/2000/xmlns/'",
+                    0,
+                )) {
+                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                        assert_eq!(prefix, b"not_xmlns");
+                        assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
+                    }
+                    x => panic!(
+                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        x
+                    ),
+                }
+                assert_eq!(&resolver.buffer[s..], b"");
+            }
+        }
+    }
+
     #[test]
     fn undeclared_prefix() {
         let name = QName(b"unknown:prefix");
 
         let resolver = NamespaceResolver::default();
 
-        assert_eq!(resolver.buffer, b"");
+        assert_eq!(
+            resolver.buffer,
+            b"xmlhttp://www.w3.org/XML/1998/namespacexmlnshttp://www.w3.org/2000/xmlns/"
+        );
         assert_eq!(
             resolver.resolve(name, true),
             (Unknown(b"unknown".to_vec()), LocalName(b"prefix"))
