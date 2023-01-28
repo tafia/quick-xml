@@ -912,8 +912,6 @@
 //! Use the [`Option`]. In that case inner array will always contains at least one
 //! element after deserialization:
 //! ```ignore
-//! // FIXME: #510,
-//! //        UnexpectedEnd([97, 110, 121, 45, 116, 97, 103])
 //! # use pretty_assertions::assert_eq;
 //! # use serde::Deserialize;
 //! # type Item = ();
@@ -935,10 +933,6 @@
 //! #   quick_xml::de::from_str(r#"<any-tag><item/><item/><item/></any-tag>"#).unwrap(),
 //! # );
 //! ```
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-//!
-//! Currently not working. The bug is tracked in [#510].
-//! </div>
 //!
 //! See also [Frequently Used Patterns](#element-lists).
 //!
@@ -1728,7 +1722,6 @@
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#474]: https://github.com/tafia/quick-xml/issues/474
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
-//! [#510]: https://github.com/tafia/quick-xml/issues/510
 
 // Macros should be defined before the modules that using them
 // Also, macros should be imported before using them
@@ -1828,6 +1821,17 @@ macro_rules! deserialize_primitives {
             V: Visitor<'de>,
         {
             self.deserialize_str(visitor)
+        }
+    };
+}
+
+macro_rules! deserialize_option {
+    ($de:expr, $deserializer:ident, $visitor:ident) => {
+        match $de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => $visitor.visit_none(),
+            DeEvent::CData(t) if t.is_empty() => $visitor.visit_none(),
+            DeEvent::Eof => $visitor.visit_none(),
+            _ => $visitor.visit_some($deserializer),
         }
     };
 }
@@ -2494,12 +2498,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.peek()? {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            DeEvent::CData(t) if t.is_empty() => visitor.visit_none(),
-            DeEvent::Eof => visitor.visit_none(),
-            _ => visitor.visit_some(self),
-        }
+        deserialize_option!(self, self, visitor)
     }
 
     /// Always call `visitor.visit_unit()` because returned value ignored in any case.

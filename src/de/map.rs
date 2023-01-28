@@ -480,7 +480,6 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_option);
     forward!(deserialize_unit);
     forward!(deserialize_unit_struct(name: &'static str));
     forward!(deserialize_newtype_struct(name: &'static str));
@@ -498,6 +497,13 @@ where
 
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        deserialize_option!(self.map.de, self, visitor)
+    }
 
     /// Tuple representation is the same as [sequences](#method.deserialize_seq).
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
@@ -758,7 +764,6 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_option);
     forward!(deserialize_unit);
     forward!(deserialize_unit_struct(name: &'static str));
     forward!(deserialize_newtype_struct(name: &'static str));
@@ -776,6 +781,13 @@ where
 
     forward!(deserialize_any);
     forward!(deserialize_ignored_any);
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        deserialize_option!(self.map.de, self, visitor)
+    }
 
     /// Representation of tuples the same as [sequences](#method.deserialize_seq).
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
