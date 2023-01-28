@@ -481,8 +481,6 @@ where
     deserialize_primitives!(mut);
 
     forward!(deserialize_unit);
-    forward!(deserialize_unit_struct(name: &'static str));
-    forward!(deserialize_newtype_struct(name: &'static str));
 
     forward!(deserialize_map);
     forward!(deserialize_struct(
@@ -503,27 +501,6 @@ where
         V: Visitor<'de>,
     {
         deserialize_option!(self.map.de, self, visitor)
-    }
-
-    /// Tuple representation is the same as [sequences](#method.deserialize_seq).
-    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_seq(visitor)
-    }
-
-    /// Named tuple representation is the same as [unnamed tuples](#method.deserialize_tuple).
-    fn deserialize_tuple_struct<V>(
-        self,
-        _name: &'static str,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_tuple(len, visitor)
     }
 
     /// Deserializes each `<tag>` in
@@ -765,8 +742,6 @@ where
     deserialize_primitives!(mut);
 
     forward!(deserialize_unit);
-    forward!(deserialize_unit_struct(name: &'static str));
-    forward!(deserialize_newtype_struct(name: &'static str));
 
     forward!(deserialize_map);
     forward!(deserialize_struct(
@@ -787,27 +762,6 @@ where
         V: Visitor<'de>,
     {
         deserialize_option!(self.map.de, self, visitor)
-    }
-
-    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
-    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_seq(visitor)
-    }
-
-    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
-    fn deserialize_tuple_struct<V>(
-        self,
-        _name: &'static str,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_tuple(len, visitor)
     }
 
     /// This method deserializes a sequence inside of element that itself is a
