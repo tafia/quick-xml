@@ -1815,6 +1815,50 @@ macro_rules! deserialize_primitives {
             self.deserialize_bytes(visitor)
         }
 
+        /// Representation of the named units the same as [unnamed units](#method.deserialize_unit)
+        fn deserialize_unit_struct<V>(
+            self,
+            _name: &'static str,
+            visitor: V,
+        ) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_unit(visitor)
+        }
+
+        fn deserialize_newtype_struct<V>(
+            self,
+            _name: &'static str,
+            visitor: V,
+        ) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_tuple(1, visitor)
+        }
+
+        /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+        fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_seq(visitor)
+        }
+
+        /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+        fn deserialize_tuple_struct<V>(
+            self,
+            _name: &'static str,
+            len: usize,
+            visitor: V,
+        ) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_tuple(len, visitor)
+        }
+
         /// Identifiers represented as [strings](#method.deserialize_str).
         fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -2422,50 +2466,6 @@ where
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
-    }
-
-    /// Representation of the names units the same as [unnamed units](#method.deserialize_unit)
-    fn deserialize_unit_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_unit(visitor)
-    }
-
-    fn deserialize_newtype_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_tuple(1, visitor)
-    }
-
-    /// Representation of tuples the same as [sequences](#method.deserialize_seq).
-    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_seq(visitor)
-    }
-
-    /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
-    fn deserialize_tuple_struct<V>(
-        self,
-        _name: &'static str,
-        len: usize,
-        visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_tuple(len, visitor)
     }
 
     fn deserialize_enum<V>(
