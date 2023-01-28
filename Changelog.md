@@ -19,11 +19,14 @@
 
 - [#537]: Restore ability to deserialize attributes that represents XML namespace
   mappings (`xmlns:xxx`) that was broken since [#490]
+- [#510]: Fix an error of deserialization of `Option<T>` fields where `T` is some
+  sequence type (for example, `Vec` or tuple)
 
 ### Misc Changes
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
+[#510]: https://github.com/tafia/quick-xml/issues/510
 [#537]: https://github.com/tafia/quick-xml/issues/537
 [#541]: https://github.com/tafia/quick-xml/pull/541
 
