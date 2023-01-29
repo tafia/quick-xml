@@ -33,6 +33,9 @@
 
 ### Misc Changes
 
+- [#371]: New error variant `EscapeError::TooManyNestedEntities` was added.
+
+[#371]: https://github.com/tafia/quick-xml/issues/371
 [#806]: https://github.com/tafia/quick-xml/issues/806
 [#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
