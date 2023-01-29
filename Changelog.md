@@ -18,6 +18,7 @@
 
 - [#938]: Add new enumeration `XmlVersion` and typified getter `BytesDecl::xml_version()`.
 - [#938]: Add new error variant `IllFormedError::UnknownVersion`.
+- [#371]: Add new error variant `EscapeError::TooManyNestedEntities`.
 
 ### Bug Fixes
 
@@ -31,6 +32,7 @@
 - [#938]: Now `BytesText::xml_content`, `BytesCData::xml_content` and `BytesRef::xml_content`
   accepts `XmlVersion` parameter to apply correct EOL normalization rules.
 
+[#371]: https://github.com/tafia/quick-xml/issues/371
 [#914]: https://github.com/tafia/quick-xml/pull/914
 [#938]: https://github.com/tafia/quick-xml/pull/938
 

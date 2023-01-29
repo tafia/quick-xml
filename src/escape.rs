@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::fmt::{self, Write};
 use std::num::ParseIntError;
 use std::ops::Range;
+use std::slice::Iter;
 
 /// Error of parsing character reference (`&#<dec-number>;` or `&#x<hex-number>;`).
 #[derive(Clone, Debug, PartialEq)]
@@ -51,6 +52,12 @@ pub enum EscapeError {
     /// Attempt to parse character reference (`&#<dec-number>;` or `&#x<hex-number>;`)
     /// was unsuccessful, not all characters are decimal or hexadecimal numbers.
     InvalidCharRef(ParseCharRefError),
+    /// Expanded more than maximum possible entities during attribute normalization.
+    ///
+    /// Attribute normalization includes expanding of general entities (`&entity;`)
+    /// which replacement text also could contain entities, which is also must be expanded.
+    /// If more than 128 entities would be expanded, this error is returned.
+    TooManyNestedEntities,
 }
 
 impl std::fmt::Display for EscapeError {
@@ -66,6 +73,9 @@ impl std::fmt::Display for EscapeError {
             ),
             Self::InvalidCharRef(e) => {
                 write!(f, "invalid character reference: {}", e)
+            }
+            Self::TooManyNestedEntities => {
+                f.write_str("too many nested entities in an attribute value")
             }
         }
     }
@@ -461,13 +471,13 @@ pub(crate) fn normalize_xml10_eols<'input>(text: &'input str) -> Cow<'input, str
         // we are sure that index within string
         normalized.push_str(&text[0..i]);
 
-        let mut pos = normalize_xml10_eol_step(&mut normalized, bytes, i, '\n');
+        let mut pos = normalize_xml10_eol_step(&mut normalized, text, i, '\n');
         while let Some(i) = memchr(b'\r', &bytes[pos..]) {
             let index = pos + i;
             // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
             // we are sure that index within string
             normalized.push_str(&text[pos..index]);
-            pos = normalize_xml10_eol_step(&mut normalized, bytes, index, '\n');
+            pos = normalize_xml10_eol_step(&mut normalized, text, index, '\n');
         }
         if let Some(rest) = text.get(pos..) {
             normalized.push_str(rest);
@@ -489,12 +499,8 @@ pub(crate) fn normalize_xml10_eols<'input>(text: &'input str) -> Cow<'input, str
 /// - `ch`: a character that should be put to the string instead of newline sequence
 ///
 /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
-fn normalize_xml10_eol_step(
-    normalized: &mut String,
-    input: &[u8],
-    index: usize,
-    ch: char,
-) -> usize {
+fn normalize_xml10_eol_step(normalized: &mut String, text: &str, index: usize, ch: char) -> usize {
+    let input = text.as_bytes();
     match input[index] {
         b'\r' => {
             normalized.push(ch);
@@ -512,6 +518,312 @@ fn normalize_xml10_eol_step(
             "at {}: expected ''\\n' or '\\r', found '{}' / {} / `0x{:X}`",
             index, x as char, x, x
         ),
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub(crate) fn normalize_xml10_attribute_value<'input, 'entity, F>(
+    value: &'input str,
+    depth: usize,
+    resolve_entity: F,
+) -> Result<Cow<'input, str>, EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: FnMut(&str) -> Option<&'entity str>,
+{
+    normalize_attribute_value(
+        value,
+        depth,
+        is_xml10_normalization_char,
+        normalize_xml10_eol_step,
+        resolve_entity,
+    )
+}
+
+const fn is_xml10_normalization_char(b: &u8) -> bool {
+    // The following sequences should be translated into a single `\n` (U+000a) character
+    // to normalize EOLs:
+    //
+    // |UTF-8   |String|
+    // |--------|------|
+    // |0d 0a   |\r\n  |
+    // |0d      |\r    |
+    matches!(*b, b'\t' | b'\r' | b'\n' | b'&')
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+pub(crate) fn normalize_xml11_attribute_value<'input, 'entity, F>(
+    value: &'input str,
+    depth: usize,
+    resolve_entity: F,
+) -> Result<Cow<'input, str>, EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: FnMut(&str) -> Option<&'entity str>,
+{
+    normalize_attribute_value(
+        value,
+        depth,
+        is_xml11_normalization_char,
+        normalize_xml11_eol_step,
+        resolve_entity,
+    )
+}
+
+const fn is_xml11_normalization_char(b: &u8) -> bool {
+    // The following sequences should be translated into a single `\n` (U+000a) character
+    // to normalize EOLs:
+    //
+    // |UTF-8   |String|
+    // |--------|------|
+    // |0d 0a   |\r\n  |
+    // |0d c2 85|\r\x85|
+    // |0d      |\r    |
+    // |c2 85   |\x85  |
+    // |e2 80 a8|\x2028|
+    matches!(*b, b'\t' | b'\r' | b'\n' | 0xC2 | 0xE2 | b'&')
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Returns the attribute value normalized as per [the XML specification],
+/// using a custom entity resolver.
+///
+/// Do not use this method with HTML attributes.
+///
+/// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+/// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters. A function
+/// for resolving entities can be provided as `resolve_entity`. Builtin entities will still
+/// take precedence.
+///
+/// This will allocate unless the raw attribute value does not require normalization.
+///
+/// # Parameters
+///
+/// - `value`: unnormalized attribute value
+/// - `depth`: maximum number of nested entities that can be expanded. If expansion
+///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`]
+/// - `is_normalization_char`: a function to check if byte is the start byte of character
+///   that should be normalized (UTF-8 encoding is assumed)
+/// - `normalize_eol_step`: a function that performs EOL normalization of a character
+/// - `resolve_entity`: a function to resolve entity. This function could be called
+///   multiple times on the same input and can return different values in each case
+///   for the same input, although it is not recommended
+///
+/// # Lifetimes
+///
+/// - `'input`: lifetime of the unnormalized attribute. If normalization is not required,
+///   the input returned unchanged with the same lifetime
+/// - `'entity`: lifetime of all entities that is returned by the entity resolution routine
+///
+/// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+pub fn normalize_attribute_value<'input, 'entity, C, E, F>(
+    value: &'input str,
+    depth: usize,
+    is_normalization_char: C,
+    normalize_eol_step: E,
+    mut resolve_entity: F,
+) -> Result<Cow<'input, str>, EscapeError>
+where
+    C: Fn(&u8) -> bool,
+    E: Fn(&mut String, &str, usize, char) -> usize,
+    // the lifetime of the output comes from a capture or is `'static`
+    F: FnMut(&str) -> Option<&'entity str>,
+{
+    let mut iter = value.as_bytes().iter();
+
+    // If we found the character that requires normalization, create a normalized
+    // version of the attribute, otherwise return the value unchanged
+    if let Some(i) = iter.position(&is_normalization_char) {
+        let mut normalized = String::with_capacity(value.len());
+        let pos = normalize_attr_step(
+            &mut normalized,
+            &mut iter,
+            value,
+            0,
+            i,
+            depth,
+            &is_normalization_char,
+            &normalize_eol_step,
+            &mut resolve_entity,
+        )?;
+
+        normalize_attr_steps(
+            &mut normalized,
+            &mut iter,
+            value,
+            pos,
+            depth,
+            &is_normalization_char,
+            &normalize_eol_step,
+            &mut resolve_entity,
+        )?;
+        return Ok(normalized.into());
+    }
+    Ok(Cow::Borrowed(value))
+}
+
+fn normalize_attr_steps<'entity, C, E, F>(
+    normalized: &mut String,
+    iter: &mut Iter<u8>,
+    input: &str,
+    mut pos: usize,
+    depth: usize,
+    is_normalization_char: &C,
+    normalize_eol_step: &E,
+    resolve_entity: &mut F,
+) -> Result<(), EscapeError>
+where
+    C: Fn(&u8) -> bool,
+    E: Fn(&mut String, &str, usize, char) -> usize,
+    // the lifetime of the output comes from a capture or is `'static`
+    F: FnMut(&str) -> Option<&'entity str>,
+{
+    while let Some(i) = iter.position(is_normalization_char) {
+        pos = normalize_attr_step(
+            normalized,
+            iter,
+            input,
+            pos,
+            pos + i,
+            depth,
+            is_normalization_char,
+            normalize_eol_step,
+            resolve_entity,
+        )?;
+    }
+    if let Some(rest) = input.get(pos..) {
+        normalized.push_str(rest);
+    }
+    Ok(())
+}
+
+/// Performs one step of the [normalization algorithm] (but with recursive part):
+///
+/// 1. For a character reference, append the referenced character
+///    to the normalized value.
+/// 2. For an entity reference, recursively apply this algorithm
+///    to the replacement text of the entity.
+/// 3. For a white space character (#x20, #xD, #xA, #x9), append
+///    a space character (#x20) to the normalized value.
+/// 4. For another character, append the character to the normalized value.
+///
+/// Because [according to the specification], XML parser should parse line-of-end
+/// normalized input, but quick-xml does not do that, this function also performs
+/// normalization of EOL characters. That should be done before expanding entities
+/// and character references, so cannot be processed later.
+///
+/// This function could be used also just to normalize line ends if the iterator
+/// won't be stop on `&` characters.
+///
+/// # Parameters
+///
+/// - `normalized`: Output of the algorithm. Normalized value will be placed here
+/// - `iter`: Iterator over bytes of `input`
+/// - `input`: Original non-normalized value
+/// - `last_pos`: Index of the last byte in `input` that was processed
+/// - `index`: Index of the byte in `input` that should be processed now
+/// - `seen_cr`: `\r\n` and `\r\x85` sequences should be normalized into one space
+///   so this parameter tracks if we seen the `\r` before processing the current byte
+/// - `depth`: Current recursion depth. Too deep recursion will interrupt the algorithm
+/// - `is_normalization_char`: a function to check if byte is the start byte of character
+///   that should be normalized (UTF-8 encoding is assumed)
+/// - `normalize_eol_step`: a function that performs EOL normalization of a character
+/// - `resolve_entity`: Resolver of entities. Returns `None` for unknown entities
+///
+/// # Lifetimes
+///
+/// - `'entity`: lifetime of all entities that is returned by the entity resolution routine
+///
+/// [normalization algorithm]: https://www.w3.org/TR/xml11/#AVNormalize
+/// [according to the specification]: https://www.w3.org/TR/xml11/#sec-line-ends
+fn normalize_attr_step<'entity, C, E, F>(
+    normalized: &mut String,
+    iter: &mut Iter<u8>,
+    input: &str,
+    last_pos: usize,
+    index: usize,
+    depth: usize,
+    is_normalization_char: &C,
+    normalize_eol_step: &E,
+    resolve_entity: &mut F,
+) -> Result<usize, EscapeError>
+where
+    C: Fn(&u8) -> bool,
+    E: Fn(&mut String, &str, usize, char) -> usize,
+    // the lifetime of the output comes from a capture or is `'static`
+    F: FnMut(&str) -> Option<&'entity str>,
+{
+    if depth == 0 {
+        return Err(EscapeError::TooManyNestedEntities);
+    }
+    // 4. For another character, append the character to the normalized value.
+    normalized.push_str(&input[last_pos..index]);
+
+    match input.as_bytes()[index] {
+        b'&' => {
+            let start = index + 1; // +1 - skip `&`
+            let end = start
+                + match iter.position(|&b| b == b';') {
+                    Some(end) => end,
+                    None => return Err(EscapeError::UnterminatedEntity(index..input.len())),
+                };
+
+            // Content between & and ; - &pat;
+            // Note, that this content have non-normalized EOLs as required by the specification,
+            // but because numbers in any case cannot have spaces inside, this is not the problem.
+            // Normalization of spaces in entity references and checking that they corresponds to
+            // [`Name`] production on conscience `resolve_entity`.
+            //
+            // [`Name`]: https://www.w3.org/TR/xml11/#NT-Name
+            let pat = &input[start..end];
+            // 1. For a character reference, append the referenced character
+            //    to the normalized value.
+            if pat.starts_with('#') {
+                let entity = &pat[1..]; // starts after the #
+                let codepoint = parse_number(entity).map_err(EscapeError::InvalidCharRef)?;
+                normalized.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
+            } else
+            // Special case: '&amp;' resolves to '&' and if follow this algorithm
+            // without special handling, we got unterminated entity error
+            if pat == "amp" {
+                normalized.push('&');
+            } else
+            // 2. For an entity reference, recursively apply this algorithm
+            //    to the replacement text of the entity.
+            if let Some(value) = resolve_entity(pat) {
+                normalize_attr_steps(
+                    normalized,
+                    &mut value.as_bytes().iter(),
+                    value,
+                    0,
+                    depth.saturating_sub(1),
+                    is_normalization_char,
+                    normalize_eol_step,
+                    resolve_entity,
+                )?;
+            } else {
+                return Err(EscapeError::UnrecognizedEntity(start..end, pat.to_string()));
+            }
+            Ok(end + 1) // +1 - skip `;`
+        }
+        // 3. For a white space character (#x20, #xD, #xA, #x9), append
+        //    a space character (#x20) to the normalized value.
+        // Space character (#x20) has no special meaning, so it is handled on step 4
+        b'\t' => {
+            normalized.push(' ');
+            Ok(index + 1) // +1 - skip \t
+        }
+        _ => {
+            let pos = normalize_eol_step(normalized, input, index, ' ');
+            // We should advance iterator because we may skip several characters
+            for _ in 0..pos - index - 1 {
+                iter.next();
+            }
+            Ok(pos)
+        }
     }
 }
 
@@ -2283,6 +2595,205 @@ mod normalization {
                     "\n\n\n\u{2028}\n\nsome\n\u{0085}\n\u{0085}text",
                 );
             }
+        }
+    }
+
+    mod attribute {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn empty() {
+            assert_eq!(
+                normalize_xml10_attribute_value("", 5, |_| { None }),
+                Ok("".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("", 5, |_| { None }),
+                Ok("".into())
+            );
+        }
+
+        #[test]
+        fn only_spaces() {
+            assert_eq!(
+                normalize_xml10_attribute_value("   ", 5, |_| { None }),
+                Ok("   ".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("   ", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\t\t\t", 5, |_| { None }),
+                Ok("   ".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\t\t\t", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\r\r\r", 5, |_| { None }),
+                Ok("   ".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\r\r\r", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\n\n\n", 5, |_| { None }),
+                Ok("   ".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\n\n\n", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\r\n\r\n\r\n", 5, |_| { None }),
+                Ok("   ".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\r\n\r\n\r\n", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\u{0085}\u{0085}\u{0085}", 5, |_| { None }),
+                Ok("\u{0085}\u{0085}\u{0085}".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\u{0085}\u{0085}\u{0085}", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\r\u{0085}\r\u{0085}\r\u{0085}", 5, |_| { None }),
+                Ok(" \u{0085} \u{0085} \u{0085}".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\r\u{0085}\r\u{0085}\r\u{0085}", 5, |_| { None }),
+                Ok("   ".into())
+            );
+
+            assert_eq!(
+                normalize_xml10_attribute_value("\u{2028}\u{2028}\u{2028}", 5, |_| { None }),
+                Ok("\u{2028}\u{2028}\u{2028}".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("\u{2028}\u{2028}\u{2028}", 5, |_| { None }),
+                Ok("   ".into())
+            );
+        }
+
+        #[test]
+        fn already_normalized() {
+            assert_eq!(
+                normalize_xml10_attribute_value("already normalized", 5, |_| { None }),
+                Ok("already normalized".into())
+            );
+            assert_eq!(
+                normalize_xml11_attribute_value("already normalized", 5, |_| { None }),
+                Ok("already normalized".into())
+            );
+        }
+
+        #[test]
+        fn characters() {
+            assert_eq!(
+                normalize_xml10_attribute_value("string with &#32; character", 5, |_| { None }),
+                Ok("string with   character".into())
+            );
+            assert_eq!(
+                normalize_xml10_attribute_value("string with &#x20; character", 5, |_| { None }),
+                Ok("string with   character".into())
+            );
+        }
+
+        #[test]
+        fn entities() {
+            assert_eq!(
+                normalize_xml10_attribute_value("string with &entity; reference", 5, |_| {
+                    Some("replacement")
+                }),
+                Ok("string with replacement reference".into())
+            );
+            assert_eq!(
+                normalize_xml10_attribute_value("string with &entity-1; reference", 5, |entity| {
+                    match entity {
+                        "entity-1" => Some("recursive &entity-2;"),
+                        "entity-2" => Some("entity&#32;2"),
+                        _ => None,
+                    }
+                }),
+                Ok("string with recursive entity 2 reference".into())
+            );
+            // Special case: '&' should not threated as unterminated reference, but everything '&...' should
+            assert_eq!(
+                normalize_xml10_attribute_value(
+                    "string with &entity;amp; reference",
+                    5,
+                    |entity| {
+                        match entity {
+                            "entity" => Some("&amp;"),
+                            "amp" => Some("&"),
+                            _ => None,
+                        }
+                    }
+                ),
+                Ok("string with &amp; reference".into())
+            );
+        }
+
+        #[test]
+        fn unclosed_entity() {
+            assert_eq!(
+                normalize_xml10_attribute_value(
+                    "string with unclosed &entity reference",
+                    //                    ^ = 21           ^ = 38
+                    5,
+                    |_| Some("replacement")
+                ),
+                Err(EscapeError::UnterminatedEntity(21..38))
+            );
+            assert_eq!(
+                normalize_xml10_attribute_value(
+                    "string with unclosed &#32 (character) reference",
+                    //                    ^ = 21                    ^ = 47
+                    5,
+                    |_| None
+                ),
+                Err(EscapeError::UnterminatedEntity(21..47))
+            );
+        }
+
+        #[test]
+        fn unknown_entity() {
+            assert_eq!(
+                normalize_xml10_attribute_value(
+                    "string with unknown &entity; reference",
+                    //                   ^     ^ = 21..27
+                    5,
+                    |_| None
+                ),
+                Err(EscapeError::UnrecognizedEntity(
+                    21..27,
+                    "entity".to_string(),
+                ))
+            );
+        }
+
+        #[test]
+        fn recursive_entity() {
+            assert_eq!(
+                normalize_xml10_attribute_value("&entity; reference", 5, |_| Some(
+                    "recursive &entity;"
+                )),
+                Err(EscapeError::TooManyNestedEntities),
+            );
         }
     }
 }
