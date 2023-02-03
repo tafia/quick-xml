@@ -864,13 +864,14 @@ mod tests {
                 // Roundtrip to ensure that serializer corresponds to deserializer
                 assert_eq!(
                     data.serialize(SimpleTypeSerializer {
-                        writer: String::new(),
+                        writer: Vec::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                     })
-                    .unwrap(),
-                    xml
+                    .unwrap()
+                    .as_slice(),
+                    xml.as_bytes()
                 );
             }
         };
@@ -975,12 +976,13 @@ mod tests {
                     // Roundtrip to ensure that serializer corresponds to deserializer
                     assert_eq!(
                         data.serialize(AtomicSerializer {
-                            writer: String::new(),
+                            writer: Vec::new(),
                             target: QuoteTarget::Text,
                             level: QuoteLevel::Full,
                         })
-                        .unwrap(),
-                        $input
+                        .unwrap()
+                        .as_slice(),
+                        $input.as_bytes()
                     );
                 }
             };

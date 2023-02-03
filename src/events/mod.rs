@@ -604,6 +604,61 @@ impl<'a> Deref for BytesEnd<'a> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+///
+
+/// Data stored in binary
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesBytes<'a> {
+    // Arbitrary binary data.
+    content: Cow<'a, [u8]>,
+}
+
+impl<'a> BytesBytes<'a> {
+    /// Creates a new `BytesBytes` from a slice of bytes.
+    #[inline]
+    pub fn new(content: &'a [u8]) -> Self {
+        Self {
+            content: content.into(),
+        }
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesBytes<'static> {
+        BytesBytes {
+            content: self.content.into_owned().into(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesBytes` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesBytes {
+        BytesBytes {
+            content: Cow::Borrowed(&self.content),
+        }
+    }
+}
+
+impl<'a> Debug for BytesBytes<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesBytes {{ binary }}")
+    }
+}
+
+impl<'a> Deref for BytesBytes<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
 
 /// Data from various events (most notably, `Event::Text`) that stored in XML
 /// in escaped form. Internally data is stored in escaped form
@@ -620,7 +675,7 @@ pub struct BytesText<'a> {
 impl<'a> BytesText<'a> {
     /// Creates a new `BytesText` from an escaped byte sequence in the specified encoding.
     #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
+    pub fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
         Self {
             content: content.into(),
             decoder,

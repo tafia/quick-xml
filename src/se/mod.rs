@@ -37,12 +37,12 @@ macro_rules! write_primitive {
             self.serialize_str(&value.to_string())
         }
 
-        fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
-            //TODO: customization point - allow user to decide how to encode bytes
-            Err(DeError::Unsupported(
-                "`serialize_bytes` not supported yet".into(),
-            ))
-        }
+        // fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        //     //TODO: customization point - allow user to decide how to encode bytes
+        //     Err(DeError::Unsupported(
+        //         "`serialize_bytes` not supported yet".into(),
+        //     ))
+        // }
 
         fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
             Ok(self.writer)
@@ -84,7 +84,6 @@ use crate::errors::serialize::DeError;
 use crate::writer::Indentation;
 use serde::ser::{self, Serialize};
 use serde::serde_if_integer128;
-use std::fmt::Write;
 use std::str::from_utf8;
 
 /// Serialize struct into a `Write`r
@@ -94,8 +93,28 @@ pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<W, DeEr
 
 /// Serialize struct into a `String`
 pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
-    to_writer(String::new(), value)
+    Ok(String::from_utf8(to_bytes(value)?).map_err(|e| DeError::from(e.utf8_error()))?)
 }
+
+/// Serialize struct into a `Vec<u8>`
+pub fn to_bytes<S: Serialize>(value: &S) -> Result<Vec<u8>, DeError> {
+    to_writer(Vec::new(), value)
+}
+
+/// Write extension for writing strings and characters.
+pub trait Write: std::io::Write {
+    /// Write to a string.
+    fn write_str(&mut self, s: &str) -> Result<(), std::io::Error> {
+        self.write(s.as_bytes())?;
+        Ok(())
+    }
+    /// Write to a character.
+    fn write_char(&mut self, c: char) -> Result<(), std::io::Error> {
+        self.write_str(c.encode_utf8(&mut [0; 4]))
+    }
+}
+
+impl<W> Write for W where W: std::io::Write {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -258,7 +277,7 @@ impl<'i> Indent<'i> {
         }
     }
 
-    pub fn write_indent<W: std::fmt::Write>(&mut self, mut writer: W) -> Result<(), DeError> {
+    pub fn write_indent<W: Write>(&mut self, mut writer: W) -> Result<(), DeError> {
         match self {
             Self::None => {}
             Self::Owned(i) => {

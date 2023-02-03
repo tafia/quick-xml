@@ -1799,12 +1799,14 @@ macro_rules! deserialize_primitives {
             }
         }
 
-        /// Returns [`DeError::Unsupported`]
-        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
+        /// Deserializes raw bytes. While not officially supported by the XML format, there are
+        /// hybrid formats that make use of binary data inside XML files.
+        fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            Err(DeError::Unsupported("binary data content is not supported by XML format".into()))
+            let bytes = self.read_bytes()?;
+            visitor.visit_bytes(bytes.as_ref())
         }
 
         /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).
@@ -2244,6 +2246,11 @@ where
         self.read_string_impl(unescape, true)
     }
 
+    #[inline]
+    fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
+        self.read_bytes_impl(true)
+    }
+
     /// Consumes a one XML element or an XML tree, returns associated text or
     /// an empty string.
     ///
@@ -2297,6 +2304,38 @@ where
                     // Return empty text in that case
                     DeEvent::End(end) if end.name() == e.name() => {
                         return Ok("".into());
+                    }
+                    DeEvent::End(end) => {
+                        return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
+                    }
+                    DeEvent::Eof => return Err(DeError::UnexpectedEof),
+                };
+                self.read_to_end(e.name())?;
+                Ok(t)
+            }
+            DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
+    }
+
+    fn read_bytes_impl(&mut self, allow_start: bool) -> Result<Cow<'de, [u8]>, DeError> {
+        match self.next()? {
+            DeEvent::Text(e) => Ok(e.into_inner()),
+            DeEvent::CData(e) => Ok(e.into_inner()),
+            DeEvent::Start(e) if allow_start => {
+                // allow one nested level
+                let inner = self.next()?;
+                let t = match inner {
+                    DeEvent::Text(t) => t.into_inner(),
+                    DeEvent::CData(t) => t.into_inner(),
+                    DeEvent::Start(s) => {
+                        return Err(DeError::UnexpectedStart(s.name().as_ref().to_owned()))
+                    }
+                    // We can get End event in case of `<tag></tag>` or `<tag/>` input
+                    // Return empty text in that case
+                    DeEvent::End(end) if end.name() == e.name() => {
+                        return Ok(Cow::Borrowed(b""));
                     }
                     DeEvent::End(end) => {
                         return Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned()))
@@ -2398,6 +2437,18 @@ where
             .check_end_names(true)
             .trim_text(true);
 
+        Self::new(IoReader {
+            reader,
+            buf: Vec::new(),
+        })
+    }
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer. If you already have a string use [`Self::from_str`]
+    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
+    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    ///
+    /// This is a version of `from_reader` that allows the caller to configure the `Reader` as needed.
+    pub fn from_custom_reader(reader: Reader<R>) -> Self {
         Self::new(IoReader {
             reader,
             buf: Vec::new(),

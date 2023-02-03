@@ -5,13 +5,13 @@ use crate::errors::serialize::DeError;
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
+use crate::se::Write;
 use crate::se::{Indent, XmlName};
 use serde::ser::{
     Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
     SerializeTupleStruct, SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
-use std::fmt::Write;
 
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
@@ -179,11 +179,11 @@ impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
         self.ser.write_indent()?;
         self.ser.indent.increase();
 
-        self.ser.writer.write_char('<')?;
-        self.ser.writer.write_str(self.key.0)?;
+        self.ser.writer.write(b"<")?;
+        self.ser.writer.write(self.key.0.as_bytes())?;
         Ok(Struct {
             ser: self,
-            children: String::new(),
+            children: Vec::new(),
         })
     }
 
@@ -292,7 +292,7 @@ pub struct Struct<'k, W: Write> {
     // TODO: Customization point: allow direct writing of elements, but all
     // attributes should be listed first. Fail, if attribute encountered after
     // element. Use feature to configure
-    children: String,
+    children: Vec<u8>,
 }
 
 impl<'k, W: Write> Struct<'k, W> {
@@ -388,7 +388,7 @@ impl<'k, W: Write> SerializeStruct for Struct<'k, W> {
             self.ser.ser.writer.write_str("/>")?;
         } else {
             self.ser.ser.writer.write_char('>')?;
-            self.ser.ser.writer.write_str(&self.children)?;
+            self.ser.ser.writer.write(&self.children)?;
 
             self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
 
@@ -526,7 +526,7 @@ mod tests {
                 fn $name() {
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
-                            writer: String::new(),
+                            writer: Vec::new(),
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
@@ -535,7 +535,7 @@ mod tests {
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(String::from_utf8(buffer).unwrap(), $expected);
                 }
             };
         }
@@ -546,7 +546,7 @@ mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
                             writer: &mut buffer,
@@ -1137,9 +1137,12 @@ mod tests {
                 err!(map:
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
-                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                value!(struct_: Struct { key: "answer", val: (42, 42) }
+                    => "<Struct>\
+                            <key>answer</key>\
+                            <val>42</val>\
+                            <val>42</val>\
+                        </Struct>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\
@@ -1255,13 +1258,21 @@ mod tests {
                         after: "answer",
                     }
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
+                value!(struct_:
                     Value {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                    => "<Value>\
+                            <before>answer</before>\
+                            <Struct>\
+                                <key>answer</key>\
+                                <val>42</val>\
+                                <val>42</val>\
+                            </Struct>\
+                            <after>answer</after>\
+                        </Value>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\
@@ -1377,13 +1388,21 @@ mod tests {
                         after: "answer",
                     }
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
+                value!(struct_:
                     SpecialEnum::Value {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                    => "<Value>\
+                            <before>answer</before>\
+                            <Struct>\
+                                <key>answer</key>\
+                                <val>42</val>\
+                                <val>42</val>\
+                            </Struct>\
+                            <after>answer</after>\
+                        </Value>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\
@@ -1484,7 +1503,7 @@ mod tests {
                 fn $name() {
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
-                            writer: String::new(),
+                            writer: Vec::new(),
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
@@ -1493,7 +1512,7 @@ mod tests {
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(String::from_utf8(buffer).unwrap(), $expected);
                 }
             };
         }
@@ -1504,7 +1523,7 @@ mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
                             writer: &mut buffer,
@@ -2121,9 +2140,12 @@ mod tests {
                 err!(map:
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
-                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                value!(struct_: Struct { key: "answer", val: (42, 42) }
+                    => "<Struct>\n    \
+                            <key>answer</key>\n    \
+                            <val>42</val>\n    \
+                            <val>42</val>\n  \
+                        </Struct>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\n    \
@@ -2251,13 +2273,21 @@ mod tests {
                         after: "answer",
                     }
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
+                value!(struct_:
                     Value {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                    => "<Value>\n    \
+                            <before>answer</before>\n    \
+                            <Struct>\n      \
+                                <key>answer</key>\n      \
+                                <val>42</val>\n      \
+                                <val>42</val>\n    \
+                            </Struct>\n    \
+                            <after>answer</after>\n  \
+                        </Value>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\n    \
@@ -2385,13 +2415,12 @@ mod tests {
                         after: "answer",
                     }
                     => Unsupported("serialization of map types is not supported in `$value` field"));
-                err!(struct_:
-                    SpecialEnum::Value {
-                        before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
-                        after: "answer",
-                    }
-                    => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+                value!(struct_: Struct { key: "answer", val: (42, 42) }
+                    => "<Struct>\n    \
+                            <key>answer</key>\n    \
+                            <val>42</val>\n    \
+                            <val>42</val>\n  \
+                        </Struct>");
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
                     => "<Struct>\n    \

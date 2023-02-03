@@ -205,6 +205,8 @@ pub mod serialize {
         /// exceeded. The limit was provided as an argument
         #[cfg(feature = "overlapped-lists")]
         TooManyEvents(NonZeroUsize),
+        /// Unexpected untyped binary data.
+        UnexpectedBinary(Vec<u8>),
     }
 
     impl fmt::Display for DeError {
@@ -227,6 +229,11 @@ pub mod serialize {
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
+                DeError::UnexpectedBinary(e) => {
+                    f.write_str("Unexpected `Event::Binary(")?;
+                    write_byte_string(f, e)?;
+                    f.write_str(")`")
+                }
                 DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
                 #[cfg(feature = "overlapped-lists")]
@@ -310,6 +317,12 @@ pub mod serialize {
     impl From<fmt::Error> for DeError {
         #[inline]
         fn from(e: fmt::Error) -> Self {
+            Self::Custom(e.to_string())
+        }
+    }
+    impl From<std::io::Error> for DeError {
+        #[inline]
+        fn from(e: std::io::Error) -> Self {
             Self::Custom(e.to_string())
         }
     }

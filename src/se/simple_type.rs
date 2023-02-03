@@ -5,13 +5,13 @@
 
 use crate::errors::serialize::DeError;
 use crate::escapei::_escape;
+use crate::se::Write;
 use crate::se::{Indent, QuoteLevel};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
 use serde::serde_if_integer128;
 use std::borrow::Cow;
-use std::fmt::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuoteTarget {
@@ -197,6 +197,11 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     write_primitive!();
 
+    fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        self.writer.write(value)?;
+        Ok(self.writer)
+    }
+
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         self.write_str(value)?;
         Ok(self.writer)
@@ -360,6 +365,14 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
     write_primitive!();
+
+    fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        if value.is_empty() {
+            self.indent = Indent::None;
+        }
+        self.writer.write(value)?;
+        Ok(self.writer)
+    }
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if value.is_empty() {
@@ -834,13 +847,13 @@ mod tests {
                 #[test]
                 fn $name() {
                     let ser = AtomicSerializer {
-                        writer: String::new(),
+                        writer: Vec::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(String::from_utf8(buffer).unwrap(), $expected);
                 }
             };
         }
@@ -851,7 +864,7 @@ mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = AtomicSerializer {
                         writer: &mut buffer,
                         target: QuoteTarget::Text,
@@ -867,7 +880,7 @@ mod tests {
                             e
                         ),
                     }
-                    assert_eq!(buffer, "");
+                    assert!(buffer.is_empty());
                 }
             };
         }
@@ -950,14 +963,14 @@ mod tests {
                 #[test]
                 fn $name() {
                     let ser = SimpleTypeSerializer {
-                        writer: String::new(),
+                        writer: Vec::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(buffer.as_slice(), $expected.as_bytes());
                 }
             };
         }
@@ -968,7 +981,7 @@ mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = SimpleTypeSerializer {
                         writer: &mut buffer,
                         target: QuoteTarget::Text,
@@ -985,7 +998,7 @@ mod tests {
                             e
                         ),
                     }
-                    assert_eq!(buffer, "");
+                    assert_eq!(buffer, b"");
                 }
             };
         }

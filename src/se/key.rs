@@ -37,6 +37,11 @@ impl<W: Write> Serializer for QNameSerializer<W> {
 
     write_primitive!();
 
+    fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        self.write_str(&String::from_utf8_lossy(value))?;
+        Ok(self.writer)
+    }
+
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         self.write_str(value)?;
         Ok(self.writer)

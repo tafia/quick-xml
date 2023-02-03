@@ -164,9 +164,12 @@ mod without_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = Serializer::new(String::new());
+                let ser = Serializer::new(Vec::new());
 
-                assert_eq!($data.serialize(ser).unwrap(), $expected);
+                assert_eq!(
+                    $data.serialize(ser).unwrap().as_slice(),
+                    $expected.as_bytes()
+                );
             }
         };
     }
@@ -177,7 +180,7 @@ mod without_root {
         ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
+                let mut buffer = Vec::new();
                 let ser = Serializer::new(&mut buffer);
 
                 match $data.serialize(ser) {
@@ -189,7 +192,7 @@ mod without_root {
                         e
                     ),
                 }
-                assert_eq!(buffer, "");
+                assert!(buffer.is_empty());
             }
         };
     }
@@ -556,10 +559,13 @@ mod without_root {
             ($name:ident: $data:expr => $expected:literal) => {
                 #[test]
                 fn $name() {
-                    let mut ser = Serializer::new(String::new());
+                    let mut ser = Serializer::new(Vec::new());
                     ser.indent(' ', 2);
 
-                    assert_eq!($data.serialize(ser).unwrap(), $expected);
+                    assert_eq!(
+                        $data.serialize(ser).unwrap().as_slice(),
+                        $expected.as_bytes()
+                    );
                 }
             };
         }
@@ -570,7 +576,7 @@ mod without_root {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = Serializer::new(&mut buffer);
 
                     match $data.serialize(ser) {
@@ -582,7 +588,7 @@ mod without_root {
                             e
                         ),
                     }
-                    assert_eq!(buffer, "");
+                    assert!(buffer.is_empty());
                 }
             };
         }
@@ -948,9 +954,12 @@ mod with_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
+                let ser = Serializer::with_root(Vec::new(), Some("root")).unwrap();
 
-                assert_eq!($data.serialize(ser).unwrap(), $expected);
+                assert_eq!(
+                    $data.serialize(ser).unwrap().as_slice(),
+                    $expected.as_bytes()
+                );
             }
         };
     }
@@ -961,7 +970,7 @@ mod with_root {
         ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
+                let mut buffer = Vec::new();
                 let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
 
                 match $data.serialize(ser) {

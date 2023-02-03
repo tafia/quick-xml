@@ -470,6 +470,11 @@ where
     fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.map.de.read_string_impl(unescape, self.allow_start)
     }
+    /// Returns next slice of bytes.
+    #[inline]
+    fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
+        self.map.de.read_bytes()
+    }
 }
 
 impl<'de, 'a, 'm, R> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R>
@@ -730,6 +735,11 @@ where
     #[inline]
     fn read_string(&mut self, unescape: bool) -> Result<Cow<'de, str>, DeError> {
         self.map.de.read_string_impl(unescape, true)
+    }
+    /// Returns next slice of bytes.
+    #[inline]
+    fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
+        self.map.de.read_bytes()
     }
 }
 
