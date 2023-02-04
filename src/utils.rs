@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn write_byte_string0() {
         let bytes = ByteBuf(vec![10, 32, 32, 32, 32, 32, 32, 32, 32]);
-        assert_eq!(format!("{:?}", bytes), "\"0xA        \"".to_owned());
+        assert_eq!(format!("{:?}", bytes), "\"0xA        \"");
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         ]);
         assert_eq!(
             format!("{:?}", bytes),
-            r##""http://www.w3.org/2002/07/owl#""##.to_owned()
+            r##""http://www.w3.org/2002/07/owl#""##
         );
     }
 
@@ -169,6 +169,6 @@ mod tests {
         let bytes = ByteBuf(vec![
             67, 108, 97, 115, 115, 32, 73, 82, 73, 61, 34, 35, 66, 34,
         ]);
-        assert_eq!(format!("{:?}", bytes), r##""Class IRI=\"#B\"""##.to_owned());
+        assert_eq!(format!("{:?}", bytes), r##""Class IRI=\"#B\"""##);
     }
 }

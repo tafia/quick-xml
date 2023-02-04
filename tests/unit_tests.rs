@@ -332,7 +332,7 @@ fn test_new_xml_decl_full() {
     let result = writer.into_inner();
     assert_eq!(
         String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>".to_owned(),
+        "<?xml version=\"1.2\" encoding=\"utf-X\" standalone=\"yo\"?>",
         "writer output (LHS)"
     );
 }
@@ -347,7 +347,7 @@ fn test_new_xml_decl_standalone() {
     let result = writer.into_inner();
     assert_eq!(
         String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" standalone=\"yo\"?>".to_owned(),
+        "<?xml version=\"1.2\" standalone=\"yo\"?>",
         "writer output (LHS)"
     );
 }
@@ -362,7 +362,7 @@ fn test_new_xml_decl_encoding() {
     let result = writer.into_inner();
     assert_eq!(
         String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\" encoding=\"utf-X\"?>".to_owned(),
+        "<?xml version=\"1.2\" encoding=\"utf-X\"?>",
         "writer output (LHS)"
     );
 }
@@ -377,7 +377,7 @@ fn test_new_xml_decl_version() {
     let result = writer.into_inner();
     assert_eq!(
         String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"1.2\"?>".to_owned(),
+        "<?xml version=\"1.2\"?>",
         "writer output (LHS)"
     );
 }
@@ -395,7 +395,7 @@ fn test_new_xml_decl_empty() {
     let result = writer.into_inner();
     assert_eq!(
         String::from_utf8(result).expect("utf-8 output"),
-        "<?xml version=\"\" encoding=\"\" standalone=\"\"?>".to_owned(),
+        "<?xml version=\"\" encoding=\"\" standalone=\"\"?>",
         "writer output (LHS)"
     );
 }
@@ -533,7 +533,7 @@ fn test_read_write_roundtrip_results_in_identity() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, input.as_bytes());
+    assert_eq!(String::from_utf8(result).unwrap(), input);
     Ok(())
 }
 
@@ -559,7 +559,7 @@ fn test_read_write_roundtrip() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+    assert_eq!(String::from_utf8(result).unwrap(), input);
     Ok(())
 }
 
@@ -589,7 +589,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), input.to_string());
+    assert_eq!(String::from_utf8(result).unwrap(), input);
     Ok(())
 }
 
