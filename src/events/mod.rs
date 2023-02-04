@@ -360,35 +360,28 @@ impl<'a> BytesDecl<'a> {
     /// # Examples
     ///
     /// ```
-    /// use std::borrow::Cow;
     /// use quick_xml::Error;
     /// use quick_xml::events::{BytesDecl, BytesStart};
     ///
     /// // <?xml version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert_eq!(
-    ///     decl.version().unwrap(),
-    ///     Cow::Borrowed(b"1.1".as_ref())
-    /// );
+    /// assert_eq!(decl.version().unwrap(), b"1.1".as_ref());
     ///
     /// // <?xml version='1.0' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(
-    ///     decl.version().unwrap(),
-    ///     Cow::Borrowed(b"1.0".as_ref())
-    /// );
+    /// assert_eq!(decl.version().unwrap(), b"1.0".as_ref());
     ///
     /// // <?xml encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
     /// match decl.version() {
-    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='utf-8' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
     /// match decl.version() {
-    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding".to_string()),
+    ///     Err(Error::XmlDeclWithoutVersion(Some(key))) => assert_eq!(key, "encoding"),
     ///     _ => assert!(false),
     /// }
     ///
