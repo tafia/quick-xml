@@ -212,6 +212,7 @@ impl<'a> Reader<&'a [u8]> {
     ///         <p>Usual XML rules does not apply inside it
     ///         <p>For example, elements not needed to be &quot;closed&quot;
     ///     "#));
+    /// assert!(matches!(text, Cow::Borrowed(_)));
     ///
     /// // Now we can enable checks again
     /// reader.check_end_names(true);

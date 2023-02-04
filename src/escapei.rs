@@ -1741,7 +1741,13 @@ fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
 
 #[test]
 fn test_unescape() {
-    assert_eq!(unescape("test").unwrap(), Cow::Borrowed("test"));
+    let unchanged = unescape("test").unwrap();
+    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
+    // because it influences diff
+    // TODO: use assert_matches! when stabilized and other features will bump MSRV
+    assert_eq!(unchanged, Cow::Borrowed("test"));
+    assert!(matches!(unchanged, Cow::Borrowed(_)));
+
     assert_eq!(unescape("&lt;test&gt;").unwrap(), "<test>");
     assert_eq!(unescape("&#x30;").unwrap(), "0");
     assert_eq!(unescape("&#48;").unwrap(), "0");
@@ -1755,10 +1761,13 @@ fn test_unescape_with() {
         _ => None,
     };
 
-    assert_eq!(
-        unescape_with("test", custom_entities).unwrap(),
-        Cow::Borrowed("test")
-    );
+    let unchanged = unescape_with("test", custom_entities).unwrap();
+    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
+    // because it influences diff
+    // TODO: use assert_matches! when stabilized and other features will bump MSRV
+    assert_eq!(unchanged, Cow::Borrowed("test"));
+    assert!(matches!(unchanged, Cow::Borrowed(_)));
+
     assert_eq!(
         unescape_with("&lt;test&gt;", custom_entities).unwrap(),
         "<test>"
@@ -1771,7 +1780,13 @@ fn test_unescape_with() {
 
 #[test]
 fn test_escape() {
-    assert_eq!(escape("test"), Cow::Borrowed("test"));
+    let unchanged = escape("test");
+    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
+    // because it influences diff
+    // TODO: use assert_matches! when stabilized and other features will bump MSRV
+    assert_eq!(unchanged, Cow::Borrowed("test"));
+    assert!(matches!(unchanged, Cow::Borrowed(_)));
+
     assert_eq!(escape("<test>"), "&lt;test&gt;");
     assert_eq!(escape("\"a\"bc"), "&quot;a&quot;bc");
     assert_eq!(escape("\"a\"b&c"), "&quot;a&quot;b&amp;c");
@@ -1783,7 +1798,13 @@ fn test_escape() {
 
 #[test]
 fn test_partial_escape() {
-    assert_eq!(partial_escape("test"), Cow::Borrowed("test"));
+    let unchanged = partial_escape("test");
+    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
+    // because it influences diff
+    // TODO: use assert_matches! when stabilized and other features will bump MSRV
+    assert_eq!(unchanged, Cow::Borrowed("test"));
+    assert!(matches!(unchanged, Cow::Borrowed(_)));
+
     assert_eq!(partial_escape("<test>"), "&lt;test&gt;");
     assert_eq!(partial_escape("\"a\"bc"), "\"a\"bc");
     assert_eq!(partial_escape("\"a\"b&c"), "\"a\"b&amp;c");
