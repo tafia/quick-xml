@@ -66,12 +66,13 @@ enum ExternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
 #[derive(Serialize)]
@@ -94,12 +95,13 @@ enum InternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
 #[derive(Serialize)]
@@ -121,12 +123,13 @@ enum AdjacentlyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
 #[derive(Serialize)]
@@ -148,12 +151,13 @@ enum Untagged {
         nested: Nested,
         string: &'static str,
     },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
 mod without_root {
