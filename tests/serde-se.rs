@@ -2,53 +2,53 @@ use quick_xml::se::Serializer;
 use quick_xml::utils::Bytes;
 use quick_xml::DeError;
 
-use serde::{serde_if_integer128, Serialize};
+use serde::{serde_if_integer128, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Unit;
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Newtype(bool);
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Tuple(f32, &'static str);
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Struct {
     float: f64,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct NestedStruct {
     nested: Nested,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct FlattenStruct {
     #[serde(flatten)]
     nested: Nested,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Nested {
     float: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Empty {}
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Text {
     #[serde(rename = "$text")]
     float: f64,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 enum ExternallyTagged {
     Unit,
     Newtype(bool),
@@ -61,11 +61,6 @@ enum ExternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
@@ -75,7 +70,23 @@ enum ExternallyTagged {
     Empty {},
 }
 
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
 #[derive(Serialize)]
+enum ExternallyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "tag")]
 enum InternallyTagged {
     Unit,
@@ -90,11 +101,6 @@ enum InternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
@@ -104,7 +110,24 @@ enum InternallyTagged {
     Empty {},
 }
 
-#[derive(Serialize)]
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "tag")]
+enum InternallyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "tag", content = "content")]
 enum AdjacentlyTagged {
     Unit,
@@ -118,11 +141,6 @@ enum AdjacentlyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
@@ -132,7 +150,24 @@ enum AdjacentlyTagged {
     Empty {},
 }
 
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
 #[derive(Serialize)]
+#[serde(tag = "tag", content = "content")]
+enum AdjacentlyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 enum Untagged {
     Unit,
@@ -146,11 +181,6 @@ enum Untagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
@@ -158,6 +188,23 @@ enum Untagged {
         string: &'static str,
     },
     Empty {},
+}
+
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
+#[derive(Serialize)]
+#[serde(untagged)]
+enum UntaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
 }
 
 mod without_root {
@@ -335,7 +382,7 @@ mod without_root {
                         <string>answer</string>\
                     </Holder>");
             serialize_as!(flatten_struct:
-                ExternallyTagged::Flatten {
+                ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -361,22 +408,22 @@ mod without_root {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Unit {
                     #[serde(rename = "$text")]
                     Text,
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Newtype<'a> {
                     #[serde(rename = "$text")]
                     Text(&'a str),
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Tuple<'a> {
                     #[serde(rename = "$text")]
                     Text(f64, &'a str),
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Struct<'a> {
                     #[serde(rename = "$text")]
                     Text { float: f64, string: &'a str },
@@ -440,7 +487,7 @@ mod without_root {
             // serde serializes flatten structs as maps, and we do not support
             // serialization of maps without root tag
             err!(flatten_struct:
-                InternallyTagged::Flatten {
+                InternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -512,17 +559,17 @@ mod without_root {
                         </content>\
                     </AdjacentlyTagged>");
             serialize_as!(flatten_struct:
-                AdjacentlyTagged::Flatten {
+                AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => "<AdjacentlyTagged>\
+                => "<AdjacentlyTaggedWorkaround>\
                         <tag>Flatten</tag>\
                         <content>\
                             <float>42</float>\
                             <string>answer</string>\
                         </content>\
-                    </AdjacentlyTagged>");
+                    </AdjacentlyTaggedWorkaround>");
             serialize_as!(empty_struct:
                 AdjacentlyTagged::Empty {}
                 => "<AdjacentlyTagged>\
@@ -577,7 +624,7 @@ mod without_root {
                         <string>answer</string>\
                     </Untagged>");
             err!(flatten_struct:
-                Untagged::Flatten {
+                UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -772,7 +819,7 @@ mod without_root {
                             <string>answer</string>\n\
                         </Holder>");
                 serialize_as!(flatten_struct:
-                    ExternallyTagged::Flatten {
+                    ExternallyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -798,22 +845,22 @@ mod without_root {
                     use super::*;
                     use pretty_assertions::assert_eq;
 
-                    #[derive(Serialize)]
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
                     enum Unit {
                         #[serde(rename = "$text")]
                         Text,
                     }
-                    #[derive(Serialize)]
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
                     enum Newtype<'a> {
                         #[serde(rename = "$text")]
                         Text(&'a str),
                     }
-                    #[derive(Serialize)]
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
                     enum Tuple<'a> {
                         #[serde(rename = "$text")]
                         Text(f64, &'a str),
                     }
-                    #[derive(Serialize)]
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
                     enum Struct<'a> {
                         #[serde(rename = "$text")]
                         Text { float: f64, string: &'a str },
@@ -877,7 +924,7 @@ mod without_root {
                 // serde serializes flatten structs as maps, and we do not support
                 // serialization of maps without root tag
                 err!(flatten_struct:
-                    InternallyTagged::Flatten {
+                    InternallyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -949,17 +996,17 @@ mod without_root {
                             </content>\n\
                         </AdjacentlyTagged>");
                 serialize_as!(flatten_struct:
-                    AdjacentlyTagged::Flatten {
+                    AdjacentlyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
-                    => "<AdjacentlyTagged>\n  \
+                    => "<AdjacentlyTaggedWorkaround>\n  \
                             <tag>Flatten</tag>\n  \
                             <content>\n    \
                                 <float>42</float>\n    \
                                 <string>answer</string>\n  \
                             </content>\n\
-                        </AdjacentlyTagged>");
+                        </AdjacentlyTaggedWorkaround>");
                 serialize_as!(empty_struct:
                     AdjacentlyTagged::Empty {}
                     => "<AdjacentlyTagged>\n  \
@@ -1012,7 +1059,7 @@ mod without_root {
                             <string>answer</string>\n\
                         </Untagged>");
                 err!(flatten_struct:
-                    Untagged::Flatten {
+                    UntaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -1226,7 +1273,7 @@ mod with_root {
                         <string>answer</string>\
                     </Holder>");
             serialize_as!(flatten_struct:
-                ExternallyTagged::Flatten {
+                ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1252,22 +1299,22 @@ mod with_root {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Unit {
                     #[serde(rename = "$text")]
                     Text,
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Newtype<'a> {
                     #[serde(rename = "$text")]
                     Text(&'a str),
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Tuple<'a> {
                     #[serde(rename = "$text")]
                     Text(f64, &'a str),
                 }
-                #[derive(Serialize)]
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Struct<'a> {
                     #[serde(rename = "$text")]
                     Text { float: f64, string: &'a str },
@@ -1327,7 +1374,7 @@ mod with_root {
                         <string>answer</string>\
                     </root>");
             serialize_as!(flatten_struct:
-                InternallyTagged::Flatten {
+                InternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1403,7 +1450,7 @@ mod with_root {
                         </content>\
                     </root>");
             serialize_as!(flatten_struct:
-                AdjacentlyTagged::Flatten {
+                AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1470,7 +1517,7 @@ mod with_root {
                         <string>answer</string>\
                     </root>");
             serialize_as!(flatten_struct:
-                Untagged::Flatten {
+                UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
