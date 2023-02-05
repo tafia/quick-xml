@@ -1,7 +1,7 @@
 //! Contains serializer for content of an XML element
 
 use crate::errors::serialize::DeError;
-use crate::se::element::{ElementSerializer, Struct};
+use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
 use crate::se::{Indent, QuoteLevel, XmlName};
 use serde::ser::{
@@ -132,7 +132,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = ElementSerializer<'w, 'i, W>;
+    type SerializeTupleVariant = Tuple<'w, 'i, W>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
     type SerializeStructVariant = Struct<'w, 'i, W>;
@@ -258,7 +258,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         // `ElementSerializer::serialize_tuple_variant` is the same as
         // `ElementSerializer::serialize_tuple_struct`, except that it replaces `.key`
         // to `variant` which is not required here
-        ser.serialize_tuple_struct(name, len)
+        ser.serialize_tuple_struct(name, len).map(Tuple::Element)
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {

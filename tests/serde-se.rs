@@ -351,8 +351,49 @@ mod without_root {
                         42\
                         <string>answer</string>\
                     </Text>");
+
+            /// Test serialization of the specially named variant `$text`
+            mod text {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Serialize)]
+                enum Unit {
+                    #[serde(rename = "$text")]
+                    Text,
+                }
+                #[derive(Serialize)]
+                enum Newtype<'a> {
+                    #[serde(rename = "$text")]
+                    Text(&'a str),
+                }
+                #[derive(Serialize)]
+                enum Tuple<'a> {
+                    #[serde(rename = "$text")]
+                    Text(f64, &'a str),
+                }
+                #[derive(Serialize)]
+                enum Struct<'a> {
+                    #[serde(rename = "$text")]
+                    Text { float: f64, string: &'a str },
+                }
+
+                // It is unknown how to exactly serialize unit to a text
+                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                // Tuple variant serialized as an `xs:list`
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                // Struct variant cannot be directly serialized to a text
+                err!(struct_:
+                    Struct::Text {
+                        float: 4.2,
+                        string: "newtype text",
+                    }
+                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+            }
         }
 
+        /// Name `$text` has no special meaning in internally tagged enums
         mod internally_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -417,6 +458,7 @@ mod without_root {
                     </InternallyTagged>");
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod adjacently_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -497,6 +539,7 @@ mod without_root {
                     </AdjacentlyTagged>");
         }
 
+        /// Name `$text` has no special meaning in untagged enums
         mod untagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -745,8 +788,49 @@ mod without_root {
                             42\n  \
                             <string>answer</string>\n\
                         </Text>");
+
+                /// Test serialization of the specially named variant `$text`
+                mod text {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Serialize)]
+                    enum Unit {
+                        #[serde(rename = "$text")]
+                        Text,
+                    }
+                    #[derive(Serialize)]
+                    enum Newtype<'a> {
+                        #[serde(rename = "$text")]
+                        Text(&'a str),
+                    }
+                    #[derive(Serialize)]
+                    enum Tuple<'a> {
+                        #[serde(rename = "$text")]
+                        Text(f64, &'a str),
+                    }
+                    #[derive(Serialize)]
+                    enum Struct<'a> {
+                        #[serde(rename = "$text")]
+                        Text { float: f64, string: &'a str },
+                    }
+
+                    // It is unknown how to exactly serialize unit to a text
+                    err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                    serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                    // Tuple variant serialized as an `xs:list`
+                    serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                    // Struct variant cannot be directly serialized to a text
+                    err!(struct_:
+                        Struct::Text {
+                            float: 4.2,
+                            string: "newtype text",
+                        }
+                        => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                }
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod internally_tagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -811,6 +895,7 @@ mod without_root {
                         </InternallyTagged>");
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod adjacently_tagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -891,6 +976,7 @@ mod without_root {
                         </AdjacentlyTagged>");
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod untagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -1156,8 +1242,49 @@ mod with_root {
                         42\
                         <string>answer</string>\
                     </Text>");
+
+            /// Test serialization of the specially named variant `$text`
+            mod text {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Serialize)]
+                enum Unit {
+                    #[serde(rename = "$text")]
+                    Text,
+                }
+                #[derive(Serialize)]
+                enum Newtype<'a> {
+                    #[serde(rename = "$text")]
+                    Text(&'a str),
+                }
+                #[derive(Serialize)]
+                enum Tuple<'a> {
+                    #[serde(rename = "$text")]
+                    Text(f64, &'a str),
+                }
+                #[derive(Serialize)]
+                enum Struct<'a> {
+                    #[serde(rename = "$text")]
+                    Text { float: f64, string: &'a str },
+                }
+
+                // It is unknown how to exactly serialize unit to a text
+                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                // Tuple variant serialized as an `xs:list`
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                // Struct variant cannot be directly serialized to a text
+                err!(struct_:
+                    Struct::Text {
+                        float: 4.2,
+                        string: "newtype text",
+                    }
+                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+            }
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod internally_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -1222,6 +1349,7 @@ mod with_root {
                     </root>");
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod adjacently_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -1302,6 +1430,7 @@ mod with_root {
                     </root>");
         }
 
+        /// Name `$text` has no special meaning in untagged enums
         mod untagged {
             use super::*;
             use pretty_assertions::assert_eq;

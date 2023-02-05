@@ -4,7 +4,7 @@ use crate::de::{TEXT_KEY, VALUE_KEY};
 use crate::errors::serialize::DeError;
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
-use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
+use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::{Indent, XmlName};
 use serde::ser::{
     Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
@@ -37,7 +37,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = Self;
+    type SerializeTupleVariant = Tuple<'w, 'k, W>;
     type SerializeMap = Map<'w, 'k, W>;
     type SerializeStruct = Struct<'w, 'k, W>;
     type SerializeStructVariant = Struct<'w, 'k, W>;
@@ -105,12 +105,19 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
 
     fn serialize_unit_variant(
         self,
-        _name: &'static str,
+        name: &'static str,
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        let name = XmlName::try_from(variant)?;
-        self.ser.write_empty(name)
+        if variant == TEXT_KEY {
+            // We should write some text but we don't known what text to write
+            Err(DeError::Unsupported(
+                format!("`{}::$text` unit variant cannot be serialized", name).into(),
+            ))
+        } else {
+            let name = XmlName::try_from(variant)?;
+            self.ser.write_empty(name)
+        }
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -128,8 +135,13 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        self.key = XmlName::try_from(variant)?;
-        value.serialize(self)
+        if variant == TEXT_KEY {
+            value.serialize(self.ser.into_simple_type_serializer())?;
+            Ok(())
+        } else {
+            self.key = XmlName::try_from(variant)?;
+            value.serialize(self)
+        }
     }
 
     #[inline]
@@ -159,8 +171,15 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        self.key = XmlName::try_from(variant)?;
-        self.serialize_tuple_struct(name, len)
+        if variant == TEXT_KEY {
+            self.ser
+                .into_simple_type_serializer()
+                .serialize_tuple_struct(name, len)
+                .map(Tuple::Text)
+        } else {
+            self.key = XmlName::try_from(variant)?;
+            self.serialize_tuple_struct(name, len).map(Tuple::Element)
+        }
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -195,8 +214,14 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        self.key = XmlName::try_from(variant)?;
-        self.serialize_struct(name, len)
+        if variant == TEXT_KEY {
+            Err(DeError::Unsupported(
+                format!("`{}::$text` struct variant cannot be serialized", name).into(),
+            ))
+        } else {
+            self.key = XmlName::try_from(variant)?;
+            self.serialize_struct(name, len)
+        }
     }
 }
 
@@ -259,7 +284,19 @@ impl<'w, 'k, W: Write> SerializeTupleStruct for ElementSerializer<'w, 'k, W> {
     }
 }
 
-impl<'w, 'k, W: Write> SerializeTupleVariant for ElementSerializer<'w, 'k, W> {
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A serializer for tuple variants. Tuples can be serialized in two modes:
+/// - wrapping each tuple field into a tag
+/// - without wrapping, fields are delimited by a space
+pub enum Tuple<'w, 'k, W: Write> {
+    /// Serialize each tuple field as an element
+    Element(ElementSerializer<'w, 'k, W>),
+    /// Serialize tuple as an `xs:list`: space-delimited content of fields
+    Text(SimpleSeq<'k, &'w mut W>),
+}
+
+impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -268,12 +305,18 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for ElementSerializer<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeTuple>::serialize_element(self, value)
+        match self {
+            Tuple::Element(ser) => SerializeTuple::serialize_element(ser, value),
+            Tuple::Text(ser) => SerializeTuple::serialize_element(ser, value),
+        }
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeTuple>::end(self)
+        match self {
+            Tuple::Element(ser) => SerializeTuple::end(ser),
+            Tuple::Text(ser) => SerializeTuple::end(ser).map(|_| ()),
+        }
     }
 }
 

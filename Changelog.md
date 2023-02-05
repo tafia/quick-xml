@@ -12,8 +12,8 @@
 
 ### New Features
 
-- [#541]: Deserialize specially named `$text` enum variant in [externally tagged]
-  enums from textual content
+- [#541]: (De)serialize specially named `$text` enum variant in [externally tagged]
+  enums to / from textual content
 - [#556]: `to_writer` and `to_string` now accept `?Sized` types
 - [#556]: Add new `to_writer_with_root` and `to_string_with_root` helper functions
 - [#520]: Add methods `BytesText::inplace_trim_start` and `BytesText::inplace_trim_end`
