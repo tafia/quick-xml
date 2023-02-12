@@ -122,12 +122,12 @@ use std::str::from_utf8;
 ///     </Root>"
 /// );
 /// ```
-pub fn to_writer<W, T>(writer: W, value: &T) -> Result<(), DeError>
+pub fn to_writer<W, T>(mut writer: W, value: &T) -> Result<(), DeError>
 where
     W: Write,
     T: ?Sized + Serialize,
 {
-    value.serialize(Serializer::new(writer))
+    value.serialize(Serializer::new(&mut writer))
 }
 
 /// Serialize struct into a `String`.
@@ -208,12 +208,12 @@ where
 /// ```
 ///
 /// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
-pub fn to_writer_with_root<W, T>(writer: W, root_tag: &str, value: &T) -> Result<(), DeError>
+pub fn to_writer_with_root<W, T>(mut writer: W, root_tag: &str, value: &T) -> Result<(), DeError>
 where
     W: Write,
     T: ?Sized + Serialize,
 {
-    value.serialize(Serializer::with_root(writer, Some(root_tag))?)
+    value.serialize(Serializer::with_root(&mut writer, Some(root_tag))?)
 }
 
 /// Serialize struct into a `String` using specified root tag name.
@@ -439,19 +439,19 @@ impl<'i> Indent<'i> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A Serializer
-pub struct Serializer<'r, W: Write> {
-    ser: ContentSerializer<'r, W>,
+pub struct Serializer<'w, 'r, W: Write> {
+    ser: ContentSerializer<'w, 'r, W>,
     /// Name of the root tag. If not specified, deduced from the structure name
     root_tag: Option<XmlName<'r>>,
 }
 
-impl<'r, W: Write> Serializer<'r, W> {
+impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// Creates a new `Serializer` that uses struct name as a root tag name.
     ///
     /// Note, that attempt to serialize a non-struct (including unit structs
     /// and newtype structs) will end up to an error. Use `with_root` to create
     /// serializer with explicitly defined root element name
-    pub fn new(writer: W) -> Self {
+    pub fn new(writer: &'w mut W) -> Self {
         Self {
             ser: ContentSerializer {
                 writer,
@@ -515,7 +515,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// ```
     ///
     /// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
-    pub fn with_root(writer: W, root_tag: Option<&'r str>) -> Result<Self, DeError> {
+    pub fn with_root(writer: &'w mut W, root_tag: Option<&'r str>) -> Result<Self, DeError> {
         Ok(Self {
             ser: ContentSerializer {
                 writer,
@@ -535,7 +535,7 @@ impl<'r, W: Write> Serializer<'r, W> {
 
     /// Creates actual serializer or returns an error if root tag is not defined.
     /// In that case `err` contains the name of type that cannot be serialized.
-    fn ser(self, err: &str) -> Result<ElementSerializer<'r, W>, DeError> {
+    fn ser(self, err: &str) -> Result<ElementSerializer<'w, 'r, W>, DeError> {
         if let Some(key) = self.root_tag {
             Ok(ElementSerializer { ser: self.ser, key })
         } else {
@@ -548,7 +548,7 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// Creates actual serializer using root tag or a specified `key` if root tag
     /// is not defined. Returns an error if root tag is not defined and a `key`
     /// does not conform [XML rules](XmlName::try_from) for names.
-    fn ser_name(self, key: &'static str) -> Result<ElementSerializer<'r, W>, DeError> {
+    fn ser_name(self, key: &'static str) -> Result<ElementSerializer<'w, 'r, W>, DeError> {
         Ok(ElementSerializer {
             ser: self.ser,
             key: match self.root_tag {
@@ -559,19 +559,20 @@ impl<'r, W: Write> Serializer<'r, W> {
     }
 }
 
-impl<'r, W: Write> ser::Serializer for Serializer<'r, W> {
+impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     type Ok = ();
     type Error = DeError;
 
-    type SerializeSeq = <ElementSerializer<'r, W> as ser::Serializer>::SerializeSeq;
-    type SerializeTuple = <ElementSerializer<'r, W> as ser::Serializer>::SerializeTuple;
-    type SerializeTupleStruct = <ElementSerializer<'r, W> as ser::Serializer>::SerializeTupleStruct;
+    type SerializeSeq = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeSeq;
+    type SerializeTuple = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTuple;
+    type SerializeTupleStruct =
+        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTupleStruct;
     type SerializeTupleVariant =
-        <ElementSerializer<'r, W> as ser::Serializer>::SerializeTupleVariant;
-    type SerializeMap = <ElementSerializer<'r, W> as ser::Serializer>::SerializeMap;
-    type SerializeStruct = <ElementSerializer<'r, W> as ser::Serializer>::SerializeStruct;
+        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTupleVariant;
+    type SerializeMap = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeMap;
+    type SerializeStruct = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeStruct;
     type SerializeStructVariant =
-        <ElementSerializer<'r, W> as ser::Serializer>::SerializeStructVariant;
+        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeStructVariant;
 
     forward!(serialize_bool(bool));
 

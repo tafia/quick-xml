@@ -44,8 +44,8 @@ macro_rules! write_primitive {
 /// with indent, sequence of strings become one big string with additional content
 /// and it would be impossible to distinguish between content of the original
 /// strings and inserted indent characters.
-pub struct ContentSerializer<'i, W: Write> {
-    pub writer: W,
+pub struct ContentSerializer<'w, 'i, W: Write> {
+    pub writer: &'w mut W,
     /// Defines which XML characters need to be escaped in text content
     pub level: QuoteLevel,
     /// Current indentation level. Note, that `Indent::None` means that there is
@@ -59,10 +59,10 @@ pub struct ContentSerializer<'i, W: Write> {
     //TODO: add settings to disallow consequent serialization of primitives
 }
 
-impl<'i, W: Write> ContentSerializer<'i, W> {
+impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     /// Turns this serializer into serializer of a text content
     #[inline]
-    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<'i, W> {
+    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<'i, &'w mut W> {
         //TODO: Customization point: choose between CDATA and Text representation
         SimpleTypeSerializer {
             writer: self.writer,
@@ -79,9 +79,9 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
     /// Creates new serializer that shares state with this serializer and
     /// writes to the same underlying writer
     #[inline]
-    pub fn new_seq_element_serializer(&mut self) -> ContentSerializer<&mut W> {
+    pub fn new_seq_element_serializer(&mut self) -> ContentSerializer<W> {
         ContentSerializer {
-            writer: &mut self.writer,
+            writer: self.writer,
             level: self.level,
             indent: self.indent.borrow(),
             write_indent: self.write_indent,
@@ -101,14 +101,14 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
     /// Writes simple type content between `name` tags
     pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<(), DeError>
     where
-        S: FnOnce(SimpleTypeSerializer<'i, W>) -> Result<W, DeError>,
+        S: for<'a> FnOnce(SimpleTypeSerializer<'i, &'a mut W>) -> Result<&'a mut W, DeError>,
     {
         self.write_indent()?;
         self.writer.write_char('<')?;
         self.writer.write_str(name.0)?;
         self.writer.write_char('>')?;
 
-        let mut writer = serialize(self.into_simple_type_serializer())?;
+        let writer = serialize(self.into_simple_type_serializer())?;
 
         writer.write_str("</")?;
         writer.write_str(name.0)?;
@@ -125,17 +125,17 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
     }
 }
 
-impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
+impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     type Ok = ();
     type Error = DeError;
 
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = ElementSerializer<'i, W>;
+    type SerializeTupleVariant = ElementSerializer<'w, 'i, W>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
-    type SerializeStructVariant = Struct<'i, W>;
+    type SerializeStructVariant = Struct<'w, 'i, W>;
 
     write_primitive!(serialize_bool(bool));
 
@@ -297,7 +297,7 @@ impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
     }
 }
 
-impl<'i, W: Write> SerializeSeq for ContentSerializer<'i, W> {
+impl<'w, 'i, W: Write> SerializeSeq for ContentSerializer<'w, 'i, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -317,7 +317,7 @@ impl<'i, W: Write> SerializeSeq for ContentSerializer<'i, W> {
     }
 }
 
-impl<'i, W: Write> SerializeTuple for ContentSerializer<'i, W> {
+impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -335,7 +335,7 @@ impl<'i, W: Write> SerializeTuple for ContentSerializer<'i, W> {
     }
 }
 
-impl<'i, W: Write> SerializeTupleStruct for ContentSerializer<'i, W> {
+impl<'w, 'i, W: Write> SerializeTupleStruct for ContentSerializer<'w, 'i, W> {
     type Ok = ();
     type Error = DeError;
 

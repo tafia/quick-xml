@@ -23,6 +23,8 @@
   mappings (`xmlns:xxx`) that was broken since [#490]
 - [#510]: Fix an error of deserialization of `Option<T>` fields where `T` is some
   sequence type (for example, `Vec` or tuple)
+- [#540]: Fix a compilation error (probably a rustc bug) in some circumstances.
+  `Serializer::new` and `Serializer::with_root` now accepts only references to `Write`r.
 
 ### Misc Changes
 
@@ -30,6 +32,7 @@
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#510]: https://github.com/tafia/quick-xml/issues/510
 [#537]: https://github.com/tafia/quick-xml/issues/537
+[#540]: https://github.com/tafia/quick-xml/issues/540
 [#541]: https://github.com/tafia/quick-xml/pull/541
 [#556]: https://github.com/tafia/quick-xml/pull/556
 
