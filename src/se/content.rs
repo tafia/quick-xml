@@ -477,14 +477,15 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $expected:literal) => {
                 #[test]
                 fn $name() {
+                    let mut buffer = String::new();
                     let ser = ContentSerializer {
-                        writer: String::new(),
+                        writer: &mut buffer,
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
                     };
 
-                    let buffer = $data.serialize(ser).unwrap();
+                    $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
                 }
             };
@@ -665,14 +666,15 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $expected:literal) => {
                 #[test]
                 fn $name() {
+                    let mut buffer = String::new();
                     let ser = ContentSerializer {
-                        writer: String::new(),
+                        writer: &mut buffer,
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
                     };
 
-                    let buffer = $data.serialize(ser).unwrap();
+                    $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
                 }
             };

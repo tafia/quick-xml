@@ -524,9 +524,10 @@ mod tests {
             ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
+                    let mut buffer = String::new();
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
-                            writer: String::new(),
+                            writer: &mut buffer,
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
@@ -534,7 +535,7 @@ mod tests {
                         key: XmlName("root"),
                     };
 
-                    let buffer = $data.serialize(ser).unwrap();
+                    $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
                 }
             };
@@ -1482,9 +1483,10 @@ mod tests {
             ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
+                    let mut buffer = String::new();
                     let ser = ElementSerializer {
                         ser: ContentSerializer {
-                            writer: String::new(),
+                            writer: &mut buffer,
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
@@ -1492,7 +1494,7 @@ mod tests {
                         key: XmlName("root"),
                     };
 
-                    let buffer = $data.serialize(ser).unwrap();
+                    $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
                 }
             };
