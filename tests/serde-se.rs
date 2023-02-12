@@ -164,9 +164,11 @@ mod without_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = Serializer::new(String::new());
+                let mut buffer = String::new();
+                let ser = Serializer::new(&mut buffer);
 
-                assert_eq!($data.serialize(ser).unwrap(), $expected);
+                $data.serialize(ser).unwrap();
+                assert_eq!(buffer, $expected);
             }
         };
     }
@@ -556,10 +558,12 @@ mod without_root {
             ($name:ident: $data:expr => $expected:literal) => {
                 #[test]
                 fn $name() {
-                    let mut ser = Serializer::new(String::new());
+                    let mut buffer = String::new();
+                    let mut ser = Serializer::new(&mut buffer);
                     ser.indent(' ', 2);
 
-                    assert_eq!($data.serialize(ser).unwrap(), $expected);
+                    $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
                 }
             };
         }
@@ -948,9 +952,11 @@ mod with_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
+                let mut buffer = String::new();
+                let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
 
-                assert_eq!($data.serialize(ser).unwrap(), $expected);
+                $data.serialize(ser).unwrap();
+                assert_eq!(buffer, $expected);
             }
         };
     }

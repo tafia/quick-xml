@@ -110,8 +110,10 @@ use std::str::from_utf8;
 ///     text: "text content",
 /// };
 ///
+/// let mut buffer = String::new();
+/// to_writer(&mut buffer, &data).unwrap();
 /// assert_eq!(
-///     to_writer(String::new(), &data).unwrap(),
+///     buffer,
 ///     // The root tag name is automatically deduced from the struct name
 ///     // This will not work for other types or struct with #[serde(flatten)] fields
 ///     "<Root attribute=\"attribute content\">\
@@ -165,7 +167,9 @@ pub fn to_string<T>(value: &T) -> Result<String, DeError>
 where
     T: ?Sized + Serialize,
 {
-    to_writer(String::new(), value)
+    let mut buffer = String::new();
+    to_writer(&mut buffer, value)?;
+    Ok(buffer)
 }
 
 /// Serialize struct into a `Write`r using specified root tag name.
@@ -192,8 +196,10 @@ where
 ///     text: "text content",
 /// };
 ///
+/// let mut buffer = String::new();
+/// to_writer_with_root(&mut buffer, "top-level", &data).unwrap();
 /// assert_eq!(
-///     to_writer_with_root(String::new(), "top-level", &data).unwrap(),
+///     buffer,
 ///     "<top-level attribute=\"attribute content\">\
 ///         <element>element content</element>\
 ///         text content\
@@ -248,7 +254,9 @@ pub fn to_string_with_root<T>(root_tag: &str, value: &T) -> Result<String, DeErr
 where
     T: ?Sized + Serialize,
 {
-    to_writer_with_root(String::new(), root_tag, value)
+    let mut buffer = String::new();
+    to_writer_with_root(&mut buffer, root_tag, value)?;
+    Ok(buffer)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -467,12 +475,11 @@ impl<'r, W: Write> Serializer<'r, W> {
     /// # use serde::Serialize;
     /// # use quick_xml::se::Serializer;
     ///
-    /// let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
+    /// let mut buffer = String::new();
+    /// let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
     ///
-    /// assert_eq!(
-    ///     "node".serialize(ser).unwrap(),
-    ///     "<root>node</root>"
-    /// );
+    /// "node".serialize(ser).unwrap();
+    /// assert_eq!(buffer, "<root>node</root>");
     /// ```
     ///
     /// When serializing a struct, newtype struct, unit struct or tuple `root_tag`
@@ -489,15 +496,17 @@ impl<'r, W: Write> Serializer<'r, W> {
     ///     answer: u32,
     /// }
     ///
-    /// let ser = Serializer::with_root(String::new(), Some("root")).unwrap();
+    /// let mut buffer = String::new();
+    /// let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
     ///
     /// let data = Struct {
     ///     question: "The Ultimate Question of Life, the Universe, and Everything".into(),
     ///     answer: 42,
     /// };
     ///
+    /// data.serialize(ser).unwrap();
     /// assert_eq!(
-    ///     data.serialize(ser).unwrap(),
+    ///     buffer,
     ///     "<root>\
     ///         <question>The Ultimate Question of Life, the Universe, and Everything</question>\
     ///         <answer>42</answer>\
