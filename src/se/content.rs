@@ -14,7 +14,8 @@ macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         #[inline]
         fn $method(self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.into_simple_type_serializer().$method(value)
+            self.into_simple_type_serializer().$method(value)?;
+            Ok(())
         }
     };
 }
@@ -89,16 +90,16 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
 
     /// Writes `name` as self-closed tag
     #[inline]
-    pub(super) fn write_empty(mut self, name: XmlName) -> Result<W, DeError> {
+    pub(super) fn write_empty(mut self, name: XmlName) -> Result<(), DeError> {
         self.write_indent()?;
         self.writer.write_char('<')?;
         self.writer.write_str(name.0)?;
         self.writer.write_str("/>")?;
-        Ok(self.writer)
+        Ok(())
     }
 
     /// Writes simple type content between `name` tags
-    pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<W, DeError>
+    pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<(), DeError>
     where
         S: FnOnce(SimpleTypeSerializer<'i, W>) -> Result<W, DeError>,
     {
@@ -112,7 +113,7 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
         writer.write_str("</")?;
         writer.write_str(name.0)?;
         writer.write_char('>')?;
-        Ok(writer)
+        Ok(())
     }
 
     pub(super) fn write_indent(&mut self) -> Result<(), DeError> {
@@ -125,7 +126,7 @@ impl<'i, W: Write> ContentSerializer<'i, W> {
 }
 
 impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     type SerializeSeq = Self;
@@ -161,17 +162,16 @@ impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
-        if value.is_empty() {
-            Ok(self.writer)
-        } else {
-            self.into_simple_type_serializer().serialize_str(value)
+        if !value.is_empty() {
+            self.into_simple_type_serializer().serialize_str(value)?;
         }
+        Ok(())
     }
 
     /// Does not write anything
     #[inline]
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.writer)
+        Ok(())
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
@@ -181,13 +181,13 @@ impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
     /// Does not write anything
     #[inline]
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.writer)
+        Ok(())
     }
 
     /// Does not write anything
     #[inline]
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Ok(self.writer)
+        Ok(())
     }
 
     /// Checks `variant` for XML name validity and writes `<${variant}/>`
@@ -298,7 +298,7 @@ impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
 }
 
 impl<'i, W: Write> SerializeSeq for ContentSerializer<'i, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -313,12 +313,12 @@ impl<'i, W: Write> SerializeSeq for ContentSerializer<'i, W> {
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.writer)
+        Ok(())
     }
 }
 
 impl<'i, W: Write> SerializeTuple for ContentSerializer<'i, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]
@@ -336,7 +336,7 @@ impl<'i, W: Write> SerializeTuple for ContentSerializer<'i, W> {
 }
 
 impl<'i, W: Write> SerializeTupleStruct for ContentSerializer<'i, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]

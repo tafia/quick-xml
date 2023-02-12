@@ -122,7 +122,7 @@ use std::str::from_utf8;
 ///     </Root>"
 /// );
 /// ```
-pub fn to_writer<W, T>(writer: W, value: &T) -> Result<W, DeError>
+pub fn to_writer<W, T>(writer: W, value: &T) -> Result<(), DeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -208,7 +208,7 @@ where
 /// ```
 ///
 /// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
-pub fn to_writer_with_root<W, T>(writer: W, root_tag: &str, value: &T) -> Result<W, DeError>
+pub fn to_writer_with_root<W, T>(writer: W, root_tag: &str, value: &T) -> Result<(), DeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -560,7 +560,7 @@ impl<'r, W: Write> Serializer<'r, W> {
 }
 
 impl<'r, W: Write> ser::Serializer for Serializer<'r, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     type SerializeSeq = <ElementSerializer<'r, W> as ser::Serializer>::SerializeSeq;
@@ -598,7 +598,7 @@ impl<'r, W: Write> ser::Serializer for Serializer<'r, W> {
     forward!(serialize_bytes(&[u8]));
 
     fn serialize_none(self) -> Result<Self::Ok, DeError> {
-        Ok(self.ser.writer)
+        Ok(())
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, DeError> {

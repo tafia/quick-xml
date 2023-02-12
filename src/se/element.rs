@@ -31,7 +31,7 @@ pub struct ElementSerializer<'k, W: Write> {
 }
 
 impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     type SerializeSeq = Self;
@@ -201,7 +201,7 @@ impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
 }
 
 impl<'k, W: Write> SerializeSeq for ElementSerializer<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -219,12 +219,12 @@ impl<'k, W: Write> SerializeSeq for ElementSerializer<'k, W> {
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(self.ser.writer)
+        Ok(())
     }
 }
 
 impl<'k, W: Write> SerializeTuple for ElementSerializer<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]
@@ -242,7 +242,7 @@ impl<'k, W: Write> SerializeTuple for ElementSerializer<'k, W> {
 }
 
 impl<'k, W: Write> SerializeTupleStruct for ElementSerializer<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]
@@ -260,7 +260,7 @@ impl<'k, W: Write> SerializeTupleStruct for ElementSerializer<'k, W> {
 }
 
 impl<'k, W: Write> SerializeTupleVariant for ElementSerializer<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]
@@ -371,7 +371,7 @@ impl<'k, W: Write> Struct<'k, W> {
 }
 
 impl<'k, W: Write> SerializeStruct for Struct<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
@@ -396,12 +396,12 @@ impl<'k, W: Write> SerializeStruct for Struct<'k, W> {
             self.ser.ser.writer.write_str(self.ser.key.0)?;
             self.ser.ser.writer.write_char('>')?;
         }
-        Ok(self.ser.ser.writer)
+        Ok(())
     }
 }
 
 impl<'k, W: Write> SerializeStructVariant for Struct<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     #[inline]
@@ -439,7 +439,7 @@ impl<'k, W: Write> Map<'k, W> {
 }
 
 impl<'k, W: Write> SerializeMap for Map<'k, W> {
-    type Ok = W;
+    type Ok = ();
     type Error = DeError;
 
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
