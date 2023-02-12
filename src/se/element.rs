@@ -24,13 +24,13 @@ macro_rules! write_primitive {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A serializer used to serialize element with specified name.
-pub struct ElementSerializer<'k, W: Write> {
-    pub ser: ContentSerializer<'k, W>,
+pub struct ElementSerializer<'w, 'k, W: Write> {
+    pub ser: ContentSerializer<'w, 'k, W>,
     /// Tag name used to wrap serialized types except enum variants which uses the variant name
     pub(super) key: XmlName<'k>,
 }
 
-impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
+impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -38,9 +38,9 @@ impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
     type SerializeTupleVariant = Self;
-    type SerializeMap = Map<'k, W>;
-    type SerializeStruct = Struct<'k, W>;
-    type SerializeStructVariant = Struct<'k, W>;
+    type SerializeMap = Map<'w, 'k, W>;
+    type SerializeStruct = Struct<'w, 'k, W>;
+    type SerializeStructVariant = Struct<'w, 'k, W>;
 
     write_primitive!(serialize_bool(bool));
 
@@ -200,7 +200,7 @@ impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeSeq for ElementSerializer<'k, W> {
+impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -223,7 +223,7 @@ impl<'k, W: Write> SerializeSeq for ElementSerializer<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeTuple for ElementSerializer<'k, W> {
+impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -241,7 +241,7 @@ impl<'k, W: Write> SerializeTuple for ElementSerializer<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeTupleStruct for ElementSerializer<'k, W> {
+impl<'w, 'k, W: Write> SerializeTupleStruct for ElementSerializer<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -259,7 +259,7 @@ impl<'k, W: Write> SerializeTupleStruct for ElementSerializer<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeTupleVariant for ElementSerializer<'k, W> {
+impl<'w, 'k, W: Write> SerializeTupleVariant for ElementSerializer<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -286,8 +286,8 @@ impl<'k, W: Write> SerializeTupleVariant for ElementSerializer<'k, W> {
 /// - attributes written directly to the higher serializer
 /// - elements buffered into internal buffer and at the end written into higher
 ///   serializer
-pub struct Struct<'k, W: Write> {
-    ser: ElementSerializer<'k, W>,
+pub struct Struct<'w, 'k, W: Write> {
+    ser: ElementSerializer<'w, 'k, W>,
     /// Buffer to store serialized elements
     // TODO: Customization point: allow direct writing of elements, but all
     // attributes should be listed first. Fail, if attribute encountered after
@@ -295,7 +295,7 @@ pub struct Struct<'k, W: Write> {
     children: String,
 }
 
-impl<'k, W: Write> Struct<'k, W> {
+impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     #[inline]
     fn write_field<T>(&mut self, key: &str, value: &T) -> Result<(), DeError>
     where
@@ -370,7 +370,7 @@ impl<'k, W: Write> Struct<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeStruct for Struct<'k, W> {
+impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -400,7 +400,7 @@ impl<'k, W: Write> SerializeStruct for Struct<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeStructVariant for Struct<'k, W> {
+impl<'w, 'k, W: Write> SerializeStructVariant for Struct<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
@@ -420,14 +420,14 @@ impl<'k, W: Write> SerializeStructVariant for Struct<'k, W> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-pub struct Map<'k, W: Write> {
-    ser: Struct<'k, W>,
+pub struct Map<'w, 'k, W: Write> {
+    ser: Struct<'w, 'k, W>,
     /// Key, serialized by `QNameSerializer` if consumer uses `serialize_key` +
     /// `serialize_value` calls instead of `serialize_entry`
     key: Option<String>,
 }
 
-impl<'k, W: Write> Map<'k, W> {
+impl<'w, 'k, W: Write> Map<'w, 'k, W> {
     fn make_key<T>(&mut self, key: &T) -> Result<String, DeError>
     where
         T: ?Sized + Serialize,
@@ -438,7 +438,7 @@ impl<'k, W: Write> Map<'k, W> {
     }
 }
 
-impl<'k, W: Write> SerializeMap for Map<'k, W> {
+impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
     type Ok = ();
     type Error = DeError;
 
