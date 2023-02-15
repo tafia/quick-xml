@@ -53,13 +53,13 @@ use crate::reader::Span;
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
 
-/// A trait for get a span information
+/// A trait for acquiring the start and end locations of a parsing event in an input
 #[cfg(feature = "span")]
 pub trait Spanned {
-    /// Returns a span that type is occupied in the input
+    /// Returns a span over the location of a parsing event
     fn span(&self) -> Span;
 
-    /// Sets the span of this holder to a given value
+    /// Sets the span of this parsing event to a given value
     fn with_span(self, span: Span) -> Self;
 }
 
