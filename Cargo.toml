@@ -221,3 +221,7 @@ path = "tests/serde-issues.rs"
 name = "async-tokio"
 required-features = ["async-tokio"]
 path = "tests/async-tokio.rs"
+
+[[example]]
+name = "read_nodes_serde"
+required-features = ["serialize"]
