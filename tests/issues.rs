@@ -49,6 +49,20 @@ mod issue514 {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    #[cfg(not(feature = "span"))]
+    fn read_event<'a>(reader: &'a mut Reader<&[u8]>) -> Event<'a> {
+        reader.read_event().unwrap()
+    }
+
+    // We do not test correctness of spans here so just clear them
+    #[cfg(feature = "span")]
+    fn read_event<'a>(reader: &'a mut Reader<&[u8]>) -> Event<'a> {
+        use quick_xml::events::Spanned;
+        use quick_xml::reader::Span;
+
+        reader.read_event().unwrap().with_span(Span::default())
+    }
+
     /// Check that there is no unexpected error
     #[test]
     fn no_mismatch() {
@@ -60,8 +74,8 @@ mod issue514 {
         let html_start = BytesStart::new("html");
         let html_end = html_start.to_end().into_owned();
 
-        assert_eq!(reader.read_event().unwrap(), Event::Start(outer_start));
-        assert_eq!(reader.read_event().unwrap(), Event::Start(html_start));
+        assert_eq!(read_event(&mut reader), Event::Start(outer_start));
+        assert_eq!(read_event(&mut reader), Event::Start(html_start));
 
         reader.check_end_names(false);
 
@@ -69,8 +83,8 @@ mod issue514 {
 
         reader.check_end_names(true);
 
-        assert_eq!(reader.read_event().unwrap(), Event::End(outer_end));
-        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        assert_eq!(read_event(&mut reader), Event::End(outer_end));
+        assert_eq!(read_event(&mut reader), Event::Eof);
     }
 
     /// Canary check that legitimate error is reported
@@ -83,8 +97,8 @@ mod issue514 {
         let html_start = BytesStart::new("html");
         let html_end = html_start.to_end().into_owned();
 
-        assert_eq!(reader.read_event().unwrap(), Event::Start(outer_start));
-        assert_eq!(reader.read_event().unwrap(), Event::Start(html_start));
+        assert_eq!(read_event(&mut reader), Event::Start(outer_start));
+        assert_eq!(read_event(&mut reader), Event::Start(html_start));
 
         reader.check_end_names(false);
 

@@ -111,6 +111,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// ```
     /// # tokio_test::block_on(async {
     /// # use pretty_assertions::assert_eq;
+    /// # #[cfg(feature = "span")]
+    /// # use quick_xml::events::Spanned;
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::reader::Reader;
     ///
@@ -129,6 +131,9 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     ///
     /// let start = BytesStart::new("outer");
     /// let end   = start.to_end().into_owned();
+    ///
+    /// # #[cfg(feature = "span")]
+    /// # let start = start.with_span(5..12);
     ///
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event_into_async(&mut buf).await.unwrap(), Event::Start(start));
@@ -246,6 +251,8 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// ```
     /// # tokio_test::block_on(async {
     /// # use pretty_assertions::assert_eq;
+    /// # #[cfg(feature = "span")]
+    /// # use quick_xml::events::Spanned;
     /// use quick_xml::name::{Namespace, ResolveResult};
     /// use quick_xml::events::{BytesStart, Event};
     /// use quick_xml::reader::NsReader;
@@ -270,6 +277,9 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     /// let ns = Namespace(b"namespace 1");
     /// let start = BytesStart::from_content(r#"outer xmlns="namespace 1""#, 5);
     /// let end   = start.to_end().into_owned();
+    ///
+    /// # #[cfg(feature = "span")]
+    /// # let start = start.with_span(5..32);
     ///
     /// // First, we read a start event...
     /// assert_eq!(

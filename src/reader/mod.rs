@@ -165,7 +165,7 @@ macro_rules! read_event_impl {
             },
             ParseState::ClosedTag => $self.$read_until_open($buf) $(.$await)?,
             ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
-            ParseState::Empty => $self.parser.close_expanded_empty(),
+            ParseState::Empty(start) => $self.parser.close_expanded_empty(start),
             ParseState::Exit => return Ok(Event::Eof),
         };
         match event {
@@ -194,11 +194,14 @@ macro_rules! read_until_open {
             return $self.$read_event($buf) $(.$await)?;
         }
 
+        // Position just after `>`
+        let start = $self.parser.offset;
+
         match $reader
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
-            Ok(Some(bytes)) => $self.parser.read_text(bytes),
+            Ok(Some(bytes)) => $self.parser.read_text(start, bytes),
             Ok(None) => Ok(Event::Eof),
             Err(e) => Err(e),
         }
@@ -213,6 +216,8 @@ macro_rules! read_until_close {
     ) => {{
         $self.parser.state = ParseState::ClosedTag;
 
+        // Cannot substract -1 here because in case of malformed documents `offset` is zero
+        let start = $self.parser.offset;
         match $reader.peek_one() $(.$await)? {
             // `<!` - comment, CDATA or DOCTYPE declaration
             Ok(Some(b'!')) => match $reader
@@ -220,7 +225,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => $self.parser.read_bang(bang_type, bytes),
+                Ok(Some((bang_type, bytes))) => $self.parser.read_bang(bang_type, start, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
@@ -229,7 +234,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_end(bytes),
+                Ok(Some(bytes)) => $self.parser.read_end(start - 1, bytes),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
@@ -238,7 +243,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_question_mark(bytes),
+                Ok(Some(bytes)) => $self.parser.read_question_mark(start - 1, bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
@@ -247,7 +252,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_start(bytes),
+                Ok(Some(bytes)) => $self.parser.read_start(start - 1, bytes),
                 Err(e) => Err(e),
             },
             Ok(None) => Ok(Event::Eof),
@@ -341,7 +346,9 @@ enum ParseState {
     /// Reader enters to this state when it is in a `ClosedTag` state and emits an
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
     /// after which reader returned to the `ClosedTag` state.
-    Empty,
+    ///
+    /// Contains start offset of the buffer, used to close empty tags
+    Empty(usize),
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
     Exit,
@@ -1624,6 +1631,8 @@ mod test {
             /// Ensures, that no empty `Text` events are generated
             mod $read_event {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+                #[cfg(feature = "span")]
+                use crate::events::Spanned;
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -1636,9 +1645,13 @@ mod test {
                 $($async)? fn bom_from_reader() {
                     let mut reader = Reader::from_reader("\u{feff}\u{feff}".as_bytes());
 
+                    let expected = BytesText::from_escaped("\u{feff}");
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..3);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("\u{feff}"))
+                        Event::Text(expected)
                     );
 
                     assert_eq!(
@@ -1656,9 +1669,13 @@ mod test {
                 $($async)? fn bom_from_str() {
                     let mut reader = Reader::from_str("\u{feff}\u{feff}");
 
+                    let expected = BytesText::from_escaped("\u{feff}");
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..3);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("\u{feff}"))
+                        Event::Text(expected)
                     );
 
                     assert_eq!(
@@ -1671,9 +1688,14 @@ mod test {
                 $($async)? fn declaration() {
                     let mut reader = Reader::from_str("<?xml ?>");
 
+                    let expected = BytesDecl::from_start(BytesStart::from_content("xml ", 3));
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..8);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3)))
+                        Event::Decl(expected)
                     );
                 }
 
@@ -1681,9 +1703,14 @@ mod test {
                 $($async)? fn doctype() {
                     let mut reader = Reader::from_str("<!DOCTYPE x>");
 
+                    let expected = BytesText::from_escaped("x");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..12);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::DocType(BytesText::from_escaped("x"))
+                        Event::DocType(expected)
                     );
                 }
 
@@ -1691,9 +1718,14 @@ mod test {
                 $($async)? fn processing_instruction() {
                     let mut reader = Reader::from_str("<?xml-stylesheet?>");
 
+                    let expected = BytesText::from_escaped("xml-stylesheet");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..18);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::PI(BytesText::from_escaped("xml-stylesheet"))
+                        Event::PI(expected)
                     );
                 }
 
@@ -1701,9 +1733,14 @@ mod test {
                 $($async)? fn start() {
                     let mut reader = Reader::from_str("<tag>");
 
+                    let expected = BytesStart::new("tag");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..5);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Start(BytesStart::new("tag"))
+                        Event::Start(expected)
                     );
                 }
 
@@ -1714,9 +1751,14 @@ mod test {
                     // the end name paired with the start name
                     reader.check_end_names(false);
 
+                    let expected = BytesEnd::new("tag");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..6);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::End(BytesEnd::new("tag"))
+                        Event::End(expected)
                     );
                 }
 
@@ -1724,9 +1766,14 @@ mod test {
                 $($async)? fn empty() {
                     let mut reader = Reader::from_str("<tag/>");
 
+                    let expected = BytesStart::new("tag");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..6);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Empty(BytesStart::new("tag"))
+                        Event::Empty(expected)
                     );
                 }
 
@@ -1734,9 +1781,14 @@ mod test {
                 $($async)? fn text() {
                     let mut reader = Reader::from_str("text");
 
+                    let expected = BytesText::from_escaped("text");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..4);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("text"))
+                        Event::Text(expected)
                     );
                 }
 
@@ -1744,9 +1796,14 @@ mod test {
                 $($async)? fn cdata() {
                     let mut reader = Reader::from_str("<![CDATA[]]>");
 
+                    let expected = BytesCData::new("");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..12);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::CData(BytesCData::new(""))
+                        Event::CData(expected)
                     );
                 }
 
@@ -1754,9 +1811,14 @@ mod test {
                 $($async)? fn comment() {
                     let mut reader = Reader::from_str("<!---->");
 
+                    let expected = BytesText::from_escaped("");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..7);
+
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Comment(BytesText::from_escaped(""))
+                        Event::Comment(expected)
                     );
                 }
 
@@ -1782,6 +1844,8 @@ mod test {
         ) => {
             mod small_buffers {
                 use crate::events::{BytesCData, BytesDecl, BytesStart, BytesText, Event};
+                #[cfg(feature = "span")]
+                use crate::events::Spanned;
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -1794,9 +1858,15 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesDecl::from_start(BytesStart::from_content("xml ", 3));
+
+                    // We do not test correctness of spans here so just clear them
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..8);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3)))
+                        Event::Decl(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1813,9 +1883,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesText::new("pi");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..6);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::PI(BytesText::new("pi"))
+                        Event::PI(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1832,9 +1907,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesStart::new("empty");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..8);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::Empty(BytesStart::new("empty"))
+                        Event::Empty(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1851,9 +1931,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesCData::new("cdata");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..17);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::CData(BytesCData::new("cdata"))
+                        Event::CData(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1870,9 +1955,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesCData::new("cdata");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..17);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::CData(BytesCData::new("cdata"))
+                        Event::CData(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1889,9 +1979,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesText::new("comment");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..14);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::Comment(BytesText::new("comment"))
+                        Event::Comment(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
@@ -1908,9 +2003,14 @@ mod test {
                     let mut reader = Reader::from_reader(br);
                     let mut buf = Vec::new();
 
+                    let expected = BytesText::new("comment");
+
+                    #[cfg(feature = "span")]
+                    let expected = expected.with_span(0..14);
+
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::Comment(BytesText::new("comment"))
+                        Event::Comment(expected)
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
