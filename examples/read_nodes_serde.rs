@@ -31,6 +31,11 @@ struct Config {
     #[serde(rename = "DefaultSettings")]
     settings: DefaultSettings,
     #[serde(rename = "Localization")]
+    localization: Localization,
+}
+#[derive(Debug, PartialEq, Default, Deserialize)]
+struct Localization {
+    #[serde(rename = "Translation")]
     translation: Vec<Translation>,
 }
 
@@ -73,9 +78,10 @@ fn main() -> Result<(), quick_xml::DeError> {
     assert_eq!(config.settings.language, "es");
     assert_eq!(config.settings.greeting, "HELLO");
 
-    assert_eq!(config.translation.len(), 4);
-    assert_eq!(config.translation[2].tag, "HELLO");
-    assert_eq!(config.translation[2].text, "Hola");
-    assert_eq!(config.translation[2].lang, "es");
+    let translations = config.localization.translation;
+    assert_eq!(translations.len(), 4);
+    assert_eq!(translations[2].tag, "HELLO");
+    assert_eq!(translations[2].text, "Hola");
+    assert_eq!(translations[2].lang, "es");
     Ok(())
 }
