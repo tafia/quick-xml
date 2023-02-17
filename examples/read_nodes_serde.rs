@@ -12,7 +12,7 @@ struct Translation {
     tag: String,
     #[serde(rename = "@Language")]
     lang: String,
-    #[serde(rename = "Text")]
+    #[serde(rename = "$text")]
     text: String,
 }
 
@@ -44,16 +44,16 @@ const XML: &str = r#"
   <DefaultSettings Language="es" Greeting="HELLO"/>
   <Localization>
     <Translation Tag="HELLO" Language="ja">
-      <Text>こんにちは</Text>
+      こんにちは
     </Translation>
     <Translation Tag="BYE" Language="ja">
-      <Text>さようなら</Text>
+      さようなら
     </Translation>
     <Translation Tag="HELLO" Language="es">
-      <Text>Hola</Text>
+      Hola
     </Translation>
     <Translation Tag="BYE" Language="es">
-      <Text>Adiós</Text>
+      Adiós
     </Translation>
   </Localization>
 </Config>
@@ -61,7 +61,7 @@ const XML: &str = r#"
 
 const ONE_TRANSLATION_XML: &str = r#"
     <Translation Tag="HELLO" Language="ja">
-      <Text>こんにちは</Text>
+      こんにちは
     </Translation>
 "#;
 
