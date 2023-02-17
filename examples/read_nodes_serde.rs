@@ -26,16 +26,15 @@ struct DefaultSettings {
 }
 
 #[derive(Debug, PartialEq, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "PascalCase")]
 struct Config {
     #[serde(rename = "DefaultSettings")]
     settings: DefaultSettings,
-    #[serde(rename = "Localization")]
     localization: Localization,
 }
 #[derive(Debug, PartialEq, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Localization {
-    #[serde(rename = "Translation")]
     translation: Vec<Translation>,
 }
 
