@@ -28,8 +28,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde-value = "0.7"
 tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
-anyhow = "1"
-
 
 [lib]
 bench = false
