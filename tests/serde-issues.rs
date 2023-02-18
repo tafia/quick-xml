@@ -4,7 +4,7 @@
 
 use pretty_assertions::assert_eq;
 use quick_xml::de::from_str;
-use quick_xml::se::to_string;
+use quick_xml::se::{to_string, to_string_with_root};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -334,4 +334,29 @@ mod issue537 {
             r#"<Bindings xmlns="default" xmlns:named="named" attribute="attribute"/>"#
         );
     }
+}
+
+#[test]
+fn issue540() {
+    #[derive(Serialize)]
+    pub enum Enum {
+        Variant {},
+    }
+
+    #[derive(Serialize)]
+    pub struct Struct {
+        #[serde(flatten)]
+        flatten: Enum,
+    }
+
+    assert_eq!(
+        to_string_with_root(
+            "root",
+            &Struct {
+                flatten: Enum::Variant {},
+            }
+        )
+        .unwrap(),
+        "<root><Variant/></root>"
+    );
 }
