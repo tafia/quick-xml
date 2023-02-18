@@ -145,33 +145,36 @@ mod trivial {
 
             eof!(string: String = $value);
 
-            /// XML does not able to store binary data
-            #[test]
-            fn byte_buf() {
-                match from_str::<ByteBuf>($value) {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
-                }
-            }
+            eof!(byte_buf: ByteBuf = $value);
+            eof!(bytes: Bytes = $value);
 
-            /// XML does not able to store binary data
-            #[test]
-            fn bytes() {
-                match from_str::<Bytes>($value) {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
-                }
-            }
+            // /// XML does not able to store binary data
+            // #[test]
+            // fn byte_buf() {
+            //     match from_str::<ByteBuf>($value) {
+            //         Err(DeError::Unsupported(msg)) => {
+            //             assert_eq!(msg, "binary data content is not supported by XML format")
+            //         }
+            //         x => panic!(
+            //             r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+            //             x
+            //         ),
+            //     }
+            // }
+
+            // /// XML does not able to store binary data
+            // #[test]
+            // fn bytes() {
+            //     match from_str::<Bytes>($value) {
+            //         Err(DeError::Unsupported(msg)) => {
+            //             assert_eq!(msg, "binary data content is not supported by XML format")
+            //         }
+            //         x => panic!(
+            //             r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+            //             x
+            //         ),
+            //     }
+            // }
 
             #[test]
             fn unit() {

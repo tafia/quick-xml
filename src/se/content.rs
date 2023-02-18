@@ -157,7 +157,15 @@ impl<'i, W: Write> Serializer for ContentSerializer<'i, W> {
     write_primitive!(serialize_f64(f64));
 
     write_primitive!(serialize_char(char));
-    write_primitive!(serialize_bytes(&[u8]));
+
+    #[inline]
+    fn serialize_bytes(self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        if value.is_empty() {
+            Ok(self.writer)
+        } else {
+            self.into_simple_type_serializer().serialize_bytes(value)
+        }
+    }
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
@@ -558,7 +566,7 @@ pub(super) mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
-        err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+        serialize_as!(bytes_unescaped: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
 
         serialize_as!(option_none: Option::<Enum>::None => "");
         serialize_as!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -752,8 +760,7 @@ pub(super) mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
-        serialize_as!(bytes: Bytes(b"<\"escaped & bytes'>") => "&lt;&quot;escaped &amp; bytes&apos;&gt;");
-        // err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+        serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
 
         serialize_as!(option_none: Option::<Enum>::None => "");
         serialize_as!(option_some: Some(Enum::Unit) => "<Unit/>");

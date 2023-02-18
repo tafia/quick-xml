@@ -274,8 +274,9 @@ mod tests {
     serialize_as!(str_apos: "string'" => "string'");
     serialize_as!(str_quot: "string\"" => "string\"");
 
-    err!(bytes: Bytes(b"<\"escaped & bytes'>")
-        => Unsupported("`serialize_bytes` not supported yet"));
+    serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+    // err!(bytes: Bytes(b"<\"escaped & bytes'>")
+    //     => Unsupported("`serialize_bytes` not supported yet"));
 
     serialize_as!(option_none: Option::<&str>::None => "");
     serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");

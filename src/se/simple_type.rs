@@ -918,8 +918,9 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped-string" => "non-escaped-string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped&#32;&amp;&#32;string&apos;&gt;");
 
-        err!(bytes: Bytes(b"<\"escaped & bytes'>")
-            => Unsupported("`serialize_bytes` not supported yet"));
+        serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+        // err!(bytes: Bytes(b"<\"escaped & bytes'>")
+        //     => Unsupported("`serialize_bytes` not supported yet"));
 
         serialize_as!(option_none: Option::<&str>::None => "");
         serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");
@@ -1036,8 +1037,9 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
-        err!(bytes: Bytes(b"<\"escaped & bytes'>")
-            => Unsupported("`serialize_bytes` not supported yet"));
+        serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+        // err!(bytes: Bytes(b"<\"escaped & bytes'>")
+        //     => Unsupported("`serialize_bytes` not supported yet"));
 
         serialize_as!(option_none: Option::<&str>::None => "");
         serialize_as!(option_some: Some("non-escaped string") => "non-escaped string");
