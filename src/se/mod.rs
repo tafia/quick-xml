@@ -87,14 +87,168 @@ use serde::serde_if_integer128;
 use std::fmt::Write;
 use std::str::from_utf8;
 
-/// Serialize struct into a `Write`r
-pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<W, DeError> {
+/// Serialize struct into a `Write`r.
+///
+/// # Examples
+///
+/// ```
+/// # use quick_xml::se::to_writer;
+/// # use serde::Serialize;
+/// # use pretty_assertions::assert_eq;
+/// #[derive(Serialize)]
+/// struct Root<'a> {
+///     #[serde(rename = "@attribute")]
+///     attribute: &'a str,
+///     element: &'a str,
+///     #[serde(rename = "$text")]
+///     text: &'a str,
+/// }
+///
+/// let data = Root {
+///     attribute: "attribute content",
+///     element: "element content",
+///     text: "text content",
+/// };
+///
+/// assert_eq!(
+///     to_writer(String::new(), &data).unwrap(),
+///     // The root tag name is automatically deduced from the struct name
+///     // This will not work for other types or struct with #[serde(flatten)] fields
+///     "<Root attribute=\"attribute content\">\
+///         <element>element content</element>\
+///         text content\
+///     </Root>"
+/// );
+/// ```
+pub fn to_writer<W, T>(writer: W, value: &T) -> Result<W, DeError>
+where
+    W: Write,
+    T: ?Sized + Serialize,
+{
     value.serialize(Serializer::new(writer))
 }
 
-/// Serialize struct into a `String`
-pub fn to_string<S: Serialize>(value: &S) -> Result<String, DeError> {
+/// Serialize struct into a `String`.
+///
+/// # Examples
+///
+/// ```
+/// # use quick_xml::se::to_string;
+/// # use serde::Serialize;
+/// # use pretty_assertions::assert_eq;
+/// #[derive(Serialize)]
+/// struct Root<'a> {
+///     #[serde(rename = "@attribute")]
+///     attribute: &'a str,
+///     element: &'a str,
+///     #[serde(rename = "$text")]
+///     text: &'a str,
+/// }
+///
+/// let data = Root {
+///     attribute: "attribute content",
+///     element: "element content",
+///     text: "text content",
+/// };
+///
+/// assert_eq!(
+///     to_string(&data).unwrap(),
+///     // The root tag name is automatically deduced from the struct name
+///     // This will not work for other types or struct with #[serde(flatten)] fields
+///     "<Root attribute=\"attribute content\">\
+///         <element>element content</element>\
+///         text content\
+///     </Root>"
+/// );
+/// ```
+pub fn to_string<T>(value: &T) -> Result<String, DeError>
+where
+    T: ?Sized + Serialize,
+{
     to_writer(String::new(), value)
+}
+
+/// Serialize struct into a `Write`r using specified root tag name.
+/// `root_tag` should be valid [XML name], otherwise error is returned.
+///
+/// # Examples
+///
+/// ```
+/// # use quick_xml::se::to_writer_with_root;
+/// # use serde::Serialize;
+/// # use pretty_assertions::assert_eq;
+/// #[derive(Serialize)]
+/// struct Root<'a> {
+///     #[serde(rename = "@attribute")]
+///     attribute: &'a str,
+///     element: &'a str,
+///     #[serde(rename = "$text")]
+///     text: &'a str,
+/// }
+///
+/// let data = Root {
+///     attribute: "attribute content",
+///     element: "element content",
+///     text: "text content",
+/// };
+///
+/// assert_eq!(
+///     to_writer_with_root(String::new(), "top-level", &data).unwrap(),
+///     "<top-level attribute=\"attribute content\">\
+///         <element>element content</element>\
+///         text content\
+///     </top-level>"
+/// );
+/// ```
+///
+/// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+pub fn to_writer_with_root<W, T>(writer: W, root_tag: &str, value: &T) -> Result<W, DeError>
+where
+    W: Write,
+    T: ?Sized + Serialize,
+{
+    value.serialize(Serializer::with_root(writer, Some(root_tag))?)
+}
+
+/// Serialize struct into a `String` using specified root tag name.
+/// `root_tag` should be valid [XML name], otherwise error is returned.
+///
+/// # Examples
+///
+/// ```
+/// # use quick_xml::se::to_string_with_root;
+/// # use serde::Serialize;
+/// # use pretty_assertions::assert_eq;
+/// #[derive(Serialize)]
+/// struct Root<'a> {
+///     #[serde(rename = "@attribute")]
+///     attribute: &'a str,
+///     element: &'a str,
+///     #[serde(rename = "$text")]
+///     text: &'a str,
+/// }
+///
+/// let data = Root {
+///     attribute: "attribute content",
+///     element: "element content",
+///     text: "text content",
+/// };
+///
+/// assert_eq!(
+///     to_string_with_root("top-level", &data).unwrap(),
+///     "<top-level attribute=\"attribute content\">\
+///         <element>element content</element>\
+///         text content\
+///     </top-level>"
+/// );
+/// ```
+///
+/// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+pub fn to_string_with_root<T>(root_tag: &str, value: &T) -> Result<String, DeError>
+where
+    T: ?Sized + Serialize,
+{
+    to_writer_with_root(String::new(), root_tag, value)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
