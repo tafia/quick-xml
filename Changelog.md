@@ -14,6 +14,8 @@
 
 - [#541]: Deserialize specially named `$text` enum variant in [externally tagged]
   enums from textual content
+- [#556]: `to_writer` and `to_string` now accept `?Sized` types
+- [#556]: Add new `to_writer_with_root` and `to_string_with_root` helper functions
 
 ### Bug Fixes
 
@@ -29,6 +31,7 @@
 [#510]: https://github.com/tafia/quick-xml/issues/510
 [#537]: https://github.com/tafia/quick-xml/issues/537
 [#541]: https://github.com/tafia/quick-xml/pull/541
+[#556]: https://github.com/tafia/quick-xml/pull/556
 
 ## 0.27.1 -- 2022-12-28
 
