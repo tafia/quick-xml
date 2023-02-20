@@ -48,8 +48,10 @@ use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
+use crate::reader::is_whitespace;
 use crate::utils::write_cow_string;
 use attributes::{Attribute, Attributes};
+use std::mem::replace;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -694,26 +696,23 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Gets content of this text buffer in the specified encoding and optionally
-    /// unescapes it.
-    #[cfg(feature = "serialize")]
-    pub(crate) fn decode(&self, unescape: bool) -> Result<Cow<'a, str>> {
-        let text = match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        };
-        let text = if unescape {
-            //FIXME: need to take into account entities defined in the document
-            match unescape_with(&text, |_| None)? {
-                // Because result is borrowed, no replacements was done and we can use original string
-                Cow::Borrowed(_) => text,
-                Cow::Owned(s) => s.into(),
-            }
-        } else {
-            text
-        };
-        Ok(text)
+    /// Removes leading XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_start(&mut self) -> bool {
+        self.content = trim_cow(
+            replace(&mut self.content, Cow::Borrowed(b"")),
+            trim_xml_start,
+        );
+        self.content.is_empty()
+    }
+
+    /// Removes trailing XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_end(&mut self) -> bool {
+        self.content = trim_cow(replace(&mut self.content, Cow::Borrowed(b"")), trim_xml_end);
+        self.content.is_empty()
     }
 }
 
@@ -960,6 +959,54 @@ fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
     match content.into() {
         Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
         Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+    }
+}
+
+/// Returns a byte slice with leading XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [first, rest @ ..] = bytes {
+        if is_whitespace(*first) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+/// Returns a byte slice with trailing XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [rest @ .., last] = bytes {
+        if is_whitespace(*last) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+fn trim_cow<'a, F>(value: Cow<'a, [u8]>, trim: F) -> Cow<'a, [u8]>
+where
+    F: FnOnce(&[u8]) -> &[u8],
+{
+    match value {
+        Cow::Borrowed(bytes) => Cow::Borrowed(trim(bytes)),
+        Cow::Owned(mut bytes) => {
+            let trimmed = trim(&bytes);
+            if trimmed.len() != bytes.len() {
+                bytes = trimmed.to_vec();
+            }
+            Cow::Owned(bytes)
+        }
     }
 }
 

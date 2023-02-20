@@ -16,6 +16,8 @@
   enums from textual content
 - [#556]: `to_writer` and `to_string` now accept `?Sized` types
 - [#556]: Add new `to_writer_with_root` and `to_string_with_root` helper functions
+- [#520]: Add methods `BytesText::inplace_trim_start` and `BytesText::inplace_trim_end`
+  to trim leading and trailing spaces from text events
 
 ### Bug Fixes
 
@@ -25,12 +27,18 @@
   sequence type (for example, `Vec` or tuple)
 - [#540]: Fix a compilation error (probably a rustc bug) in some circumstances.
   `Serializer::new` and `Serializer::with_root` now accepts only references to `Write`r.
+- [#520]: Merge consequent (delimited only by comments and processing instructions)
+  texts and CDATA when deserialize using serde deserializer. `DeEvent::Text` and
+  `DeEvent::CData` events was replaced by `DeEvent::Text` with merged content.
+  The same behavior for the `Reader` does not implemented (yet?) and should be
+  implemented manually
 
 ### Misc Changes
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
 [#510]: https://github.com/tafia/quick-xml/issues/510
+[#520]: https://github.com/tafia/quick-xml/pull/520
 [#537]: https://github.com/tafia/quick-xml/issues/537
 [#540]: https://github.com/tafia/quick-xml/issues/540
 [#541]: https://github.com/tafia/quick-xml/pull/541

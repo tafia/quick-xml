@@ -42,10 +42,21 @@ macro_rules! configure_methods {
         ///
         /// Changing this option automatically changes the [`trim_text_end`] option.
         ///
-        /// (`false` by default)
+        /// (`false` by default).
+        ///
+        /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+        ///
+        /// WARNING: With this option every text events will be trimmed which is
+        /// incorrect behavior when text events delimited by comments, processing
+        /// instructions or CDATA sections. To correctly trim data manually apply
+        /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
+        /// only to necessary events.
+        /// </div>
         ///
         /// [`Text`]: Event::Text
         /// [`trim_text_end`]: Self::trim_text_end
+        /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
+        /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
         pub fn trim_text(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .parser.trim_text_start = val;
             self $(.$holder)? .parser.trim_text_end = val;
@@ -57,9 +68,20 @@ macro_rules! configure_methods {
         /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
         /// If after that the event is empty it will not be pushed.
         ///
-        /// (`false` by default)
+        /// (`false` by default).
+        ///
+        /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+        ///
+        /// WARNING: With this option every text events will be trimmed which is
+        /// incorrect behavior when text events delimited by comments, processing
+        /// instructions or CDATA sections. To correctly trim data manually apply
+        /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
+        /// only to necessary events.
+        /// </div>
         ///
         /// [`Text`]: Event::Text
+        /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
+        /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
         pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
             self $(.$holder)? .parser.trim_text_end = val;
             self
@@ -848,7 +870,7 @@ impl ReadElementState {
 
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
-pub(crate) fn is_whitespace(b: u8) -> bool {
+pub(crate) const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 

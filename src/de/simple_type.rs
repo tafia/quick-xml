@@ -504,14 +504,12 @@ impl<'de, 'a> Deref for CowRef<'de, 'a> {
 ///
 /// Used for deserialize values from:
 /// - attribute values (`<... ...="value" ...>`)
-/// - text content (`<...>text</...>`)
-/// - CDATA content (`<...><![CDATA[cdata]]></...>`)
+/// - mixed text / CDATA content (`<...>text<![CDATA[cdata]]></...>`)
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 pub struct SimpleTypeDeserializer<'de, 'a> {
     /// - In case of attribute contains escaped attribute value
-    /// - In case of text contains escaped text value
-    /// - In case of CData contains unescaped cdata value
+    /// - In case of text contains unescaped text value
     content: CowRef<'de, 'a>,
     /// If `true`, `content` in escaped form and should be unescaped before use
     escaped: bool,
