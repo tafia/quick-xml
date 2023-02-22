@@ -9,10 +9,12 @@ edition = "2018"
 cargo-fuzz = true
 
 [dependencies]
+arbitrary = { version = "1.2.3", features = ["derive"] }
 libfuzzer-sys = "0.4"
 
 [dependencies.quick-xml]
 path = ".."
+features = ["arbitrary"]
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -21,5 +23,11 @@ members = ["."]
 [[bin]]
 name = "fuzz_target_1"
 path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "structured_roundtrip"
+path = "fuzz_targets/structured_roundtrip.rs"
 test = false
 doc = false
