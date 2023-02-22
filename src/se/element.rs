@@ -64,6 +64,9 @@ impl<'k, W: Write> Serializer for ElementSerializer<'k, W> {
 
     write_primitive!(serialize_char(char));
 
+    #[cfg(feature = "binary_text")]
+    write_primitive!(serialize_bytes(&[u8]));
+    #[cfg(not(feature = "binary_text"))]
     fn serialize_bytes(self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
         if value.is_empty() {
             self.ser.write_empty(self.key)
@@ -613,7 +616,10 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
+        #[cfg(feature = "binary_text")]
         serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<root><\"unescaped & bytes'></root>");
+        #[cfg(not(feature = "binary_text"))]
+        err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported"));
 
         serialize_as!(option_none: Option::<&str>::None => "<root/>");
         serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");
@@ -723,7 +729,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None);
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -844,15 +859,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-
-                // err!(bytes:
-                //     Text {
-                //         before: "answer",
-                //         content: Bytes(b"<\"escaped & bytes'>"),
-                //         after: "answer",
-                //     }
-                //     => Unsupported("`serialize_bytes` not supported yet"));
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None => "");
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -973,7 +989,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    SpecialEnum::Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None => "");
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1098,10 +1123,12 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-                // err!(bytes:
-                //     BTreeMap::from([("$value", Bytes(b"<\"escaped & bytes'>"))])
-                //     => Unsupported("`serialize_bytes` not supported yet"));
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    BTreeMap::from([("$value", Bytes(b"<\"escaped & bytes'>"))])
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None);
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1208,14 +1235,16 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-                // err!(bytes:
-                //     Value {
-                //         before: "answer",
-                //         content: Bytes(b"<\"escaped & bytes'>"),
-                //         after: "answer",
-                //     }
-                //     => Unsupported("`serialize_bytes` not supported yet"));
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Value {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None => "");
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1339,14 +1368,16 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-                // err!(bytes:
-                //     SpecialEnum::Value {
-                //         before: "answer",
-                //         content: Bytes(b"<\"escaped & bytes'>"),
-                //         after: "answer",
-                //     }
-                //     => Unsupported("`serialize_bytes` not supported yet"));
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    SpecialEnum::Value {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None => "");
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1586,7 +1617,10 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
+        #[cfg(feature = "binary_text")]
         serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<root><\"unescaped & bytes'></root>");
+        #[cfg(not(feature = "binary_text"))]
+        err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported"));
 
         serialize_as!(option_none: Option::<&str>::None => "<root/>");
         serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");
@@ -1696,7 +1730,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None);
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1829,7 +1872,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None);
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -1962,7 +2014,16 @@ mod tests {
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 text!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    SpecialEnum::Text {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 text!(option_none: Option::<&str>::None);
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -2087,7 +2148,12 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    BTreeMap::from([("$value", Bytes(b"<\"escaped & bytes'>"))])
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None);
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -2205,7 +2271,16 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    Value {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None);
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
@@ -2341,7 +2416,16 @@ mod tests {
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
                 value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+                #[cfg(feature = "binary_text")]
                 value!(bytes: Bytes(b"\n  <\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
+                #[cfg(not(feature = "binary_text"))]
+                err!(bytes:
+                    SpecialEnum::Value {
+                        before: "answer",
+                        content: Bytes(b"<\"escaped & bytes'>"),
+                        after: "answer",
+                    }
+                    => Unsupported("`serialize_bytes` not supported"));
 
                 value!(option_none: Option::<&str>::None);
                 value!(option_some: Some("non-escaped string") => "non-escaped string");

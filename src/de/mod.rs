@@ -1799,8 +1799,18 @@ macro_rules! deserialize_primitives {
             }
         }
 
+        /// Returns [`DeError::Unsupported`]
+        #[cfg(not(feature = "binary_text"))]
+        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            Err(DeError::Unsupported("binary data content is not supported by XML format".into()))
+        }
+
         /// Deserializes raw bytes. While not officially supported by the XML format, there are
         /// hybrid formats that make use of binary data inside XML files.
+        #[cfg(feature = "binary_text")]
         fn deserialize_bytes<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -2246,6 +2256,7 @@ where
         self.read_string_impl(unescape, true)
     }
 
+    #[cfg(feature = "binary_text")]
     #[inline]
     fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
         self.read_bytes_impl(true)
@@ -2319,6 +2330,7 @@ where
         }
     }
 
+    #[cfg(feature = "binary_text")]
     fn read_bytes_impl(&mut self, allow_start: bool) -> Result<Cow<'de, [u8]>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e.into_inner()),

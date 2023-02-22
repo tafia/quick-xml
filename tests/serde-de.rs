@@ -145,36 +145,40 @@ mod trivial {
 
             eof!(string: String = $value);
 
+            #[cfg(feature = "binary_text")]
             eof!(byte_buf: ByteBuf = $value);
+            #[cfg(feature = "binary_text")]
             eof!(bytes: Bytes = $value);
 
-            // /// XML does not able to store binary data
-            // #[test]
-            // fn byte_buf() {
-            //     match from_str::<ByteBuf>($value) {
-            //         Err(DeError::Unsupported(msg)) => {
-            //             assert_eq!(msg, "binary data content is not supported by XML format")
-            //         }
-            //         x => panic!(
-            //             r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-            //             x
-            //         ),
-            //     }
-            // }
+            /// XML does not able to store binary data
+            #[cfg(not(feature = "binary_text"))]
+            #[test]
+            fn byte_buf() {
+                match from_str::<ByteBuf>($value) {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
 
-            // /// XML does not able to store binary data
-            // #[test]
-            // fn bytes() {
-            //     match from_str::<Bytes>($value) {
-            //         Err(DeError::Unsupported(msg)) => {
-            //             assert_eq!(msg, "binary data content is not supported by XML format")
-            //         }
-            //         x => panic!(
-            //             r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-            //             x
-            //         ),
-            //     }
-            // }
+            /// XML does not able to store binary data
+            #[cfg(not(feature = "binary_text"))]
+            #[test]
+            fn bytes() {
+                match from_str::<Bytes>($value) {
+                    Err(DeError::Unsupported(msg)) => {
+                        assert_eq!(msg, "binary data content is not supported by XML format")
+                    }
+                    x => panic!(
+                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        x
+                    ),
+                }
+            }
 
             #[test]
             fn unit() {
@@ -192,6 +196,7 @@ mod trivial {
     /// Empty document should considered invalid no matter what type we try to deserialize
     mod empty_doc {
         use super::*;
+        #[cfg(not(feature = "binary_text"))]
         use pretty_assertions::assert_eq;
 
         eof!("");
@@ -200,6 +205,7 @@ mod trivial {
     /// Document that contains only comment should be handled as if it is empty
     mod only_comment {
         use super::*;
+        #[cfg(not(feature = "binary_text"))]
         use pretty_assertions::assert_eq;
 
         eof!("<!--comment-->");

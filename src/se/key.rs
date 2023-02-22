@@ -37,6 +37,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
 
     write_primitive!();
 
+    #[cfg(feature = "binary_text")]
     fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.write_str(&String::from_utf8_lossy(value))?;
         Ok(self.writer)
@@ -274,9 +275,11 @@ mod tests {
     serialize_as!(str_apos: "string'" => "string'");
     serialize_as!(str_quot: "string\"" => "string\"");
 
+    #[cfg(feature = "binary_text")]
     serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-    // err!(bytes: Bytes(b"<\"escaped & bytes'>")
-    //     => Unsupported("`serialize_bytes` not supported yet"));
+    #[cfg(not(feature = "binary_text"))]
+    err!(bytes: Bytes(b"<\"escaped & bytes'>")
+        => Unsupported("`serialize_bytes` not supported"));
 
     serialize_as!(option_none: Option::<&str>::None => "");
     serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");

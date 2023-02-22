@@ -180,6 +180,10 @@ serde-types = ["serde/derive"]
 ## If you need that, use the `serde-types` feature.
 serialize = ["serde"] # "dep:" prefix only avalible from Rust 1.60
 
+## Enables support for binary blobs in XML text locations. When this
+## feature is enabled, quick-xml accepts unescaped binary blobs in XML files.
+binary_text = []
+
 [package.metadata.docs.rs]
 # document all features
 all-features = true

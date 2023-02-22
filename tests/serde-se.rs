@@ -966,6 +966,7 @@ mod with_root {
 
     /// Checks that attempt to serialize given `$data` results to a
     /// serialization error `$kind` with `$reason`
+    #[cfg(not(feature = "binary_text"))]
     macro_rules! err {
         ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
             #[test]
@@ -1022,8 +1023,10 @@ mod with_root {
     serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
     serialize_as!(str_escaped:  "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
+    #[cfg(feature = "binary_text")]
     serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<root><\"unescaped & bytes'></root>");
-    // err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
+    #[cfg(not(feature = "binary_text"))]
+    err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported"));
 
     serialize_as!(option_none: Option::<&str>::None => "");
     serialize_as!(option_some: Some("non-escaped string") => "<root>non-escaped string</root>");

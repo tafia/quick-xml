@@ -471,6 +471,7 @@ where
         self.map.de.read_string_impl(unescape, self.allow_start)
     }
     /// Returns next slice of bytes.
+    #[cfg(feature = "binary_text")]
     #[inline]
     fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
         self.map.de.read_bytes()
@@ -737,6 +738,7 @@ where
         self.map.de.read_string_impl(unescape, true)
     }
     /// Returns next slice of bytes.
+    #[cfg(feature = "binary_text")]
     #[inline]
     fn read_bytes(&mut self) -> Result<Cow<'de, [u8]>, DeError> {
         self.map.de.read_bytes()

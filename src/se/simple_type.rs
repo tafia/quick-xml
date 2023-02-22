@@ -197,6 +197,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     write_primitive!();
 
+    #[cfg(feature = "binary_text")]
     fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.writer.write(value)?;
         Ok(self.writer)
@@ -366,6 +367,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
 
     write_primitive!();
 
+    #[cfg(feature = "binary_text")]
     fn serialize_bytes(mut self, value: &[u8]) -> Result<Self::Ok, Self::Error> {
         if value.is_empty() {
             self.indent = Indent::None;
@@ -918,9 +920,11 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped-string" => "non-escaped-string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped&#32;&amp;&#32;string&apos;&gt;");
 
+        #[cfg(feature = "binary_text")]
         serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-        // err!(bytes: Bytes(b"<\"escaped & bytes'>")
-        //     => Unsupported("`serialize_bytes` not supported yet"));
+        #[cfg(not(feature = "binary_text"))]
+        err!(bytes: Bytes(b"<\"escaped & bytes'>")
+            => Unsupported("`serialize_bytes` not supported"));
 
         serialize_as!(option_none: Option::<&str>::None => "");
         serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");
@@ -1037,9 +1041,11 @@ mod tests {
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
         serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
 
+        #[cfg(feature = "binary_text")]
         serialize_as!(bytes: Bytes(b"<\"unescaped & bytes'>") => "<\"unescaped & bytes'>");
-        // err!(bytes: Bytes(b"<\"escaped & bytes'>")
-        //     => Unsupported("`serialize_bytes` not supported yet"));
+        #[cfg(not(feature = "binary_text"))]
+        err!(bytes: Bytes(b"<\"escaped & bytes'>")
+            => Unsupported("`serialize_bytes` not supported"));
 
         serialize_as!(option_none: Option::<&str>::None => "");
         serialize_as!(option_some: Some("non-escaped string") => "non-escaped string");
