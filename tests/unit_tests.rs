@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::io::Cursor;
 use std::str::from_utf8;
 
-use quick_xml::events::attributes::{AttrError, Attribute};
+use quick_xml::events::attributes::{Attr, AttrError, Attribute};
 use quick_xml::events::Event::*;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText};
 use quick_xml::name::QName;
@@ -605,6 +605,7 @@ fn test_closing_bracket_in_single_quote_attr() {
                 Some(Ok(Attribute {
                     key: QName(b"attr"),
                     value: Cow::Borrowed(b">"),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(
@@ -612,6 +613,7 @@ fn test_closing_bracket_in_single_quote_attr() {
                 Some(Ok(Attribute {
                     key: QName(b"check"),
                     value: Cow::Borrowed(b"2"),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -633,6 +635,7 @@ fn test_closing_bracket_in_double_quote_attr() {
                 Some(Ok(Attribute {
                     key: QName(b"attr"),
                     value: Cow::Borrowed(b">"),
+                    quote: Attr::DoubleQ((), ())
                 }))
             );
             assert_eq!(
@@ -640,6 +643,7 @@ fn test_closing_bracket_in_double_quote_attr() {
                 Some(Ok(Attribute {
                     key: QName(b"check"),
                     value: Cow::Borrowed(b"2"),
+                    quote: Attr::DoubleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -661,6 +665,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
                 Some(Ok(Attribute {
                     key: QName(b"attr"),
                     value: Cow::Borrowed(b"'>'"),
+                    quote: Attr::DoubleQ((), ())
                 }))
             );
             assert_eq!(
@@ -668,6 +673,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
                 Some(Ok(Attribute {
                     key: QName(b"check"),
                     value: Cow::Borrowed(b"'2'"),
+                    quote: Attr::DoubleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -689,6 +695,7 @@ fn test_closing_bracket_in_single_quote_mixed() {
                 Some(Ok(Attribute {
                     key: QName(b"attr"),
                     value: Cow::Borrowed(br#"">""#),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(
@@ -696,6 +703,7 @@ fn test_closing_bracket_in_single_quote_mixed() {
                 Some(Ok(Attribute {
                     key: QName(b"check"),
                     value: Cow::Borrowed(br#""2""#),
+                    quote: Attr::SingleQ((), ())
                 }))
             );
             assert_eq!(attrs.next(), None);

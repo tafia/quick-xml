@@ -173,7 +173,7 @@ where
     de: &'a mut Deserializer<'de, R>,
     /// State of the iterator over attributes. Contains the next position in the
     /// inner `start` slice, from which next attribute should be parsed.
-    iter: IterState,
+    iter: IterState<'a>,
     /// Current state of the accessor that determines what next call to API
     /// methods should return.
     source: ValueSource,
@@ -201,7 +201,7 @@ where
     ) -> Result<Self, DeError> {
         Ok(MapAccess {
             de,
-            iter: IterState::new(start.name().as_ref().len(), false),
+            iter: IterState::new(start.name().as_ref().len(), false, &[]),
             start,
             source: ValueSource::Unknown,
             fields,

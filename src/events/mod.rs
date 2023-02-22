@@ -241,12 +241,23 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::wrap(&self.buf, self.name_len, false)
+        Attributes::wrap(&self.buf, self.name_len, &[], false)
+    }
+
+    /// Returns an iterator over the attributes of this tag, with custom quotes.
+    pub fn attributes_with_custom_quotes(&self, custom_quotes: &'a [(u8, u8)]) -> Attributes {
+        Attributes::wrap(&self.buf, self.name_len, custom_quotes, false)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes {
-        Attributes::wrap(&self.buf, self.name_len, true)
+        Attributes::wrap(&self.buf, self.name_len, &[], true)
+    }
+
+    /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`),
+    /// with custom quotes.
+    pub fn html_attributes_with_custom_quotes(&self, custom_quotes: &'a [(u8, u8)]) -> Attributes {
+        Attributes::wrap(&self.buf, self.name_len, custom_quotes, true)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,

@@ -153,6 +153,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
+            custom_quotes: &[(u8, u8)]
         ) -> Result<Option<&'b [u8]>> {
             let mut state = ReadElementState::Elem;
             let mut read = 0;
@@ -162,7 +163,7 @@ macro_rules! impl_buffered_source {
                 match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) if n.is_empty() => break,
                     Ok(available) => {
-                        if let Some((consumed, used)) = state.change(available) {
+                        if let Some((consumed, used)) = state.change(available, custom_quotes) {
                             buf.extend_from_slice(consumed);
 
                             self $(.$reader)? .consume(used);
