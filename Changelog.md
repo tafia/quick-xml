@@ -32,6 +32,7 @@
   `DeEvent::CData` events was replaced by `DeEvent::Text` with merged content.
   The same behavior for the `Reader` does not implemented (yet?) and should be
   implemented manually
+- [#562]: Correctly set minimum required version of memchr dependency to 2.1
 
 ### Misc Changes
 
@@ -43,6 +44,7 @@
 [#540]: https://github.com/tafia/quick-xml/issues/540
 [#541]: https://github.com/tafia/quick-xml/pull/541
 [#556]: https://github.com/tafia/quick-xml/pull/556
+[#562]: https://github.com/tafia/quick-xml/pull/562
 
 ## 0.27.1 -- 2022-12-28
 
