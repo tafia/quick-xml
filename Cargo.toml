@@ -18,7 +18,7 @@ document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 serde = { version = "1.0.100", optional = true }
 tokio = { version = "1.0", optional = true, default-features = false, features = ["io-util"] }
-memchr = "^2.1"
+memchr = "2.1"
 
 [dev-dependencies]
 criterion = "0.4"
