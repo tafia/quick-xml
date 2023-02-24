@@ -44,6 +44,7 @@
 [#540]: https://github.com/tafia/quick-xml/issues/540
 [#541]: https://github.com/tafia/quick-xml/pull/541
 [#556]: https://github.com/tafia/quick-xml/pull/556
+[#562]: https://github.com/tafia/quick-xml/pull/562
 
 ## 0.27.1 -- 2022-12-28
 
