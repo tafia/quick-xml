@@ -32,6 +32,7 @@
   `DeEvent::CData` events was replaced by `DeEvent::Text` with merged content.
   The same behavior for the `Reader` does not implemented (yet?) and should be
   implemented manually
+- [#562]: Correctly set minimum required version of memchr dependency to 2.1
 
 ### Misc Changes
 
