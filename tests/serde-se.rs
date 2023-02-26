@@ -440,9 +440,9 @@ mod without_root {
                     Text(&'a str),
                 }
                 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-                enum Tuple<'a> {
+                enum Tuple {
                     #[serde(rename = "$text")]
-                    Text(f64, &'a str),
+                    Text(f64, String),
                 }
                 #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Struct<'a> {
@@ -454,7 +454,7 @@ mod without_root {
                 err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
-                serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
                 // Struct variant cannot be directly serialized to a text
                 err!(struct_:
                     Struct::Text {
@@ -1222,10 +1222,11 @@ mod with_root {
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
     serialize_as!(char_apos:        '\'' => "<root>&apos;</root>");
     serialize_as!(char_quot:        '"'  => "<root>&quot;</root>");
-    serialize_as!(char_space:       ' '  => "<root> </root>");
+    // FIXME: Probably we should trim only for specified types when deserialize
+    serialize_as_only!(char_space:       ' '  => "<root> </root>");
 
     serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
-    serialize_as!(str_escaped:  "<\"escaped & string'>"; &str => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
+    serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
@@ -1249,7 +1250,8 @@ mod with_root {
             <root>2</root>\
             <root>3</root>");
     serialize_as!(tuple:
-        ("<\"&'>", "with\t\r\n spaces", 3usize)
+        // Use to_string() to get owned type that is required for deserialization
+        ("<\"&'>".to_string(), "with\t\r\n spaces", 3usize)
         => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
             <root>with\t\r\n spaces</root>\
             <root>3</root>");
@@ -1385,9 +1387,9 @@ mod with_root {
                     Text(&'a str),
                 }
                 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-                enum Tuple<'a> {
+                enum Tuple {
                     #[serde(rename = "$text")]
-                    Text(f64, &'a str),
+                    Text(f64, String),
                 }
                 #[derive(Debug, PartialEq, Deserialize, Serialize)]
                 enum Struct<'a> {
@@ -1399,7 +1401,7 @@ mod with_root {
                 err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
-                serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
                 // Struct variant cannot be directly serialized to a text
                 err!(struct_:
                     Struct::Text {
