@@ -477,13 +477,17 @@ mod without_root {
                     </InternallyTagged>");
             // serde serializes internally tagged newtype structs by delegating
             // serialization to the inner type and augmenting it with a tag
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 InternallyTagged::Newtype(Nested { float: 4.2 })
                 => "<Nested>\
                         <tag>Newtype</tag>\
                         <float>4.2</float>\
                     </Nested>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 InternallyTagged::Struct {
                     float: 42.0,
                     string: "answer"
@@ -493,7 +497,9 @@ mod without_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </InternallyTagged>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 InternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -518,7 +524,9 @@ mod without_root {
                 => "<InternallyTagged>\
                         <tag>Empty</tag>\
                     </InternallyTagged>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 InternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -626,7 +634,9 @@ mod without_root {
                 => Unsupported("cannot serialize `bool` without defined root tag"));
             err!(tuple_struct: Untagged::Tuple(42.0, "answer")
                 => Unsupported("cannot serialize unnamed tuple without defined root tag"));
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 Untagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -635,7 +645,9 @@ mod without_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </Untagged>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 Untagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -657,7 +669,9 @@ mod without_root {
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<Untagged/>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 Untagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -1270,7 +1284,9 @@ mod with_root {
                 </nested>\
                 <string>answer</string>\
             </root>");
-    serialize_as!(flatten_struct:
+    // NOTE: Cannot be deserialized in roundtrip due to
+    // https://github.com/serde-rs/serde/issues/1183
+    serialize_as_only!(flatten_struct:
         FlattenStruct {
             nested: Nested { float: 42.0 },
             string: "answer",
@@ -1404,13 +1420,17 @@ mod with_root {
                 => "<root>\
                         <tag>Unit</tag>\
                     </root>");
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 InternallyTagged::Newtype(Nested { float: 4.2 })
                 => "<root>\
                         <tag>Newtype</tag>\
                         <float>4.2</float>\
                     </root>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 InternallyTagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -1420,7 +1440,9 @@ mod with_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 InternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1449,7 +1471,9 @@ mod with_root {
                 => "<root>\
                         <tag>Empty</tag>\
                     </root>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 InternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -1549,17 +1573,25 @@ mod with_root {
             use super::*;
             use pretty_assertions::assert_eq;
 
-            serialize_as!(unit:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(unit:
                 Untagged::Unit
                 => "<root/>");
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 Untagged::Newtype(true)
                 => "<root>true</root>");
-            serialize_as!(tuple_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(tuple_struct:
                 Untagged::Tuple(42.0, "answer")
                 => "<root>42</root>\
                     <root>answer</root>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 Untagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -1568,7 +1600,9 @@ mod with_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 Untagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1593,7 +1627,9 @@ mod with_root {
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<root/>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 Untagged::Text {
                     float: 42.0,
                     string: "answer"
