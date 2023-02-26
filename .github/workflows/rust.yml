@@ -17,6 +17,23 @@ jobs:
     - uses: dtolnay/rust-toolchain@1.52.0
     - run: cargo check
 
+  minimal-versions:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install tools
+      run: cargo install cargo-hack cargo-minimal-versions
+    - name: Install nightly rust
+      uses: dtolnay/rust-toolchain@nightly
+    - name: Check with minimal versions
+      run: cargo minimal-versions check
+    - name: Check with minimal versions (serialize)
+      run: cargo minimal-versions check --features serialize
+    - name: Check with minimal versions (encoding)
+      run: cargo minimal-versions check --features encoding
+    - name: Check with minimal versions (async-tokio)
+      run: cargo minimal-versions check --features async-tokio
+
   test:
     strategy:
       matrix:
