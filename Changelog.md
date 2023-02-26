@@ -18,6 +18,8 @@
 - [#556]: Add new `to_writer_with_root` and `to_string_with_root` helper functions
 - [#520]: Add methods `BytesText::inplace_trim_start` and `BytesText::inplace_trim_end`
   to trim leading and trailing spaces from text events
+- [#565]: Allow deserialize special field names `$value` and `$text` into borrowed
+  fields when use serde deserializer
 
 ### Bug Fixes
 
@@ -33,6 +35,7 @@
   The same behavior for the `Reader` does not implemented (yet?) and should be
   implemented manually
 - [#562]: Correctly set minimum required version of memchr dependency to 2.1
+- [#565]: Fix compilation error when build with serde <1.0.139
 
 ### Misc Changes
 
@@ -45,6 +48,7 @@
 [#541]: https://github.com/tafia/quick-xml/pull/541
 [#556]: https://github.com/tafia/quick-xml/pull/556
 [#562]: https://github.com/tafia/quick-xml/pull/562
+[#565]: https://github.com/tafia/quick-xml/pull/565
 
 ## 0.27.1 -- 2022-12-28
 
