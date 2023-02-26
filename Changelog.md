@@ -35,6 +35,7 @@
   The same behavior for the `Reader` does not implemented (yet?) and should be
   implemented manually
 - [#562]: Correctly set minimum required version of memchr dependency to 2.1
+- [#565]: Correctly set minimum required version of tokio dependency to 1.10
 - [#565]: Fix compilation error when build with serde <1.0.139
 
 ### Misc Changes
