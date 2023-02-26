@@ -1,3 +1,4 @@
+use quick_xml::de::from_str;
 use quick_xml::se::Serializer;
 use quick_xml::utils::Bytes;
 use quick_xml::DeError;
@@ -215,11 +216,29 @@ mod without_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
-                let ser = Serializer::new(&mut buffer);
+                serialize_as!(@ $data => $expected);
 
-                $data.serialize(ser).unwrap();
-                assert_eq!(buffer, $expected);
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        (@ $data:expr => $expected:literal) => {
+            let mut buffer = String::new();
+            let ser = Serializer::new(&mut buffer);
+
+            $data.serialize(ser).unwrap();
+            assert_eq!(buffer, $expected);
+        };
+    }
+    macro_rules! serialize_as_only {
+        ($name:ident: $data:expr => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
             }
         };
     }
@@ -381,7 +400,9 @@ mod without_root {
                         </nested>\
                         <string>answer</string>\
                     </Holder>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -558,7 +579,9 @@ mod without_root {
                             <string>answer</string>\
                         </content>\
                     </AdjacentlyTagged>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -623,6 +646,8 @@ mod without_root {
                         </nested>\
                         <string>answer</string>\
                     </Untagged>");
+            // serde serializes flatten structs as maps, and we do not support
+            // serialization of maps without root tag
             err!(flatten_struct:
                 UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
@@ -644,6 +669,7 @@ mod without_root {
         }
     }
 
+    /// Do not run roundtrip in those tests because the results the same as without indentation
     mod with_indent {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -1089,11 +1115,42 @@ mod with_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
-                let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
+                serialize_as!(@ $data => $expected);
 
-                $data.serialize(ser).unwrap();
-                assert_eq!(buffer, $expected);
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        ($name:ident: $data:expr ; $ty:ty => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
+
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str::<'_, $ty>($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        (@ $data:expr => $expected:literal) => {
+            let mut buffer = String::new();
+            let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
+
+            $data.serialize(ser).unwrap();
+            assert_eq!(buffer, $expected);
+        };
+    }
+    macro_rules! serialize_as_only {
+        ($name:ident: $data:expr => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
             }
         };
     }
@@ -1153,8 +1210,8 @@ mod with_root {
     serialize_as!(char_quot:        '"'  => "<root>&quot;</root>");
     serialize_as!(char_space:       ' '  => "<root> </root>");
 
-    serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
-    serialize_as!(str_escaped:  "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
+    serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
+    serialize_as!(str_escaped:  "<\"escaped & string'>"; &str => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
@@ -1173,7 +1230,7 @@ mod with_root {
         => "<root>true</root>");
 
     serialize_as!(seq:
-        vec![1, 2, 3]
+        vec![1, 2, 3]; Vec<usize>
         => "<root>1</root>\
             <root>2</root>\
             <root>3</root>");
@@ -1272,7 +1329,9 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </Holder>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1373,7 +1432,9 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 InternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1449,7 +1510,9 @@ mod with_root {
                             <string>answer</string>\
                         </content>\
                     </root>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1516,7 +1579,9 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(flatten_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
                 UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
