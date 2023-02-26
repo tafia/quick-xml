@@ -4,7 +4,7 @@ use crate::{
     de::{DeEvent, Deserializer, XmlRead, TEXT_KEY},
     errors::serialize::DeError,
 };
-use serde::de::value::StrDeserializer;
+use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{self, DeserializeSeed, Deserializer as _, Visitor};
 
 /// An enum access
@@ -42,7 +42,7 @@ where
                 false,
             ),
             DeEvent::Text(_) => (
-                seed.deserialize(StrDeserializer::<DeError>::new(TEXT_KEY))?,
+                seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
             DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),

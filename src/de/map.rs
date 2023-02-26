@@ -10,7 +10,8 @@ use crate::{
     events::BytesStart,
     name::QName,
 };
-use serde::de::{self, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor};
+use serde::de::value::BorrowedStrDeserializer;
+use serde::de::{self, DeserializeSeed, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
@@ -244,14 +245,16 @@ where
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
-                    seed.deserialize(VALUE_KEY.into_deserializer()).map(Some)
+                    let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
+                    seed.deserialize(de).map(Some)
                 }
                 DeEvent::Text(_) => {
                     self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
                     // XML node
-                    seed.deserialize(TEXT_KEY.into_deserializer()).map(Some)
+                    let de = BorrowedStrDeserializer::<DeError>::new(TEXT_KEY);
+                    seed.deserialize(de).map(Some)
                 }
                 // Used to deserialize collections of enums, like:
                 // <root>
@@ -271,7 +274,9 @@ where
                 // See https://github.com/serde-rs/serde/issues/1905
                 DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
                     self.source = ValueSource::Content;
-                    seed.deserialize(VALUE_KEY.into_deserializer()).map(Some)
+
+                    let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
+                    seed.deserialize(de).map(Some)
                 }
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
