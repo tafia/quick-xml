@@ -20,6 +20,8 @@
   to trim leading and trailing spaces from text events
 - [#565]: Allow deserialize special field names `$value` and `$text` into borrowed
   fields when use serde deserializer
+- [#568]: Rename `Writter::inner` into `Writter::get_mut`
+- [#568]: Add method `Writter::get_ref`
 
 ### Bug Fixes
 
@@ -50,6 +52,7 @@
 [#556]: https://github.com/tafia/quick-xml/pull/556
 [#562]: https://github.com/tafia/quick-xml/pull/562
 [#565]: https://github.com/tafia/quick-xml/pull/565
+[#568]: https://github.com/tafia/quick-xml/pull/568
 
 ## 0.27.1 -- 2022-12-28
 
