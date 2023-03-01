@@ -86,6 +86,16 @@ impl<W: Write> Writer<W> {
         &mut self.writer
     }
 
+    /// Get a reference to the underlying writer.
+    pub fn get_ref(&self) -> &W {
+        &self.writer
+    }
+
+    /// Get a mutable reference to the underlying writer.
+    pub fn get_mut(&mut self) -> &mut W {
+        &mut self.writer
+    }
+
     /// Write a [Byte-Order-Mark] character to the document.
     ///
     /// # Example
