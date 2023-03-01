@@ -20,6 +20,8 @@
   to trim leading and trailing spaces from text events
 - [#565]: Allow deserialize special field names `$value` and `$text` into borrowed
   fields when use serde deserializer
+- [#568]: Rename `Writter::inner` into `Writter::get_mut`
+- [#568]: Add method `Writter::get_ref`
 
 ### Bug Fixes
 
