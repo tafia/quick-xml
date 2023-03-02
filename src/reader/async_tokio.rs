@@ -81,19 +81,52 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: Reader::read_event_into
-    pub fn read_event_into_async<'reader, 'b: 'reader>(
+    pub async fn read_event_into_async<'reader, 'b: 'reader>(
         &'reader mut self,
         buf: &'b mut Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Event<'b>>> + 'reader>> {
-        Box::pin(async move {
-            read_event_impl!(
-                self, buf,
-                TokioAdapter(&mut self.reader),
-                read_until_open_async,
-                read_until_close_async,
-                await
-            )
-        })
+    ) -> Result<Event<'b>> {
+        let event = self.read_event_into_async_inner(buf).await;
+        match event {
+            Err(_) | Ok(Event::Eof) => self.parser.state = ParseState::Exit,
+            _ => {}
+        }
+        event
+    }
+
+    async fn read_event_into_async_inner<'reader, 'b: 'reader>(
+        &'reader mut self,
+        mut buf: &'b mut Vec<u8>,
+    ) -> Result<Event<'b>> {
+        loop {
+            match self.parser.state {
+                ParseState::Init => {
+                    #[cfg(feature = "encoding")]
+                    if let Some(encoding) =
+                        (TokioAdapter(&mut self.reader)).detect_encoding().await?
+                    {
+                        if self.parser.encoding.can_be_refined() {
+                            self.parser.encoding =
+                                crate::reader::EncodingRef::BomDetected(encoding);
+                        }
+                    }
+                    #[cfg(not(feature = "encoding"))]
+                    (TokioAdapter(&mut self.reader)).remove_utf8_bom().await?;
+                    match self.read_until_open_async(buf).await? {
+                        Ok(ev) => break Ok(ev),
+                        Err(b) => buf = b,
+                    }
+                }
+                ParseState::ClosedTag => {
+                    match self.read_until_open_async(buf).await? {
+                        Ok(ev) => break Ok(ev),
+                        Err(b) => buf = b,
+                    }
+                }
+                ParseState::OpenedTag => break self.read_until_close_async(buf).await,
+                ParseState::Empty => break self.parser.close_expanded_empty(),
+                ParseState::Exit => break Ok(Event::Eof),
+            }
+        }
     }
 
     /// An asynchronous version of [`read_to_end_into()`].
@@ -155,8 +188,30 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     }
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    async fn read_until_open_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
+    /// 
+    /// Returns inner Ok if the loop should be broken and an event returned.
+    /// Returns inner Err with the same [buf] because Rust borrowck stumbles upon this case in particular.
+    async fn read_until_open_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<std::result::Result<Event<'b>, &'b mut Vec<u8>>> {
+        self.parser.state = ParseState::OpenedTag;
+        if self.parser.trim_text_start {
+            (TokioAdapter(&mut self.reader))
+                .skip_whitespace(&mut self.parser.offset)
+                .await?;
+        }
+        if (TokioAdapter(&mut self.reader))
+            .skip_one(b'<', &mut self.parser.offset)
+            .await?
+        {
+            return Ok(Err(buf));
+        }
+        match (TokioAdapter(&mut self.reader))
+            .read_bytes_until(b'<', buf, &mut self.parser.offset)
+            .await
+        {
+            Ok(Some(bytes)) => self.parser.read_text(bytes).map(Ok),
+            Ok(None) => Ok(Ok(Event::Eof)),
+            Err(e) => Err(e),
+        }
     }
 
     /// Private function to read until `>` is found. This function expects that
