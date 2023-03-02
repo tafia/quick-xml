@@ -28,15 +28,6 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// An asynchronous version of [`read_event_into()`]. Reads the next event into
     /// given buffer.
     ///
-    /// > This function should be defined as
-    /// > ```ignore
-    /// > pub async fn read_event_into_async<'b>(
-    /// >     &mut self,
-    /// >     buf: &'b mut Vec<u8>
-    /// > ) -> Result<Event<'b>>;
-    /// > ```
-    /// > but Rust does not allow to write that for recursive asynchronous function
-    ///
     /// This is the main entry point for reading XML `Event`s when using an async reader.
     ///
     /// See the documentation of [`read_event_into()`] for more information.
@@ -79,8 +70,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: Reader::read_event_into
-    pub async fn read_event_into_async<'reader, 'b: 'reader>(
-        &'reader mut self,
+    pub async fn read_event_into_async<'b>(
+        &mut self,
         mut buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
         read_event_impl!(
@@ -152,8 +143,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
     ///
-    /// Returns inner Ok if the loop should be broken and an event returned.
-    /// Returns inner Err with the same [buf] because Rust borrowck stumbles upon this case in particular.
+    /// Returns inner `Ok` if the loop should be broken and an event returned.
+    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
     async fn read_until_open_async<'b>(
         &mut self,
         buf: &'b mut Vec<u8>,

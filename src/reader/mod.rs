@@ -205,7 +205,7 @@ macro_rules! read_event_impl {
         match event {
             Err(_) | Ok(Event::Eof) => $self.parser.state = ParseState::Exit,
             _ => {}
-        };
+        }
         event
     }};
 }
@@ -614,8 +614,8 @@ impl<R> Reader<R> {
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
     ///
-    /// Returns inner Ok if the loop should be broken and an event returned.
-    /// Returns inner Err with the same [buf] because Rust borrowck stumbles upon this case in particular.
+    /// Returns inner `Ok` if the loop should be broken and an event returned.
+    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
     fn read_until_open<'i, B>(&mut self, buf: B) -> Result<std::result::Result<Event<'i>, B>>
     where
         R: XmlSource<'i, B>,
