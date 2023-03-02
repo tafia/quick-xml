@@ -386,4 +386,18 @@ mod test {
         read_event_into_async: tokio::io::BufReader<_>,
         async, await
     );
+
+    #[test]
+    fn test_future_is_send() {
+        // This test should just compile, no actual runtime checks are performed here.
+        use super::*;
+        use tokio::io::BufReader;
+        fn check_send<T: Send>(_: T) {}
+
+        let input = vec![];
+        let mut reading_buf = vec![];
+        let mut reader = Reader::from_reader(BufReader::new(input.as_slice()));
+
+        check_send(reader.read_event_into_async(&mut reading_buf));
+    }
 }
