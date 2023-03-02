@@ -287,6 +287,22 @@ impl<'a> Deref for BytesStart<'a> {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let s = <&str>::arbitrary(u)?;
+        if s.is_empty() || !s.chars().all(char::is_alphanumeric) {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+        let mut result = Self::new(s);
+        result.extend_attributes(Vec::<(&str, &str)>::arbitrary(u)?.into_iter());
+        Ok(result)
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// An XML declaration (`Event::Decl`).
@@ -533,6 +549,21 @@ impl<'a> Deref for BytesDecl<'a> {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(
+            <&str>::arbitrary(u)?,
+            Option::<&str>::arbitrary(u)?,
+            Option::<&str>::arbitrary(u)?,
+        ))
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A struct to manage `Event::End` events
@@ -602,6 +633,16 @@ impl<'a> Deref for BytesEnd<'a> {
 
     fn deref(&self) -> &[u8] {
         &self.name
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }
 }
 
@@ -729,6 +770,21 @@ impl<'a> Deref for BytesText<'a> {
 
     fn deref(&self) -> &[u8] {
         &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let s = <&str>::arbitrary(u)?;
+        if !s.chars().all(char::is_alphanumeric) {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+        Ok(Self::new(s))
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }
 }
 
@@ -863,12 +919,23 @@ impl<'a> Deref for BytesCData<'a> {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Event emitted by [`Reader::read_event_into`].
 ///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Event<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
