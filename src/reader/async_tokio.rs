@@ -158,26 +158,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<std::result::Result<Event<'b>, &'b mut Vec<u8>>> {
-        self.parser.state = ParseState::OpenedTag;
-        if self.parser.trim_text_start {
-            (TokioAdapter(&mut self.reader))
-                .skip_whitespace(&mut self.parser.offset)
-                .await?;
-        }
-        if (TokioAdapter(&mut self.reader))
-            .skip_one(b'<', &mut self.parser.offset)
-            .await?
-        {
-            return Ok(Err(buf));
-        }
-        match (TokioAdapter(&mut self.reader))
-            .read_bytes_until(b'<', buf, &mut self.parser.offset)
-            .await
-        {
-            Ok(Some(bytes)) => self.parser.read_text(bytes).map(Ok),
-            Ok(None) => Ok(Ok(Event::Eof)),
-            Err(e) => Err(e),
-        }
+        read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
     }
 
     /// Private function to read until `>` is found. This function expects that
