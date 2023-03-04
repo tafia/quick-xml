@@ -2,8 +2,6 @@
 //! as underlying byte stream. This reader fully implements async/await so reading
 //! can use non-blocking I/O.
 
-use std::future::Future;
-use std::pin::Pin;
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
 use crate::events::Event;
@@ -29,15 +27,6 @@ impl<'a, R: AsyncBufRead + Unpin> TokioAdapter<'a, R> {
 impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// An asynchronous version of [`read_event_into()`]. Reads the next event into
     /// given buffer.
-    ///
-    /// > This function should be defined as
-    /// > ```ignore
-    /// > pub async fn read_event_into_async<'b>(
-    /// >     &mut self,
-    /// >     buf: &'b mut Vec<u8>
-    /// > ) -> Result<Event<'b>>;
-    /// > ```
-    /// > but Rust does not allow to write that for recursive asynchronous function
     ///
     /// This is the main entry point for reading XML `Event`s when using an async reader.
     ///
@@ -81,19 +70,17 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: Reader::read_event_into
-    pub fn read_event_into_async<'reader, 'b: 'reader>(
-        &'reader mut self,
-        buf: &'b mut Vec<u8>,
-    ) -> Pin<Box<dyn Future<Output = Result<Event<'b>>> + 'reader>> {
-        Box::pin(async move {
-            read_event_impl!(
-                self, buf,
-                TokioAdapter(&mut self.reader),
-                read_until_open_async,
-                read_until_close_async,
-                await
-            )
-        })
+    pub async fn read_event_into_async<'b>(
+        &mut self,
+        mut buf: &'b mut Vec<u8>,
+    ) -> Result<Event<'b>> {
+        read_event_impl!(
+            self, buf,
+            TokioAdapter(&mut self.reader),
+            read_until_open_async,
+            read_until_close_async,
+            await
+        )
     }
 
     /// An asynchronous version of [`read_to_end_into()`].
@@ -155,7 +142,13 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     }
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    async fn read_until_open_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+    ///
+    /// Returns inner `Ok` if the loop should be broken and an event returned.
+    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
+    async fn read_until_open_async<'b>(
+        &mut self,
+        buf: &'b mut Vec<u8>,
+    ) -> Result<std::result::Result<Event<'b>, &'b mut Vec<u8>>> {
         read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
     }
 
@@ -393,4 +386,18 @@ mod test {
         read_event_into_async: tokio::io::BufReader<_>,
         async, await
     );
+
+    #[test]
+    fn test_future_is_send() {
+        // This test should just compile, no actual runtime checks are performed here.
+        use super::*;
+        use tokio::io::BufReader;
+        fn check_send<T: Send>(_: T) {}
+
+        let input = vec![];
+        let mut reading_buf = vec![];
+        let mut reader = Reader::from_reader(BufReader::new(input.as_slice()));
+
+        check_send(reader.read_event_into_async(&mut reading_buf));
+    }
 }

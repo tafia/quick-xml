@@ -166,29 +166,41 @@ macro_rules! read_event_impl {
         $read_until_close:ident
         $(, $await:ident)?
     ) => {{
-        let event = match $self.parser.state {
-            ParseState::Init => {
-                // If encoding set explicitly, we not need to detect it. For example,
-                // explicit UTF-8 set automatically if Reader was created using `from_str`.
-                // But we still need to remove BOM for consistency with no encoding
-                // feature enabled path
-                #[cfg(feature = "encoding")]
-                if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
-                    if $self.parser.encoding.can_be_refined() {
-                        $self.parser.encoding = crate::reader::EncodingRef::BomDetected(encoding);
+        let event = loop {
+            match $self.parser.state {
+                ParseState::Init => {
+                    // If encoding set explicitly, we not need to detect it. For example,
+                    // explicit UTF-8 set automatically if Reader was created using `from_str`.
+                    // But we still need to remove BOM for consistency with no encoding
+                    // feature enabled path
+                    #[cfg(feature = "encoding")]
+                    if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
+                        if $self.parser.encoding.can_be_refined() {
+                            $self.parser.encoding = crate::reader::EncodingRef::BomDetected(encoding);
+                        }
                     }
-                }
 
-                // Removes UTF-8 BOM if it is present
-                #[cfg(not(feature = "encoding"))]
-                $reader.remove_utf8_bom() $(.$await)? ?;
+                    // Removes UTF-8 BOM if it is present
+                    #[cfg(not(feature = "encoding"))]
+                    $reader.remove_utf8_bom() $(.$await)? ?;
 
-                $self.$read_until_open($buf) $(.$await)?
-            },
-            ParseState::ClosedTag => $self.$read_until_open($buf) $(.$await)?,
-            ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
-            ParseState::Empty => $self.parser.close_expanded_empty(),
-            ParseState::Exit => return Ok(Event::Eof),
+                    match $self.$read_until_open($buf) $(.$await)? {
+                        Ok(Ok(ev)) => break Ok(ev),
+                        Ok(Err(b)) => $buf = b,
+                        Err(err)   => break Err(err),
+                    }
+                },
+                ParseState::ClosedTag => {
+                    match $self.$read_until_open($buf) $(.$await)? {
+                        Ok(Ok(ev)) => break Ok(ev),
+                        Ok(Err(b)) => $buf = b,
+                        Err(err)   => break Err(err),
+                    }
+                },
+                ParseState::OpenedTag => break $self.$read_until_close($buf) $(.$await)?,
+                ParseState::Empty => break $self.parser.close_expanded_empty(),
+                ParseState::Exit => break Ok(Event::Eof),
+            };
         };
         match event {
             Err(_) | Ok(Event::Eof) => $self.parser.state = ParseState::Exit,
@@ -213,15 +225,15 @@ macro_rules! read_until_open {
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if $reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
-            return $self.$read_event($buf) $(.$await)?;
+            return Ok(Err($buf));
         }
 
         match $reader
             .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
             $(.$await)?
         {
-            Ok(Some(bytes)) => $self.parser.read_text(bytes),
-            Ok(None) => Ok(Event::Eof),
+            Ok(Some(bytes)) => $self.parser.read_text(bytes).map(Ok),
+            Ok(None) => Ok(Ok(Event::Eof)),
             Err(e) => Err(e),
         }
     }};
@@ -593,7 +605,7 @@ impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_event_impl<'i, B>(&mut self, mut buf: B) -> Result<Event<'i>>
     where
         R: XmlSource<'i, B>,
     {
@@ -601,7 +613,10 @@ impl<R> Reader<R> {
     }
 
     /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    ///
+    /// Returns inner `Ok` if the loop should be broken and an event returned.
+    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
+    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<std::result::Result<Event<'i>, B>>
     where
         R: XmlSource<'i, B>,
     {
