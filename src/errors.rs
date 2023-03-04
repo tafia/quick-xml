@@ -199,7 +199,7 @@ pub mod serialize {
         /// would occur if map key is a complex type that cannot be serialized as
         /// a primitive type (i.e. string, char, bool, unit struct or unit variant).
         ///
-        /// [XML name]: https://www.w3.org/TR/REC-xml/#sec-common-syn
+        /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
         Unsupported(Cow<'static, str>),
         /// Too many events were skipped while deserializing a sequence, event limit
         /// exceeded. The limit was provided as an argument

@@ -163,7 +163,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
-    /// According to the <https://www.w3.org/TR/xmlschema-2/#boolean>,
+    /// According to the <https://www.w3.org/TR/xmlschema11-2/#boolean>,
     /// valid boolean representations are only `"true"`, `"false"`, `"1"`,
     /// and `"0"`. But this method also handles following:
     ///

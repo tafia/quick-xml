@@ -207,7 +207,7 @@ where
 /// );
 /// ```
 ///
-/// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+/// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 pub fn to_writer_with_root<W, T>(mut writer: W, root_tag: &str, value: &T) -> Result<(), DeError>
 where
     W: Write,
@@ -249,7 +249,7 @@ where
 /// );
 /// ```
 ///
-/// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+/// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 pub fn to_string_with_root<T>(root_tag: &str, value: &T) -> Result<String, DeError>
 where
     T: ?Sized + Serialize,
@@ -369,7 +369,7 @@ pub(self) struct XmlName<'n>(&'n str);
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
     ///
-    /// [XML 1.1 specification]: https://www.w3.org/TR/REC-xml/#NT-Name
+    /// [XML 1.1 specification]: https://www.w3.org/TR/xml11/#NT-Name
     pub fn try_from(name: &'n str) -> Result<XmlName<'n>, DeError> {
         //TODO: Customization point: allow user to decide if he want to reject or encode the name
         match name.chars().next() {
@@ -514,7 +514,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// );
     /// ```
     ///
-    /// [XML name]: https://www.w3.org/TR/REC-xml/#NT-Name
+    /// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
     pub fn with_root(writer: &'w mut W, root_tag: Option<&'r str>) -> Result<Self, DeError> {
         Ok(Self {
             ser: ContentSerializer {
