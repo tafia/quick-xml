@@ -281,7 +281,7 @@ where
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
 
-                    let de = QNameDeserializer::from_elem(e.name(), decoder)?;
+                    let de = QNameDeserializer::from_elem(e.raw_name(), decoder)?;
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag

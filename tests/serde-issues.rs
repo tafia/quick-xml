@@ -142,6 +142,23 @@ fn issue349() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/352.
+#[test]
+fn issue352() {
+    use std::borrow::Cow;
+
+    #[derive(Deserialize)]
+    struct Root<'a> {
+        #[serde(borrow)]
+        #[serde(rename = "@attribute")]
+        attribute: Cow<'a, str>,
+    }
+
+    let r: Root = from_str("<Root attribute='borrowed value'></Root>").unwrap();
+
+    assert!(matches!(r.attribute, Cow::Borrowed(_)));
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/429.
 #[test]
 fn issue429() {

@@ -2,6 +2,7 @@ use crate::de::str2bool;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::name::QName;
+use crate::utils::CowRef;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, VariantAccess, Visitor};
 use serde::{forward_to_deserialize_any, serde_if_integer128};
 use std::borrow::Cow;
@@ -60,18 +61,19 @@ fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, De
 ///
 /// `deserialize_any()` returns the same result as `deserialize_identifier()`.
 ///
-/// # Lifetime
+/// # Lifetimes
 ///
+/// - `'i`: lifetime of the data that the deserializer borrows from the parsed input
 /// - `'d`: lifetime of a deserializer that holds a buffer with content of events
 ///
 /// [`attribute`]: Self::from_attr
 /// [`local_name()`]: QName::local_name
 /// [`Deserialize`]: serde::Deserialize
-pub struct QNameDeserializer<'d> {
-    name: Cow<'d, str>,
+pub struct QNameDeserializer<'i, 'd> {
+    name: CowRef<'i, 'd, str>,
 }
 
-impl<'d> QNameDeserializer<'d> {
+impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an attribute
     pub fn from_attr(name: QName<'d>, decoder: Decoder) -> Result<Self, DeError> {
         // https://github.com/tafia/quick-xml/issues/537
@@ -83,19 +85,34 @@ impl<'d> QNameDeserializer<'d> {
         };
 
         Ok(Self {
-            name: Cow::Owned(format!("@{field}")),
+            name: CowRef::Owned(format!("@{field}")),
         })
     }
 
     /// Creates deserializer from name of an element
-    pub fn from_elem(name: QName<'d>, decoder: Decoder) -> Result<Self, DeError> {
-        let local = decode_name(name, decoder)?;
+    pub fn from_elem(name: CowRef<'i, 'd, [u8]>, decoder: Decoder) -> Result<Self, DeError> {
+        let local = match name {
+            CowRef::Input(borrowed) => match decode_name(QName(borrowed), decoder)? {
+                Cow::Borrowed(borrowed) => CowRef::Input(borrowed),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
+            CowRef::Slice(borrowed) => match decode_name(QName(borrowed), decoder)? {
+                Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
+            CowRef::Owned(owned) => match decode_name(QName(&owned), decoder)? {
+                // SAFETY: Because result is borrowed, no changes was done
+                // and we can safely unwrap here
+                Cow::Borrowed(_) => CowRef::Owned(String::from_utf8(owned).unwrap()),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
+        };
 
         Ok(Self { name: local })
     }
 }
 
-impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'d> {
+impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'de, 'd> {
     type Error = DeError;
 
     forward_to_deserialize_any! {
@@ -202,8 +219,9 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'d> {
         V: Visitor<'de>,
     {
         match self.name {
-            Cow::Borrowed(name) => visitor.visit_str(name),
-            Cow::Owned(name) => visitor.visit_string(name),
+            CowRef::Input(name) => visitor.visit_borrowed_str(name),
+            CowRef::Slice(name) => visitor.visit_str(name),
+            CowRef::Owned(name) => visitor.visit_string(name),
         }
     }
 
@@ -220,7 +238,7 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'d> {
     }
 }
 
-impl<'de, 'd> EnumAccess<'de> for QNameDeserializer<'d> {
+impl<'de, 'd> EnumAccess<'de> for QNameDeserializer<'de, 'd> {
     type Error = DeError;
     type Variant = QNameUnitOnly;
 
@@ -337,7 +355,7 @@ mod tests {
             #[test]
             fn $name() {
                 let de = QNameDeserializer {
-                    name: Cow::Borrowed($input),
+                    name: CowRef::Input($input),
                 };
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -352,7 +370,7 @@ mod tests {
             #[test]
             fn $name() {
                 let de = QNameDeserializer {
-                    name: Cow::Borrowed($input),
+                    name: CowRef::Input($input),
                 };
                 let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -377,7 +395,7 @@ mod tests {
             #[test]
             fn $name() {
                 let de = QNameDeserializer {
-                    name: Cow::Borrowed($input),
+                    name: CowRef::Input($input),
                 };
                 let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
@@ -420,8 +438,7 @@ mod tests {
         => Custom("invalid value: string \"&lt;\", expected a character"));
 
     deserialized_to!(string: String = "&lt;escaped&#x20;string" => "&lt;escaped&#x20;string");
-    err!(borrowed_str: &str = "name"
-        => Custom("invalid type: string \"name\", expected a borrowed string"));
+    deserialized_to!(borrowed_str: &str = "name" => "name");
 
     err!(byte_buf: ByteBuf = "&lt;escaped&#x20;string"
         => Custom("invalid type: string \"&lt;escaped&#x20;string\", expected byte data"));
