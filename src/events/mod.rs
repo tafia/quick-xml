@@ -49,7 +49,7 @@ use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
 use crate::reader::is_whitespace;
-use crate::utils::write_cow_string;
+use crate::utils::{write_cow_string, CowRef};
 use attributes::{Attribute, Attributes};
 use std::mem::replace;
 
@@ -188,6 +188,21 @@ impl<'a> BytesStart<'a> {
         bytes.splice(..self.name_len, name.iter().cloned());
         self.name_len = name.len();
         self
+    }
+
+    /// Gets the undecoded raw tag name, as present in the input stream, which
+    /// is borrowed either to the input, or to the event.
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'a`: Lifetime of the input data from which this event is borrow
+    /// - `'e`: Lifetime of the concrete event instance
+    // TODO: We should made this is a part of public API, but with safe wrapped for a name
+    pub(crate) fn raw_name<'e>(&'e self) -> CowRef<'a, 'e, [u8]> {
+        match self.buf {
+            Cow::Borrowed(b) => CowRef::Input(&b[..self.name_len]),
+            Cow::Owned(ref o) => CowRef::Slice(&o[..self.name_len]),
+        }
     }
 }
 

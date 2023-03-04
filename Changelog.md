@@ -23,6 +23,8 @@
 - [#568]: Rename `Writter::inner` into `Writter::get_mut`
 - [#568]: Add method `Writter::get_ref`
 - [#569]: Rewrite the `Reader::read_event_into_async` as an async fn, making the future `Send` if possible.
+- [#571]: Borrow element names (`<element>`) when deserialize with serde.
+  This change allow to deserialize into `HashMap<&str, T>`, for example
 
 ### Bug Fixes
 
@@ -55,6 +57,7 @@
 [#565]: https://github.com/tafia/quick-xml/pull/565
 [#568]: https://github.com/tafia/quick-xml/pull/568
 [#569]: https://github.com/tafia/quick-xml/pull/569
+[#571]: https://github.com/tafia/quick-xml/pull/571
 
 ## 0.27.1 -- 2022-12-28
 

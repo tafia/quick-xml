@@ -38,7 +38,7 @@ where
         let decoder = self.de.reader.decoder();
         let (name, is_text) = match self.de.peek()? {
             DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.name(), decoder)?)?,
+                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
                 false,
             ),
             DeEvent::Text(_) => (

@@ -90,10 +90,22 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     }
 
     /// Creates deserializer from name of an element
-    pub fn from_elem(name: QName<'d>, decoder: Decoder) -> Result<Self, DeError> {
-        let local = match decode_name(name, decoder)? {
-            Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
-            Cow::Owned(owned) => CowRef::Owned(owned),
+    pub fn from_elem(name: CowRef<'i, 'd, [u8]>, decoder: Decoder) -> Result<Self, DeError> {
+        let local = match name {
+            CowRef::Input(borrowed) => match decode_name(QName(borrowed), decoder)? {
+                Cow::Borrowed(borrowed) => CowRef::Input(borrowed),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
+            CowRef::Slice(borrowed) => match decode_name(QName(borrowed), decoder)? {
+                Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
+            CowRef::Owned(owned) => match decode_name(QName(&owned), decoder)? {
+                // SAFETY: Because result is borrowed, no changes was done
+                // and we can safely unwrap here
+                Cow::Borrowed(_) => CowRef::Owned(String::from_utf8(owned).unwrap()),
+                Cow::Owned(owned) => CowRef::Owned(owned),
+            },
         };
 
         Ok(Self { name: local })

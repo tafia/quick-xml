@@ -6285,6 +6285,9 @@ fn from_str_should_ignore_encoding() {
 /// Checks that deserializer is able to borrow data from the input
 mod borrow {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use std::collections::BTreeMap;
+    use std::iter::FromIterator;
 
     /// Struct that should borrow input to be able to deserialize successfully.
     /// serde implicitly borrow `&str` and `&[u8]` even without `#[serde(borrow)]`
@@ -6402,5 +6405,25 @@ mod borrow {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn element_name() {
+        let data: BTreeMap<&str, &str> = from_str(
+            r#"
+            <root>
+                <element>element content</element>
+                text content
+            </root>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([
+                // Comment to prevent formatting in one line
+                ("element", "element content"),
+                ("$text", "text content"),
+            ])
+        );
     }
 }
