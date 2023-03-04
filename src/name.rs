@@ -209,7 +209,7 @@ impl<'a> AsRef<[u8]> for Prefix<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A namespace prefix declaration, `xmlns` or `xmlns:<name>`, as defined in
-/// [XML Schema specification](https://www.w3.org/TR/xml-names/#ns-decl)
+/// [XML Schema specification](https://www.w3.org/TR/xml-names11/#ns-decl)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PrefixDeclaration<'a> {
     /// XML attribute binds a default namespace. Corresponds to `xmlns` in `xmlns="..."`
@@ -250,7 +250,7 @@ impl<'a> Namespace<'a> {
     /// This is because XML entity references are expanded during attribute value
     /// normalization.
     ///
-    /// [non-normalized]: https://www.w3.org/TR/REC-xml/#AVNormalize
+    /// [non-normalized]: https://www.w3.org/TR/xml11/#AVNormalize
     /// [IRI reference]: https://datatracker.ietf.org/doc/html/rfc3987
     #[inline(always)]
     pub fn into_inner(self) -> &'a [u8] {

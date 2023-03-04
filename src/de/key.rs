@@ -123,7 +123,7 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'de, 'd> {
         ignored_any
     }
 
-    /// According to the <https://www.w3.org/TR/xmlschema-2/#boolean>,
+    /// According to the <https://www.w3.org/TR/xmlschema11-2/#boolean>,
     /// valid boolean representations are only `"true"`, `"false"`, `"1"`,
     /// and `"0"`. But this method also handles following:
     ///

@@ -2121,7 +2121,7 @@ where
     T::deserialize(&mut de)
 }
 
-// TODO: According to the https://www.w3.org/TR/xmlschema-2/#boolean,
+// TODO: According to the https://www.w3.org/TR/xmlschema11-2/#boolean,
 // valid boolean representations are only "true", "false", "1", and "0"
 fn str2bool<'de, V>(value: &str, visitor: V) -> Result<V::Value, DeError>
 where

@@ -10,7 +10,7 @@ use std::fmt::Write;
 /// [not allowed] in XML names, because in some cases it should pass names
 /// that would be filtered on higher level.
 ///
-/// [not allowed]: https://www.w3.org/TR/REC-xml/#sec-common-syn
+/// [not allowed]: https://www.w3.org/TR/xml11/#sec-common-syn
 pub struct QNameSerializer<W: Write> {
     /// Writer to which this serializer writes content
     pub writer: W,
