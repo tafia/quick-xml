@@ -1,5 +1,6 @@
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::fmt::{self, Debug, Formatter};
+use std::ops::Deref;
 
 #[cfg(feature = "serialize")]
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
@@ -32,6 +33,56 @@ pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
     }
     write!(f, "\"")?;
     Ok(())
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A version of [`Cow`] that can borrow from two different buffers, one of them
+/// is a deserializer input.
+///
+/// # Lifetimes
+///
+/// - `'i`: lifetime of the data that deserializer borrow from the parsed input
+/// - `'s`: lifetime of the data that owned by a deserializer
+pub enum CowRef<'i, 's, B>
+where
+    B: ToOwned + ?Sized,
+{
+    /// An input borrowed from the parsed data
+    Input(&'i B),
+    /// An input borrowed from the buffer owned by another deserializer
+    Slice(&'s B),
+    /// An input taken from an external deserializer, owned by that deserializer
+    Owned(<B as ToOwned>::Owned),
+}
+impl<'i, 's, B> Deref for CowRef<'i, 's, B>
+where
+    B: ToOwned + ?Sized,
+    B::Owned: Borrow<B>,
+{
+    type Target = B;
+
+    fn deref(&self) -> &B {
+        match *self {
+            Self::Input(borrowed) => borrowed,
+            Self::Slice(borrowed) => borrowed,
+            Self::Owned(ref owned) => owned.borrow(),
+        }
+    }
+}
+
+impl<'i, 's, B> Debug for CowRef<'i, 's, B>
+where
+    B: ToOwned + ?Sized + Debug,
+    B::Owned: Debug,
+{
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            Self::Input(borrowed) => Debug::fmt(borrowed, f),
+            Self::Slice(borrowed) => Debug::fmt(borrowed, f),
+            Self::Owned(ref owned) => Debug::fmt(owned, f),
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

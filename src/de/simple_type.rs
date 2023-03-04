@@ -7,11 +7,12 @@ use crate::de::{deserialize_bool, str2bool};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
+use crate::utils::CowRef;
 use memchr::memchr;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};
 use std::borrow::Cow;
-use std::ops::{Deref, Range};
+use std::ops::Range;
 
 macro_rules! deserialize_num {
     ($method:ident, $visit:ident) => {
@@ -467,32 +468,6 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A version of [`Cow`] that can borrow from two different buffers, one of them
-/// is a deserializer input.
-///
-/// # Lifetimes
-/// - `'de` -- lifetime of the data that deserializer borrow from the parsed input
-/// - `'a` -- lifetime of the data that owned by a deserializer
-enum CowRef<'de, 'a> {
-    /// An input borrowed from the parsed data
-    Input(&'de [u8]),
-    /// An input borrowed from the buffer owned by another deserializer
-    Slice(&'a [u8]),
-    /// An input taken from an external deserializer, owned by that deserializer
-    Owned(Vec<u8>),
-}
-impl<'de, 'a> Deref for CowRef<'de, 'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        match self {
-            Self::Input(slice) => slice,
-            Self::Slice(slice) => slice,
-            Self::Owned(ref v) => v,
-        }
-    }
-}
-
 /// A deserializer for an xml probably escaped and encoded value of XSD [simple types].
 /// This deserializer will borrow from the input as much as possible.
 ///
@@ -510,7 +485,7 @@ impl<'de, 'a> Deref for CowRef<'de, 'a> {
 pub struct SimpleTypeDeserializer<'de, 'a> {
     /// - In case of attribute contains escaped attribute value
     /// - In case of text contains unescaped text value
-    content: CowRef<'de, 'a>,
+    content: CowRef<'de, 'a, [u8]>,
     /// If `true`, `content` in escaped form and should be unescaped before use
     escaped: bool,
     /// Decoder used to deserialize string data, numeric and boolean data.
@@ -545,7 +520,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
 
     /// Constructor for tests
     #[inline]
-    fn new(content: CowRef<'de, 'a>, escaped: bool, decoder: Decoder) -> Self {
+    fn new(content: CowRef<'de, 'a, [u8]>, escaped: bool, decoder: Decoder) -> Self {
         Self {
             content,
             escaped,
