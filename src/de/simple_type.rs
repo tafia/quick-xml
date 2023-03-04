@@ -3,7 +3,7 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::{deserialize_bool, str2bool};
+use crate::de::{deserialize_bool, str2bool, Text};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
@@ -495,8 +495,8 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
 
 impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// Creates a deserializer from a value, that possible borrowed from input
-    pub fn from_text_content(value: Cow<'de, str>) -> Self {
-        let content = match value {
+    pub fn from_text_content(value: Text<'de>) -> Self {
+        let content = match value.text {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
