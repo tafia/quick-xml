@@ -6,6 +6,9 @@ use crate::encoding::UTF8_BOM;
 use crate::errors::Result;
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 
+#[cfg(feature = "async-tokio")]
+mod async_tokio;
+
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
 /// # Examples
@@ -53,13 +56,13 @@ use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Ev
 /// assert_eq!(result, expected.as_bytes());
 /// ```
 #[derive(Clone)]
-pub struct Writer<W: Write> {
+pub struct Writer<W> {
     /// underlying writer
     writer: W,
     indent: Option<Indentation>,
 }
 
-impl<W: Write> Writer<W> {
+impl<W> Writer<W> {
     /// Creates a `Writer` from a generic writer.
     pub fn new(inner: W) -> Writer<W> {
         Writer {
@@ -67,7 +70,9 @@ impl<W: Write> Writer<W> {
             indent: None,
         }
     }
+}
 
+impl<W: Write> Writer<W> {
     /// Creates a `Writer` with configured whitespace indents from a generic writer.
     pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
         Writer {
