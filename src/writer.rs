@@ -9,7 +9,7 @@ use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Ev
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
 
-/// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
+/// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or a [`tokio::io::AsyncWrite`] implementor.
 ///
 /// # Examples
 ///

@@ -5,7 +5,7 @@ use crate::events::Event;
 use crate::Writer;
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
-    /// Writes the given event to the underlying writer. Async version of [Writer::write_event].
+    /// Writes the given event to the underlying writer. Async version of [`Writer::write_event`].
     pub async fn write_event_async<'a, E: AsRef<Event<'a>>>(&mut self, event: E) -> Result<()> {
         match *event.as_ref() {
             Event::Start(ref e) => self.write_wrapped_async(b"<", e, b">").await,
@@ -50,20 +50,82 @@ mod tests {
     use crate::events::*;
     use pretty_assertions::assert_eq;
 
+    macro_rules! test {
+        ($name: ident, $event: expr, $expected: expr) => {
+            #[tokio::test]
+            async fn $name() {
+                let mut buffer = Vec::new();
+                let mut writer = Writer::new(&mut buffer);
+        
+                writer
+                    .write_event_async($event)
+                    .await
+                    .expect("write event failed");
+        
+                assert_eq!(
+                    std::str::from_utf8(&buffer).unwrap(),
+                    $expected,
+                );
+            }
+        };
+    }
+
+    test!(
+        xml_header,
+        Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), Some("no"))),
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>"#
+    );
+
+    test!(
+        empty_tag,
+        Event::Empty(BytesStart::new("tag")),
+        r#"<tag/>"#
+    );
+
+    test!(
+        comment,
+        Event::Comment(BytesText::new("this is a comment")),
+        r#"<!--this is a comment-->"#
+    );
+
+    test!(
+        cdata,
+        Event::CData(BytesCData::new("this is a cdata")),
+        r#"<![CDATA[this is a cdata]]>"#
+    );
+
+    test!(
+        pi,
+        Event::PI(BytesText::new("this is a processing instruction")),
+        r#"<?this is a processing instruction?>"#
+    );
+
+    test!(
+        doctype,
+        Event::DocType(BytesText::new("this is a doctype")),
+        r#"<!DOCTYPE this is a doctype>"#
+    );
+
+
     #[tokio::test]
-    async fn xml_header() {
+    async fn full_tag() {
         let mut buffer = Vec::new();
         let mut writer = Writer::new(&mut buffer);
 
-        let event = Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), Some("no")));
-        writer
-            .write_event_async(event)
-            .await
-            .expect("write tag failed");
+        let start = Event::Start(BytesStart::new("tag"));
+        let text = Event::Text(BytesText::new("inner text"));
+        let end = Event::End(BytesEnd::new("tag"));
+        for i in [start, text, end] {
+            writer
+                .write_event_async(i)
+                .await
+                .expect("write tag failed");
+        }
 
         assert_eq!(
             std::str::from_utf8(&buffer).unwrap(),
-            r#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>"#
+            r#"<tag>inner text</tag>"#
         );
     }
+
 }
