@@ -1807,13 +1807,13 @@ mod with_root {
     serialize_as!(char_lt:          '<'  => "<root>&lt;</root>");
     serialize_as!(char_gt:          '>'  => "<root>&gt;</root>");
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
-    serialize_as!(char_apos:        '\'' => "<root>&apos;</root>");
-    serialize_as!(char_quot:        '"'  => "<root>&quot;</root>");
+    serialize_as!(char_apos:        '\'' => "<root>'</root>");
+    serialize_as!(char_quot:        '"'  => "<root>\"</root>");
     // FIXME: Probably we should trim only for specified types when deserialize
     serialize_as_only!(char_space:       ' '  => "<root> </root>");
 
     serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
-    serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
+    serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;\"escaped &amp; string'&gt;</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
@@ -1839,7 +1839,7 @@ mod with_root {
     serialize_as!(tuple:
         // Use to_string() to get owned type that is required for deserialization
         ("<\"&'>".to_string(), "with\t\r\n spaces", 3usize)
-        => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
+        => "<root>&lt;\"&amp;'&gt;</root>\
             <root>with\t\r\n spaces</root>\
             <root>3</root>");
     serialize_as!(tuple_struct:

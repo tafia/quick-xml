@@ -461,7 +461,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         Self {
             ser: ContentSerializer {
                 writer,
-                level: QuoteLevel::Full,
+                level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
                 expand_empty_elements: false,
@@ -526,7 +526,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         Ok(Self {
             ser: ContentSerializer {
                 writer,
-                level: QuoteLevel::Full,
+                level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
                 expand_empty_elements: false,

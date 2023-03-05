@@ -20,7 +20,7 @@ configuration is serializable.
 - [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
   configuration. Previous builder methods on `Reader` / `NsReader` was replaced by
   direct access to fields of config using `reader.config_mut().<...>`.
-- #[#684]: Added a method `Config::enable_all_checks` to turn on or off all
+- [#684]: Added a method `Config::enable_all_checks` to turn on or off all
   well-formedness checks.
 
 ### Bug Fixes
@@ -47,7 +47,9 @@ configuration is serializable.
 - [#684]: Now `<??>` parsed as `Event::PI` with empty content instead of raising
   syntax error.
 - [#684]: Now `<?xml?>` parsed as `Event::Decl` instead of `Event::PI`.
+- [#362]: Now default quote level is `QuoteLevel::Partial` when using serde serializer.
 
+[#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
 [#675]: https://github.com/tafia/quick-xml/pull/675
