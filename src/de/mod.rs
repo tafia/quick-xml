@@ -1852,11 +1852,45 @@ use std::io::BufRead;
 use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
+use std::ops::Deref;
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
+
+/// Decoded and concatenated content of consequent [`Text`] and [`CData`]
+/// events. _Consequent_ means that events should follow each other or be
+/// delimited only by (any count of) [`Comment`] or [`PI`] events.
+///
+/// [`Text`]: Event::Text
+/// [`CData`]: Event::CData
+/// [`Comment`]: Event::Comment
+/// [`PI`]: Event::PI
+#[derive(Debug, PartialEq, Eq)]
+pub struct Text<'a> {
+    text: Cow<'a, str>,
+}
+
+impl<'a> Deref for Text<'a> {
+    type Target = str;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.text.deref()
+    }
+}
+
+impl<'a> From<&'a str> for Text<'a> {
+    #[inline]
+    fn from(text: &'a str) -> Self {
+        Self {
+            text: Cow::Borrowed(text),
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Simplified event which contains only these variants that used by deserializer
 #[derive(Debug, PartialEq, Eq)]
@@ -1873,7 +1907,7 @@ pub enum DeEvent<'a> {
     /// [`CData`]: Event::CData
     /// [`Comment`]: Event::Comment
     /// [`PI`]: Event::PI
-    Text(Cow<'a, str>),
+    Text(Text<'a>),
     /// End of XML document.
     Eof,
 }
@@ -1976,7 +2010,7 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
                 _ => break,
             }
         }
-        Ok(DeEvent::Text(result))
+        Ok(DeEvent::Text(Text { text: result }))
     }
 
     /// Read one text event, panics if current event is not a text event
@@ -2066,42 +2100,6 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A structure that deserializes XML into Rust values.
-pub struct Deserializer<'de, R>
-where
-    R: XmlRead<'de>,
-{
-    /// An XML reader that streams events into this deserializer
-    reader: XmlReader<'de, R>,
-
-    /// When deserializing sequences sometimes we have to skip unwanted events.
-    /// That events should be stored and then replayed. This is a replay buffer,
-    /// that streams events while not empty. When it exhausted, events will
-    /// requested from [`Self::reader`].
-    #[cfg(feature = "overlapped-lists")]
-    read: VecDeque<DeEvent<'de>>,
-    /// When deserializing sequences sometimes we have to skip events, because XML
-    /// is tolerant to elements order and even if in the XSD order is strictly
-    /// specified (using `xs:sequence`) most of XML parsers allows order violations.
-    /// That means, that elements, forming a sequence, could be overlapped with
-    /// other elements, do not related to that sequence.
-    ///
-    /// In order to support this, deserializer will scan events and skip unwanted
-    /// events, store them here. After call [`Self::start_replay()`] all events
-    /// moved from this to [`Self::read`].
-    #[cfg(feature = "overlapped-lists")]
-    write: VecDeque<DeEvent<'de>>,
-    /// Maximum number of events that can be skipped when processing sequences
-    /// that occur out-of-order. This field is used to prevent potential
-    /// denial-of-service (DoS) attacks which could cause infinite memory
-    /// consumption when parsing a very large amount of XML into a sequence field.
-    #[cfg(feature = "overlapped-lists")]
-    limit: Option<NonZeroUsize>,
-
-    #[cfg(not(feature = "overlapped-lists"))]
-    peek: Option<DeEvent<'de>>,
-}
-
 /// Deserialize an instance of type `T` from a string of XML text.
 pub fn from_str<'de, T>(s: &'de str) -> Result<T, DeError>
 where
@@ -2164,6 +2162,44 @@ where
             e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
         }
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A structure that deserializes XML into Rust values.
+pub struct Deserializer<'de, R>
+where
+    R: XmlRead<'de>,
+{
+    /// An XML reader that streams events into this deserializer
+    reader: XmlReader<'de, R>,
+
+    /// When deserializing sequences sometimes we have to skip unwanted events.
+    /// That events should be stored and then replayed. This is a replay buffer,
+    /// that streams events while not empty. When it exhausted, events will
+    /// requested from [`Self::reader`].
+    #[cfg(feature = "overlapped-lists")]
+    read: VecDeque<DeEvent<'de>>,
+    /// When deserializing sequences sometimes we have to skip events, because XML
+    /// is tolerant to elements order and even if in the XSD order is strictly
+    /// specified (using `xs:sequence`) most of XML parsers allows order violations.
+    /// That means, that elements, forming a sequence, could be overlapped with
+    /// other elements, do not related to that sequence.
+    ///
+    /// In order to support this, deserializer will scan events and skip unwanted
+    /// events, store them here. After call [`Self::start_replay()`] all events
+    /// moved from this to [`Self::read`].
+    #[cfg(feature = "overlapped-lists")]
+    write: VecDeque<DeEvent<'de>>,
+    /// Maximum number of events that can be skipped when processing sequences
+    /// that occur out-of-order. This field is used to prevent potential
+    /// denial-of-service (DoS) attacks which could cause infinite memory
+    /// consumption when parsing a very large amount of XML into a sequence field.
+    #[cfg(feature = "overlapped-lists")]
+    limit: Option<NonZeroUsize>,
+
+    #[cfg(not(feature = "overlapped-lists"))]
+    peek: Option<DeEvent<'de>>,
 }
 
 impl<'de, R> Deserializer<'de, R>
@@ -2421,12 +2457,12 @@ where
     /// [`CData`]: Event::CData
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
-            DeEvent::Text(e) => Ok(e),
+            DeEvent::Text(e) => Ok(e.text),
             // allow one nested level
             DeEvent::Start(e) if allow_start => match self.next()? {
                 DeEvent::Text(t) => {
                     self.read_to_end(e.name())?;
-                    Ok(t)
+                    Ok(t.text)
                 }
                 DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
                 // We can get End event in case of `<tag></tag>` or `<tag/>` input
@@ -2869,7 +2905,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -2903,7 +2939,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("inner")),
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     Start(BytesStart::new("inner")),
                     End(BytesEnd::new("inner")),
                     End(BytesEnd::new("inner")),
@@ -2931,7 +2967,7 @@ mod tests {
                 vec![
                     // This comment here to keep the same formatting of both arrays
                     // otherwise rustfmt suggest one-line it
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                 ]
             );
 
@@ -2953,12 +2989,12 @@ mod tests {
                 vec![
                     // This comment here to keep the same formatting as others
                     // otherwise rustfmt suggest one-line it
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     End(BytesEnd::new("inner")),
                 ]
             );
             assert_eq!(de.write, vec![]);
-            assert_eq!(de.next().unwrap(), Text(Cow::Borrowed("text")));
+            assert_eq!(de.next().unwrap(), Text("text".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("inner")));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("target")));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("target")));
@@ -3000,7 +3036,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -3021,7 +3057,7 @@ mod tests {
                 de.write,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -3043,7 +3079,7 @@ mod tests {
                 de.read,
                 vec![
                     Start(BytesStart::new("skip")),
-                    Text(Cow::Borrowed("text")),
+                    Text("text".into()),
                     Start(BytesStart::new("skip")),
                     End(BytesEnd::new("skip")),
                     End(BytesEnd::new("skip")),
@@ -3333,7 +3369,7 @@ mod tests {
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="2""#, 3))
             );
-            assert_eq!(de.next().unwrap(), Text(Cow::Borrowed("cdata content")));
+            assert_eq!(de.next().unwrap(), Text("cdata content".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
@@ -3362,7 +3398,7 @@ mod tests {
             let mut de = Deserializer::from_str("<tag><![CDATA[]]><tag></tag>");
 
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("tag")));
-            assert_eq!(de.peek().unwrap(), &Text(Cow::Borrowed("")));
+            assert_eq!(de.peek().unwrap(), &Text("".into()));
 
             match de.read_to_end(QName(b"tag")) {
                 Err(DeError::UnexpectedEof) => (),
@@ -3493,49 +3529,37 @@ mod tests {
         #[test]
         fn text() {
             let mut de = Deserializer::from_str("text");
-            assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+            assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
         }
 
         #[test]
         fn cdata() {
             let mut de = Deserializer::from_str("<![CDATA[cdata]]>");
-            assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("cdata")));
+            assert_eq!(de.next().unwrap(), DeEvent::Text("cdata".into()));
         }
 
         #[test]
         fn text_and_cdata() {
             let mut de = Deserializer::from_str("text and <![CDATA[cdata]]>");
-            assert_eq!(
-                de.next().unwrap(),
-                DeEvent::Text(Cow::Borrowed("text and cdata"))
-            );
+            assert_eq!(de.next().unwrap(), DeEvent::Text("text and cdata".into()));
         }
 
         #[test]
         fn text_and_empty_cdata() {
             let mut de = Deserializer::from_str("text and <![CDATA[]]>");
-            assert_eq!(
-                de.next().unwrap(),
-                DeEvent::Text(Cow::Borrowed("text and "))
-            );
+            assert_eq!(de.next().unwrap(), DeEvent::Text("text and ".into()));
         }
 
         #[test]
         fn cdata_and_text() {
             let mut de = Deserializer::from_str("<![CDATA[cdata]]> and text");
-            assert_eq!(
-                de.next().unwrap(),
-                DeEvent::Text(Cow::Borrowed("cdata and text"))
-            );
+            assert_eq!(de.next().unwrap(), DeEvent::Text("cdata and text".into()));
         }
 
         #[test]
         fn empty_cdata_and_text() {
             let mut de = Deserializer::from_str("<![CDATA[]]> and text");
-            assert_eq!(
-                de.next().unwrap(),
-                DeEvent::Text(Cow::Borrowed(" and text"))
-            );
+            assert_eq!(de.next().unwrap(), DeEvent::Text(" and text".into()));
         }
 
         #[test]
@@ -3546,10 +3570,7 @@ mod tests {
                     <![CDATA[>cdata]]>\
                 ",
             );
-            assert_eq!(
-                de.next().unwrap(),
-                DeEvent::Text(Cow::Borrowed("cdata]]>cdata"))
-            );
+            assert_eq!(de.next().unwrap(), DeEvent::Text("cdata]]>cdata".into()));
         }
 
         mod comment_between {
@@ -3565,10 +3586,7 @@ mod tests {
                         text\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("text  text"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text  text".into()));
             }
 
             #[test]
@@ -3580,10 +3598,7 @@ mod tests {
                         <![CDATA[>cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata]]>cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata]]>cdata".into()));
             }
 
             #[test]
@@ -3595,10 +3610,7 @@ mod tests {
                         <![CDATA[ cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("text  cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata".into()));
             }
 
             #[test]
@@ -3610,7 +3622,7 @@ mod tests {
                         <![CDATA[]]>\
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text ")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text ".into()));
             }
 
             #[test]
@@ -3622,10 +3634,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata  text"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
             }
 
             #[test]
@@ -3637,7 +3646,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" text")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
             }
 
             #[test]
@@ -3649,10 +3658,7 @@ mod tests {
                         <![CDATA[]>cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata]]>cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata]]>cdata".into()));
             }
         }
 
@@ -3669,10 +3675,7 @@ mod tests {
                         text\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("text  text"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text  text".into()));
             }
 
             #[test]
@@ -3684,10 +3687,7 @@ mod tests {
                         <![CDATA[>cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata]]>cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata]]>cdata".into()));
             }
 
             #[test]
@@ -3699,10 +3699,7 @@ mod tests {
                         <![CDATA[ cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("text  cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata".into()));
             }
 
             #[test]
@@ -3714,7 +3711,7 @@ mod tests {
                         <![CDATA[]]>\
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text ")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text ".into()));
             }
 
             #[test]
@@ -3726,10 +3723,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata  text"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
             }
 
             #[test]
@@ -3741,7 +3735,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" text")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
             }
 
             #[test]
@@ -3753,10 +3747,7 @@ mod tests {
                         <![CDATA[]>cdata]]>\
                     ",
                 );
-                assert_eq!(
-                    de.next().unwrap(),
-                    DeEvent::Text(Cow::Borrowed("cdata]]>cdata"))
-                );
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata]]>cdata".into()));
             }
         }
     }
@@ -3802,7 +3793,7 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3811,7 +3802,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag1><tag2><![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3860,7 +3851,7 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3869,7 +3860,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag></tag><![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3893,7 +3884,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag> text <tag2>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -3903,7 +3894,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag> text </tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -3915,10 +3906,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag> text <![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from the start
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3927,7 +3915,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -3942,7 +3930,7 @@ mod tests {
                 fn start() {
                     let mut de = Deserializer::from_str("<tag><![CDATA[ cdata ]]><tag2>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -3951,7 +3939,7 @@ mod tests {
                 fn end() {
                     let mut de = Deserializer::from_str("<tag><![CDATA[ cdata ]]></tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -3961,10 +3949,7 @@ mod tests {
                     let mut de = Deserializer::from_str("<tag><![CDATA[ cdata ]]> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from the end
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  text"))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3973,10 +3958,7 @@ mod tests {
                     let mut de =
                         Deserializer::from_str("<tag><![CDATA[ cdata ]]><![CDATA[ cdata2 ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2 "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -3984,7 +3966,7 @@ mod tests {
                 fn eof() {
                     let mut de = Deserializer::from_str("<tag><![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4017,7 +3999,7 @@ mod tests {
                 fn start() {
                     let mut de = Deserializer::from_str(" text <tag1><tag2>");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4028,7 +4010,7 @@ mod tests {
                 fn end() {
                     let mut de = Deserializer::from_str(" text <tag></tag>");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4038,10 +4020,10 @@ mod tests {
                 fn text() {
                     let mut de = Deserializer::from_str(" text <tag> text2 ");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text2")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text2".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4049,9 +4031,9 @@ mod tests {
                 fn cdata() {
                     let mut de = Deserializer::from_str(" text <tag><![CDATA[ cdata ]]>");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4059,7 +4041,7 @@ mod tests {
                 fn eof() {
                     // Text is trimmed from both sides
                     let mut de = Deserializer::from_str(" text <tag>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4071,7 +4053,7 @@ mod tests {
             fn end() {
                 let mut de = Deserializer::from_str(" text </tag>");
                 // Text is trimmed from both sides
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                 match de.next() {
                     Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                         assert_eq!(expected, "");
@@ -4092,10 +4074,7 @@ mod tests {
                 fn start() {
                     let mut de = Deserializer::from_str(" text <![CDATA[ cdata ]]><tag>");
                     // Text is trimmed from the start
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4104,10 +4083,7 @@ mod tests {
                 fn end() {
                     let mut de = Deserializer::from_str(" text <![CDATA[ cdata ]]></tag>");
                     // Text is trimmed from the start
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                             assert_eq!(expected, "");
@@ -4124,7 +4100,7 @@ mod tests {
                     // Text is trimmed from the start and from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata  text2"))
+                        DeEvent::Text("text  cdata  text2".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4136,7 +4112,7 @@ mod tests {
                     // Text is trimmed from the start
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata  cdata2 "))
+                        DeEvent::Text("text  cdata  cdata2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4145,10 +4121,7 @@ mod tests {
                 fn eof() {
                     let mut de = Deserializer::from_str(" text <![CDATA[ cdata ]]>");
                     // Text is trimmed from the start
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed("text  cdata "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4166,7 +4139,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]><tag1><tag2>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4176,7 +4149,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]><tag></tag>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4185,10 +4158,10 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]><tag> text ");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed("text")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4196,16 +4169,16 @@ mod tests {
                 fn cdata() {
                     let mut de =
                         Deserializer::from_str("<![CDATA[ cdata ]]><tag><![CDATA[ cdata2 ]]>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata2 ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
                 #[test]
                 fn eof() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]><tag>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4216,7 +4189,7 @@ mod tests {
             #[test]
             fn end() {
                 let mut de = Deserializer::from_str("<![CDATA[ cdata ]]></tag>");
-                assert_eq!(de.next().unwrap(), DeEvent::Text(Cow::Borrowed(" cdata ")));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                 match de.next() {
                     Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                         assert_eq!(expected, "");
@@ -4235,10 +4208,7 @@ mod tests {
                 fn start() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]> text <tag>");
                     // Text is trimmed from the end
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  text"))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4247,10 +4217,7 @@ mod tests {
                 fn end() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]> text </tag>");
                     // Text is trimmed from the end
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  text"))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                             assert_eq!(expected, "");
@@ -4269,7 +4236,7 @@ mod tests {
                         Deserializer::from_str("<![CDATA[ cdata ]]> text <![CDATA[ cdata2 ]]>");
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  text  cdata2 "))
+                        DeEvent::Text(" cdata  text  cdata2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4278,10 +4245,7 @@ mod tests {
                 fn eof() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]> text ");
                     // Text is trimmed from the end
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  text"))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4295,10 +4259,7 @@ mod tests {
                 fn start() {
                     let mut de =
                         Deserializer::from_str("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]><tag>");
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2 "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4307,10 +4268,7 @@ mod tests {
                 fn end() {
                     let mut de =
                         Deserializer::from_str("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]></tag>");
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2 "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
                             assert_eq!(expected, "");
@@ -4328,7 +4286,7 @@ mod tests {
                     // Text is trimmed from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2  text"))
+                        DeEvent::Text(" cdata  cdata2  text".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4340,7 +4298,7 @@ mod tests {
                     );
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2  cdata3 "))
+                        DeEvent::Text(" cdata  cdata2  cdata3 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4348,10 +4306,7 @@ mod tests {
                 #[test]
                 fn eof() {
                     let mut de = Deserializer::from_str("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]>");
-                    assert_eq!(
-                        de.next().unwrap(),
-                        DeEvent::Text(Cow::Borrowed(" cdata  cdata2 "))
-                    );
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
