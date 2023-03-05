@@ -56,16 +56,13 @@ mod tests {
             async fn $name() {
                 let mut buffer = Vec::new();
                 let mut writer = Writer::new(&mut buffer);
-        
+
                 writer
                     .write_event_async($event)
                     .await
                     .expect("write event failed");
-        
-                assert_eq!(
-                    std::str::from_utf8(&buffer).unwrap(),
-                    $expected,
-                );
+
+                assert_eq!(std::str::from_utf8(&buffer).unwrap(), $expected,);
             }
         };
     }
@@ -76,11 +73,7 @@ mod tests {
         r#"<?xml version="1.0" encoding="UTF-8" standalone="no"?>"#
     );
 
-    test!(
-        empty_tag,
-        Event::Empty(BytesStart::new("tag")),
-        r#"<tag/>"#
-    );
+    test!(empty_tag, Event::Empty(BytesStart::new("tag")), r#"<tag/>"#);
 
     test!(
         comment,
@@ -106,7 +99,6 @@ mod tests {
         r#"<!DOCTYPE this is a doctype>"#
     );
 
-
     #[tokio::test]
     async fn full_tag() {
         let mut buffer = Vec::new();
@@ -116,10 +108,7 @@ mod tests {
         let text = Event::Text(BytesText::new("inner text"));
         let end = Event::End(BytesEnd::new("tag"));
         for i in [start, text, end] {
-            writer
-                .write_event_async(i)
-                .await
-                .expect("write tag failed");
+            writer.write_event_async(i).await.expect("write tag failed");
         }
 
         assert_eq!(
@@ -127,5 +116,4 @@ mod tests {
             r#"<tag>inner text</tag>"#
         );
     }
-
 }
