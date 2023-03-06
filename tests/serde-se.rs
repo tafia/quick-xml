@@ -454,7 +454,12 @@ mod without_root {
                 err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
-                serialize_as!(tuple: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
+                // Note, that spaces in strings, even escaped, would represent
+                // the list item delimiters. Non-symmetric serialization follows
+                // tradition: the XmlBeans Java library have the same behavior.
+                // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                serialize_as_only!(tuple_with_spaces: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
                 // Struct variant cannot be directly serialized to a text
                 err!(struct_:
                     Struct::Text {
@@ -1401,7 +1406,12 @@ mod with_root {
                 err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
-                serialize_as!(tuple: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
+                // Note, that spaces in strings, even escaped, would represent
+                // the list item delimiters. Non-symmetric serialization follows
+                // tradition: the XmlBeans Java library have the same behavior.
+                // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                serialize_as_only!(tuple_with_spaces: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
                 // Struct variant cannot be directly serialized to a text
                 err!(struct_:
                     Struct::Text {
