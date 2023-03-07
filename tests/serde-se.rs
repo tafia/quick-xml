@@ -1,54 +1,55 @@
+use quick_xml::de::from_str;
 use quick_xml::se::Serializer;
 use quick_xml::utils::Bytes;
 use quick_xml::DeError;
 
-use serde::{serde_if_integer128, Serialize};
+use serde::{serde_if_integer128, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Unit;
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Newtype(bool);
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Tuple(f32, &'static str);
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Struct {
     float: f64,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct NestedStruct {
     nested: Nested,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct FlattenStruct {
     #[serde(flatten)]
     nested: Nested,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Nested {
     float: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Empty {}
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Text {
     #[serde(rename = "$text")]
     float: f64,
     string: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 enum ExternallyTagged {
     Unit,
     Newtype(bool),
@@ -61,20 +62,32 @@ enum ExternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
 #[derive(Serialize)]
+enum ExternallyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "tag")]
 enum InternallyTagged {
     Unit,
@@ -89,20 +102,33 @@ enum InternallyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
-#[derive(Serialize)]
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "tag")]
+enum InternallyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "tag", content = "content")]
 enum AdjacentlyTagged {
     Unit,
@@ -116,20 +142,33 @@ enum AdjacentlyTagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
         string: &'static str,
     },
+    Empty {},
 }
 
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
 #[derive(Serialize)]
+#[serde(tag = "tag", content = "content")]
+enum AdjacentlyTaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
+        string: &'static str,
+    },
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 enum Untagged {
     Unit,
@@ -143,15 +182,28 @@ enum Untagged {
         nested: Nested,
         string: &'static str,
     },
-    Flatten {
-        #[serde(flatten)]
-        nested: Nested,
-        string: &'static str,
-    },
-    Empty {},
+    /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
         float: f64,
+        string: &'static str,
+    },
+    Empty {},
+}
+
+/// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
+/// incorrect code generation when deriving `Deserialize`.
+///
+/// TODO: Merge into main enum after fixing <https://github.com/serde-rs/serde/issues/2371>
+///
+/// Anyway, deserialization of that type in roundtrip suffers from
+/// <https://github.com/serde-rs/serde/issues/1183>
+#[derive(Serialize)]
+#[serde(untagged)]
+enum UntaggedWorkaround {
+    Flatten {
+        #[serde(flatten)]
+        nested: Nested,
         string: &'static str,
     },
 }
@@ -164,11 +216,29 @@ mod without_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
-                let ser = Serializer::new(&mut buffer);
+                serialize_as!(@ $data => $expected);
 
-                $data.serialize(ser).unwrap();
-                assert_eq!(buffer, $expected);
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        (@ $data:expr => $expected:literal) => {
+            let mut buffer = String::new();
+            let ser = Serializer::new(&mut buffer);
+
+            $data.serialize(ser).unwrap();
+            assert_eq!(buffer, $expected);
+        };
+    }
+    macro_rules! serialize_as_only {
+        ($name:ident: $data:expr => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
             }
         };
     }
@@ -330,8 +400,10 @@ mod without_root {
                         </nested>\
                         <string>answer</string>\
                     </Holder>");
-            serialize_as!(flatten_struct:
-                ExternallyTagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -351,8 +423,54 @@ mod without_root {
                         42\
                         <string>answer</string>\
                     </Text>");
+
+            /// Test serialization of the specially named variant `$text`
+            mod text {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Unit {
+                    #[serde(rename = "$text")]
+                    Text,
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Newtype<'a> {
+                    #[serde(rename = "$text")]
+                    Text(&'a str),
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Tuple {
+                    #[serde(rename = "$text")]
+                    Text(f64, String),
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Struct<'a> {
+                    #[serde(rename = "$text")]
+                    Text { float: f64, string: &'a str },
+                }
+
+                // It is unknown how to exactly serialize unit to a text
+                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                // Tuple variant serialized as an `xs:list`
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
+                // Note, that spaces in strings, even escaped, would represent
+                // the list item delimiters. Non-symmetric serialization follows
+                // tradition: the XmlBeans Java library have the same behavior.
+                // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                serialize_as_only!(tuple_with_spaces: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
+                // Struct variant cannot be directly serialized to a text
+                err!(struct_:
+                    Struct::Text {
+                        float: 4.2,
+                        string: "newtype text",
+                    }
+                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+            }
         }
 
+        /// Name `$text` has no special meaning in internally tagged enums
         mod internally_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -364,13 +482,17 @@ mod without_root {
                     </InternallyTagged>");
             // serde serializes internally tagged newtype structs by delegating
             // serialization to the inner type and augmenting it with a tag
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 InternallyTagged::Newtype(Nested { float: 4.2 })
                 => "<Nested>\
                         <tag>Newtype</tag>\
                         <float>4.2</float>\
                     </Nested>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 InternallyTagged::Struct {
                     float: 42.0,
                     string: "answer"
@@ -380,7 +502,9 @@ mod without_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </InternallyTagged>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 InternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -395,7 +519,7 @@ mod without_root {
             // serde serializes flatten structs as maps, and we do not support
             // serialization of maps without root tag
             err!(flatten_struct:
-                InternallyTagged::Flatten {
+                InternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -405,7 +529,9 @@ mod without_root {
                 => "<InternallyTagged>\
                         <tag>Empty</tag>\
                     </InternallyTagged>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 InternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -417,6 +543,7 @@ mod without_root {
                     </InternallyTagged>");
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod adjacently_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -465,18 +592,20 @@ mod without_root {
                             <string>answer</string>\
                         </content>\
                     </AdjacentlyTagged>");
-            serialize_as!(flatten_struct:
-                AdjacentlyTagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
-                => "<AdjacentlyTagged>\
+                => "<AdjacentlyTaggedWorkaround>\
                         <tag>Flatten</tag>\
                         <content>\
                             <float>42</float>\
                             <string>answer</string>\
                         </content>\
-                    </AdjacentlyTagged>");
+                    </AdjacentlyTaggedWorkaround>");
             serialize_as!(empty_struct:
                 AdjacentlyTagged::Empty {}
                 => "<AdjacentlyTagged>\
@@ -497,6 +626,7 @@ mod without_root {
                     </AdjacentlyTagged>");
         }
 
+        /// Name `$text` has no special meaning in untagged enums
         mod untagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -509,7 +639,9 @@ mod without_root {
                 => Unsupported("cannot serialize `bool` without defined root tag"));
             err!(tuple_struct: Untagged::Tuple(42.0, "answer")
                 => Unsupported("cannot serialize unnamed tuple without defined root tag"));
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 Untagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -518,7 +650,9 @@ mod without_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </Untagged>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 Untagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -529,8 +663,10 @@ mod without_root {
                         </nested>\
                         <string>answer</string>\
                     </Untagged>");
+            // serde serializes flatten structs as maps, and we do not support
+            // serialization of maps without root tag
             err!(flatten_struct:
-                Untagged::Flatten {
+                UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -538,7 +674,9 @@ mod without_root {
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<Untagged/>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 Untagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -550,6 +688,7 @@ mod without_root {
         }
     }
 
+    /// Do not run roundtrip in those tests because the results the same as without indentation
     mod with_indent {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -725,7 +864,7 @@ mod without_root {
                             <string>answer</string>\n\
                         </Holder>");
                 serialize_as!(flatten_struct:
-                    ExternallyTagged::Flatten {
+                    ExternallyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -745,8 +884,49 @@ mod without_root {
                             42\n  \
                             <string>answer</string>\n\
                         </Text>");
+
+                /// Test serialization of the specially named variant `$text`
+                mod text {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    enum Unit {
+                        #[serde(rename = "$text")]
+                        Text,
+                    }
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    enum Newtype<'a> {
+                        #[serde(rename = "$text")]
+                        Text(&'a str),
+                    }
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    enum Tuple<'a> {
+                        #[serde(rename = "$text")]
+                        Text(f64, &'a str),
+                    }
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    enum Struct<'a> {
+                        #[serde(rename = "$text")]
+                        Text { float: f64, string: &'a str },
+                    }
+
+                    // It is unknown how to exactly serialize unit to a text
+                    err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                    serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                    // Tuple variant serialized as an `xs:list`
+                    serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
+                    // Struct variant cannot be directly serialized to a text
+                    err!(struct_:
+                        Struct::Text {
+                            float: 4.2,
+                            string: "newtype text",
+                        }
+                        => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                }
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod internally_tagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -789,7 +969,7 @@ mod without_root {
                 // serde serializes flatten structs as maps, and we do not support
                 // serialization of maps without root tag
                 err!(flatten_struct:
-                    InternallyTagged::Flatten {
+                    InternallyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -811,6 +991,7 @@ mod without_root {
                         </InternallyTagged>");
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod adjacently_tagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -860,17 +1041,17 @@ mod without_root {
                             </content>\n\
                         </AdjacentlyTagged>");
                 serialize_as!(flatten_struct:
-                    AdjacentlyTagged::Flatten {
+                    AdjacentlyTaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
-                    => "<AdjacentlyTagged>\n  \
+                    => "<AdjacentlyTaggedWorkaround>\n  \
                             <tag>Flatten</tag>\n  \
                             <content>\n    \
                                 <float>42</float>\n    \
                                 <string>answer</string>\n  \
                             </content>\n\
-                        </AdjacentlyTagged>");
+                        </AdjacentlyTaggedWorkaround>");
                 serialize_as!(empty_struct:
                     AdjacentlyTagged::Empty {}
                     => "<AdjacentlyTagged>\n  \
@@ -891,6 +1072,7 @@ mod without_root {
                         </AdjacentlyTagged>");
             }
 
+            /// Name `$text` has no special meaning in untagged enums
             mod untagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -922,7 +1104,7 @@ mod without_root {
                             <string>answer</string>\n\
                         </Untagged>");
                 err!(flatten_struct:
-                    Untagged::Flatten {
+                    UntaggedWorkaround::Flatten {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }
@@ -952,11 +1134,42 @@ mod with_root {
         ($name:ident: $data:expr => $expected:literal) => {
             #[test]
             fn $name() {
-                let mut buffer = String::new();
-                let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
+                serialize_as!(@ $data => $expected);
 
-                $data.serialize(ser).unwrap();
-                assert_eq!(buffer, $expected);
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        ($name:ident: $data:expr ; $ty:ty => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
+
+                // Roundtrip to ensure that serializer corresponds to deserializer
+                assert_eq!(
+                    $data,
+                    from_str::<'_, $ty>($expected).expect("deserialization roundtrip"),
+                    "deserialization roundtrip",
+                );
+            }
+        };
+        (@ $data:expr => $expected:literal) => {
+            let mut buffer = String::new();
+            let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
+
+            $data.serialize(ser).unwrap();
+            assert_eq!(buffer, $expected);
+        };
+    }
+    macro_rules! serialize_as_only {
+        ($name:ident: $data:expr => $expected:literal) => {
+            #[test]
+            fn $name() {
+                serialize_as!(@ $data => $expected);
             }
         };
     }
@@ -1014,10 +1227,11 @@ mod with_root {
     serialize_as!(char_amp:         '&'  => "<root>&amp;</root>");
     serialize_as!(char_apos:        '\'' => "<root>&apos;</root>");
     serialize_as!(char_quot:        '"'  => "<root>&quot;</root>");
-    serialize_as!(char_space:       ' '  => "<root> </root>");
+    // FIXME: Probably we should trim only for specified types when deserialize
+    serialize_as_only!(char_space:       ' '  => "<root> </root>");
 
-    serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
-    serialize_as!(str_escaped:  "<\"escaped & string'>" => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
+    serialize_as!(str_non_escaped: "non-escaped string"; &str => "<root>non-escaped string</root>");
+    serialize_as!(str_escaped: "<\"escaped & string'>"; String => "<root>&lt;&quot;escaped &amp; string&apos;&gt;</root>");
 
     err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
@@ -1036,12 +1250,13 @@ mod with_root {
         => "<root>true</root>");
 
     serialize_as!(seq:
-        vec![1, 2, 3]
+        vec![1, 2, 3]; Vec<usize>
         => "<root>1</root>\
             <root>2</root>\
             <root>3</root>");
     serialize_as!(tuple:
-        ("<\"&'>", "with\t\r\n spaces", 3usize)
+        // Use to_string() to get owned type that is required for deserialization
+        ("<\"&'>".to_string(), "with\t\r\n spaces", 3usize)
         => "<root>&lt;&quot;&amp;&apos;&gt;</root>\
             <root>with\t\r\n spaces</root>\
             <root>3</root>");
@@ -1076,7 +1291,9 @@ mod with_root {
                 </nested>\
                 <string>answer</string>\
             </root>");
-    serialize_as!(flatten_struct:
+    // NOTE: Cannot be deserialized in roundtrip due to
+    // https://github.com/serde-rs/serde/issues/1183
+    serialize_as_only!(flatten_struct:
         FlattenStruct {
             nested: Nested { float: 42.0 },
             string: "answer",
@@ -1135,8 +1352,10 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </Holder>");
-            serialize_as!(flatten_struct:
-                ExternallyTagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                ExternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1156,8 +1375,54 @@ mod with_root {
                         42\
                         <string>answer</string>\
                     </Text>");
+
+            /// Test serialization of the specially named variant `$text`
+            mod text {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Unit {
+                    #[serde(rename = "$text")]
+                    Text,
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Newtype<'a> {
+                    #[serde(rename = "$text")]
+                    Text(&'a str),
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Tuple {
+                    #[serde(rename = "$text")]
+                    Text(f64, String),
+                }
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                enum Struct<'a> {
+                    #[serde(rename = "$text")]
+                    Text { float: f64, string: &'a str },
+                }
+
+                // It is unknown how to exactly serialize unit to a text
+                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
+                // Tuple variant serialized as an `xs:list`
+                serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
+                // Note, that spaces in strings, even escaped, would represent
+                // the list item delimiters. Non-symmetric serialization follows
+                // tradition: the XmlBeans Java library have the same behavior.
+                // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                serialize_as_only!(tuple_with_spaces: Tuple::Text(4.2, "newtype text".into()) => "4.2 newtype&#32;text");
+                // Struct variant cannot be directly serialized to a text
+                err!(struct_:
+                    Struct::Text {
+                        float: 4.2,
+                        string: "newtype text",
+                    }
+                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+            }
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod internally_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -1167,13 +1432,17 @@ mod with_root {
                 => "<root>\
                         <tag>Unit</tag>\
                     </root>");
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 InternallyTagged::Newtype(Nested { float: 4.2 })
                 => "<root>\
                         <tag>Newtype</tag>\
                         <float>4.2</float>\
                     </root>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 InternallyTagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -1183,7 +1452,9 @@ mod with_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 InternallyTagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1195,8 +1466,10 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(flatten_struct:
-                InternallyTagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                InternallyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1210,7 +1483,9 @@ mod with_root {
                 => "<root>\
                         <tag>Empty</tag>\
                     </root>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 InternallyTagged::Text {
                     float: 42.0,
                     string: "answer"
@@ -1222,6 +1497,7 @@ mod with_root {
                     </root>");
         }
 
+        /// Name `$text` has no special meaning in adjacently tagged enums
         mod adjacently_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -1270,8 +1546,10 @@ mod with_root {
                             <string>answer</string>\
                         </content>\
                     </root>");
-            serialize_as!(flatten_struct:
-                AdjacentlyTagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                AdjacentlyTaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1302,21 +1580,30 @@ mod with_root {
                     </root>");
         }
 
+        /// Name `$text` has no special meaning in untagged enums
         mod untagged {
             use super::*;
             use pretty_assertions::assert_eq;
 
-            serialize_as!(unit:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(unit:
                 Untagged::Unit
                 => "<root/>");
-            serialize_as!(newtype:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(newtype:
                 Untagged::Newtype(true)
                 => "<root>true</root>");
-            serialize_as!(tuple_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(tuple_struct:
                 Untagged::Tuple(42.0, "answer")
                 => "<root>42</root>\
                     <root>answer</root>");
-            serialize_as!(struct_:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(struct_:
                 Untagged::Struct {
                     float: 42.0,
                     string: "answer",
@@ -1325,7 +1612,9 @@ mod with_root {
                         <float>42</float>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(nested_struct:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(nested_struct:
                 Untagged::Holder {
                     nested: Nested { float: 42.0 },
                     string: "answer",
@@ -1336,8 +1625,10 @@ mod with_root {
                         </nested>\
                         <string>answer</string>\
                     </root>");
-            serialize_as!(flatten_struct:
-                Untagged::Flatten {
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(flatten_struct:
+                UntaggedWorkaround::Flatten {
                     nested: Nested { float: 42.0 },
                     string: "answer",
                 }
@@ -1348,7 +1639,9 @@ mod with_root {
             serialize_as!(empty_struct:
                 Untagged::Empty {}
                 => "<root/>");
-            serialize_as!(text:
+            // NOTE: Cannot be deserialized in roundtrip due to
+            // https://github.com/serde-rs/serde/issues/1183
+            serialize_as_only!(text:
                 Untagged::Text {
                     float: 42.0,
                     string: "answer"
