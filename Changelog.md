@@ -25,6 +25,7 @@
 - [#569]: Rewrite the `Reader::read_event_into_async` as an async fn, making the future `Send` if possible.
 - [#571]: Borrow element names (`<element>`) when deserialize with serde.
   This change allow to deserialize into `HashMap<&str, T>`, for example
+- [#573]: Add basic support for async byte writers via tokio's `AsyncWrite`.
 
 ### Bug Fixes
 
@@ -58,6 +59,7 @@
 [#568]: https://github.com/tafia/quick-xml/pull/568
 [#569]: https://github.com/tafia/quick-xml/pull/569
 [#571]: https://github.com/tafia/quick-xml/pull/571
+[#573]: https://github.com/tafia/quick-xml/pull/573
 
 ## 0.27.1 -- 2022-12-28
 
