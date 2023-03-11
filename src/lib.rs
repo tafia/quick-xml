@@ -16,10 +16,13 @@
 //! Especially for nested XML elements, the user must keep track _where_ (how deep)
 //! in the XML document the current event is located.
 //!
-//! quick-xml contains optional support of asynchronous reading using [tokio].
+//! quick-xml contains optional support of asynchronous reading and writing using [tokio].
+//! To get it enable the `async-tokio` feature.
 //!
 //! Furthermore, quick-xml also contains optional [Serde] support to directly
 //! serialize and deserialize from structs, without having to deal with the XML events.
+//! To get it enable the `serialize` feature. Read more about mapping Rust types
+//! to XML in the documentation of [`de`] module.
 //!
 //! # Examples
 //!
@@ -33,6 +36,7 @@
 //! [StAX]: https://en.wikipedia.org/wiki/StAX
 //! [tokio]: https://tokio.rs/
 //! [Serde]: https://serde.rs/
+//! [`de`]: ./de/index.html
 #![cfg_attr(
     feature = "document-features",
     cfg_attr(doc, doc = ::document_features::document_features!())
