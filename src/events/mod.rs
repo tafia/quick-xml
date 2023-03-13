@@ -49,7 +49,9 @@ use crate::errors::{Error, Result};
 use crate::escape::{escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
 use crate::reader::is_whitespace;
-use crate::utils::{write_cow_string, CowRef};
+use crate::utils::write_cow_string;
+#[cfg(feature = "serialize")]
+use crate::utils::CowRef;
 use attributes::{Attribute, Attributes};
 use std::mem::replace;
 
@@ -198,6 +200,7 @@ impl<'a> BytesStart<'a> {
     /// - `'a`: Lifetime of the input data from which this event is borrow
     /// - `'e`: Lifetime of the concrete event instance
     // TODO: We should made this is a part of public API, but with safe wrapped for a name
+    #[cfg(feature = "serialize")]
     pub(crate) fn raw_name<'e>(&'e self) -> CowRef<'a, 'e, [u8]> {
         match self.buf {
             Cow::Borrowed(b) => CowRef::Input(&b[..self.name_len]),
