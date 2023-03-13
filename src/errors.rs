@@ -34,7 +34,8 @@ pub enum Error {
     UnexpectedBang(u8),
     /// Text not found, expected `Event::Text`
     TextNotFound,
-    /// `Event::XmlDecl` must start with *version* attribute
+    /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
+    /// that was found or `None` if an xml declaration doesn't contain attributes.
     XmlDeclWithoutVersion(Option<String>),
     /// Attribute parsing error
     InvalidAttr(AttrError),
