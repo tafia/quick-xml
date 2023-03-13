@@ -190,6 +190,9 @@ all-features = true
 # See https://stackoverflow.com/questions/61417452
 rustdoc-args = ["--cfg", "docs_rs"]
 
+# Tests, benchmarks and examples doesn't included in package on crates.io,
+# so we need to specify a path, otherwise `cargo package` complains
+
 [[test]]
 name = "encodings"
 required-features = ["encoding"]
@@ -228,3 +231,4 @@ path = "tests/async-tokio.rs"
 [[example]]
 name = "read_nodes_serde"
 required-features = ["serialize"]
+path = "examples/read_nodes_serde.rs"
