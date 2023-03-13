@@ -12,6 +12,15 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.28.0 -- 2023-03-13
+
+### New Features
+
 - [#541]: (De)serialize specially named `$text` enum variant in [externally tagged]
   enums to / from textual content
 - [#556]: `to_writer` and `to_string` now accept `?Sized` types
@@ -44,7 +53,6 @@
 - [#565]: Correctly set minimum required version of tokio dependency to 1.10
 - [#565]: Fix compilation error when build with serde <1.0.139
 
-### Misc Changes
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
@@ -61,6 +69,7 @@
 [#571]: https://github.com/tafia/quick-xml/pull/571
 [#573]: https://github.com/tafia/quick-xml/pull/573
 
+
 ## 0.27.1 -- 2022-12-28
 
 ### Bug Fixes
@@ -71,6 +80,7 @@
   feature is active and malformed XML is parsed
 
 [#530]: https://github.com/tafia/quick-xml/pull/530
+
 
 ## 0.27.0 -- 2022-12-25
 
@@ -145,6 +155,7 @@
 [XML name]: https://www.w3.org/TR/xml11/#NT-Name
 [documentation]: https://docs.rs/quick-xml/0.27.0/quick_xml/de/index.html#difference-between-text-and-value-special-names
 
+
 ## 0.26.0 -- 2022-10-23
 
 ### Misc Changes
@@ -156,6 +167,7 @@
 
 [#481]: https://github.com/tafia/quick-xml/pull/481
 [#489]: https://github.com/tafia/quick-xml/pull/489
+
 
 ## 0.25.0 -- 2022-09-10
 
@@ -171,6 +183,7 @@
 [#468]: https://github.com/tafia/quick-xml/pull/468
 [#469]: https://github.com/tafia/quick-xml/issues/469
 
+
 ## 0.24.1 -- 2022-09-10
 
 ### Bug Fixes
@@ -178,6 +191,7 @@
 - [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
 
 [#469]: https://github.com/tafia/quick-xml/issues/469
+
 
 ## 0.24.0 -- 2022-08-28
 
@@ -418,6 +432,7 @@
 [#459]: https://github.com/tafia/quick-xml/pull/459
 [#467]: https://github.com/tafia/quick-xml/pull/467
 
+
 ## 0.23.1 -- 2022-09-11
 
 ### Bug Fixes
@@ -425,6 +440,7 @@
 - [#469]: Fix incorrect parsing of CDATA and comments when using buffered readers
 
 [#469]: https://github.com/tafia/quick-xml/issues/469
+
 
 ## 0.23.0 -- 2022-05-08
 
