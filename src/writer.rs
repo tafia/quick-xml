@@ -331,7 +331,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     /// Create a new scope for writing XML inside the current element.
     pub fn write_inner_content<F>(self, closure: F) -> Result<&'a mut Writer<W>>
     where
-        F: Fn(&mut Writer<W>) -> Result<()>,
+        F: FnOnce(&mut Writer<W>) -> Result<()>,
     {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
