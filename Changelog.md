@@ -16,6 +16,8 @@
 
 ### Misc Changes
 
+- [#579]: `ElementWriter.write_inner_content` now uses a `FnOnce` instead of a more restrictive `Fn` closure
+
 
 ## 0.28.0 -- 2023-03-13
 
