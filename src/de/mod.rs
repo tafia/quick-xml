@@ -1813,14 +1813,6 @@ macro_rules! deserialize_primitives {
             str2bool(&text, visitor)
         }
 
-        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
-        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_str(visitor)
-        }
-
         /// Character represented as [strings](#method.deserialize_str).
         fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1840,6 +1832,14 @@ macro_rules! deserialize_primitives {
             }
         }
 
+        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
         /// Returns [`DeError::Unsupported`]
         fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
         where
@@ -1856,7 +1856,7 @@ macro_rules! deserialize_primitives {
             self.deserialize_bytes(visitor)
         }
 
-        /// Representation of the named units the same as [unnamed units](#method.deserialize_unit)
+        /// Representation of the named units the same as [unnamed units](#method.deserialize_unit).
         fn deserialize_unit_struct<V>(
             self,
             _name: &'static str,
@@ -1868,6 +1868,7 @@ macro_rules! deserialize_primitives {
             self.deserialize_unit(visitor)
         }
 
+        /// Representation of the newtypes the same as one-element [tuple](#method.deserialize_tuple).
         fn deserialize_newtype_struct<V>(
             self,
             _name: &'static str,
