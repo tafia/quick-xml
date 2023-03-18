@@ -18,6 +18,8 @@
 
 - [#579]: `ElementWriter.write_inner_content` now uses a `FnOnce` instead of a more restrictive `Fn` closure
 
+[#579]: https://github.com/tafia/quick-xml/pull/579
+
 
 ## 0.28.0 -- 2023-03-13
 
