@@ -1931,10 +1931,9 @@ pub enum PayloadEvent<'a> {
     Start(BytesStart<'a>),
     /// End tag `</tag>`.
     End(BytesEnd<'a>),
-    /// Escaped character data between `Start` and `End` element.
+    /// Escaped character data between tags.
     Text(BytesText<'a>),
-    /// Unescaped character data between `Start` and `End` element,
-    /// stored in `<![CDATA[...]]>`.
+    /// Unescaped character data stored in `<![CDATA[...]]>`.
     CData(BytesCData<'a>),
     /// End of XML document.
     Eof,

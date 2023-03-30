@@ -961,17 +961,17 @@ pub enum Event<'a> {
     End(BytesEnd<'a>),
     /// Empty element tag (with attributes) `<tag attr="value" />`.
     Empty(BytesStart<'a>),
-    /// Character data between `Start` and `End` element.
+    /// Escaped character data between tags.
     Text(BytesText<'a>),
     /// Comment `<!-- ... -->`.
     Comment(BytesText<'a>),
-    /// CData `<![CDATA[...]]>`.
+    /// Unescaped character data stored in `<![CDATA[...]]>`.
     CData(BytesCData<'a>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
     PI(BytesText<'a>),
-    /// Doctype `<!DOCTYPE ...>`.
+    /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
     /// End of XML document.
     Eof,
