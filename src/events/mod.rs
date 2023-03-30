@@ -740,7 +740,7 @@ impl<'a> BytesText<'a> {
     /// non-UTF-8 encoding.
     pub fn unescape_with<'entity>(
         &self,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> Result<Cow<'a, str>> {
         let decoded = match &self.content {
             Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
