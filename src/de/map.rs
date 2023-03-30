@@ -2,6 +2,7 @@
 
 use crate::{
     de::key::QNameDeserializer,
+    de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     encoding::Decoder,
@@ -165,13 +166,14 @@ enum ValueSource {
 ///
 /// - `'a` lifetime represents a parent deserializer, which could own the data
 ///   buffer.
-pub(crate) struct MapAccess<'de, 'a, R>
+pub(crate) struct MapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
-    de: &'a mut Deserializer<'de, R>,
+    de: &'a mut Deserializer<'de, R, E>,
     /// State of the iterator over attributes. Contains the next position in the
     /// inner `start` slice, from which next attribute should be parsed.
     iter: IterState,
@@ -190,13 +192,14 @@ where
     has_value_field: bool,
 }
 
-impl<'de, 'a, R> MapAccess<'de, 'a, R>
+impl<'de, 'a, R, E> MapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Create a new MapAccess
     pub fn new(
-        de: &'a mut Deserializer<'de, R>,
+        de: &'a mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
@@ -211,9 +214,10 @@ where
     }
 }
 
-impl<'de, 'a, R> de::MapAccess<'de> for MapAccess<'de, 'a, R>
+impl<'de, 'a, R, E> de::MapAccess<'de> for MapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
@@ -369,13 +373,14 @@ macro_rules! forward {
 /// A deserializer for a value of map or struct. That deserializer slightly
 /// differently processes events for a primitive types and sequences than
 /// a [`Deserializer`].
-struct MapValueDeserializer<'de, 'a, 'm, R>
+struct MapValueDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R>,
+    map: &'m mut MapAccess<'de, 'a, R, E>,
     /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
@@ -453,9 +458,10 @@ where
     allow_start: bool,
 }
 
-impl<'de, 'a, 'm, R> MapValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> MapValueDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Returns a next string as concatenated content of consequent [`Text`] and
     /// [`CData`] events, used inside [`deserialize_primitives!()`].
@@ -468,9 +474,10 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
@@ -629,13 +636,14 @@ impl<'de> TagFilter<'de> {
 ///
 /// [`Text`]: crate::events::Event::Text
 /// [`CData`]: crate::events::Event::CData
-struct MapValueSeqAccess<'de, 'a, 'm, R>
+struct MapValueSeqAccess<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Accessor to a map that creates this accessor and to a deserializer for
     /// a sequence items.
-    map: &'m mut MapAccess<'de, 'a, R>,
+    map: &'m mut MapAccess<'de, 'a, R, E>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
     /// When feature `overlapped-lists` is not activated, iteration will stop
@@ -653,18 +661,20 @@ where
 }
 
 #[cfg(feature = "overlapped-lists")]
-impl<'de, 'a, 'm, R> Drop for MapValueSeqAccess<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> Drop for MapValueSeqAccess<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     fn drop(&mut self) {
         self.map.de.start_replay(self.checkpoint);
     }
 }
 
-impl<'de, 'a, 'm, R> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
@@ -705,18 +715,20 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A deserializer for a single item of a sequence.
-struct SeqItemDeserializer<'de, 'a, 'm, R>
+struct SeqItemDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R>,
+    map: &'m mut MapAccess<'de, 'a, R, E>,
 }
 
-impl<'de, 'a, 'm, R> SeqItemDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> SeqItemDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Returns a next string as concatenated content of consequent [`Text`] and
     /// [`CData`] events, used inside [`deserialize_primitives!()`].
@@ -729,9 +741,10 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R>
+impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
