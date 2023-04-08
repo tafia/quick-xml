@@ -16,6 +16,10 @@
 
 ### Misc Changes
 
+- [#584]: Export `EscapeError` from the crate
+
+[#584]: https://github.com/tafia/quick-xml/pull/584
+
 
 ## 0.28.1 -- 2023-03-19
 

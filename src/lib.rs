@@ -55,8 +55,7 @@ mod errors;
 mod escapei;
 pub mod escape {
     //! Manage xml character escapes
-    pub(crate) use crate::escapei::EscapeError;
-    pub use crate::escapei::{escape, partial_escape, unescape, unescape_with};
+    pub use crate::escapei::{escape, partial_escape, unescape, unescape_with, EscapeError};
 }
 pub mod events;
 pub mod name;
