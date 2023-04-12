@@ -12,11 +12,18 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.28.2 -- 2023-04-12
+
+### New Features
+
 - [#581]: Allow `Deserializer` to set `quick_xml::de::EntityResolver` for
   resolving unknown entities that would otherwise cause the parser to return
   an [`EscapeError::UnrecognizedSymbol`] error.
-
-### Bug Fixes
 
 ### Misc Changes
 
