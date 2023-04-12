@@ -159,11 +159,11 @@ pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape_with<'input, 'entity, F>(
     raw: &'input str,
-    resolve_entity: F,
+    mut resolve_entity: F,
 ) -> Result<Cow<'input, str>, EscapeError>
 where
     // the lifetime of the output comes from a capture or is `'static`
-    F: Fn(&str) -> Option<&'entity str>,
+    F: FnMut(&str) -> Option<&'entity str>,
 {
     let bytes = raw.as_bytes();
     let mut unescaped = None;

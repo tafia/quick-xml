@@ -6427,3 +6427,72 @@ mod borrow {
         );
     }
 }
+
+/// Test for entity resolver
+mod resolve {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use quick_xml::de::EntityResolver;
+    use quick_xml::events::BytesText;
+    use std::collections::BTreeMap;
+    use std::convert::Infallible;
+    use std::iter::FromIterator;
+
+    struct TestEntityResolver {
+        capture_called: bool,
+    }
+
+    impl EntityResolver for TestEntityResolver {
+        type Error = Infallible;
+
+        fn capture(&mut self, doctype: BytesText) -> Result<(), Self::Error> {
+            self.capture_called = true;
+
+            assert_eq!(doctype.as_ref(), br#"dict[ <!ENTITY unc "unclassified"> ]"#);
+
+            Ok(())
+        }
+
+        fn resolve(&self, entity: &str) -> Option<&str> {
+            assert!(
+                self.capture_called,
+                "`EntityResolver::capture` should be called before `EntityResolver::resolve`"
+            );
+            match entity {
+                "t1" => Some("test_one"),
+                "t2" => Some("test_two"),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_custom_entity() {
+        let resolver = TestEntityResolver {
+            capture_called: false,
+        };
+        let mut de = Deserializer::with_resolver(
+            br#"
+            <!DOCTYPE dict[ <!ENTITY unc "unclassified"> ]>
+
+            <root>
+                <entity_one>&t1;</entity_one>
+                <entity_two>&t2;</entity_two>
+                <entity_three>non-entity</entity_three>
+            </root>
+            "#
+            .as_ref(),
+            resolver,
+        );
+
+        let data: BTreeMap<String, String> = BTreeMap::deserialize(&mut de).unwrap();
+        assert_eq!(
+            data,
+            BTreeMap::from_iter([
+                (String::from("entity_one"), String::from("test_one")),
+                (String::from("entity_two"), String::from("test_two")),
+                (String::from("entity_three"), String::from("non-entity")),
+            ])
+        );
+    }
+}

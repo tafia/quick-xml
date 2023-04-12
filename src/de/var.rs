@@ -1,5 +1,6 @@
 use crate::{
     de::key::QNameDeserializer,
+    de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::{DeEvent, Deserializer, XmlRead, TEXT_KEY},
     errors::serialize::DeError,
@@ -8,30 +9,33 @@ use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{self, DeserializeSeed, Deserializer as _, Visitor};
 
 /// An enum access
-pub struct EnumAccess<'de, 'a, R>
+pub struct EnumAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
-    de: &'a mut Deserializer<'de, R>,
+    de: &'a mut Deserializer<'de, R, E>,
 }
 
-impl<'de, 'a, R> EnumAccess<'de, 'a, R>
+impl<'de, 'a, R, E> EnumAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
-    pub fn new(de: &'a mut Deserializer<'de, R>) -> Self {
+    pub fn new(de: &'a mut Deserializer<'de, R, E>) -> Self {
         EnumAccess { de }
     }
 }
 
-impl<'de, 'a, R> de::EnumAccess<'de> for EnumAccess<'de, 'a, R>
+impl<'de, 'a, R, E> de::EnumAccess<'de> for EnumAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
-    type Variant = VariantAccess<'de, 'a, R>;
+    type Variant = VariantAccess<'de, 'a, R, E>;
 
-    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, VariantAccess<'de, 'a, R>), DeError>
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, VariantAccess<'de, 'a, R, E>), DeError>
     where
         V: DeserializeSeed<'de>,
     {
@@ -58,19 +62,21 @@ where
     }
 }
 
-pub struct VariantAccess<'de, 'a, R>
+pub struct VariantAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
-    de: &'a mut Deserializer<'de, R>,
+    de: &'a mut Deserializer<'de, R, E>,
     /// `true` if variant should be deserialized from a textual content
     /// and `false` if from tag
     is_text: bool,
 }
 
-impl<'de, 'a, R> de::VariantAccess<'de> for VariantAccess<'de, 'a, R>
+impl<'de, 'a, R, E> de::VariantAccess<'de> for VariantAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 

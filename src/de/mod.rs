@@ -1833,10 +1833,13 @@ macro_rules! deserialize_option {
 
 mod key;
 mod map;
+mod resolver;
 mod simple_type;
 mod var;
 
 pub use crate::errors::serialize::DeError;
+pub use resolver::{EntityResolver, NoEntityResolver};
+
 use crate::{
     encoding::Decoder,
     errors::Error,
@@ -1931,11 +1934,12 @@ pub enum PayloadEvent<'a> {
     Start(BytesStart<'a>),
     /// End tag `</tag>`.
     End(BytesEnd<'a>),
-    /// Escaped character data between `Start` and `End` element.
+    /// Escaped character data between tags.
     Text(BytesText<'a>),
-    /// Unescaped character data between `Start` and `End` element,
-    /// stored in `<![CDATA[...]]>`.
+    /// Unescaped character data stored in `<![CDATA[...]]>`.
     CData(BytesCData<'a>),
+    /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
+    DocType(BytesText<'a>),
     /// End of XML document.
     Eof,
 }
@@ -1949,6 +1953,7 @@ impl<'a> PayloadEvent<'a> {
             PayloadEvent::End(e) => PayloadEvent::End(e.into_owned()),
             PayloadEvent::Text(e) => PayloadEvent::Text(e.into_owned()),
             PayloadEvent::CData(e) => PayloadEvent::CData(e.into_owned()),
+            PayloadEvent::DocType(e) => PayloadEvent::DocType(e.into_owned()),
             PayloadEvent::Eof => PayloadEvent::Eof,
         }
     }
@@ -1957,7 +1962,7 @@ impl<'a> PayloadEvent<'a> {
 /// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
 /// [`PayloadEvent::Text`] events, that followed by any event except
 /// [`PayloadEvent::Text`] or [`PayloadEvent::CData`], are trimmed from the end.
-struct XmlReader<'i, R: XmlRead<'i>> {
+struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = NoEntityResolver> {
     /// A source of low-level XML events
     reader: R,
     /// Intermediate event, that could be returned by the next call to `next()`.
@@ -1965,15 +1970,32 @@ struct XmlReader<'i, R: XmlRead<'i>> {
     /// trailing spaces is not. Before the event will be returned, trimming of
     /// the spaces could be necessary
     lookahead: Result<PayloadEvent<'i>, DeError>,
+
+    /// Used to resolve unknown entities that would otherwise cause the parser
+    /// to return an [`EscapeError::UnrecognizedSymbol`] error.
+    ///
+    /// [`EscapeError::UnrecognizedSymbol`]: crate::escape::EscapeError::UnrecognizedSymbol
+    entity_resolver: E,
 }
 
-impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
-    fn new(mut reader: R) -> Self {
+impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
+    fn new(reader: R) -> Self
+    where
+        E: Default,
+    {
+        Self::with_resolver(reader, E::default())
+    }
+
+    fn with_resolver(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
         // loop if we need lookahead or not
         let lookahead = reader.next();
 
-        Self { reader, lookahead }
+        Self {
+            reader,
+            lookahead,
+            entity_resolver,
+        }
     }
 
     /// Read next event and put it in lookahead, return the current lookahead
@@ -2029,7 +2051,7 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
                 if self.need_trim_end() {
                     e.inplace_trim_end();
                 }
-                Ok(e.unescape()?)
+                Ok(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
             }
             PayloadEvent::CData(e) => Ok(e.decode()?),
 
@@ -2048,9 +2070,15 @@ impl<'i, R: XmlRead<'i>> XmlReader<'i, R> {
                     if self.need_trim_end() && e.inplace_trim_end() {
                         continue;
                     }
-                    self.drain_text(e.unescape()?)
+                    self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
                 }
                 PayloadEvent::CData(e) => self.drain_text(e.decode()?),
+                PayloadEvent::DocType(e) => {
+                    self.entity_resolver
+                        .capture(e)
+                        .map_err(|err| DeError::Custom(format!("cannot parse DTD: {}", err)))?;
+                    continue;
+                }
                 PayloadEvent::Eof => Ok(DeEvent::Eof),
             };
         }
@@ -2167,12 +2195,12 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A structure that deserializes XML into Rust values.
-pub struct Deserializer<'de, R>
+pub struct Deserializer<'de, R, E: EntityResolver = NoEntityResolver>
 where
     R: XmlRead<'de>,
 {
     /// An XML reader that streams events into this deserializer
-    reader: XmlReader<'de, R>,
+    reader: XmlReader<'de, R, E>,
 
     /// When deserializing sequences sometimes we have to skip unwanted events.
     /// That events should be stored and then replayed. This is a replay buffer,
@@ -2227,7 +2255,13 @@ where
             peek: None,
         }
     }
+}
 
+impl<'de, R, E> Deserializer<'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
     /// Set the maximum number of events that could be skipped during deserialization
     /// of sequences.
     ///
@@ -2557,20 +2591,49 @@ where
     /// instead, because it will borrow instead of copy. If you have `&[u8]` which
     /// is known to represent UTF-8, you can decode it first before using [`from_str`].
     pub fn from_reader(reader: R) -> Self {
-        let mut reader = Reader::from_reader(reader);
-        reader.expand_empty_elements(true).check_end_names(true);
-
-        Self::new(IoReader {
-            reader,
-            start_trimmer: StartTrimmer::default(),
-            buf: Vec::new(),
-        })
+        Self::with_resolver(reader, NoEntityResolver)
     }
 }
 
-impl<'de, 'a, R> de::Deserializer<'de> for &'a mut Deserializer<'de, R>
+impl<'de, R, E> Deserializer<'de, IoReader<R>, E>
+where
+    R: BufRead,
+    E: EntityResolver,
+{
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer. If you already have a string use [`Self::from_str`]
+    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
+    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
+        let mut reader = Reader::from_reader(reader);
+        reader.expand_empty_elements(true).check_end_names(true);
+
+        let io_reader = IoReader {
+            reader,
+            start_trimmer: StartTrimmer::default(),
+            buf: Vec::new(),
+        };
+
+        Self {
+            reader: XmlReader::with_resolver(io_reader, entity_resolver),
+
+            #[cfg(feature = "overlapped-lists")]
+            read: VecDeque::new(),
+            #[cfg(feature = "overlapped-lists")]
+            write: VecDeque::new(),
+            #[cfg(feature = "overlapped-lists")]
+            limit: None,
+
+            #[cfg(not(feature = "overlapped-lists"))]
+            peek: None,
+        }
+    }
+}
+
+impl<'de, 'a, R, E> de::Deserializer<'de> for &'a mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
@@ -2706,9 +2769,10 @@ where
 ///
 /// Technically, multiple top-level elements violates XML rule of only one top-level
 /// element, but we consider this as several concatenated XML documents.
-impl<'de, 'a, R> SeqAccess<'de> for &'a mut Deserializer<'de, R>
+impl<'de, 'a, R, E> SeqAccess<'de> for &'a mut Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     type Error = DeError;
 
@@ -2744,6 +2808,7 @@ impl StartTrimmer {
     #[inline(always)]
     fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
         let (event, trim_next_event) = match event {
+            Event::DocType(e) => (PayloadEvent::DocType(e), false),
             Event::Start(e) => (PayloadEvent::Start(e), true),
             Event::End(e) => (PayloadEvent::End(e), true),
             Event::Eof => (PayloadEvent::Eof, true),

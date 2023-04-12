@@ -12,12 +12,20 @@
 
 ### New Features
 
+- [#581]: Allow `Deserializer` to set `quick_xml::de::EntityResolver` for
+  resolving unknown entities that would otherwise cause the parser to return
+  an [`EscapeError::UnrecognizedSymbol`] error.
+
 ### Bug Fixes
 
 ### Misc Changes
 
 - [#584]: Export `EscapeError` from the crate
+- [#581]: Relax requirements for `unsescape_*` set of functions -- their now use
+  `FnMut` instead of `Fn` for `resolve_entity` parameters, like `Iterator::map`
+  from `std`.
 
+[#581]: https://github.com/tafia/quick-xml/pull/581
 [#584]: https://github.com/tafia/quick-xml/pull/584
 
 

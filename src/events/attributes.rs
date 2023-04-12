@@ -60,7 +60,7 @@ impl<'a> Attribute<'a> {
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value_with<'entity>(
         &self,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
         // from_utf8 should never fail because content is always UTF-8 encoded
         let decoded = match &self.value {
@@ -91,7 +91,7 @@ impl<'a> Attribute<'a> {
     pub fn decode_and_unescape_value_with<'entity, B>(
         &self,
         reader: &Reader<B>,
-        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
         let decoded = match &self.value {
             Cow::Borrowed(bytes) => reader.decoder().decode(bytes)?,
