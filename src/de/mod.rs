@@ -28,6 +28,7 @@
 //! - [Frequently Used Patterns](#frequently-used-patterns)
 //!   - [`<element>` lists](#element-lists)
 //!   - [Enum::Unit Variants As a Text](#enumunit-variants-as-a-text)
+//!   - [Internally Tagged Enums](#internally-tagged-enums)
 //!
 //!
 //!
@@ -1743,10 +1744,28 @@
 //! If you still want to keep your struct untouched, you can instead use the
 //! helper module [`text_content`].
 //!
+//!
+//! Internally Tagged Enums
+//! -----------------------
+//! [Tagged enums] are currently not supported because of an issue in the Serde
+//! design (see [serde#1183] and [quick-xml#586]) and missing optimizations in
+//! serde which could be useful for XML case ([serde#1495]). This can be worked
+//! around by manually implementing deserialize with `#[serde(deserialize_with = "func")]`
+//! or implementing [`Deserialize`], but this can get very tedious very fast for
+//! files with large amounts of tagged enums. To help with this issue the quick-xml
+//! provides a macro [`impl_deserialize_for_internally_tagged_enum!`]. See the
+//! macro documentation for details.
+//!
+//!
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
 //! [`text_content`]: crate::serde_helpers::text_content
+//! [Tagged enums]: https://serde.rs/enum-representations.html#internally-tagged
+//! [serde#1183]: https://github.com/serde-rs/serde/issues/1183
+//! [serde#1495]: https://github.com/serde-rs/serde/issues/1495
+//! [quick-xml#586]: https://github.com/tafia/quick-xml/issues/586
+//! [`impl_deserialize_for_internally_tagged_enum!`]: crate::impl_deserialize_for_internally_tagged_enum
 
 // Macros should be defined before the modules that using them
 // Also, macros should be imported before using them
