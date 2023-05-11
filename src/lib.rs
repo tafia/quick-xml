@@ -22,7 +22,8 @@
 //! Furthermore, quick-xml also contains optional [Serde] support to directly
 //! serialize and deserialize from structs, without having to deal with the XML events.
 //! To get it enable the `serialize` feature. Read more about mapping Rust types
-//! to XML in the documentation of [`de`] module.
+//! to XML in the documentation of [`de`] module. Also check [`serde_helpers`]
+//! module.
 //!
 //! # Examples
 //!
@@ -62,6 +63,8 @@ pub mod name;
 pub mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;
+#[cfg(feature = "serde-types")]
+pub mod serde_helpers;
 /// Not an official API, public for integration tests
 #[doc(hidden)]
 pub mod utils;

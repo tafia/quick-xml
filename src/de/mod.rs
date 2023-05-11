@@ -27,6 +27,7 @@
 //!     - [Enums and sequences of enums](#enums-and-sequences-of-enums)
 //! - [Frequently Used Patterns](#frequently-used-patterns)
 //!   - [`<element>` lists](#element-lists)
+//!   - [Enum::Unit Variants As a Text](#enumunit-variants-as-a-text)
 //!
 //!
 //!
@@ -1579,7 +1580,8 @@
 //! Some XML constructs used so frequent, that it is worth to document the recommended
 //! way to represent them in the Rust. The sections below describes them.
 //!
-//! ## `<element>` lists
+//! `<element>` lists
+//! -----------------
 //! Many XML formats wrap lists of elements in the additional container,
 //! although this is not required by the XML rules:
 //!
@@ -1672,9 +1674,79 @@
 //!
 //! Instead of writing such functions manually, you also could try <https://lib.rs/crates/serde-query>.
 //!
+//! Enum::Unit Variants As a Text
+//! -----------------------------
+//! One frequent task and a typical mistake is to creation of mapping a text
+//! content of some tag to a Rust `enum`. For example, for the XML:
+//!
+//! ```xml
+//! <some-container>
+//!   <field>EnumValue</field>
+//! </some-container>
+//! ```
+//! one could create an _incorrect_ mapping
+//!
+//! ```
+//! # use serde::{Deserialize, Serialize};
+//! #
+//! #[derive(Serialize, Deserialize)]
+//! enum SomeEnum {
+//!     EnumValue,
+//! # /*
+//!     ...
+//! # */
+//! }
+//!
+//! #[derive(Serialize, Deserialize)]
+//! #[serde(rename = "some-container")]
+//! struct SomeContainer {
+//!     field: SomeEnum,
+//! }
+//! ```
+//!
+//! Actually, those types will be serialized into:
+//! ```xml
+//! <some-container>
+//!   <EnumValue/>
+//! </some-container>
+//! ```
+//! and will not be able to be deserialized.
+//!
+//! You can easily see what's wrong if you think about attributes, which could
+//! be defined in the `<field>` tag:
+//! ```xml
+//! <some-container>
+//!   <field some="attribute">EnumValue</field>
+//! </some-container>
+//! ```
+//!
+//! After that you can find the correct solution, using the principles, explained
+//! above. You should wrap `SomeEnum` into wrapper struct under the [`$text`](#text)
+//! name:
+//! ```
+//! # use serde::{Serialize, Deserialize};
+//! # type SomeEnum = ();
+//! #[derive(Serialize, Deserialize)]
+//! struct Field {
+//!     // Use a special name `$text` to map field to the text content
+//!     #[serde(rename = "$text")]
+//!     content: SomeEnum,
+//! }
+//!
+//! #[derive(Serialize, Deserialize)]
+//! #[serde(rename = "some-container")]
+//! struct SomeContainer {
+//!     field: Field,
+//! }
+//! ```
+//!
+//! If you still want to keep your struct untouched, you can instead use the
+//! helper module [`text_content`].
+//!
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
+//! [`text_content`]: crate::serde_helpers::text_content
 
 // Macros should be defined before the modules that using them
 // Also, macros should be imported before using them
