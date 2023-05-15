@@ -963,10 +963,10 @@ pub enum Event<'a> {
     Empty(BytesStart<'a>),
     /// Escaped character data between tags.
     Text(BytesText<'a>),
-    /// Comment `<!-- ... -->`.
-    Comment(BytesText<'a>),
     /// Unescaped character data stored in `<![CDATA[...]]>`.
     CData(BytesCData<'a>),
+    /// Comment `<!-- ... -->`.
+    Comment(BytesText<'a>),
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
