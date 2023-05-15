@@ -12,9 +12,14 @@
 
 ### New Features
 
+- [#601]: Add `serde_helper` module to the crate root with some useful utility
+  functions and document using of enum's unit variants as a text content of element.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#601]: https://github.com/tafia/quick-xml/pull/601
 
 
 ## 0.28.2 -- 2023-04-12
