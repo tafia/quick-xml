@@ -155,3 +155,188 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod indentation_async {
+    use super::*;
+    use crate::events::*;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn self_closed() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let tag = BytesStart::new("self-closed")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        writer
+            .write_event_async(Event::Empty(tag))
+            .await
+            .expect("write tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<self-closed attr1="value1" attr2="value2"/>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_paired() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start tag failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
+</paired>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn paired_with_inner() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+        let inner = BytesStart::new("inner");
+
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start tag failed");
+        writer
+            .write_event_async(Event::Empty(inner))
+            .await
+            .expect("write inner tag failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
+    <inner/>
+</paired>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn paired_with_text() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+        let text = BytesText::new("text");
+
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start tag failed");
+        writer
+            .write_event_async(Event::Text(text))
+            .await
+            .expect("write text failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">text</paired>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn mixed_content() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+        let text = BytesText::new("text");
+        let inner = BytesStart::new("inner");
+
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start tag failed");
+        writer
+            .write_event_async(Event::Text(text))
+            .await
+            .expect("write text failed");
+        writer
+            .write_event_async(Event::Empty(inner))
+            .await
+            .expect("write inner tag failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">text<inner/>
+</paired>"#
+        );
+    }
+
+    #[tokio::test]
+    async fn nested() {
+        let mut buffer = Vec::new();
+        let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+        let start = BytesStart::new("paired")
+            .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter());
+        let end = start.to_end();
+        let inner = BytesStart::new("inner");
+
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start 1 tag failed");
+        writer
+            .write_event_async(Event::Start(start.clone()))
+            .await
+            .expect("write start 2 tag failed");
+        writer
+            .write_event_async(Event::Empty(inner))
+            .await
+            .expect("write inner tag failed");
+        writer
+            .write_event_async(Event::End(end.clone()))
+            .await
+            .expect("write end tag 2 failed");
+        writer
+            .write_event_async(Event::End(end))
+            .await
+            .expect("write end tag 1 failed");
+
+        assert_eq!(
+            std::str::from_utf8(&buffer).unwrap(),
+            r#"<paired attr1="value1" attr2="value2">
+    <paired attr1="value1" attr2="value2">
+        <inner/>
+    </paired>
+</paired>"#
+        );
+    }
+}
