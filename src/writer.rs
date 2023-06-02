@@ -71,6 +71,14 @@ impl<W> Writer<W> {
         }
     }
 
+    /// Creates a `Writer` with configured indents from a generic writer.
+    pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
+        Writer {
+            writer: inner,
+            indent: Some(Indentation::new(indent_char, indent_size)),
+        }
+    }
+
     /// Consumes this `Writer`, returning the underlying writer.
     pub fn into_inner(self) -> W {
         self.writer
@@ -88,14 +96,6 @@ impl<W> Writer<W> {
 }
 
 impl<W: Write> Writer<W> {
-    /// Creates a `Writer` with configured whitespace indents from a generic writer.
-    pub fn new_with_indent(inner: W, indent_char: u8, indent_size: usize) -> Writer<W> {
-        Writer {
-            writer: inner,
-            indent: Some(Indentation::new(indent_char, indent_size)),
-        }
-    }
-
     /// Write a [Byte-Order-Mark] character to the document.
     ///
     /// # Example
