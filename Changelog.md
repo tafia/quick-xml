@@ -14,12 +14,14 @@
 
 - [#601]: Add `serde_helper` module to the crate root with some useful utility
   functions and document using of enum's unit variants as a text content of element.
+- [#606]: Implement indentation for `AsyncWrite` trait implementations.
 
 ### Bug Fixes
 
 ### Misc Changes
 
 [#601]: https://github.com/tafia/quick-xml/pull/601
+[#606]: https://github.com/tafia/quick-xml/pull/606
 
 
 ## 0.28.2 -- 2023-04-12
