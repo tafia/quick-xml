@@ -18,9 +18,15 @@
 
 ### Bug Fixes
 
+- [#603]: Fix a regression from [#581] that an XML comment or a processing
+  instruction between a <!DOCTYPE> and the root element in the file brokes
+  deserialization of structs by returning `DeError::ExpectedStart`
+
 ### Misc Changes
 
+[#581]: https://github.com/tafia/quick-xml/pull/581
 [#601]: https://github.com/tafia/quick-xml/pull/601
+[#603]: https://github.com/tafia/quick-xml/pull/603
 [#606]: https://github.com/tafia/quick-xml/pull/606
 
 
