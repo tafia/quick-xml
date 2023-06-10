@@ -524,7 +524,11 @@ impl<R: BufRead> NsReader<R> {
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
-        self.reader.read_to_end_into(end, buf)
+        let result = self.reader.read_to_end_into(end, buf)?;
+        // read_to_end_into will consume closing tag. Because nobody can access to its
+        // content anymore, we directly pop namespace of the opening tag
+        self.ns_resolver.pop(&mut self.buffer);
+        Ok(result)
     }
 }
 
@@ -760,7 +764,11 @@ impl<'i> NsReader<&'i [u8]> {
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Self::check_end_names` documentation
-        self.reader.read_to_end(end)
+        let result = self.reader.read_to_end(end)?;
+        // read_to_end will consume closing tag. Because nobody can access to its
+        // content anymore, we directly pop namespace of the opening tag
+        self.ns_resolver.pop(&mut self.buffer);
+        Ok(result)
     }
 
     /// Reads content between start and end tags, including any markup. This
@@ -830,7 +838,13 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`decoder()`]: Reader::decoder()
     #[inline]
     pub fn read_text(&mut self, end: QName) -> Result<Cow<'i, str>> {
-        self.reader.read_text(end)
+        // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
+        // match literally the start name. See `Self::check_end_names` documentation
+        let result = self.reader.read_text(end)?;
+        // read_text will consume closing tag. Because nobody can access to its
+        // content anymore, we directly pop namespace of the opening tag
+        self.ns_resolver.pop(&mut self.buffer);
+        Ok(result)
     }
 }
 
