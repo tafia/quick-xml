@@ -337,7 +337,11 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
         // match literally the start name. See `Config::check_end_names` documentation
-        self.reader.read_to_end_into_async(end, buf).await
+        let result = self.reader.read_to_end_into_async(end, buf).await?;
+        // read_to_end_into_async will consume closing tag. Because nobody can access to its
+        // content anymore, we directly pop namespace of the opening tag
+        self.ns_resolver.pop();
+        Ok(result)
     }
 
     /// An asynchronous version of [`read_resolved_event_into()`]. Reads the next
