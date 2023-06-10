@@ -6496,3 +6496,77 @@ mod resolve {
         );
     }
 }
+
+/// Tests for https://github.com/tafia/quick-xml/pull/603.
+///
+/// According to <https://www.w3.org/TR/xml11/#NT-prolog> comments,
+/// processing instructions and spaces are possible after XML declaration or DTD.
+/// Their existence should not break deserializing
+///
+/// ```text
+/// [22] prolog ::= XMLDecl Misc* (doctypedecl Misc*)?
+/// [27] Misc   ::= Comment | PI | S
+/// ```
+mod xml_prolog {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use std::collections::HashMap;
+
+    #[test]
+    fn spaces() {
+        assert_eq!(
+            from_str::<HashMap<(), ()>>(
+                r#"
+        <?xml version="1.1"?>
+
+        <!DOCTYPE dict>
+
+        <doc>
+        </doc>
+        "#
+            )
+            .unwrap(),
+            HashMap::new()
+        );
+    }
+
+    #[test]
+    fn comments() {
+        assert_eq!(
+            from_str::<HashMap<(), ()>>(
+                r#"
+        <?xml version="1.1"?>
+        <!-- comment between xml declaration and doctype -->
+        <!-- another comment -->
+        <!DOCTYPE dict>
+        <!-- comment between doctype and root element -->
+        <!-- another comment -->
+        <doc>
+        </doc>
+        "#,
+            )
+            .unwrap(),
+            HashMap::new()
+        );
+    }
+
+    #[test]
+    fn pi() {
+        assert_eq!(
+            from_str::<HashMap<(), ()>>(
+                r#"
+        <?xml version="1.1"?>
+        <?pi?>
+        <?another pi?>
+        <!DOCTYPE dict>
+        <?pi?>
+        <?another pi?>
+        <doc>
+        </doc>
+        "#,
+            )
+            .unwrap(),
+            HashMap::new()
+        );
+    }
+}

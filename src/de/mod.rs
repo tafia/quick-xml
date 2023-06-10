@@ -2880,7 +2880,7 @@ impl StartTrimmer {
     #[inline(always)]
     fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
         let (event, trim_next_event) = match event {
-            Event::DocType(e) => (PayloadEvent::DocType(e), false),
+            Event::DocType(e) => (PayloadEvent::DocType(e), true),
             Event::Start(e) => (PayloadEvent::Start(e), true),
             Event::End(e) => (PayloadEvent::End(e), true),
             Event::Eof => (PayloadEvent::Eof, true),
