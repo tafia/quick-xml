@@ -65,7 +65,7 @@ impl Parser {
     /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
     ///
     /// [`Text`]: Event::Text
-    pub fn read_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
         let mut content = bytes;
 
         if self.trim_text_end {
@@ -82,7 +82,7 @@ impl Parser {
 
     /// reads `BytesElement` starting with a `!`,
     /// return `Comment`, `CData` or `DocType` event
-    pub fn read_bang<'b>(&mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_bang<'b>(&mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
         };
@@ -131,7 +131,7 @@ impl Parser {
 
     /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
     /// end name matches the last opened start name if `self.check_end_names` is set.
-    pub fn read_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
         let name = if self.trim_markup_names_in_closing_tags {
@@ -182,7 +182,7 @@ impl Parser {
 
     /// reads `BytesElement` starting with a `?`,
     /// return `Decl` or `PI` event
-    pub fn read_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
@@ -210,7 +210,7 @@ impl Parser {
     ///
     /// # Parameters
     /// - `content`: Content of a tag between `<` and `>`
-    pub fn read_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
         let len = content.len();
         let name_end = content
             .iter()

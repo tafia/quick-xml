@@ -245,7 +245,7 @@ macro_rules! read_until_open {
             $(.$await)?
         {
             // Return Text event with `bytes` content
-            Ok(Some(bytes)) => $self.parser.read_text(bytes).map(Ok),
+            Ok(Some(bytes)) => $self.parser.emit_text(bytes).map(Ok),
             Ok(None) => Ok(Ok(Event::Eof)),
             Err(e) => Err(e),
         }
@@ -287,7 +287,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => $self.parser.read_bang(bang_type, bytes),
+                Ok(Some((bang_type, bytes))) => $self.parser.emit_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
@@ -296,7 +296,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_end(bytes),
+                Ok(Some(bytes)) => $self.parser.emit_end(bytes),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
@@ -305,7 +305,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_question_mark(bytes),
+                Ok(Some(bytes)) => $self.parser.emit_question_mark(bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
@@ -314,7 +314,7 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.read_start(bytes),
+                Ok(Some(bytes)) => $self.parser.emit_start(bytes),
                 Err(e) => Err(e),
             },
             Ok(None) => Ok(Event::Eof),
