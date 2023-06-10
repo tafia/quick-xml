@@ -22,9 +22,13 @@
   instruction between a <!DOCTYPE> and the root element in the file brokes
   deserialization of structs by returning `DeError::ExpectedStart`
 
+- [#597]: Fixed incorrect processing of namespace scopes in `NsReader::read_to_end`.
+  The scope started by a start element was not ended after that call.
+
 ### Misc Changes
 
 [#581]: https://github.com/tafia/quick-xml/pull/581
+[#597]: https://github.com/tafia/quick-xml/issues/597
 [#601]: https://github.com/tafia/quick-xml/pull/601
 [#603]: https://github.com/tafia/quick-xml/pull/603
 [#606]: https://github.com/tafia/quick-xml/pull/606
