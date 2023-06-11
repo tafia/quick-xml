@@ -37,6 +37,10 @@ pub enum Error {
     /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
     /// that was found or `None` if an xml declaration doesn't contain attributes.
     XmlDeclWithoutVersion(Option<String>),
+    /// Empty `Event::DocType`. `<!doctype foo>` is correct but `<!doctype > is not.
+    ///
+    /// See <https://www.w3.org/TR/xml11/#NT-doctypedecl>
+    EmptyDocType,
     /// Attribute parsing error
     InvalidAttr(AttrError),
     /// Escape error
@@ -109,6 +113,7 @@ impl fmt::Display for Error {
                 "XmlDecl must start with 'version' attribute, found {:?}",
                 e
             ),
+            Error::EmptyDocType => write!(f, "DOCTYPE declaration must not be empty"),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {

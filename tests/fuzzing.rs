@@ -2,15 +2,14 @@
 
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use std::io::Cursor;
+use quick_xml::Error;
 
 #[test]
 fn fuzz_53() {
     let data: &[u8] = b"\xe9\x00\x00\x00\x00\x00\x00\x00\x00\
 \x00\x00\x00\x00\n(\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\
 \x00<>\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00<<\x00\x00\x00";
-    let cursor = Cursor::new(data);
-    let mut reader = Reader::from_reader(cursor);
+    let mut reader = Reader::from_reader(data);
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
@@ -25,8 +24,7 @@ fn fuzz_101() {
     let data: &[u8] = b"\x00\x00<\x00\x00\x0a>&#44444444401?#\x0a413518\
                        #\x0a\x0a\x0a;<:<)(<:\x0a\x0a\x0a\x0a;<:\x0a\x0a\
                        <:\x0a\x0a\x0a\x0a\x0a<\x00*\x00\x00\x00\x00";
-    let cursor = Cursor::new(data);
-    let mut reader = Reader::from_reader(cursor);
+    let mut reader = Reader::from_reader(data);
     let mut buf = vec![];
     loop {
         match reader.read_event_into(&mut buf) {
@@ -49,4 +47,16 @@ fn fuzz_101() {
         }
         buf.clear();
     }
+}
+
+#[test]
+fn fuzz_empty_doctype() {
+    let data: &[u8] = b"<!doctype  \n    >";
+    let mut reader = Reader::from_reader(data);
+    let mut buf = Vec::new();
+    assert!(matches!(
+        reader.read_event_into(&mut buf).unwrap_err(),
+        Error::EmptyDocType
+    ));
+    assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
 }

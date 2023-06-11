@@ -117,7 +117,9 @@ impl Parser {
                     .iter()
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or(len - 8);
-                debug_assert!(start < len - 8, "DocType must have a name");
+                if start + 8 >= len {
+                    return Err(Error::EmptyDocType);
+                }
                 Ok(Event::DocType(BytesText::wrap(
                     &buf[8 + start..],
                     self.decoder(),
