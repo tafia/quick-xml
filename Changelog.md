@@ -21,6 +21,8 @@
 - [#603]: Fix a regression from [#581] that an XML comment or a processing
   instruction between a <!DOCTYPE> and the root element in the file brokes
   deserialization of structs by returning `DeError::ExpectedStart`
+- [#608]: Return a new error `Error::EmptyDocType` on empty doctype instead
+  of crashing because of a debug assertion.
 
 ### Misc Changes
 
@@ -28,6 +30,7 @@
 [#601]: https://github.com/tafia/quick-xml/pull/601
 [#603]: https://github.com/tafia/quick-xml/pull/603
 [#606]: https://github.com/tafia/quick-xml/pull/606
+[#608]: https://github.com/tafia/quick-xml/issues/608
 
 
 ## 0.28.2 -- 2023-04-12
