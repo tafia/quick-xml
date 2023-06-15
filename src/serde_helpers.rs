@@ -48,7 +48,7 @@ macro_rules! deserialize_variant {
 /// does not use [`Deserializer::deserialize_any`] that produces wrong results
 /// with XML because of [serde#1183].
 ///
-/// In contract to deriving [`Deserialize`] this macro assumes that a tag will be
+/// In contrast to deriving [`Deserialize`] this macro assumes that a tag will be
 /// the first element or attribute in the XML.
 ///
 /// # Example
@@ -200,8 +200,8 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
 /// and [`#[serde(serialize_with = "...")]`][se-with].
 ///
 /// When you serialize unit variants of enums, they are serialized as an empty
-/// elements, like `<Unit/>`. At the same time, when enum consist only from unit
-/// variants, it is frequently needed to serialize them as string content of an
+/// element, like `<Unit/>`. If your enum consist only of unit variants,
+/// it is frequently required to serialize them as string content of an
 /// element, like `<field>Unit</field>`. To make this possible use this module.
 ///
 /// ```

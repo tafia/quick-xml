@@ -55,9 +55,9 @@ default = []
 async-tokio = ["tokio"]
 
 ## Enables support of non-UTF-8 encoded documents. Encoding will be inferred from
-## the XML declaration if it will be found, otherwise UTF-8 is assumed.
+## the XML declaration if it is found, otherwise UTF-8 is assumed.
 ##
-## Currently, only ASCII-compatible encodings are supported, so, for example,
+## Currently, only ASCII-compatible encodings are supported. For example,
 ## UTF-16 will not work (therefore, `quick-xml` is not [standard compliant]).
 ##
 ## Thus, quick-xml supports all encodings of [`encoding_rs`] except these:
@@ -65,11 +65,11 @@ async-tokio = ["tokio"]
 ## - [UTF-16LE]
 ## - [ISO-2022-JP]
 ##
-## You should stop to process document when one of that encoding will be detected,
+## You should stop processing a document when one of these encodings is detected,
 ## because generated events can be wrong and do not reflect a real document structure!
 ##
-## Because there is only supported encodings that is not ASCII compatible, you can
-## check for that to detect them:
+## Because these are the only supported encodings that are not ASCII compatible, you can
+## check for them:
 ##
 ## ```
 ## use quick_xml::events::Event;
@@ -102,7 +102,7 @@ async-tokio = ["tokio"]
 ## }
 ## assert_eq!(unsupported, true);
 ## ```
-## That restriction will be eliminated once issue [#158] is resolved.
+## This restriction will be eliminated once issue [#158] is resolved.
 ##
 ## [standard compliant]: https://www.w3.org/TR/xml11/#charencoding
 ## [UTF-16BE]: encoding_rs::UTF_16BE
@@ -120,7 +120,7 @@ encoding = ["encoding_rs"]
 ## [`unescape_with`]: crate::escape::unescape_with
 escape-html = []
 
-## This feature for a serde deserializer that enables support for deserializing
+## This feature is for the Serde deserializer that enables support for deserializing
 ## lists where tags are overlapped with tags that do not correspond to the list.
 ##
 ## When this feature is enabled, the XML:
@@ -148,8 +148,8 @@ escape-html = []
 ## (duplicated field) when the deserializer encounters a second `<item/>`.
 ##
 ## Note, that enabling this feature can lead to high and even unlimited memory
-## consumption, because deserializer should check all events up to the end of a
-## container tag (`</any-name>` in that example) to figure out that there are no
+## consumption, because deserializer needs to check all events up to the end of a
+## container tag (`</any-name>` in this example) to figure out that there are no
 ## more items for a field. If `</any-name>` or even EOF is not encountered, the
 ## parsing will never end which can lead to a denial-of-service (DoS) scenario.
 ##
@@ -167,8 +167,8 @@ escape-html = []
 ## [`Deserializer`]: crate::de::Deserializer
 overlapped-lists = []
 
-## Enables serialization of some types using [`serde`]. Probably your rarely will
-## need this feature enabled.
+## Enables serialization of some quick-xml types using [`serde`]. This feature
+## is rarely needed.
 ##
 ## This feature does NOT provide XML serializer or deserializer. You should use
 ## the `serialize` feature for that instead.

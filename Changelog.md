@@ -36,7 +36,7 @@
 ### Misc Changes
 
 - [#594]: Add a helper macro to help deserialize internally tagged enums
-  with Serde, which doesn't work out-of-box due to serde limitations.
+  with Serde, which doesn't work out-of-the-box due to serde limitations.
 
 [#581]: https://github.com/tafia/quick-xml/pull/581
 [#594]: https://github.com/tafia/quick-xml/pull/594

@@ -1,8 +1,8 @@
 //! Serde `Deserializer` module.
 //!
-//! Due to the complexity of the XML standard and the fact that serde was developed
-//! with JSON in mind, not all serde concepts apply smoothly to XML. This leads to
-//! that fact that some XML concepts are inexpressible in terms of serde derives
+//! Due to the complexity of the XML standard and the fact that Serde was developed
+//! with JSON in mind, not all Serde concepts apply smoothly to XML. This leads to
+//! that fact that some XML concepts are inexpressible in terms of Serde derives
 //! and may require manual deserialization.
 //!
 //! The most notable restriction is the ability to distinguish between _elements_
@@ -49,17 +49,15 @@
 //!
 //! <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
 //!
-//! NOTE: examples, marked with `FIXME:` does not work yet -- any PRs that fixes
-//! that are welcome! The message after marker is a test failure message.
-//! Also, all that tests are marked with an `ignore` option, although their
-//! compiles. This is by intention, because rustdoc marks such blocks with
-//! an information icon unlike `no_run` blocks.
+//! NOTE: All tests are marked with an `ignore` option, even though they do
+//! compile. This is  because rustdoc marks such blocks with an information
+//! icon unlike `no_run` blocks.
 //!
 //! </div>
 //!
 //! <table>
 //! <thead>
-//! <tr><th>To parse all these XML's...</th><th>...use that Rust type(s)</th></tr>
+//! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! </thead>
 //! <tbody style="vertical-align:top;">
 //! <tr>
@@ -262,7 +260,7 @@
 //! ```
 //! </td>
 //! <td>
-//! A structure where an each XML child element are mapped to the field.
+//! A structure where each XML child element is mapped to the field.
 //! Each element name becomes a name of field. The name of the struct itself
 //! does not matter:
 //!
@@ -364,7 +362,7 @@
 //! ## Optional attributes and elements
 //!
 //! </th></tr>
-//! <tr><th>To parse all these XML's...</th><th>...use that Rust type(s)</th></tr>
+//! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! <!-- 6 ===================================================================================== -->
 //! <tr>
 //! <td>
@@ -458,7 +456,7 @@
 //! ## Choices (`xs:choice` XML Schema type)
 //!
 //! </th></tr>
-//! <tr><th>To parse all these XML's...</th><th>...use that Rust type(s)</th></tr>
+//! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! <!-- 8 ===================================================================================== -->
 //! <tr>
 //! <td>
@@ -479,10 +477,10 @@
 //! </td>
 //! <td>
 //!
-//! An enum where each variant have a name of the possible root tag. The name of
+//! An enum where each variant has the name of a possible root tag. The name of
 //! the enum itself does not matter.
 //!
-//! If you need to get a textual content, mark a variant with `#[serde(rename = "$text")]`.
+//! If you need to get the textual content, mark a variant with `#[serde(rename = "$text")]`.
 //!
 //! All these structs can be used to deserialize from any XML on the
 //! left side depending on amount of information that you want to get:
@@ -840,7 +838,7 @@
 //! ## Sequences (`xs:all` and `xs:sequence` XML Schema types)
 //!
 //! </th></tr>
-//! <tr><th>To parse all these XML's...</th><th>...use that Rust type(s)</th></tr>
+//! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! <!-- 13 ==================================================================================== -->
 //! <tr>
 //! <td>
@@ -864,7 +862,7 @@
 //! </td>
 //! <td>
 //!
-//! A structure with a field which have a sequence type, for example, [`Vec`].
+//! A structure with a field which is a sequence type, for example, [`Vec`].
 //! Because XML syntax does not distinguish between empty sequences and missed
 //! elements, we should indicate that on the Rust side, because serde will require
 //! that field `item` exists. You can do that in two possible ways:
@@ -928,7 +926,7 @@
 //! <!-- 14 ==================================================================================== -->
 //! <tr>
 //! <td>
-//! A sequence with a strict order, probably with a mixed content
+//! A sequence with a strict order, probably with mixed content
 //! (text / CDATA and tags):
 //!
 //! ```xml
@@ -1303,7 +1301,7 @@
 //! Composition Rules
 //! =================
 //!
-//! XML format is very different from other formats supported by `serde`.
+//! The XML format is very different from other formats supported by `serde`.
 //! One such difference it is how data in the serialized form is related to
 //! the Rust type. Usually each byte in the data can be associated only with
 //! one field in the data structure. However, XML is an exception.
@@ -1352,7 +1350,7 @@
 //! how you want to serialize certain constructs, which could be represented
 //! through XML in multiple different ways.
 //!
-//! The only difference in how complex types and sequences are serialized.
+//! The only difference is in how complex types and sequences are serialized.
 //! If you doubt which one you should select, begin with [`$value`](#value).
 //!
 //! ## `$text`
@@ -1401,7 +1399,7 @@
 //!
 //! NOTE: a name `#content` would better explain the purpose of that field,
 //! but `$value` is used for compatibility with other XML serde crates, which
-//! uses that name. This allow you to switch XML crate more smoothly if required.
+//! uses that name. This will allow you to switch XML crates more smoothly if required.
 //! </div>
 //!
 //! Representation of primitive types in `$value` does not differ from their
@@ -1500,10 +1498,10 @@
 //!
 //! ### Structs and sequences of structs
 //!
-//! Note, that structures does not have serializable name as well (name of the
-//! type are never used), so it is impossible to serialize non-unit struct or
+//! Note, that structures do not have a serializable name as well (name of the
+//! type is never used), so it is impossible to serialize non-unit struct or
 //! sequence of non-unit structs in `$value` field. (sequences of) unit structs
-//! are serialized as empty string, although, because units itself serializing
+//! are serialized as empty string, because units itself serializing
 //! to nothing:
 //!
 //! ```
@@ -1721,7 +1719,7 @@
 //! </some-container>
 //! ```
 //!
-//! After that you can find the correct solution, using the principles, explained
+//! After that you can find the correct solution, using the principles explained
 //! above. You should wrap `SomeEnum` into wrapper struct under the [`$text`](#text)
 //! name:
 //! ```
@@ -1749,10 +1747,10 @@
 //! -----------------------
 //! [Tagged enums] are currently not supported because of an issue in the Serde
 //! design (see [serde#1183] and [quick-xml#586]) and missing optimizations in
-//! serde which could be useful for XML case ([serde#1495]). This can be worked
+//! Serde which could be useful for XML parsing ([serde#1495]). This can be worked
 //! around by manually implementing deserialize with `#[serde(deserialize_with = "func")]`
 //! or implementing [`Deserialize`], but this can get very tedious very fast for
-//! files with large amounts of tagged enums. To help with this issue the quick-xml
+//! files with large amounts of tagged enums. To help with this issue quick-xml
 //! provides a macro [`impl_deserialize_for_internally_tagged_enum!`]. See the
 //! macro documentation for details.
 //!
