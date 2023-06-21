@@ -2648,9 +2648,22 @@ where
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
-    /// Create new deserializer that will borrow data from the specified string
+    /// Create new deserializer that will borrow data from the specified string.
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'de str) -> Self {
+        Self::from_str_with_resolver(source, NoEntityResolver)
+    }
+}
+
+impl<'de, E> Deserializer<'de, SliceReader<'de>, E>
+where
+    E: EntityResolver,
+{
+    /// Create new deserializer that will borrow data from the specified string
+    /// and use specified entity resolver.
+    pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
         let mut reader = Reader::from_str(source);
         reader.expand_empty_elements(true);
 
@@ -2659,7 +2672,7 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
                 reader,
                 start_trimmer: StartTrimmer::default(),
             },
-            NoEntityResolver,
+            entity_resolver,
         )
     }
 }
@@ -2669,9 +2682,13 @@ where
     R: BufRead,
 {
     /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer. If you already have a string use [`Self::from_str`]
-    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
-    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    /// into internal buffer.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
     pub fn from_reader(reader: R) -> Self {
         Self::with_resolver(reader, NoEntityResolver)
     }
@@ -2683,9 +2700,11 @@ where
     E: EntityResolver,
 {
     /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer. If you already have a string use [`Self::from_str`]
-    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
-    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    /// into internal buffer and use specified entity resolver.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true);
