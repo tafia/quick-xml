@@ -21,7 +21,7 @@
 ### Misc Changes
 
 
-[#609]: https://github.com/tafia/quick-xml/issues/609
+[#609]: https://github.com/tafia/quick-xml/pull/609
 [#615]: https://github.com/tafia/quick-xml/pull/615
 
 
