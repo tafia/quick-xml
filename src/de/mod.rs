@@ -1813,14 +1813,6 @@ macro_rules! deserialize_primitives {
             str2bool(&text, visitor)
         }
 
-        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
-        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_str(visitor)
-        }
-
         /// Character represented as [strings](#method.deserialize_str).
         fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1840,6 +1832,14 @@ macro_rules! deserialize_primitives {
             }
         }
 
+        /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_str(visitor)
+        }
+
         /// Returns [`DeError::Unsupported`]
         fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
         where
@@ -1856,7 +1856,7 @@ macro_rules! deserialize_primitives {
             self.deserialize_bytes(visitor)
         }
 
-        /// Representation of the named units the same as [unnamed units](#method.deserialize_unit)
+        /// Representation of the named units the same as [unnamed units](#method.deserialize_unit).
         fn deserialize_unit_struct<V>(
             self,
             _name: &'static str,
@@ -1868,6 +1868,7 @@ macro_rules! deserialize_primitives {
             self.deserialize_unit(visitor)
         }
 
+        /// Representation of the newtypes the same as one-element [tuple](#method.deserialize_tuple).
         fn deserialize_newtype_struct<V>(
             self,
             _name: &'static str,
@@ -2068,14 +2069,7 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = NoEntityResolver> {
 }
 
 impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
-    fn new(reader: R) -> Self
-    where
-        E: Default,
-    {
-        Self::with_resolver(reader, E::default())
-    }
-
-    fn with_resolver(mut reader: R, entity_resolver: E) -> Self {
+    fn new(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
         // loop if we need lookahead or not
         let lookahead = reader.next();
@@ -2319,9 +2313,10 @@ where
     peek: Option<DeEvent<'de>>,
 }
 
-impl<'de, R> Deserializer<'de, R>
+impl<'de, R, E> Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Create an XML deserializer from one of the possible quick_xml input sources.
     ///
@@ -2329,9 +2324,9 @@ where
     ///
     ///  - [`Deserializer::from_str`]
     ///  - [`Deserializer::from_reader`]
-    fn new(reader: R) -> Self {
+    fn new(reader: R, entity_resolver: E) -> Self {
         Self {
-            reader: XmlReader::new(reader),
+            reader: XmlReader::new(reader, entity_resolver),
 
             #[cfg(feature = "overlapped-lists")]
             read: VecDeque::new(),
@@ -2344,13 +2339,7 @@ where
             peek: None,
         }
     }
-}
 
-impl<'de, R, E> Deserializer<'de, R, E>
-where
-    R: XmlRead<'de>,
-    E: EntityResolver,
-{
     /// Set the maximum number of events that could be skipped during deserialization
     /// of sequences.
     ///
@@ -2659,15 +2648,32 @@ where
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
-    /// Create new deserializer that will borrow data from the specified string
+    /// Create new deserializer that will borrow data from the specified string.
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
     #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'de str) -> Self {
-        let mut reader = Reader::from_str(s);
-        reader.expand_empty_elements(true).check_end_names(true);
-        Self::new(SliceReader {
-            reader,
-            start_trimmer: StartTrimmer::default(),
-        })
+    pub fn from_str(source: &'de str) -> Self {
+        Self::from_str_with_resolver(source, NoEntityResolver)
+    }
+}
+
+impl<'de, E> Deserializer<'de, SliceReader<'de>, E>
+where
+    E: EntityResolver,
+{
+    /// Create new deserializer that will borrow data from the specified string
+    /// and use specified entity resolver.
+    pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
+        let mut reader = Reader::from_str(source);
+        reader.expand_empty_elements(true);
+
+        Self::new(
+            SliceReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+            },
+            entity_resolver,
+        )
     }
 }
 
@@ -2676,9 +2682,13 @@ where
     R: BufRead,
 {
     /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer. If you already have a string use [`Self::from_str`]
-    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
-    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    /// into internal buffer.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
     pub fn from_reader(reader: R) -> Self {
         Self::with_resolver(reader, NoEntityResolver)
     }
@@ -2690,32 +2700,23 @@ where
     E: EntityResolver,
 {
     /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer. If you already have a string use [`Self::from_str`]
-    /// instead, because it will borrow instead of copy. If you have `&[u8]` which
-    /// is known to represent UTF-8, you can decode it first before using [`from_str`].
+    /// into internal buffer and use specified entity resolver.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
         let mut reader = Reader::from_reader(reader);
-        reader.expand_empty_elements(true).check_end_names(true);
+        reader.expand_empty_elements(true);
 
-        let io_reader = IoReader {
-            reader,
-            start_trimmer: StartTrimmer::default(),
-            buf: Vec::new(),
-        };
-
-        Self {
-            reader: XmlReader::with_resolver(io_reader, entity_resolver),
-
-            #[cfg(feature = "overlapped-lists")]
-            read: VecDeque::new(),
-            #[cfg(feature = "overlapped-lists")]
-            write: VecDeque::new(),
-            #[cfg(feature = "overlapped-lists")]
-            limit: None,
-
-            #[cfg(not(feature = "overlapped-lists"))]
-            peek: None,
-        }
+        Self::new(
+            IoReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+                buf: Vec::new(),
+            },
+            entity_resolver,
+        )
     }
 }
 
@@ -3606,10 +3607,7 @@ mod tests {
             start_trimmer: StartTrimmer::default(),
         };
 
-        reader
-            .reader
-            .expand_empty_elements(true)
-            .check_end_names(true);
+        reader.reader.expand_empty_elements(true);
 
         let mut events = Vec::new();
 
