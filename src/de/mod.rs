@@ -2652,7 +2652,7 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'de str) -> Self {
         let mut reader = Reader::from_str(source);
-        reader.expand_empty_elements(true).check_end_names(true);
+        reader.expand_empty_elements(true);
 
         Self::new(
             SliceReader {
@@ -2688,7 +2688,7 @@ where
     /// is known to represent UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
         let mut reader = Reader::from_reader(reader);
-        reader.expand_empty_elements(true).check_end_names(true);
+        reader.expand_empty_elements(true);
 
         Self::new(
             IoReader {
@@ -3588,10 +3588,7 @@ mod tests {
             start_trimmer: StartTrimmer::default(),
         };
 
-        reader
-            .reader
-            .expand_empty_elements(true)
-            .check_end_names(true);
+        reader.reader.expand_empty_elements(true);
 
         let mut events = Vec::new();
 
