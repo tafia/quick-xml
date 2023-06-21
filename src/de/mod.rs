@@ -2069,14 +2069,7 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = NoEntityResolver> {
 }
 
 impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
-    fn new(reader: R) -> Self
-    where
-        E: Default,
-    {
-        Self::with_resolver(reader, E::default())
-    }
-
-    fn with_resolver(mut reader: R, entity_resolver: E) -> Self {
+    fn new(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
         // loop if we need lookahead or not
         let lookahead = reader.next();
@@ -2320,9 +2313,10 @@ where
     peek: Option<DeEvent<'de>>,
 }
 
-impl<'de, R> Deserializer<'de, R>
+impl<'de, R, E> Deserializer<'de, R, E>
 where
     R: XmlRead<'de>,
+    E: EntityResolver,
 {
     /// Create an XML deserializer from one of the possible quick_xml input sources.
     ///
@@ -2330,9 +2324,9 @@ where
     ///
     ///  - [`Deserializer::from_str`]
     ///  - [`Deserializer::from_reader`]
-    fn new(reader: R) -> Self {
+    fn new(reader: R, entity_resolver: E) -> Self {
         Self {
-            reader: XmlReader::new(reader),
+            reader: XmlReader::new(reader, entity_resolver),
 
             #[cfg(feature = "overlapped-lists")]
             read: VecDeque::new(),
@@ -2345,13 +2339,7 @@ where
             peek: None,
         }
     }
-}
 
-impl<'de, R, E> Deserializer<'de, R, E>
-where
-    R: XmlRead<'de>,
-    E: EntityResolver,
-{
     /// Set the maximum number of events that could be skipped during deserialization
     /// of sequences.
     ///
@@ -2662,13 +2650,17 @@ where
 impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Create new deserializer that will borrow data from the specified string
     #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'de str) -> Self {
-        let mut reader = Reader::from_str(s);
+    pub fn from_str(source: &'de str) -> Self {
+        let mut reader = Reader::from_str(source);
         reader.expand_empty_elements(true).check_end_names(true);
-        Self::new(SliceReader {
-            reader,
-            start_trimmer: StartTrimmer::default(),
-        })
+
+        Self::new(
+            SliceReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+            },
+            NoEntityResolver,
+        )
     }
 }
 
@@ -2698,25 +2690,14 @@ where
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true).check_end_names(true);
 
-        let io_reader = IoReader {
-            reader,
-            start_trimmer: StartTrimmer::default(),
-            buf: Vec::new(),
-        };
-
-        Self {
-            reader: XmlReader::with_resolver(io_reader, entity_resolver),
-
-            #[cfg(feature = "overlapped-lists")]
-            read: VecDeque::new(),
-            #[cfg(feature = "overlapped-lists")]
-            write: VecDeque::new(),
-            #[cfg(feature = "overlapped-lists")]
-            limit: None,
-
-            #[cfg(not(feature = "overlapped-lists"))]
-            peek: None,
-        }
+        Self::new(
+            IoReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+                buf: Vec::new(),
+            },
+            entity_resolver,
+        )
     }
 }
 
