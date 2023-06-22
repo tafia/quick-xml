@@ -2665,7 +2665,7 @@ where
     /// and use specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
         let mut reader = Reader::from_str(source);
-        reader.expand_empty_elements(true);
+        reader.expand_empty_elements(true).trim_text(true);
 
         Self::new(
             SliceReader {
