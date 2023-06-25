@@ -18,9 +18,12 @@
 
 ### Bug Fixes
 
+- [#604]: Avoid crashing on wrong comments like `<!-->` when using `read_event_into*` functions.
+
 ### Misc Changes
 
 
+[#604]: https://github.com/tafia/quick-xml/issue/604
 [#609]: https://github.com/tafia/quick-xml/pull/609
 [#615]: https://github.com/tafia/quick-xml/pull/615
 

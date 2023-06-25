@@ -4,7 +4,7 @@
 
 use std::sync::mpsc;
 
-use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::{BytesDecl, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
@@ -98,10 +98,90 @@ mod issue514 {
                 assert_eq!(found, "other-tag");
             }
             x => panic!(
-                r#"Expected `Err(EndEventMismatch("some-tag", "other-tag")))`, but found {:?}"#,
+                r#"Expected `Err(EndEventMismatch("some-tag", "other-tag"))`, but found {:?}"#,
                 x
             ),
         }
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/604
+mod issue604 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn short() {
+        let data = b"<?xml version=\"1.0\"?><!-->";
+        let mut reader = Reader::from_reader(data.as_slice());
+        let mut buf = Vec::new();
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Decl(BytesDecl::new("1.0", None, None))
+        );
+        match reader.read_event_into(&mut buf) {
+            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
+            x => panic!(
+                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
+                x
+            ),
+        }
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn long() {
+        let data = b"<?xml version=\"1.0\"?><!--->";
+        let mut reader = Reader::from_reader(data.as_slice());
+        let mut buf = Vec::new();
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Decl(BytesDecl::new("1.0", None, None))
+        );
+        match reader.read_event_into(&mut buf) {
+            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
+            x => panic!(
+                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
+                x
+            ),
+        }
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+
+    /// According to the grammar, `>` is allowed just in start of comment.
+    /// See https://www.w3.org/TR/xml11/#sec-comments
+    #[test]
+    fn short_valid() {
+        let data = b"<?xml version=\"1.0\"?><!-->-->";
+        let mut reader = Reader::from_reader(data.as_slice());
+        let mut buf = Vec::new();
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Decl(BytesDecl::new("1.0", None, None))
+        );
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Comment(BytesText::from_escaped(">"))
+        );
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+
+    /// According to the grammar, `->` is allowed just in start of comment.
+    /// See https://www.w3.org/TR/xml11/#sec-comments
+    #[test]
+    fn long_valid() {
+        let data = b"<?xml version=\"1.0\"?><!--->-->";
+        let mut reader = Reader::from_reader(data.as_slice());
+        let mut buf = Vec::new();
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Decl(BytesDecl::new("1.0", None, None))
+        );
+        assert_eq!(
+            reader.read_event_into(&mut buf).unwrap(),
+            Event::Comment(BytesText::from_escaped("->"))
+        );
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
 }
