@@ -66,7 +66,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     write_primitive!(serialize_bytes(&[u8]));
 
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
-        if value.is_empty() {
+        if value.is_empty() && !self.ser.expand_empty_elements {
             self.ser.write_empty(self.key)
         } else {
             self.ser
@@ -397,6 +397,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             level: self.ser.ser.level,
             indent: self.ser.ser.indent.borrow(),
             write_indent: true,
+            expand_empty_elements: false,
         };
 
         if key == TEXT_KEY {
@@ -574,6 +575,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -597,6 +599,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -1533,6 +1536,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -1556,6 +1560,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -2532,5 +2537,36 @@ mod tests {
                         <b>b</b>\n\
                     </root>");
         }
+    }
+
+    mod expand_empty_elements {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Checks that given `$data` successfully serialized as `$expected`
+        macro_rules! serialize_as {
+            ($name:ident: $data:expr => $expected:expr) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = ElementSerializer {
+                        ser: ContentSerializer {
+                            writer: &mut buffer,
+                            level: QuoteLevel::Full,
+                            indent: Indent::None,
+                            write_indent: false,
+                            expand_empty_elements: true,
+                        },
+                        key: XmlName("root"),
+                    };
+
+                    $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
+                }
+            };
+        }
+
+        serialize_as!(option_some_empty: Some("") => "<root></root>");
+        serialize_as!(option_some_empty_str: Some("") => "<root></root>");
     }
 }

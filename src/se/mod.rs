@@ -458,6 +458,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Full,
                 indent: Indent::None,
                 write_indent: false,
+                expand_empty_elements: false,
             },
             root_tag: None,
         }
@@ -522,9 +523,16 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Full,
                 indent: Indent::None,
                 write_indent: false,
+                expand_empty_elements: false,
             },
             root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
         })
+    }
+
+    /// Enable or disable expansion of empty elements.
+    pub fn expand_empty_elements(&mut self, expand: bool) -> &mut Self {
+        self.ser.expand_empty_elements = expand;
+        self
     }
 
     /// Configure indent for a serializer

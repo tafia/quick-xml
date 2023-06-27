@@ -56,6 +56,9 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     /// If `true`, then current indent will be written before writing the content,
     /// but only if content is not empty.
     pub write_indent: bool,
+    // If `true`, then empty elements will be serialized as `<element></element>`
+    // instead of `<element/>`.
+    pub expand_empty_elements: bool,
     //TODO: add settings to disallow consequent serialization of primitives
 }
 
@@ -85,6 +88,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             level: self.level,
             indent: self.indent.borrow(),
             write_indent: self.write_indent,
+            expand_empty_elements: false,
         }
     }
 
@@ -483,6 +487,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        expand_empty_elements: false,
                     };
 
                     $data.serialize(ser).unwrap();
@@ -503,6 +508,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        expand_empty_elements: false,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
@@ -672,6 +678,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        expand_empty_elements: false,
                     };
 
                     $data.serialize(ser).unwrap();
@@ -692,6 +699,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        expand_empty_elements: false,
                     };
 
                     match $data.serialize(ser).unwrap_err() {
