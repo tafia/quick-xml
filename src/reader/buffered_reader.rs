@@ -117,7 +117,9 @@ macro_rules! impl_buffered_source {
                     // somewhere sane rather than at the EOF
                     Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
                     Ok(available) => {
-                        if let Some((consumed, used)) = bang_type.parse(buf, available) {
+                        // We only parse from start because we don't want to consider
+                        // whatever is in the buffer before the bang element
+                        if let Some((consumed, used)) = bang_type.parse(&buf[start..], available) {
                             buf.extend_from_slice(consumed);
 
                             self $(.$reader)? .consume(used);
