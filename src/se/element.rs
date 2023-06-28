@@ -66,7 +66,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     write_primitive!(serialize_bytes(&[u8]));
 
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
-        if value.is_empty() && !self.ser.expand_empty_elements {
+        if value.is_empty() {
             self.ser.write_empty(self.key)
         } else {
             self.ser
@@ -2566,7 +2566,48 @@ mod tests {
             };
         }
 
+        /// Checks that attempt to serialize given `$data` results to a
+        /// serialization error `$kind` with `$reason`
+        macro_rules! err {
+            ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = ElementSerializer {
+                        ser: ContentSerializer {
+                            writer: &mut buffer,
+                            level: QuoteLevel::Full,
+                            indent: Indent::None,
+                            write_indent: false,
+                            expand_empty_elements: false,
+                        },
+                        key: XmlName("root"),
+                    };
+
+                    match $data.serialize(ser).unwrap_err() {
+                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        e => panic!(
+                            "Expected `{}({})`, found `{:?}`",
+                            stringify!($kind),
+                            $reason,
+                            e
+                        ),
+                    }
+                    // We can write something before fail
+                    // assert_eq!(buffer, "");
+                }
+            };
+        }
+
         serialize_as!(option_some_empty: Some("") => "<root></root>");
         serialize_as!(option_some_empty_str: Some("") => "<root></root>");
+
+        serialize_as!(unit: () => "<root></root>");
+        serialize_as!(unit_struct: Unit => "<root></root>");
+        serialize_as!(unit_struct_escaped: UnitEscaped => "<root></root>");
+
+        serialize_as!(enum_unit: Enum::Unit => "<Unit></Unit>");
+        err!(enum_unit_escaped: Enum::UnitEscaped
+            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
     }
 }

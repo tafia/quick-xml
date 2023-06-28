@@ -96,9 +96,17 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     #[inline]
     pub(super) fn write_empty(mut self, name: XmlName) -> Result<(), DeError> {
         self.write_indent()?;
-        self.writer.write_char('<')?;
-        self.writer.write_str(name.0)?;
-        self.writer.write_str("/>")?;
+        if self.expand_empty_elements {
+            self.writer.write_char('<')?;
+            self.writer.write_str(name.0)?;
+            self.writer.write_str("></")?;
+            self.writer.write_str(name.0)?;
+            self.writer.write_char('>')?;
+        } else {
+            self.writer.write_str("<")?;
+            self.writer.write_str(name.0)?;
+            self.writer.write_str("/>")?;
+        }
         Ok(())
     }
 
