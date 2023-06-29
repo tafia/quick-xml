@@ -529,7 +529,34 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
         })
     }
 
-    /// Enable or disable expansion of empty elements.
+    /// Enable or disable expansion of empty elements. Defaults to `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::Serializer;
+    ///
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Struct {
+    ///     question: Option<String>,
+    /// }
+    ///
+    /// let mut buffer = String::new();
+    /// let mut ser = Serializer::new(&mut buffer);
+    /// ser.expand_empty_elements(true);
+    ///
+    /// let data = Struct {
+    ///   question: None,
+    /// };
+    ///
+    /// data.serialize(ser).unwrap();
+    /// assert_eq!(
+    ///     buffer,
+    ///     "<Struct><question></question></Struct>"
+    /// );
+    /// ```
     pub fn expand_empty_elements(&mut self, expand: bool) -> &mut Self {
         self.ser.expand_empty_elements = expand;
         self
