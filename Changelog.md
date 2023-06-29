@@ -15,6 +15,7 @@
 - [#609]: Added `Writer::write_serializable` to provide the capability to serialize
   arbitrary types using serde when using the lower-level `Writer` API.
 - [#615]: Added ability to set entity resolver when deserialize using borrowing reader.
+- [#620]: Added ability to enforce the expansion of empty elements.
 
 ### Bug Fixes
 
@@ -23,6 +24,7 @@
 
 [#609]: https://github.com/tafia/quick-xml/pull/609
 [#615]: https://github.com/tafia/quick-xml/pull/615
+[#620]: https://github.com/tafia/quick-xml/pull/620
 
 
 ## 0.29.0 -- 2023-06-13
