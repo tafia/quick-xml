@@ -397,7 +397,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             level: self.ser.ser.level,
             indent: self.ser.ser.indent.borrow(),
             write_indent: true,
-            expand_empty_elements: false,
+            expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
 
         if key == TEXT_KEY {

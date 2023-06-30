@@ -88,7 +88,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             level: self.level,
             indent: self.indent.borrow(),
             write_indent: self.write_indent,
-            expand_empty_elements: false,
+            expand_empty_elements: self.expand_empty_elements,
         }
     }
 
