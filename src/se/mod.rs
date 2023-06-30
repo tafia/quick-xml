@@ -458,6 +458,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Full,
                 indent: Indent::None,
                 write_indent: false,
+                expand_empty_elements: false,
             },
             root_tag: None,
         }
@@ -522,9 +523,43 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Full,
                 indent: Indent::None,
                 write_indent: false,
+                expand_empty_elements: false,
             },
             root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
         })
+    }
+
+    /// Enable or disable expansion of empty elements. Defaults to `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use serde::Serialize;
+    /// # use quick_xml::se::Serializer;
+    ///
+    /// #[derive(Debug, PartialEq, Serialize)]
+    /// struct Struct {
+    ///     question: Option<String>,
+    /// }
+    ///
+    /// let mut buffer = String::new();
+    /// let mut ser = Serializer::new(&mut buffer);
+    /// ser.expand_empty_elements(true);
+    ///
+    /// let data = Struct {
+    ///   question: None,
+    /// };
+    ///
+    /// data.serialize(ser).unwrap();
+    /// assert_eq!(
+    ///     buffer,
+    ///     "<Struct><question></question></Struct>"
+    /// );
+    /// ```
+    pub fn expand_empty_elements(&mut self, expand: bool) -> &mut Self {
+        self.ser.expand_empty_elements = expand;
+        self
     }
 
     /// Configure indent for a serializer

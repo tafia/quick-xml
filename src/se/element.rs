@@ -397,6 +397,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             level: self.ser.ser.level,
             indent: self.ser.ser.indent.borrow(),
             write_indent: true,
+            expand_empty_elements: false,
         };
 
         if key == TEXT_KEY {
@@ -574,6 +575,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -597,6 +599,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -1533,6 +1536,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -1556,6 +1560,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            expand_empty_elements: false,
                         },
                         key: XmlName("root"),
                     };
@@ -2532,5 +2537,77 @@ mod tests {
                         <b>b</b>\n\
                     </root>");
         }
+    }
+
+    mod expand_empty_elements {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Checks that given `$data` successfully serialized as `$expected`
+        macro_rules! serialize_as {
+            ($name:ident: $data:expr => $expected:expr) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = ElementSerializer {
+                        ser: ContentSerializer {
+                            writer: &mut buffer,
+                            level: QuoteLevel::Full,
+                            indent: Indent::None,
+                            write_indent: false,
+                            expand_empty_elements: true,
+                        },
+                        key: XmlName("root"),
+                    };
+
+                    $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
+                }
+            };
+        }
+
+        /// Checks that attempt to serialize given `$data` results to a
+        /// serialization error `$kind` with `$reason`
+        macro_rules! err {
+            ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let ser = ElementSerializer {
+                        ser: ContentSerializer {
+                            writer: &mut buffer,
+                            level: QuoteLevel::Full,
+                            indent: Indent::None,
+                            write_indent: false,
+                            expand_empty_elements: false,
+                        },
+                        key: XmlName("root"),
+                    };
+
+                    match $data.serialize(ser).unwrap_err() {
+                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        e => panic!(
+                            "Expected `{}({})`, found `{:?}`",
+                            stringify!($kind),
+                            $reason,
+                            e
+                        ),
+                    }
+                    // We can write something before fail
+                    // assert_eq!(buffer, "");
+                }
+            };
+        }
+
+        serialize_as!(option_some_empty: Some("") => "<root></root>");
+        serialize_as!(option_some_empty_str: Some("") => "<root></root>");
+
+        serialize_as!(unit: () => "<root></root>");
+        serialize_as!(unit_struct: Unit => "<root></root>");
+        serialize_as!(unit_struct_escaped: UnitEscaped => "<root></root>");
+
+        serialize_as!(enum_unit: Enum::Unit => "<Unit></Unit>");
+        err!(enum_unit_escaped: Enum::UnitEscaped
+            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
     }
 }
