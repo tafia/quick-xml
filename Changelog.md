@@ -12,6 +12,15 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.30.0 -- 2023-07-23
+
+### New Features
+
 - [#609]: Added `Writer::write_serializable` to provide the capability to serialize
   arbitrary types using serde when using the lower-level `Writer` API.
 - [#615]: Added ability to set entity resolver when deserialize using borrowing reader.
@@ -22,7 +31,6 @@
 - [#604]: Avoid crashing on wrong comments like `<!-->` when using `read_event_into*` functions.
 
 ### Misc Changes
-
 
 [#604]: https://github.com/tafia/quick-xml/issue/604
 [#609]: https://github.com/tafia/quick-xml/pull/609
