@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::io::Cursor;
-use std::str::from_utf8;
 
 use quick_xml::events::attributes::{AttrError, Attribute};
 use quick_xml::events::Event::*;
@@ -13,43 +12,33 @@ use quick_xml::Result;
 use pretty_assertions::assert_eq;
 
 macro_rules! next_eq_name {
-    ($r:expr, $t:tt, $bytes:expr) => {
+    ($r:expr, $t:tt, $str:expr) => {
         match $r.read_event().unwrap() {
-            $t(ref e) if e.name().as_ref() == $bytes => (),
-            e => panic!(
-                "expecting {}({:?}), found {:?}",
-                stringify!($t),
-                from_utf8($bytes),
-                e
-            ),
+            $t(e) if e.name() == QName($str) => (),
+            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), $str, e),
         }
     };
 }
 
 macro_rules! next_eq_content {
-    ($r:expr, $t:tt, $bytes:expr) => {
+    ($r:expr, $t:tt, $str:expr) => {
         match $r.read_event().unwrap() {
-            $t(ref e) if e.as_ref() == $bytes => (),
-            e => panic!(
-                "expecting {}({:?}), found {:?}",
-                stringify!($t),
-                from_utf8($bytes),
-                e
-            ),
+            $t(e) if &*e == $str => (),
+            e => panic!("expecting {}({:?}), found {:?}", stringify!($t), $str, e),
         }
     };
 }
 
 macro_rules! next_eq {
-    ($r:expr, Start, $bytes:expr) => (next_eq_name!($r, Start, $bytes););
-    ($r:expr, End, $bytes:expr) => (next_eq_name!($r, End, $bytes););
-    ($r:expr, Empty, $bytes:expr) => (next_eq_name!($r, Empty, $bytes););
-    ($r:expr, Comment, $bytes:expr) => (next_eq_content!($r, Comment, $bytes););
-    ($r:expr, Text, $bytes:expr) => (next_eq_content!($r, Text, $bytes););
-    ($r:expr, CData, $bytes:expr) => (next_eq_content!($r, CData, $bytes););
-    ($r:expr, $t0:tt, $b0:expr, $($t:tt, $bytes:expr),*) => {
+    ($r:expr, Start, $str:expr) => (next_eq_name!($r, Start, $str););
+    ($r:expr, End, $str:expr) => (next_eq_name!($r, End, $str););
+    ($r:expr, Empty, $str:expr) => (next_eq_name!($r, Empty, $str););
+    ($r:expr, Comment, $str:expr) => (next_eq_content!($r, Comment, $str););
+    ($r:expr, Text, $str:expr) => (next_eq_content!($r, Text, $str););
+    ($r:expr, CData, $str:expr) => (next_eq_content!($r, CData, $str););
+    ($r:expr, $t0:tt, $b0:expr, $($t:tt, $str:expr),*) => {
         next_eq!($r, $t0, $b0);
-        next_eq!($r, $($t, $bytes),*);
+        next_eq!($r, $($t, $str),*);
     };
 }
 
@@ -57,70 +46,70 @@ macro_rules! next_eq {
 fn test_start() {
     let mut r = Reader::from_str("<a>");
     r.trim_text(true);
-    next_eq!(r, Start, b"a");
+    next_eq!(r, Start, "a");
 }
 
 #[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
     r.trim_text(true);
-    next_eq!(r, Start, b"a", End, b"a");
+    next_eq!(r, Start, "a", End, "a");
 }
 
 #[test]
 fn test_start_end_with_ws() {
     let mut r = Reader::from_str("<a></a >");
     r.trim_text(true);
-    next_eq!(r, Start, b"a", End, b"a");
+    next_eq!(r, Start, "a", End, "a");
 }
 
 #[test]
 fn test_start_end_attr() {
     let mut r = Reader::from_str("<a b=\"test\"></a>");
     r.trim_text(true);
-    next_eq!(r, Start, b"a", End, b"a");
+    next_eq!(r, Start, "a", End, "a");
 }
 
 #[test]
 fn test_empty() {
     let mut r = Reader::from_str("<a />");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r, Empty, b"a");
+    next_eq!(r, Empty, "a");
 }
 
 #[test]
 fn test_empty_can_be_expanded() {
     let mut r = Reader::from_str("<a />");
     r.trim_text(true).expand_empty_elements(true);
-    next_eq!(r, Start, b"a", End, b"a");
+    next_eq!(r, Start, "a", End, "a");
 }
 
 #[test]
 fn test_empty_attr() {
     let mut r = Reader::from_str("<a b=\"test\" />");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r, Empty, b"a");
+    next_eq!(r, Empty, "a");
 }
 
 #[test]
 fn test_start_end_comment() {
     let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r, Start, b"b", Empty, b"a", Empty, b"a", Comment, b"t", End, b"b");
+    next_eq!(r, Start, "b", Empty, "a", Empty, "a", Comment, "t", End, "b");
 }
 
 #[test]
 fn test_start_txt_end() {
     let mut r = Reader::from_str("<a>test</a>");
     r.trim_text(true);
-    next_eq!(r, Start, b"a", Text, b"test", End, b"a");
+    next_eq!(r, Start, "a", Text, "test", End, "a");
 }
 
 #[test]
 fn test_comment() {
     let mut r = Reader::from_str("<!--test-->");
     r.trim_text(true);
-    next_eq!(r, Comment, b"test");
+    next_eq!(r, Comment, "test");
 }
 
 #[test]
@@ -130,21 +119,13 @@ fn test_xml_decl() {
     match r.read_event().unwrap() {
         Decl(ref e) => {
             match e.version() {
-                Ok(v) => assert_eq!(
-                    &*v,
-                    b"1.0",
-                    "expecting version '1.0', got '{:?}",
-                    from_utf8(&v)
-                ),
-                Err(e) => panic!("{:?}", e),
+                Ok(v) => assert_eq!(&*v, "1.0", "expecting version '1.0', got '{:?}", &*v),
+                Err(e) => assert!(false, "{:?}", e),
             }
             match e.encoding() {
-                Some(Ok(v)) => assert_eq!(
-                    &*v,
-                    b"utf-8",
-                    "expecting encoding 'utf-8', got '{:?}",
-                    from_utf8(&v)
-                ),
+                Some(Ok(v)) => {
+                    assert_eq!(&*v, "utf-8", "expecting encoding 'utf-8', got '{:?}", &*v)
+                }
                 Some(Err(e)) => panic!("{:?}", e),
                 None => panic!("cannot find encoding"),
             }
@@ -162,39 +143,39 @@ fn test_trim_test() {
     let txt = "<a><b>  </b></a>";
     let mut r = Reader::from_str(txt);
     r.trim_text(true);
-    next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
+    next_eq!(r, Start, "a", Start, "b", End, "b", End, "a");
 
     let mut r = Reader::from_str(txt);
     r.trim_text(false);
-    next_eq!(r, Start, b"a", Start, b"b", Text, b"  ", End, b"b", End, b"a");
+    next_eq!(r, Start, "a", Start, "b", Text, "  ", End, "b", End, "a");
 }
 
 #[test]
 fn test_cdata() {
     let mut r = Reader::from_str("<![CDATA[test]]>");
     r.trim_text(true);
-    next_eq!(r, CData, b"test");
+    next_eq!(r, CData, "test");
 }
 
 #[test]
 fn test_cdata_open_close() {
     let mut r = Reader::from_str("<![CDATA[test <> test]]>");
     r.trim_text(true);
-    next_eq!(r, CData, b"test <> test");
+    next_eq!(r, CData, "test <> test");
 }
 
 #[test]
 fn test_start_attr() {
     let mut r = Reader::from_str("<a b=\"c\">");
     r.trim_text(true);
-    next_eq!(r, Start, b"a");
+    next_eq!(r, Start, "a");
 }
 
 #[test]
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
     r.trim_text(true).expand_empty_elements(false);
-    next_eq!(r, Start, b"a", Start, b"b", Text, b"test", End, b"b", Empty, b"c", End, b"a");
+    next_eq!(r, Start, "a", Start, "b", Text, "test", End, "b", Empty, "c", End, "a");
 }
 
 #[test]
@@ -421,7 +402,7 @@ fn test_offset_err_comment() {
     let mut r = Reader::from_str("<a><!--b>");
     r.trim_text(true).check_end_names(true);
 
-    next_eq!(r, Start, b"a");
+    next_eq!(r, Start, "a");
     assert_eq!(r.buffer_position(), 3);
 
     match r.read_event() {
@@ -463,7 +444,7 @@ fn test_offset_err_comment_trim_text() {
     let mut r = Reader::from_str("<a>\r\n <!--b>");
     r.trim_text(true).check_end_names(true);
 
-    next_eq!(r, Start, b"a");
+    next_eq!(r, Start, "a");
     assert_eq!(r.buffer_position(), 3);
 
     match r.read_event() {
@@ -483,14 +464,13 @@ fn test_offset_err_comment_trim_text() {
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
     r.trim_text(true);
-    next_eq!(r, Start, b"a");
+    next_eq!(r, Start, "a");
     match r.read_event() {
         Ok(Text(e)) => {
             assert_eq!(
-                &*e,
-                b"&lt;test&gt;",
+                &*e, "&lt;test&gt;",
                 "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
-                from_utf8(&e)
+                &*e
             );
             match e.unescape() {
                 Ok(c) => assert_eq!(c, "<test>"),
@@ -508,7 +488,7 @@ fn test_escaped_content() {
             e
         ),
     }
-    next_eq!(r, End, b"a");
+    next_eq!(r, End, "a");
 }
 
 #[test]
@@ -582,7 +562,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
             Eof => break,
             Text(e) => {
                 let t = e.unescape().unwrap();
-                assert!(writer.write_event(Text(BytesText::new(&t))).is_ok());
+                assert!(writer.write_event(Text(BytesText::new(t))).is_ok());
             }
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -603,22 +583,22 @@ fn test_closing_bracket_in_single_quote_attr() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b">"),
+                    key: QName("attr"),
+                    value: Cow::Borrowed(">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"2"),
+                    key: QName("check"),
+                    value: Cow::Borrowed("2"),
                 }))
             );
             assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
-    next_eq!(r, End, b"a");
+    next_eq!(r, End, "a");
 }
 
 #[test]
@@ -631,22 +611,22 @@ fn test_closing_bracket_in_double_quote_attr() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b">"),
+                    key: QName("attr"),
+                    value: Cow::Borrowed(">"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"2"),
+                    key: QName("check"),
+                    value: Cow::Borrowed("2"),
                 }))
             );
             assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
-    next_eq!(r, End, b"a");
+    next_eq!(r, End, "a");
 }
 
 #[test]
@@ -659,22 +639,22 @@ fn test_closing_bracket_in_double_quote_mixed() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b"'>'"),
+                    key: QName("attr"),
+                    value: Cow::Borrowed("'>'"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"'2'"),
+                    key: QName("check"),
+                    value: Cow::Borrowed("'2'"),
                 }))
             );
             assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
-    next_eq!(r, End, b"a");
+    next_eq!(r, End, "a");
 }
 
 #[test]
@@ -687,20 +667,20 @@ fn test_closing_bracket_in_single_quote_mixed() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(br#"">""#),
+                    key: QName("attr"),
+                    value: Cow::Borrowed(r#"">""#),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(br#""2""#),
+                    key: QName("check"),
+                    value: Cow::Borrowed(r#""2""#),
                 }))
             );
             assert_eq!(attrs.next(), None);
         }
         x => panic!("expected <a attr='>'>, got {:?}", x),
     }
-    next_eq!(r, End, b"a");
+    next_eq!(r, End, "a");
 }

@@ -224,7 +224,7 @@ fn attributes(c: &mut Criterion) {
             let mut count = criterion::black_box(0);
             loop {
                 match r.read_event() {
-                    Ok(Event::Empty(e)) if e.name() == QName(b"player") => {
+                    Ok(Event::Empty(e)) if e.name() == QName("player") => {
                         for name in ["num", "status", "avg"] {
                             if let Some(_attr) = e.try_get_attribute(name).unwrap() {
                                 count += 1

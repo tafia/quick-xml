@@ -2,7 +2,6 @@
 
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
-use crate::utils::write_byte_string;
 use std::fmt;
 use std::io::Error as IoError;
 use std::str::Utf8Error;
@@ -46,7 +45,7 @@ pub enum Error {
     /// Escape error
     EscapeError(EscapeError),
     /// Specified namespace prefix is unknown, cannot resolve namespace for it
-    UnknownPrefix(Vec<u8>),
+    UnknownPrefix(String),
 }
 
 impl From<IoError> for Error {
@@ -116,11 +115,7 @@ impl fmt::Display for Error {
             Error::EmptyDocType => write!(f, "DOCTYPE declaration must not be empty"),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
-            Error::UnknownPrefix(prefix) => {
-                f.write_str("Unknown namespace prefix '")?;
-                write_byte_string(f, prefix)?;
-                f.write_str("'")
-            }
+            Error::UnknownPrefix(prefix) => write!(f, "Unknown namespace prefix '{}'", prefix),
         }
     }
 }
@@ -170,7 +165,7 @@ pub mod serialize {
         /// Deserializer encounter a start tag with a specified name when it is
         /// not expecting. This happens when you try to deserialize a primitive
         /// value (numbers, strings, booleans) from an XML element.
-        UnexpectedStart(Vec<u8>),
+        UnexpectedStart(String),
         /// Deserializer encounter an end tag with a specified name when it is
         /// not expecting. Usually that should not be possible, because XML reader
         /// is not able to produce such stream of events that lead to this error.
@@ -178,7 +173,7 @@ pub mod serialize {
         /// If you get this error this likely indicates and error in the `quick_xml`.
         /// Please open an issue at <https://github.com/tafia/quick-xml>, provide
         /// your Rust code and XML input.
-        UnexpectedEnd(Vec<u8>),
+        UnexpectedEnd(String),
         /// The [`Reader`] produced [`Event::Eof`] when it is not expecting,
         /// for example, after producing [`Event::Start`] but before corresponding
         /// [`Event::End`].
@@ -224,12 +219,12 @@ pub mod serialize {
                 DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
                     f.write_str("Unexpected `Event::Start(")?;
-                    write_byte_string(f, e)?;
+                    write_byte_string(f, e.as_bytes())?;
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEnd(e) => {
                     f.write_str("Unexpected `Event::End(")?;
-                    write_byte_string(f, e)?;
+                    write_byte_string(f, e.as_bytes())?;
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),

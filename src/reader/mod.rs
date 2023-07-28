@@ -1,10 +1,12 @@
 //! Contains high-level interface for a pull-based XML parser.
 
-#[cfg(feature = "encoding")]
-use encoding_rs::Encoding;
+use std::io::Read;
 use std::ops::Range;
 
-use crate::encoding::Decoder;
+#[cfg(feature = "encoding")]
+use encoding_rs::{Encoding, UTF_8};
+
+use crate::encoding::Utf8BytesReader;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::reader::parser::Parser;
@@ -348,8 +350,7 @@ macro_rules! read_to_end {
                     depth -= 1;
                 }
                 Ok(Event::Eof) => {
-                    let name = $self.decoder().decode($end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
+                    return Err(Error::UnexpectedEof(format!("</{:?}>", $end.as_ref())));
                 }
                 _ => (),
             }
@@ -428,7 +429,7 @@ enum ParseState {
 ///   BomDetected -- "encoding=..." --> XmlDetected
 /// ```
 #[cfg(feature = "encoding")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum EncodingRef {
     /// Encoding was implicitly assumed to have a specified value. It can be refined
     /// using BOM or by the XML declaration event (`<?xml encoding=... ?>`)
@@ -501,10 +502,10 @@ impl EncodingRef {
 ///
 ///         Ok(Event::Start(e)) => {
 ///             match e.name().as_ref() {
-///                 b"tag1" => println!("attributes values: {:?}",
+///                 "tag1" => println!("attributes values: {:?}",
 ///                                     e.attributes().map(|a| a.unwrap().value)
 ///                                     .collect::<Vec<_>>()),
-///                 b"tag2" => count += 1,
+///                 "tag2" => count += 1,
 ///                 _ => (),
 ///             }
 ///         }
@@ -528,73 +529,47 @@ pub struct Reader<R> {
 }
 
 /// Builder methods
-impl<R> Reader<R> {
+impl<R: Read> Reader<Utf8BytesReader<R>> {
     /// Creates a `Reader` that reads from a given reader.
     pub fn from_reader(reader: R) -> Self {
         Self {
-            reader,
+            reader: Utf8BytesReader::new(reader),
             parser: Parser::default(),
         }
     }
-
-    configure_methods!();
 }
 
-/// Getters
+/// Builder methods
+impl<'a> Reader<&'a [u8]> {
+    /// Creates an XML reader from a string slice.
+    pub fn from_str(s: &'a str) -> Self {
+        // Rust strings are guaranteed to be UTF-8, so lock the encoding
+        #[cfg(feature = "encoding")]
+        {
+            let mut parser = Parser::default();
+            parser.encoding = EncodingRef::Explicit(UTF_8);
+            Self {
+                reader: s.as_bytes(),
+                parser: parser,
+            }
+        }
+
+        #[cfg(not(feature = "encoding"))]
+        {
+            Self {
+                reader: s.as_bytes(),
+                parser: Parser::default(),
+            }
+        }
+    }
+}
+
+/// Public implementation-independent functionality
 impl<R> Reader<R> {
-    /// Consumes `Reader` returning the underlying reader
-    ///
-    /// Can be used to compute line and column of a parsing error position
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use std::{str, io::Cursor};
-    /// use quick_xml::events::Event;
-    /// use quick_xml::reader::Reader;
-    ///
-    /// let xml = r#"<tag1 att1 = "test">
-    ///                 <tag2><!--Test comment-->Test</tag2>
-    ///                 <tag3>Test 2</tag3>
-    ///              </tag1>"#;
-    /// let mut reader = Reader::from_reader(Cursor::new(xml.as_bytes()));
-    /// let mut buf = Vec::new();
-    ///
-    /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
-    ///     let end_pos = reader.buffer_position();
-    ///     let mut cursor = reader.into_inner();
-    ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
-    ///         .expect("can't make a string");
-    ///     let mut line = 1;
-    ///     let mut column = 0;
-    ///     for c in s.chars() {
-    ///         if c == '\n' {
-    ///             line += 1;
-    ///             column = 0;
-    ///         } else {
-    ///             column += 1;
-    ///         }
-    ///     }
-    ///     (line, column)
-    /// }
-    ///
-    /// loop {
-    ///     match reader.read_event_into(&mut buf) {
-    ///         Ok(Event::Start(ref e)) => match e.name().as_ref() {
-    ///             b"tag1" | b"tag2" => (),
-    ///             tag => {
-    ///                 assert_eq!(b"tag3", tag);
-    ///                 assert_eq!((3, 22), into_line_and_column(reader));
-    ///                 break;
-    ///             }
-    ///         },
-    ///         Ok(Event::Eof) => unreachable!(),
-    ///         _ => (),
-    ///     }
-    ///     buf.clear();
-    /// }
-    /// ```
+    // Configuration setters
+    configure_methods!();
+
+    /// Consumes `Reader` returning the underlying reader.
     pub fn into_inner(self) -> R {
         self.reader
     }
@@ -622,16 +597,17 @@ impl<R> Reader<R> {
         }
     }
 
-    /// Get the decoder, used to decode bytes, read by this reader, to the strings.
+    /// Get the encoding this reader is currently using to decode strings.
     ///
     /// If `encoding` feature is enabled, the used encoding may change after
     /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
     ///
     /// If `encoding` feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
+    #[cfg(feature = "encoding")]
     #[inline]
-    pub fn decoder(&self) -> Decoder {
-        self.parser.decoder()
+    pub fn encoding(&self) -> &'static Encoding {
+        self.parser.encoding.encoding()
     }
 }
 
@@ -1699,33 +1675,13 @@ mod test {
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
-                /// When `encoding` feature is enabled, encoding should be detected
-                /// from BOM (UTF-8) and BOM should be stripped.
-                ///
-                /// When `encoding` feature is disabled, UTF-8 is assumed and BOM
-                /// character should be stripped for consistency
-                #[$test]
-                $($async)? fn bom_from_reader() {
-                    let mut reader = Reader::from_reader("\u{feff}\u{feff}".as_bytes());
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Text(BytesText::from_escaped("\u{feff}"))
-                    );
-
-                    assert_eq!(
-                        reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::Eof
-                    );
-                }
-
                 /// When parsing from &str, encoding is fixed (UTF-8), so
                 /// - when `encoding` feature is disabled, the behavior the
                 ///   same as in `bom_from_reader` text
                 /// - when `encoding` feature is enabled, the behavior should
                 ///   stay consistent, so the first BOM character is stripped
                 #[$test]
-                $($async)? fn bom_from_str() {
+                $($async)? fn bom() {
                     let mut reader = Reader::from_str("\u{feff}\u{feff}");
 
                     assert_eq!(

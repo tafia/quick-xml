@@ -7,7 +7,6 @@ use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::str;
 
 const XML: &str = r#"
@@ -47,8 +46,8 @@ impl Translation {
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
-                b"Language" => lang = a.decode_and_unescape_value(reader)?,
-                b"Tag" => tag = a.decode_and_unescape_value(reader)?,
+                "Language" => lang = Cow::Owned(a.unescape_value()?.to_string()),
+                "Tag" => tag = Cow::Owned(a.unescape_value()?.to_string()),
                 _ => (),
             }
         }
@@ -57,7 +56,7 @@ impl Translation {
 
         if let Event::Start(ref e) = event {
             let name = e.name();
-            if name == QName(b"Text") {
+            if name == QName("Text") {
                 // note: `read_text` does not support content as CDATA
                 let text_content = reader.read_text(e.name())?;
                 Ok(Translation {
@@ -67,8 +66,7 @@ impl Translation {
                 })
             } else {
                 dbg!("Expected Event::Start for Text, got: {:?}", &event);
-                let name_string = reader.decoder().decode(name.as_ref())?;
-                Err(quick_xml::Error::UnexpectedToken(name_string.into()))
+                Err(quick_xml::Error::UnexpectedToken(name.as_ref().to_owned()))
             }
         } else {
             let event_string = format!("{:?}", event);
@@ -99,7 +97,7 @@ fn main() -> Result<(), quick_xml::Error> {
 
         match event {
             Event::Start(element) => match element.name().as_ref() {
-                b"DefaultSettings" => {
+                "DefaultSettings" => {
                     // Note: real app would handle errors with good defaults or halt program with nice message
                     // This illustrates decoding an attribute's key and value with error handling
                     settings = element
@@ -107,16 +105,8 @@ fn main() -> Result<(), quick_xml::Error> {
                         .map(|attr_result| {
                             match attr_result {
                                 Ok(a) => {
-                                    let key = reader.decoder().decode(a.key.local_name().as_ref())
-                                        .or_else(|err| {
-                                            dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
-                                            Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
-                                        })
-                                        .unwrap().to_string();
-                                    let value = a.decode_and_unescape_value(&reader).or_else(|err| {
-                                            dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
-                                            Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
-                                    }).unwrap().to_string();
+                                    let key = a.key.local_name().as_ref().to_string();
+                                    let value = a.unescape_value().expect("failure to unescape").to_string();
                                     (key, value)
                                 },
                                 Err(err) => {
@@ -130,7 +120,7 @@ fn main() -> Result<(), quick_xml::Error> {
                     assert_eq!(settings["Greeting"], "HELLO");
                     reader.read_to_end(element.name())?;
                 }
-                b"Translation" => {
+                "Translation" => {
                     translations.push(Translation::new_from_element(&mut reader, element)?);
                 }
                 _ => (),

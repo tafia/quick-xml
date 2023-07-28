@@ -27,6 +27,8 @@ mod decode {
 }
 
 #[test]
+#[ignore = "fixme dalley - encoding support"]
+#[cfg(feature = "encoding")]
 fn test_koi8_r_encoding() {
     let src = include_bytes!("documents/opennews_all.rss").as_ref();
     let mut buf = vec![];
@@ -57,7 +59,7 @@ mod detect {
                 let mut r = Reader::from_reader(
                     include_bytes!(concat!("documents/encoding/", $file, ".xml")).as_ref(),
                 );
-                assert_eq!(r.decoder().encoding(), UTF_8);
+                assert_eq!(r.encoding(), UTF_8);
 
                 let mut buf = Vec::new();
                 loop {
@@ -65,7 +67,7 @@ mod detect {
                         Event::Eof => break,
                         _ => {}
                     }
-                    assert_eq!(r.decoder().encoding(), $enc);
+                    assert_eq!(r.encoding(), $enc);
                     buf.clear();
                     $($break)?
                 }

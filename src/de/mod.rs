@@ -1931,7 +1931,7 @@ pub use crate::errors::serialize::DeError;
 pub use resolver::{EntityResolver, NoEntityResolver};
 
 use crate::{
-    encoding::Decoder,
+    encoding::Utf8BytesReader,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
@@ -2677,7 +2677,7 @@ where
     }
 }
 
-impl<'de, R> Deserializer<'de, IoReader<R>>
+impl<'de, R> Deserializer<'de, IoReader<Utf8BytesReader<R>>>
 where
     R: BufRead,
 {

@@ -16,6 +16,7 @@ include = ["src/*", "LICENSE-MIT.md", "README.md"]
 [dependencies]
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
+encoding_rs_io = { version = "0.1", optional = true }
 serde = { version = "1.0.100", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
@@ -90,7 +91,7 @@ async-tokio = ["tokio"]
 ## let mut buf = Vec::new();
 ## let mut unsupported = false;
 ## loop {
-##     if !reader.decoder().encoding().is_ascii_compatible() {
+##     if !reader.encoding().is_ascii_compatible() {
 ##         unsupported = true;
 ##         break;
 ##     }
@@ -109,7 +110,7 @@ async-tokio = ["tokio"]
 ## [UTF-16LE]: encoding_rs::UTF_16LE
 ## [ISO-2022-JP]: encoding_rs::ISO_2022_JP
 ## [#158]: https://github.com/tafia/quick-xml/issues/158
-encoding = ["encoding_rs"]
+encoding = ["encoding_rs", "encoding_rs_io"]
 
 ## Enables support for recognizing all [HTML 5 entities] in [`unescape`] and
 ## [`unescape_with`] functions. The full list of entities also can be found in

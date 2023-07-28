@@ -5,9 +5,7 @@
 use std::borrow::Cow;
 
 #[cfg(feature = "encoding")]
-use crate::reader::EncodingRef;
-#[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::Encoding;
 
 use crate::errors::{Error, Result};
 use crate::events::Event;
@@ -16,25 +14,10 @@ use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, Xml
 
 use memchr;
 
-/// This is an implementation for reading from a `&[u8]` as underlying byte stream.
-/// This implementation supports not using an intermediate buffer as the byte slice
-/// itself can be used to borrow from.
+/// This is an implementation of [`Reader`] for reading from a `&[u8]` as
+/// underlying byte stream. This implementation supports not using an
+/// intermediate buffer as the byte slice itself can be used to borrow from.
 impl<'a> Reader<&'a [u8]> {
-    /// Creates an XML reader from a string slice.
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'a str) -> Self {
-        // Rust strings are guaranteed to be UTF-8, so lock the encoding
-        #[cfg(feature = "encoding")]
-        {
-            let mut reader = Self::from_reader(s.as_bytes());
-            reader.parser.encoding = EncodingRef::Explicit(UTF_8);
-            reader
-        }
-
-        #[cfg(not(feature = "encoding"))]
-        Self::from_reader(s.as_bytes())
-    }
-
     /// Read an event that borrows from the input rather than a buffer.
     ///
     /// There is no asynchronous `read_event_async()` version of this function,
@@ -169,13 +152,11 @@ impl<'a> Reader<&'a [u8]> {
     /// it reads, and if, for example, it contains CDATA section, attempt to
     /// unescape it content will spoil data.
     ///
-    /// Any text will be decoded using the XML current [`decoder()`].
-    ///
     /// Actually, this method perform the following code:
     ///
     /// ```ignore
     /// let span = reader.read_to_end(end)?;
-    /// let text = reader.decoder().decode(&reader.inner_slice[span]);
+    /// let text = std::str::from_utf8(&reader.inner_slice[span]);
     /// ```
     ///
     /// # Examples
@@ -223,13 +204,12 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     ///
     /// [`Start`]: Event::Start
-    /// [`decoder()`]: Self::decoder()
     pub fn read_text(&mut self, end: QName) -> Result<Cow<'a, str>> {
         // self.reader will be changed, so store original reference
         let buffer = self.reader;
         let span = self.read_to_end(end)?;
 
-        self.decoder().decode(&buffer[0..span.len()])
+        Ok(Cow::Borrowed(std::str::from_utf8(&buffer[0..span.len()])?))
     }
 }
 
@@ -381,9 +361,9 @@ mod test {
         fn str_always_has_utf8() {
             let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
 
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
             reader.read_event().unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_8);
+            assert_eq!(reader.encoding(), UTF_8);
 
             assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }

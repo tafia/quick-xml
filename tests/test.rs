@@ -34,15 +34,15 @@ fn test_attributes_empty() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
-                    value: Cow::Borrowed(b"a"),
+                    key: QName("att1"),
+                    value: Cow::Borrowed("a"),
                 }))
             );
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att2"),
-                    value: Cow::Borrowed(b"b"),
+                    key: QName("att2"),
+                    value: Cow::Borrowed("b"),
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -62,8 +62,8 @@ fn test_attribute_equal() {
             assert_eq!(
                 attrs.next(),
                 Some(Ok(Attribute {
-                    key: QName(b"att1"),
-                    value: Cow::Borrowed(b"a=b"),
+                    key: QName("att1"),
+                    value: Cow::Borrowed("a=b"),
                 }))
             );
             assert_eq!(attrs.next(), None);
@@ -80,7 +80,7 @@ fn test_comment_starting_with_gt() {
     loop {
         match r.read_event() {
             Ok(Comment(e)) => {
-                assert_eq!(e.as_ref(), b">");
+                assert_eq!(e.unescape().unwrap(), ">");
                 break;
             }
             Ok(Eof) => panic!("Expecting Comment"),
@@ -97,7 +97,7 @@ fn test_issue94() {
     let mut reader = Reader::from_reader(&data[..]);
     reader.trim_text(true);
     loop {
-        match reader.read_event() {
+        match reader.read_event_into(&mut Vec::new()) {
             Ok(Eof) | Err(..) => break,
             _ => (),
         }
@@ -167,16 +167,16 @@ fn test_issue299() -> Result<(), Error> {
         match reader.read_event()? {
             Start(e) | Empty(e) => {
                 let attr_count = match e.name().as_ref() {
-                    b"MICEX_DOC" => 1,
-                    b"SECURITY" => 4,
-                    b"RECORDS" => 26,
+                    "MICEX_DOC" => 1,
+                    "SECURITY" => 4,
+                    "RECORDS" => 26,
                     _ => unreachable!(),
                 };
                 assert_eq!(
                     attr_count,
                     e.attributes().filter(Result::is_ok).count(),
                     "mismatch att count on '{:?}'",
-                    reader.decoder().decode(e.name().as_ref())
+                    e.name().as_ref()
                 );
             }
             Eof => break,

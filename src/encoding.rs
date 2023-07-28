@@ -1,9 +1,12 @@
 //! A module for wrappers that encode / decode data.
 
 use std::borrow::Cow;
+use std::io;
 
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
+#[cfg(feature = "encoding")]
+use encoding_rs_io::{DecodeReaderBytes, DecodeReaderBytesBuilder};
 
 #[cfg(feature = "encoding")]
 use crate::Error;
@@ -21,73 +24,106 @@ pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 #[cfg(feature = "encoding")]
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
-/// Decoder of byte slices into strings.
-///
-/// If feature `encoding` is enabled, this encoding taken from the `"encoding"`
-/// XML declaration or assumes UTF-8, if XML has no <?xml ?> declaration, encoding
-/// key is not defined or contains unknown encoding.
-///
-/// The library supports any UTF-8 compatible encodings that crate `encoding_rs`
-/// is supported. [*UTF-16 and ISO-2022-JP are not supported at the present*][utf16].
-///
-/// If feature `encoding` is disabled, the decoder is always UTF-8 decoder:
-/// any XML declarations are ignored.
-///
-/// [utf16]: https://github.com/tafia/quick-xml/issues/158
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Decoder {
+/// A struct for transparently decoding / validating bytes as UTF-8.
+#[derive(Debug)]
+pub struct Utf8BytesReader<R> {
     #[cfg(feature = "encoding")]
-    pub(crate) encoding: &'static Encoding,
+    reader: io::BufReader<DecodeReaderBytes<R, Vec<u8>>>,
+    #[cfg(not(feature = "encoding"))]
+    reader: io::BufReader<R>,
 }
 
-impl Decoder {
-    pub(crate) fn utf8() -> Self {
-        Decoder {
-            #[cfg(feature = "encoding")]
-            encoding: UTF_8,
+impl<R: io::Read> Utf8BytesReader<R> {
+    /// Build a new reader which decodes a stream of bytes in an unknown encoding into UTF-8.
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(feature = "encoding")]
+    pub fn new(reader: R) -> Self {
+        let decoder = DecodeReaderBytesBuilder::new()
+            .bom_override(true)
+            .build(reader);
+
+        Self {
+            reader: io::BufReader::new(decoder),
         }
     }
 
-    #[cfg(all(test, feature = "encoding", feature = "serialize"))]
-    pub(crate) fn utf16() -> Self {
-        Decoder { encoding: UTF_16LE }
+    /// Build a new reader which (will eventually) validate UTF-8.
+    /// Note: The consumer is responsible for finding the correct character boundaries when
+    /// treating a given range of bytes as UTF-8.
+    #[cfg(not(feature = "encoding"))]
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader: io::BufReader::new(reader),
+        }
     }
 }
 
-impl Decoder {
-    /// Returns the `Reader`s encoding.
-    ///
-    /// This encoding will be used by [`decode`].
-    ///
-    /// [`decode`]: Self::decode
-    #[cfg(feature = "encoding")]
-    pub fn encoding(&self) -> &'static Encoding {
-        self.encoding
-    }
-
-    /// ## Without `encoding` feature
-    ///
-    /// Decodes an UTF-8 slice regardless of XML declaration and ignoring BOM
-    /// if it is present in the `bytes`.
-    ///
-    /// ## With `encoding` feature
-    ///
-    /// Decodes specified bytes using encoding, declared in the XML, if it was
-    /// declared there, or UTF-8 otherwise, and ignoring BOM if it is present
-    /// in the `bytes`.
-    ///
-    /// ----
-    /// Returns an error in case of malformed sequences in the `bytes`.
-    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
-        #[cfg(not(feature = "encoding"))]
-        let decoded = Ok(Cow::Borrowed(std::str::from_utf8(bytes)?));
-
-        #[cfg(feature = "encoding")]
-        let decoded = decode(bytes, self.encoding);
-
-        decoded
+impl<R: io::Read> io::Read for Utf8BytesReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.reader.read(buf)
     }
 }
+
+impl<R: io::Read> io::BufRead for Utf8BytesReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.reader.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.reader.consume(amt)
+    }
+}
+
+///
+#[derive(Debug)]
+pub struct ValidatingReader<R> {
+    reader: R,
+    leftover_bytes_buf: [u8; 7],
+    leftover_bytes: u8,
+}
+
+impl<R: io::Read> ValidatingReader<R> {
+    ///
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader,
+            leftover_bytes_buf: [0; 7],
+            leftover_bytes: 0,
+        }
+    }
+}
+
+impl<R: io::Read> io::Read for ValidatingReader<R> {
+    // TODO: bug around the edges of the buffer
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let amt = {
+            let leftover_bytes = &self.leftover_bytes_buf[..self.leftover_bytes.into()];
+            let (dest_for_leftover_bytes, dest_for_bytes_read) = buf.split_at_mut(leftover_bytes.len());
+            dest_for_leftover_bytes.copy_from_slice(&leftover_bytes);
+            self.reader.read(dest_for_bytes_read)? + self.leftover_bytes as usize
+        };
+
+        let (bytes_in_buffer, _unused_buffer) = buf.split_at(amt);
+        match std::str::from_utf8(bytes_in_buffer) {
+            Ok(_) => {
+                self.leftover_bytes = 0;
+                Ok(amt)
+            },
+            Err(err) => {
+                let (valid, leftover) = bytes_in_buffer.split_at(err.valid_up_to());
+                self.leftover_bytes_buf[..leftover.len()].copy_from_slice(leftover);
+                self.leftover_bytes = leftover.len() as u8;
+                Ok(valid.len())
+            }
+        }
+    }
+}
+
+// error::const_io_error!(
+//     ErrorKind::InvalidData,
+//     "stream did not contain valid UTF-8"
+// )
 
 /// Decodes the provided bytes using the specified encoding.
 ///
@@ -138,5 +174,37 @@ pub fn detect_encoding(bytes: &[u8]) -> Option<(&'static Encoding, usize)> {
         _ if bytes.starts_with(&[b'<', b'?', b'x', b'm']) => Some((UTF_8, 0)), // Some ASCII compatible
 
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Read;
+
+    use super::*;
+
+    #[track_caller]
+    fn test_validate_input(input: &[u8]) {
+        let mut reader = ValidatingReader::new(input);
+        assert_eq!(reader.read_to_end(&mut Vec::new()).unwrap(), input.len());
+    }
+
+    mod decoding_reader {
+
+    }
+
+    mod validating_reader {
+        use super::*;
+
+        #[test]
+        fn utf8_test_file() {
+            let test_file = std::fs::read("tests/documents/encoding/utf8.txt").unwrap();
+
+            // test_validate_input(b"asdf");
+            // test_validate_input("\u{2014}asdfasdfasdfasdfasdfa\u{2014}asdf".as_bytes());
+            test_validate_input(test_file.as_slice());
+            // test_validate_input(b"\x82\xA0\x82\xA2\x82\xA4");
+            // test_validate_input(b"\xEF\xBB\xBFfoo\xFFbar");
+        }
     }
 }

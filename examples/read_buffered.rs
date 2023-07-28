@@ -17,9 +17,7 @@ fn main() -> Result<(), quick_xml::Error> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
-                let name = e.name();
-                let name = reader.decoder().decode(name.as_ref())?;
-                println!("read start event {:?}", name.as_ref());
+                println!("read start event {:?}", e.name().as_ref());
                 count += 1;
             }
             Ok(Event::Eof) => break, // exits the loop when reaching end of file

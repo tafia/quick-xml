@@ -30,7 +30,7 @@ use {crate::de::DeError, serde::Serialize};
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
 /// loop {
 ///     match reader.read_event() {
-///         Ok(Event::Start(e)) if e.name().as_ref() == b"this_tag" => {
+///         Ok(Event::Start(e)) if e.name().as_ref() == "this_tag" => {
 ///
 ///             // crates a new element ... alternatively we could reuse `e` by calling
 ///             // `e.into_owned()`
@@ -45,7 +45,7 @@ use {crate::de::DeError, serde::Serialize};
 ///             // writes the event to the writer
 ///             assert!(writer.write_event(Event::Start(elem)).is_ok());
 ///         },
-///         Ok(Event::End(e)) if e.name().as_ref() == b"this_tag" => {
+///         Ok(Event::End(e)) if e.name().as_ref() == "this_tag" => {
 ///             assert!(writer.write_event(Event::End(BytesEnd::new("my_elem"))).is_ok());
 ///         },
 ///         Ok(Event::Eof) => break,
@@ -139,7 +139,7 @@ impl<W: Write> Writer<W> {
         let mut next_should_line_break = true;
         let result = match *event.as_ref() {
             Event::Start(ref e) => {
-                let result = self.write_wrapped(b"<", e, b">");
+                let result = self.write_wrapped(b"<", e.as_bytes(), b">");
                 if let Some(i) = self.indent.as_mut() {
                     i.grow();
                 }
@@ -149,23 +149,23 @@ impl<W: Write> Writer<W> {
                 if let Some(i) = self.indent.as_mut() {
                     i.shrink();
                 }
-                self.write_wrapped(b"</", e, b">")
+                self.write_wrapped(b"</", e.as_bytes(), b">")
             }
-            Event::Empty(ref e) => self.write_wrapped(b"<", e, b"/>"),
+            Event::Empty(ref e) => self.write_wrapped(b"<", e.as_bytes(), b"/>"),
             Event::Text(ref e) => {
                 next_should_line_break = false;
-                self.write(e)
+                self.write(&e.as_bytes())
             }
-            Event::Comment(ref e) => self.write_wrapped(b"<!--", e, b"-->"),
+            Event::Comment(ref e) => self.write_wrapped(b"<!--", e.as_bytes(), b"-->"),
             Event::CData(ref e) => {
                 next_should_line_break = false;
                 self.write(b"<![CDATA[")?;
-                self.write(e)?;
+                self.write(e.as_bytes())?;
                 self.write(b"]]>")
             }
-            Event::Decl(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::PI(ref e) => self.write_wrapped(b"<?", e, b"?>"),
-            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE ", e, b">"),
+            Event::Decl(ref e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
+            Event::PI(ref e) => self.write_wrapped(b"<?", e.as_bytes(), b"?>"),
+            Event::DocType(ref e) => self.write_wrapped(b"<!DOCTYPE ", e.as_bytes(), b">"),
             Event::Eof => Ok(()),
         };
         if let Some(i) = self.indent.as_mut() {
@@ -244,7 +244,7 @@ impl<W: Write> Writer<W> {
     /// writer.create_element("tag")
     ///     .write_inner_content(|writer| {
     ///         let fruits = ["apple", "orange"];
-    ///         for (quant, item) in fruits.iter().enumerate() {
+    ///         for (quant, &item) in fruits.iter().enumerate() {
     ///             writer
     ///                 .create_element("fruit")
     ///                 .with_attribute(("quantity", quant.to_string().as_str()))
@@ -748,7 +748,7 @@ mod indentation {
             .with_attribute(("attr2", "value2"))
             .write_inner_content(|writer| {
                 let fruits = ["apple", "orange", "banana"];
-                for (quant, item) in fruits.iter().enumerate() {
+                for (quant, &item) in fruits.iter().enumerate() {
                     writer
                         .create_element("fruit")
                         .with_attribute(("quantity", quant.to_string().as_str()))
