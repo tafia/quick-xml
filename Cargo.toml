@@ -16,8 +16,7 @@ include = ["src/*", "LICENSE-MIT.md", "README.md"]
 [dependencies]
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
-# FIXME: remove upper bound when https://github.com/tafia/quick-xml/issues/630 is resolved
-serde = { version = ">=1.0.100,<1.0.181", optional = true }
+serde = { version = ">=1.0.100", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
 arbitrary = { version = "1", features = ["derive"], optional = true }

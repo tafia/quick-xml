@@ -12,6 +12,9 @@
 
 MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 
+Enum representation was changed (it was buggy anyway) to ensure compatibility with
+serde >= 1.0.181
+
 ### New Features
 
 - [#545]: Resolve well-known namespaces (`xml` and `xmlns`) to their appropriate URIs.
@@ -40,11 +43,13 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
   (and newly added `ElementWriter::write_inner_content_async` of course).
 - [#662]: Get rid of some allocations during serde deserialization.
 - [#665]: Improve serialization of `xs:list`s when some elements serialized to an empty string.
+- [#630]: Fixed compatibility with serde >= 1.0.181
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
 [#567]: https://github.com/tafia/quick-xml/issues/567
 [#580]: https://github.com/tafia/quick-xml/issues/580
 [#619]: https://github.com/tafia/quick-xml/issues/619
+[#630]: https://github.com/tafia/quick-xml/issues/630
 [#635]: https://github.com/tafia/quick-xml/pull/635
 [#643]: https://github.com/tafia/quick-xml/pull/643
 [#649]: https://github.com/tafia/quick-xml/pull/646
