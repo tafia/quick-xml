@@ -67,6 +67,7 @@ to get an offset of the error position. For `SyntaxError`s the range
   To get an error position use `error_position()`.
 - [#738]: Add an example of how to deserialize XML elements into Rust enums using an
   intermediate custom deserializer.
+- [#748]: Implement `Clone` for [`DeEvent`], [`PayloadEvent`] and [`Text`].
 
 [#275]: https://github.com/tafia/quick-xml/issues/275
 [#362]: https://github.com/tafia/quick-xml/issues/362
@@ -82,6 +83,10 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#705]: https://github.com/tafia/quick-xml/pull/705
 [#722]: https://github.com/tafia/quick-xml/pull/722
 [#738]: https://github.com/tafia/quick-xml/pull/738
+[#748]: https://github.com/tafia/quick-xml/pull/748
+[`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
+[`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
+[`Text`]: https://docs.rs/quick-xml/latest/quick_xml/de/struct.Text.html
 
 
 ## 0.31.0 -- 2023-10-22
