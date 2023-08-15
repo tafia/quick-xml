@@ -991,7 +991,7 @@ mod without_root {
                         </InternallyTagged>");
             }
 
-            /// Name `$text` has no special meaning in untagged enums
+            /// Name `$text` has no special meaning in adjacently tagged enums
             mod adjacently_tagged {
                 use super::*;
                 use pretty_assertions::assert_eq;
