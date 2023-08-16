@@ -412,23 +412,19 @@ impl NamespaceResolver {
         for a in start.attributes().with_checks(false) {
             if let Ok(Attribute { key: k, value: v }) = a {
                 match k.as_namespace_binding() {
-                    Some(PrefixDeclaration::Default) => {
+                    Some(pd) => {
                         let start = buffer.len();
+                        let prefix_len = match pd {
+                            PrefixDeclaration::Default => 0,
+                            PrefixDeclaration::Named(prefix) => {
+                                buffer.extend_from_slice(prefix);
+                                prefix.len()
+                            }
+                        };
                         buffer.extend_from_slice(&v);
                         self.bindings.push(NamespaceEntry {
                             start,
-                            prefix_len: 0,
-                            value_len: v.len(),
-                            level,
-                        });
-                    }
-                    Some(PrefixDeclaration::Named(prefix)) => {
-                        let start = buffer.len();
-                        buffer.extend_from_slice(prefix);
-                        buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceEntry {
-                            start,
-                            prefix_len: prefix.len(),
+                            prefix_len,
                             value_len: v.len(),
                             level,
                         });
