@@ -118,7 +118,8 @@ macro_rules! deserialize_variant {
 /// );
 /// ```
 ///
-/// You don't have to provide all the enumeration variants and can use `_` to put every undefined tag into an enumeration variant like so:
+/// You don't necessarily have to provide all the enumeration variants and can use `_` to put every undefined tag into an enumeration variant.
+/// This default variant (`_ => ...`) must be the last one to appear in the macro, like `_ => Other` in the example below:
 /// # Example
 ///
 /// ```
