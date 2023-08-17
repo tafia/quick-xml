@@ -150,8 +150,8 @@ macro_rules! deserialize_variant {
 /// // and information about all the variants
 /// impl_deserialize_for_internally_tagged_enum!{
 ///     InternallyTaggedEnum, "@tag",
-///     ("NewType"    => NewType(Newtype)),
-///     (_  => Other),
+///     ("NewType" => NewType(Newtype)),
+///     (_ => Other),
 /// }
 ///
 /// assert_eq!(
