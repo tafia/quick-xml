@@ -11,6 +11,7 @@
 ## Unreleased
 
 ### New Features
+* [#629]: Added a default case to `impl_deserialize_for_internally_tagged_enum` macro so that it can handle every attribute that does not match existing cases within an enum variant.
 
 ### Bug Fixes
 
