@@ -182,8 +182,8 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
         $(
             ($variant_tag:literal => $($variant:tt)+ )
         ),*
-        $(, (_ => $($default_variant:tt)+ ))?
-        $(,)*
+        $(, (_ => $($default_variant:tt)? ))?
+        $(,)?
     ) => {
         impl<'de> serde::de::Deserialize<'de> for $enum {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
