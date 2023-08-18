@@ -1,8 +1,10 @@
+use std::future::Future;
+
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::errors::Result;
-use crate::events::Event;
-use crate::Writer;
+use crate::events::{BytesCData, BytesText, Event};
+use crate::{ElementWriter, Writer};
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
     /// Writes the given event to the underlying writer. Async version of [`Writer::write_event`].
@@ -79,6 +81,236 @@ impl<W: AsyncWrite + Unpin> Writer<W> {
         self.write_async(value).await?;
         self.write_async(after).await?;
         Ok(())
+    }
+}
+
+impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
+    /// Write some text inside the current element.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::events::BytesText;
+    /// # use tokio::io::AsyncWriteExt;
+    /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+    /// let mut buffer = Vec::new();
+    /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    ///
+    /// writer
+    ///     .create_element("paired")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .with_attribute(("attr2", "value2"))
+    ///     .write_text_content_async(BytesText::new("text"))
+    ///     .await
+    ///     .expect("cannot write content");
+    ///
+    /// tokio_buffer.flush().await.expect("flush failed");
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     r#"<paired attr1="value1" attr2="value2">text</paired>"#
+    /// );
+    /// # }
+    pub async fn write_text_content_async(self, text: BytesText<'_>) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event_async(Event::Start(self.start_tag.borrow()))
+            .await?;
+        self.writer.write_event_async(Event::Text(text)).await?;
+        self.writer
+            .write_event_async(Event::End(self.start_tag.to_end()))
+            .await?;
+        Ok(self.writer)
+    }
+
+    /// Write a CData event `<![CDATA[...]]>` inside the current element.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::events::BytesCData;
+    /// # use tokio::io::AsyncWriteExt;
+    /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+    /// let mut buffer = Vec::new();
+    /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    ///
+    /// writer
+    ///     .create_element("paired")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .with_attribute(("attr2", "value2"))
+    ///     .write_cdata_content_async(BytesCData::new("text & content"))
+    ///     .await
+    ///     .expect("cannot write content");
+    ///
+    /// tokio_buffer.flush().await.expect("flush failed");
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     r#"<paired attr1="value1" attr2="value2"><![CDATA[text & content]]></paired>"#
+    /// );
+    /// # }
+    pub async fn write_cdata_content_async(
+        self,
+        text: BytesCData<'_>,
+    ) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event_async(Event::Start(self.start_tag.borrow()))
+            .await?;
+        self.writer.write_event_async(Event::CData(text)).await?;
+        self.writer
+            .write_event_async(Event::End(self.start_tag.to_end()))
+            .await?;
+        Ok(self.writer)
+    }
+
+    /// Write a processing instruction `<?...?>` inside the current element.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::events::BytesText;
+    /// # use tokio::io::AsyncWriteExt;
+    /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+    /// let mut buffer = Vec::new();
+    /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    ///
+    /// writer
+    ///     .create_element("paired")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .with_attribute(("attr2", "value2"))
+    ///     // NOTE: We cannot use BytesText::new here, because it escapes strings,
+    ///     // but processing instruction content should not be escaped
+    ///     .write_pi_content_async(BytesText::from_escaped(r#"xml-stylesheet href="style.css""#))
+    ///     .await
+    ///     .expect("cannot write content");
+    ///
+    /// tokio_buffer.flush().await.expect("flush failed");
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     r#"<paired attr1="value1" attr2="value2">
+    ///     <?xml-stylesheet href="style.css"?>
+    /// </paired>"#
+    /// );
+    /// # }
+    pub async fn write_pi_content_async(self, text: BytesText<'_>) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event_async(Event::Start(self.start_tag.borrow()))
+            .await?;
+        self.writer.write_event_async(Event::PI(text)).await?;
+        self.writer
+            .write_event_async(Event::End(self.start_tag.to_end()))
+            .await?;
+        Ok(self.writer)
+    }
+
+    /// Write an empty (self-closing) tag.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::events::BytesText;
+    /// # use tokio::io::AsyncWriteExt;
+    /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+    /// let mut buffer = Vec::new();
+    /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    ///
+    /// writer
+    ///     .create_element("empty")
+    ///     .with_attribute(("attr1", "value1"))
+    ///     .with_attribute(("attr2", "value2"))
+    ///     .write_empty_async()
+    ///     .await
+    ///     .expect("cannot write content");
+    ///
+    /// tokio_buffer.flush().await.expect("flush failed");
+    ///
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     r#"<empty attr1="value1" attr2="value2"/>"#
+    /// );
+    /// # }
+    pub async fn write_empty_async(self) -> Result<&'a mut Writer<W>> {
+        self.writer
+            .write_event_async(Event::Empty(self.start_tag))
+            .await?;
+        Ok(self.writer)
+    }
+
+    /// Create a new scope for writing XML inside the current element.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// # use quick_xml::events::BytesText;
+    /// # use tokio::io::AsyncWriteExt;
+    /// # #[tokio::main(flavor = "current_thread")] async fn main() {
+    /// let mut buffer = Vec::new();
+    /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
+    /// let mut writer = Writer::new_with_indent(&mut tokio_buffer, b' ', 4);
+    ///
+    /// writer
+    ///     .create_element("outer")
+    ///     .with_attributes([("attr1", "value1"), ("attr2", "value2")])
+    ///     .write_inner_content_async(|writer| async move {
+    ///         let fruits = ["apple", "orange", "banana"];
+    ///         for (quant, item) in fruits.iter().enumerate() {
+    ///             writer
+    ///                 .create_element("fruit")
+    ///                 .with_attributes([("quantity", quant.to_string().as_str())])
+    ///                 .write_text_content_async(BytesText::new(item))
+    ///                 .await?;
+    ///         }
+    ///         writer
+    ///             .create_element("inner")
+    ///             .write_inner_content_async(|writer| async move {
+    ///                 writer.create_element("empty").write_empty_async().await?;
+    ///                 Ok(writer)
+    ///             })
+    ///             .await?;
+    ///
+    ///        Ok(writer)
+    ///     })
+    ///     .await
+    ///     .expect("cannot write content");
+    ///
+    /// tokio_buffer.flush().await.expect("flush failed");
+    /// assert_eq!(
+    ///     std::str::from_utf8(&buffer).unwrap(),
+    ///     r#"<outer attr1="value1" attr2="value2">
+    ///     <fruit quantity="0">apple</fruit>
+    ///     <fruit quantity="1">orange</fruit>
+    ///     <fruit quantity="2">banana</fruit>
+    ///     <inner>
+    ///         <empty/>
+    ///     </inner>
+    /// </outer>"#
+    /// );
+    /// # }
+    pub async fn write_inner_content_async<F, Fut>(
+        mut self,
+        closure: F,
+    ) -> Result<&'a mut Writer<W>>
+    where
+        F: FnOnce(&'a mut Writer<W>) -> Fut,
+        Fut: Future<Output = Result<&'a mut Writer<W>>>,
+    {
+        self.writer
+            .write_event_async(Event::Start(self.start_tag.borrow()))
+            .await?;
+        self.writer = closure(self.writer).await?;
+        self.writer
+            .write_event_async(Event::End(self.start_tag.to_end()))
+            .await?;
+        Ok(self.writer)
     }
 }
 

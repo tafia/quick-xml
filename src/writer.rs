@@ -97,6 +97,59 @@ impl<W> Writer<W> {
     pub fn get_ref(&self) -> &W {
         &self.writer
     }
+
+    /// Provides a simple, high-level API for writing XML elements.
+    ///
+    /// Returns an [`ElementWriter`] that simplifies setting attributes and writing
+    /// content inside the element.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use quick_xml::Result;
+    /// # fn main() -> Result<()> {
+    /// use quick_xml::events::{BytesStart, BytesText, Event};
+    /// use quick_xml::writer::Writer;
+    /// use quick_xml::Error;
+    /// use std::io::Cursor;
+    ///
+    /// let mut writer = Writer::new(Cursor::new(Vec::new()));
+    ///
+    /// // writes <tag attr1="value1"/>
+    /// writer.create_element("tag")
+    ///     .with_attribute(("attr1", "value1"))  // chain `with_attribute()` calls to add many attributes
+    ///     .write_empty()?;
+    ///
+    /// // writes <tag attr1="value1" attr2="value2">with some text inside</tag>
+    /// writer.create_element("tag")
+    ///     .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter())  // or add attributes from an iterator
+    ///     .write_text_content(BytesText::new("with some text inside"))?;
+    ///
+    /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
+    /// writer.create_element("tag")
+    ///     .write_inner_content(|writer| {
+    ///         let fruits = ["apple", "orange"];
+    ///         for (quant, item) in fruits.iter().enumerate() {
+    ///             writer
+    ///                 .create_element("fruit")
+    ///                 .with_attribute(("quantity", quant.to_string().as_str()))
+    ///                 .write_text_content(BytesText::new(item))?;
+    ///         }
+    ///         Ok(())
+    ///     })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn create_element<'a, N>(&'a mut self, name: &'a N) -> ElementWriter<W>
+    where
+        N: 'a + AsRef<str> + ?Sized,
+    {
+        ElementWriter {
+            writer: self,
+            start_tag: BytesStart::new(name.as_ref()),
+        }
+    }
 }
 
 impl<W: Write> Writer<W> {
@@ -213,59 +266,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Provides a simple, high-level API for writing XML elements.
-    ///
-    /// Returns an [`ElementWriter`] that simplifies setting attributes and writing
-    /// content inside the element.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use quick_xml::Result;
-    /// # fn main() -> Result<()> {
-    /// use quick_xml::events::{BytesStart, BytesText, Event};
-    /// use quick_xml::writer::Writer;
-    /// use quick_xml::Error;
-    /// use std::io::Cursor;
-    ///
-    /// let mut writer = Writer::new(Cursor::new(Vec::new()));
-    ///
-    /// // writes <tag attr1="value1"/>
-    /// writer.create_element("tag")
-    ///     .with_attribute(("attr1", "value1"))  // chain `with_attribute()` calls to add many attributes
-    ///     .write_empty()?;
-    ///
-    /// // writes <tag attr1="value1" attr2="value2">with some text inside</tag>
-    /// writer.create_element("tag")
-    ///     .with_attributes(vec![("attr1", "value1"), ("attr2", "value2")].into_iter())  // or add attributes from an iterator
-    ///     .write_text_content(BytesText::new("with some text inside"))?;
-    ///
-    /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
-    /// writer.create_element("tag")
-    ///     .write_inner_content(|writer| {
-    ///         let fruits = ["apple", "orange"];
-    ///         for (quant, item) in fruits.iter().enumerate() {
-    ///             writer
-    ///                 .create_element("fruit")
-    ///                 .with_attribute(("quantity", quant.to_string().as_str()))
-    ///                 .write_text_content(BytesText::new(item))?;
-    ///         }
-    ///         Ok(())
-    ///     })?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[must_use]
-    pub fn create_element<'a, N>(&'a mut self, name: &'a N) -> ElementWriter<W>
-    where
-        N: 'a + AsRef<str> + ?Sized,
-    {
-        ElementWriter {
-            writer: self,
-            start_tag: BytesStart::new(name.as_ref()),
-        }
-    }
-
     /// Write an arbitrary serializable type
     ///
     /// Note: If you are attempting to write XML in a non-UTF-8 encoding, this may not
@@ -335,12 +335,12 @@ impl<W: Write> Writer<W> {
 
 /// A struct to write an element. Contains methods to add attributes and inner
 /// elements to the element
-pub struct ElementWriter<'a, W: Write> {
+pub struct ElementWriter<'a, W> {
     writer: &'a mut Writer<W>,
     start_tag: BytesStart<'a>,
 }
 
-impl<'a, W: Write> ElementWriter<'a, W> {
+impl<'a, W> ElementWriter<'a, W> {
     /// Adds an attribute to this element.
     pub fn with_attribute<'b, I>(mut self, attr: I) -> Self
     where
@@ -361,7 +361,9 @@ impl<'a, W: Write> ElementWriter<'a, W> {
         self.start_tag.extend_attributes(attributes);
         self
     }
+}
 
+impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write some text inside the current element.
     pub fn write_text_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
         self.writer

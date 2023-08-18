@@ -49,7 +49,7 @@ path = "benches/macrobenches.rs"
 [features]
 default = []
 
-## Enables support for asynchronous reading from `tokio`'s IO-Traits by enabling
+## Enables support for asynchronous reading and writing from `tokio`'s IO-Traits by enabling
 ## [reading events] from types implementing [`tokio::io::AsyncBufRead`].
 ##
 ## [reading events]: crate::reader::Reader::read_event_into_async
