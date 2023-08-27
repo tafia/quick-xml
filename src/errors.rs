@@ -2,26 +2,28 @@
 
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
-use crate::utils::write_byte_string;
-use std::fmt;
 use std::io::Error as IoError;
 use std::str::Utf8Error;
 use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 /// The error type used by this crate.
-#[derive(Clone, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum Error {
     /// IO error.
     ///
     /// `Arc<IoError>` instead of `IoError` since `IoError` is not `Clone`.
+    #[error("I/O error: {0}")]
     Io(Arc<IoError>),
     /// Input decoding error. If `encoding` feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
+    #[error("Malformed input, decoding impossible")]
     NonDecodable(Option<Utf8Error>),
     /// Unexpected End of File
+    #[error("Unexpected EOF during reading {0}")]
     UnexpectedEof(String),
     /// End event mismatch
+    #[error("Expecting </{expected}> found </{found}>")]
     EndEventMismatch {
         /// Expected end event
         expected: String,
@@ -29,23 +31,33 @@ pub enum Error {
         found: String,
     },
     /// Unexpected token
+    #[error("Unexpected token '{0}'")]
     UnexpectedToken(String),
     /// Unexpected <!>
+    #[error(
+        "Only Comment (`--`), CDATA (`[CDATA[`) and DOCTYPE (`DOCTYPE`) nodes can start with a '!', but symbol `{}` found",
+        *(.0) as char)]
     UnexpectedBang(u8),
     /// Text not found, expected `Event::Text`
+    #[error("Cannot read text, expecting Event::Text")]
     TextNotFound,
     /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
     /// that was found or `None` if an xml declaration doesn't contain attributes.
+    #[error("XmlDecl must start with 'version' attribute, found {0:?}")]
     XmlDeclWithoutVersion(Option<String>),
     /// Empty `Event::DocType`. `<!doctype foo>` is correct but `<!doctype > is not.
     ///
     /// See <https://www.w3.org/TR/xml11/#NT-doctypedecl>
+    #[error("DOCTYPE declaration must not be empty")]
     EmptyDocType,
     /// Attribute parsing error
+    #[error("error while parsing attribute: {0}")]
     InvalidAttr(AttrError),
     /// Escape error
+    #[error("{0}")]
     EscapeError(EscapeError),
     /// Specified namespace prefix is unknown, cannot resolve namespace for it
+    #[error("Uknonwn namespace prefix '{:?}'", crate::utils::Bytes(.0))]
     UnknownPrefix(Vec<u8>),
 }
 
@@ -90,52 +102,6 @@ impl From<AttrError> for Error {
 
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
-            Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
-            Error::EndEventMismatch { expected, found } => {
-                write!(f, "Expecting </{}> found </{}>", expected, found)
-            }
-            Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
-            Error::UnexpectedBang(b) => write!(
-                f,
-                "Only Comment (`--`), CDATA (`[CDATA[`) and DOCTYPE (`DOCTYPE`) nodes can start with a '!', but symbol `{}` found",
-                *b as char
-            ),
-            Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
-            Error::XmlDeclWithoutVersion(e) => write!(
-                f,
-                "XmlDecl must start with 'version' attribute, found {:?}",
-                e
-            ),
-            Error::EmptyDocType => write!(f, "DOCTYPE declaration must not be empty"),
-            Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
-            Error::EscapeError(e) => write!(f, "{}", e),
-            Error::UnknownPrefix(prefix) => {
-                f.write_str("Unknown namespace prefix '")?;
-                write_byte_string(f, prefix)?;
-                f.write_str("'")
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Error::Io(e) => Some(e),
-            Error::NonDecodable(Some(e)) => Some(e),
-            Error::InvalidAttr(e) => Some(e),
-            Error::EscapeError(e) => Some(e),
-            _ => None,
-        }
-    }
-}
 
 #[cfg(feature = "serialize")]
 pub mod serialize {
