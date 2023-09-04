@@ -564,16 +564,17 @@ mod namespaces {
             let ns = Namespace(b"default");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns='default'", 0));
-            assert_eq!(resolver.buffer, b"default");
+            assert_eq!(&resolver.buffer[s..], b"default");
 
             // Check that tags without namespaces does not change result
             resolver.push(&BytesStart::from_content("", 0));
-            assert_eq!(resolver.buffer, b"default");
+            assert_eq!(&resolver.buffer[s..], b"default");
             resolver.pop();
 
-            assert_eq!(resolver.buffer, b"default");
+            assert_eq!(&resolver.buffer[s..], b"default");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(ns), LocalName(b"simple"))
@@ -593,11 +594,12 @@ mod namespaces {
             let new_ns = Namespace(b"new");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns='old'", 0));
             resolver.push(&BytesStart::from_content(" xmlns='new'", 0));
 
-            assert_eq!(resolver.buffer, b"oldnew");
+            assert_eq!(&resolver.buffer[s..], b"oldnew");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(new_ns), LocalName(b"simple"))
@@ -609,7 +611,7 @@ mod namespaces {
             assert_eq!(resolver.find(name), Bound(new_ns));
 
             resolver.pop();
-            assert_eq!(resolver.buffer, b"old");
+            assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"simple"))
@@ -631,11 +633,12 @@ mod namespaces {
             let old_ns = Namespace(b"old");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns='old'", 0));
             resolver.push(&BytesStart::from_content(" xmlns=''", 0));
 
-            assert_eq!(resolver.buffer, b"old");
+            assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Unbound, LocalName(b"simple"))
@@ -647,7 +650,7 @@ mod namespaces {
             assert_eq!(resolver.find(name), Unbound);
 
             resolver.pop();
-            assert_eq!(resolver.buffer, b"old");
+            assert_eq!(&resolver.buffer[s..], b"old");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"simple"))
@@ -671,16 +674,17 @@ mod namespaces {
             let ns = Namespace(b"default");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns:p='default'", 0));
-            assert_eq!(resolver.buffer, b"pdefault");
+            assert_eq!(&resolver.buffer[s..], b"pdefault");
 
             // Check that tags without namespaces does not change result
             resolver.push(&BytesStart::from_content("", 0));
-            assert_eq!(resolver.buffer, b"pdefault");
+            assert_eq!(&resolver.buffer[s..], b"pdefault");
             resolver.pop();
 
-            assert_eq!(resolver.buffer, b"pdefault");
+            assert_eq!(&resolver.buffer[s..], b"pdefault");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(ns), LocalName(b"with-declared-prefix"))
@@ -700,11 +704,12 @@ mod namespaces {
             let new_ns = Namespace(b"new");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns:p='old'", 0));
             resolver.push(&BytesStart::from_content(" xmlns:p='new'", 0));
 
-            assert_eq!(resolver.buffer, b"poldpnew");
+            assert_eq!(&resolver.buffer[s..], b"poldpnew");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(new_ns), LocalName(b"with-declared-prefix"))
@@ -716,7 +721,7 @@ mod namespaces {
             assert_eq!(resolver.find(name), Bound(new_ns));
 
             resolver.pop();
-            assert_eq!(resolver.buffer, b"pold");
+            assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
@@ -738,11 +743,12 @@ mod namespaces {
             let old_ns = Namespace(b"old");
 
             let mut resolver = NamespaceResolver::default();
+            let s = resolver.buffer.len();
 
             resolver.push(&BytesStart::from_content(" xmlns:p='old'", 0));
             resolver.push(&BytesStart::from_content(" xmlns:p=''", 0));
 
-            assert_eq!(resolver.buffer, b"poldp");
+            assert_eq!(&resolver.buffer[s..], b"poldp");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Unknown(b"p".to_vec()), LocalName(b"with-declared-prefix"))
@@ -754,7 +760,7 @@ mod namespaces {
             assert_eq!(resolver.find(name), Unknown(b"p".to_vec()));
 
             resolver.pop();
-            assert_eq!(resolver.buffer, b"pold");
+            assert_eq!(&resolver.buffer[s..], b"pold");
             assert_eq!(
                 resolver.resolve(name, true),
                 (Bound(old_ns), LocalName(b"with-declared-prefix"))
