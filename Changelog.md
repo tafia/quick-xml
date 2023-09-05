@@ -16,6 +16,10 @@
 
 ### Misc Changes
 
+- [#643] Bumped MSRV to 1.56. In practice the previous MSRV was incorrect in many cases.
+
+[#643]: https://github.com/tafia/quick-xml/pull/643
+
 
 ## 0.30.0 -- 2023-07-23
 
