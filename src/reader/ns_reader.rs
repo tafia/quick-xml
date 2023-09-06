@@ -21,9 +21,6 @@ use crate::reader::{Reader, Span, XmlSource};
 pub struct NsReader<R> {
     /// An XML reader
     pub(super) reader: Reader<R>,
-    /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
-    /// and an `=`) and namespace values.
-    buffer: Vec<u8>,
     /// A buffer to manage namespaces
     ns_resolver: NamespaceResolver,
     /// We cannot pop data from the namespace stack until returned `Empty` or `End`
@@ -49,7 +46,6 @@ impl<R> NsReader<R> {
     fn new(reader: Reader<R>) -> Self {
         Self {
             reader,
-            buffer: Vec::new(),
             ns_resolver: NamespaceResolver::default(),
             pending_pop: false,
         }
@@ -66,7 +62,7 @@ impl<R> NsReader<R> {
 
     pub(super) fn pop(&mut self) {
         if self.pending_pop {
-            self.ns_resolver.pop(&mut self.buffer);
+            self.ns_resolver.pop();
             self.pending_pop = false;
         }
     }
@@ -74,11 +70,11 @@ impl<R> NsReader<R> {
     pub(super) fn process_event<'i>(&mut self, event: Result<Event<'i>>) -> Result<Event<'i>> {
         match event {
             Ok(Event::Start(e)) => {
-                self.ns_resolver.push(&e, &mut self.buffer);
+                self.ns_resolver.push(&e)?;
                 Ok(Event::Start(e))
             }
             Ok(Event::Empty(e)) => {
-                self.ns_resolver.push(&e, &mut self.buffer);
+                self.ns_resolver.push(&e)?;
                 // notify next `read_event_impl()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
@@ -99,19 +95,9 @@ impl<R> NsReader<R> {
         event: Result<Event<'i>>,
     ) -> Result<(ResolveResult, Event<'i>)> {
         match event {
-            Ok(Event::Start(e)) => Ok((
-                self.ns_resolver.find(e.name(), &self.buffer),
-                Event::Start(e),
-            )),
-            Ok(Event::Empty(e)) => Ok((
-                self.ns_resolver.find(e.name(), &self.buffer),
-                Event::Empty(e),
-            )),
-            Ok(Event::End(e)) => Ok((
-                // Comment that prevent cargo rmt
-                self.ns_resolver.find(e.name(), &self.buffer),
-                Event::End(e),
-            )),
+            Ok(Event::Start(e)) => Ok((self.ns_resolver.find(e.name()), Event::Start(e))),
+            Ok(Event::Empty(e)) => Ok((self.ns_resolver.find(e.name()), Event::Empty(e))),
+            Ok(Event::End(e)) => Ok((self.ns_resolver.find(e.name()), Event::End(e))),
             Ok(e) => Ok((ResolveResult::Unbound, e)),
             Err(e) => Err(e),
         }
@@ -169,7 +155,7 @@ impl<R> NsReader<R> {
     /// [`resolve_element()`]: Self::resolve_element()
     #[inline]
     pub fn resolve<'n>(&self, name: QName<'n>, attribute: bool) -> (ResolveResult, LocalName<'n>) {
-        self.ns_resolver.resolve(name, &self.buffer, !attribute)
+        self.ns_resolver.resolve(name, !attribute)
     }
 
     /// Resolves a potentially qualified **element name** into _(namespace name, local name)_.
@@ -225,7 +211,7 @@ impl<R> NsReader<R> {
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn resolve_element<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
-        self.ns_resolver.resolve(name, &self.buffer, true)
+        self.ns_resolver.resolve(name, true)
     }
 
     /// Resolves a potentially qualified **attribute name** into _(namespace name, local name)_.
@@ -296,7 +282,7 @@ impl<R> NsReader<R> {
     /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
-        self.ns_resolver.resolve(name, &self.buffer, false)
+        self.ns_resolver.resolve(name, false)
     }
 }
 

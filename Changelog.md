@@ -12,13 +12,18 @@
 
 ### New Features
 
+- [#545]: Resolve well-known namespaces (`xml` and `xmlns`) to their appropriate URIs.
+  Also, enforce namespace constraints related to these well-known namespaces.
+
 ### Bug Fixes
 
 ### Misc Changes
 
-- [#643] Bumped MSRV to 1.56. In practice the previous MSRV was incorrect in many cases.
-- [#643] Adopted Rust 2021 edition.
+- [#643]: Bumped MSRV to 1.56. In practice the previous MSRV was incorrect in many cases.
+- [#643]: Adopted Rust 2021 edition.
+- [#545]: Add new `Error` variant -- `Error::InvalidPrefixBind`
 
+[#545]: https://github.com/tafia/quick-xml/pull/545
 [#643]: https://github.com/tafia/quick-xml/pull/643
 
 
