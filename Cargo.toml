@@ -2,7 +2,7 @@
 name = "quick-xml"
 version = "0.30.0"
 description = "High performance xml reader and writer"
-edition = "2018"
+edition = "2021"
 
 documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
@@ -10,7 +10,7 @@ repository = "https://github.com/tafia/quick-xml"
 keywords = ["xml", "serde", "parser", "writer", "html"]
 categories = ["asynchronous", "encoding", "parsing", "parser-implementations"]
 license = "MIT"
-rust-version = "1.52"
+rust-version = "1.56"
 include = ["src/*", "LICENSE-MIT.md", "README.md"]
 
 [dependencies]
