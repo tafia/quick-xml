@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
+
 ### New Features
 
 - [#545]: Resolve well-known namespaces (`xml` and `xmlns`) to their appropriate URIs.
@@ -21,7 +23,7 @@
 
 - [#643]: Bumped MSRV to 1.56. In practice the previous MSRV was incorrect in many cases.
 - [#643]: Adopted Rust 2021 edition.
-- [#545]: Add new `Error` variant -- `Error::InvalidPrefixBind`
+- [#545]: Added new `Error` variant -- `Error::InvalidPrefixBind`.
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
 [#643]: https://github.com/tafia/quick-xml/pull/643
