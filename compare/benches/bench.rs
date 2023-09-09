@@ -79,12 +79,12 @@ fn low_level_comparison(c: &mut Criterion) {
             BenchmarkId::new("maybe_xml", filename),
             *data,
             |b, input| {
-                use maybe_xml::eval::recv::RecvEvaluator;
+                use maybe_xml::eval::recv::Evaluator;
                 use maybe_xml::token::borrowed::Token;
 
                 b.iter(|| {
                     let mut input = input.as_bytes();
-                    let mut eval = RecvEvaluator::new();
+                    let mut eval = Evaluator::new();
 
                     let mut count = criterion::black_box(0);
                     loop {

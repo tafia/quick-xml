@@ -2,13 +2,13 @@
 name = "compare"
 version = "0.1.0"
 authors = ["Johann Tuffe <tafia973@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-criterion = "0.3"
-maybe_xml = "0.2"
+criterion = "0.5"
+maybe_xml = "0.3"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
 rusty_xml = { version = "0.3", package = "RustyXML" }
@@ -16,9 +16,9 @@ xml_oxide = "0.3"
 xml-rs = "0.8"
 xml5ever = "0.17"
 xmlparser = "0.13"
-serde-xml-rs = "0.5"
+serde-xml-rs = "0.6"
 serde = { version = "1.0", features = [ "derive" ] }
-pretty_assertions = "1.2"
+pretty_assertions = "1.4"
 
 [[bench]]
 name = "bench"
