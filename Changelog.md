@@ -24,9 +24,12 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#643]: Bumped MSRV to 1.56. In practice the previous MSRV was incorrect in many cases.
 - [#643]: Adopted Rust 2021 edition.
 - [#545]: Added new `Error` variant -- `Error::InvalidPrefixBind`.
+- [#651]: Relax requirement for version of `arbitrary` dependency -- we're actually
+  compatible with version 1.0.0 and up.
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
 [#643]: https://github.com/tafia/quick-xml/pull/643
+[#651]: https://github.com/tafia/quick-xml/pull/651
 
 
 ## 0.30.0 -- 2023-07-23

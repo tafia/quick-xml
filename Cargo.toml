@@ -20,7 +20,7 @@ encoding_rs = { version = "0.8", optional = true }
 serde = { version = ">=1.0.100,<1.0.181", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
-arbitrary = { version = "1.2.3", features = ["derive"], optional = true }
+arbitrary = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = "0.4"
