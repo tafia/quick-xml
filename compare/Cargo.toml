@@ -17,7 +17,10 @@ xml-rs = "0.8"
 xml5ever = "0.17"
 xmlparser = "0.13"
 serde-xml-rs = "0.6"
-serde = { version = "1.0", features = [ "derive" ] }
+# Do not use "derive" feature, because it slowdown compilation
+# See https://github.com/serde-rs/serde/pull/2588
+serde = "1.0"
+serde_derive = "1.0"
 pretty_assertions = "1.4"
 
 [[bench]]
