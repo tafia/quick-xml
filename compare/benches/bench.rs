@@ -239,32 +239,24 @@ fn serde_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("serde");
 
     #[derive(Debug, Deserialize)]
-    struct Rss {
-        channel: Channel,
+    struct Rss<E> {
+        channel: Channel<E>,
     }
 
     #[derive(Debug, Deserialize)]
-    struct Channel {
+    struct Channel<E> {
         title: String,
-        #[serde(rename = "item", default)]
-        items: Vec<Item>,
+        #[serde(rename = "item", default = "Vec::new")]
+        items: Vec<Item<E>>,
     }
 
     #[derive(Debug, Deserialize)]
-    struct Item {
+    struct Item<E> {
         title: String,
         link: String,
         #[serde(rename = "pubDate")]
         pub_date: String,
-        enclosure: Option<Enclosure>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct Enclosure {
-        url: String,
-        length: String,
-        #[serde(rename = "type")]
-        typ: String,
+        enclosure: Option<E>,
     }
 
     group.throughput(Throughput::Bytes(SAMPLE_RSS.len() as u64));
@@ -273,8 +265,20 @@ fn serde_comparison(c: &mut Criterion) {
         BenchmarkId::new("quick_xml", "sample_rss.xml"),
         SAMPLE_RSS,
         |b, input| {
+            #[derive(Debug, Deserialize)]
+            struct Enclosure {
+                #[serde(rename = "@url")]
+                url: String,
+
+                #[serde(rename = "@length")]
+                length: String,
+
+                #[serde(rename = "@type")]
+                typ: String,
+            }
+
             b.iter(|| {
-                let rss: Rss = criterion::black_box(quick_xml::de::from_str(input).unwrap());
+                let rss: Rss<Enclosure> = criterion::black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
@@ -297,8 +301,19 @@ fn serde_comparison(c: &mut Criterion) {
         BenchmarkId::new("xml_rs", "sample_rss.xml"),
         SAMPLE_RSS,
         |b, input| {
+            // serde_xml_rs supports @-notation for attributes, but applies it only
+            // for serialization
+            #[derive(Debug, Deserialize)]
+            struct Enclosure {
+                url: String,
+                length: String,
+
+                #[serde(rename = "type")]
+                typ: String,
+            }
+
             b.iter(|| {
-                let rss: Rss = criterion::black_box(serde_xml_rs::from_str(input).unwrap());
+                let rss: Rss<Enclosure> = criterion::black_box(serde_xml_rs::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
