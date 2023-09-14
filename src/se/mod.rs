@@ -691,7 +691,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
 
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
         self,
-        name: &'static str,
+        _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
         value: &T,
@@ -700,14 +700,10 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
             value.serialize(self.ser.into_simple_type_serializer())?;
             Ok(())
         } else {
-            let mut ser = ElementSerializer {
+            let ser = ElementSerializer {
                 ser: self.ser,
-                key: match self.root_tag {
-                    Some(key) => key,
-                    None => XmlName::try_from(name)?,
-                },
+                key: XmlName::try_from(variant)?,
             };
-            ser.key = XmlName::try_from(variant)?;
             value.serialize(ser)
         }
     }
@@ -741,14 +737,10 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
                 .serialize_tuple_struct(name, len)
                 .map(Tuple::Text)
         } else {
-            let mut ser = ElementSerializer {
+            let ser = ElementSerializer {
                 ser: self.ser,
-                key: match self.root_tag {
-                    Some(key) => key,
-                    None => XmlName::try_from(name)?,
-                },
+                key: XmlName::try_from(variant)?,
             };
-            ser.key = XmlName::try_from(variant)?;
             ser.serialize_tuple_struct(name, len).map(Tuple::Element)
         }
     }
@@ -781,14 +773,10 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
                 .into(),
             ))
         } else {
-            let mut ser = ElementSerializer {
+            let ser = ElementSerializer {
                 ser: self.ser,
-                key: match self.root_tag {
-                    Some(key) => key,
-                    None => XmlName::try_from(name)?,
-                },
+                key: XmlName::try_from(variant)?,
             };
-            ser.key = XmlName::try_from(variant)?;
             ser.serialize_struct(name, len)
         }
     }
