@@ -666,13 +666,6 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, DeError> {
-        let ser = ElementSerializer {
-            ser: self.ser,
-            key: match self.root_tag {
-                Some(key) => key,
-                None => XmlName::try_from(name)?,
-            },
-        };
         if variant == TEXT_KEY {
             // We should write some text but we don't known what text to write
             Err(DeError::Unsupported(
@@ -684,7 +677,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
             ))
         } else {
             let name = XmlName::try_from(variant)?;
-            ser.ser.write_empty(name)
+            self.ser.write_empty(name)
         }
     }
 
@@ -703,17 +696,17 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, DeError> {
-        let mut ser = ElementSerializer {
-            ser: self.ser,
-            key: match self.root_tag {
-                Some(key) => key,
-                None => XmlName::try_from(name)?,
-            },
-        };
         if variant == TEXT_KEY {
-            value.serialize(ser.ser.into_simple_type_serializer())?;
+            value.serialize(self.ser.into_simple_type_serializer())?;
             Ok(())
         } else {
+            let mut ser = ElementSerializer {
+                ser: self.ser,
+                key: match self.root_tag {
+                    Some(key) => key,
+                    None => XmlName::try_from(name)?,
+                },
+            };
             ser.key = XmlName::try_from(variant)?;
             value.serialize(ser)
         }
@@ -742,19 +735,19 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, DeError> {
-        let mut ser = ElementSerializer {
-            ser: self.ser,
-            key: match self.root_tag {
-                Some(key) => key,
-                None => XmlName::try_from(name)?,
-            },
-        };
         if variant == TEXT_KEY {
-            ser.ser
+            self.ser
                 .into_simple_type_serializer()
                 .serialize_tuple_struct(name, len)
                 .map(Tuple::Text)
         } else {
+            let mut ser = ElementSerializer {
+                ser: self.ser,
+                key: match self.root_tag {
+                    Some(key) => key,
+                    None => XmlName::try_from(name)?,
+                },
+            };
             ser.key = XmlName::try_from(variant)?;
             ser.serialize_tuple_struct(name, len).map(Tuple::Element)
         }
@@ -779,13 +772,6 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, DeError> {
-        let mut ser = ElementSerializer {
-            ser: self.ser,
-            key: match self.root_tag {
-                Some(key) => key,
-                None => XmlName::try_from(name)?,
-            },
-        };
         if variant == TEXT_KEY {
             Err(DeError::Unsupported(
                 format!(
@@ -795,6 +781,13 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
                 .into(),
             ))
         } else {
+            let mut ser = ElementSerializer {
+                ser: self.ser,
+                key: match self.root_tag {
+                    Some(key) => key,
+                    None => XmlName::try_from(name)?,
+                },
+            };
             ser.key = XmlName::try_from(variant)?;
             ser.serialize_struct(name, len)
         }
