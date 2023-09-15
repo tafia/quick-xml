@@ -17,11 +17,11 @@
 //! in the XML document the current event is located.
 //!
 //! quick-xml contains optional support of asynchronous reading and writing using [tokio].
-//! To get it enable the `async-tokio` feature.
+//! To get it enable the [`async-tokio`](#async-tokio) feature.
 //!
 //! Furthermore, quick-xml also contains optional [Serde] support to directly
 //! serialize and deserialize from structs, without having to deal with the XML events.
-//! To get it enable the `serialize` feature. Read more about mapping Rust types
+//! To get it enable the [`serialize`](#serialize) feature. Read more about mapping Rust types
 //! to XML in the documentation of [`de`] module. Also check [`serde_helpers`]
 //! module.
 //!
@@ -40,7 +40,9 @@
 //! [`de`]: ./de/index.html
 #![cfg_attr(
     feature = "document-features",
-    cfg_attr(doc, doc = ::document_features::document_features!())
+    cfg_attr(doc, doc = ::document_features::document_features!(
+        feature_label = "<a id=\"{feature}\" href=\"#{feature}\"><strong><code>{feature}</code></strong></a>"
+    ))
 )]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]

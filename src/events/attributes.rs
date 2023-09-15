@@ -39,7 +39,9 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value_with()`](Self::unescape_value_with)
     ///
-    /// This method is available only if `encoding` feature is **not** enabled.
+    /// This method is available only if [`encoding`] feature is **not** enabled.
+    ///
+    /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         self.unescape_value_with(|_| None)
@@ -56,7 +58,9 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value()`](Self::unescape_value)
     ///
-    /// This method is available only if `encoding` feature is **not** enabled.
+    /// This method is available only if [`encoding`] feature is **not** enabled.
+    ///
+    /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value_with<'entity>(
         &self,

@@ -250,11 +250,13 @@ impl Parser {
 
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
     ///
-    /// If `encoding` feature is enabled, the used encoding may change after
+    /// If [`encoding`] feature is enabled, the used encoding may change after
     /// parsing the XML declaration, otherwise encoding is fixed to UTF-8.
     ///
-    /// If `encoding` feature is enabled and no encoding is specified in declaration,
+    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
     /// defaults to UTF-8.
+    ///
+    /// [`encoding`]: ../../index.html#encoding
     pub fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
