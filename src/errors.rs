@@ -16,8 +16,10 @@ pub enum Error {
     ///
     /// `Arc<IoError>` instead of `IoError` since `IoError` is not `Clone`.
     Io(Arc<IoError>),
-    /// Input decoding error. If `encoding` feature is disabled, contains `None`,
+    /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
+    ///
+    /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
     /// Unexpected End of File
     UnexpectedEof(String),

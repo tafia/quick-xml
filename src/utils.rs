@@ -90,9 +90,11 @@ where
 /// Wrapper around `Vec<u8>` that has a human-readable debug representation:
 /// printable ASCII symbols output as is, all other output in HEX notation.
 ///
-/// Also, when `serialize` feature is on, this type deserialized using
+/// Also, when [`serialize`] feature is on, this type deserialized using
 /// [`deserialize_byte_buf`](serde::Deserializer::deserialize_byte_buf) instead
 /// of vector's generic [`deserialize_seq`](serde::Deserializer::deserialize_seq)
+///
+/// [`serialize`]: ../index.html#serialize
 #[derive(PartialEq, Eq)]
 pub struct ByteBuf(pub Vec<u8>);
 
@@ -145,9 +147,11 @@ impl Serialize for ByteBuf {
 /// Wrapper around `&[u8]` that has a human-readable debug representation:
 /// printable ASCII symbols output as is, all other output in HEX notation.
 ///
-/// Also, when `serialize` feature is on, this type deserialized using
+/// Also, when [`serialize`] feature is on, this type deserialized using
 /// [`deserialize_bytes`](serde::Deserializer::deserialize_bytes) instead
 /// of vector's generic [`deserialize_seq`](serde::Deserializer::deserialize_seq)
+///
+/// [`serialize`]: ../index.html#serialize
 #[derive(PartialEq, Eq)]
 pub struct Bytes<'de>(pub &'de [u8]);
 

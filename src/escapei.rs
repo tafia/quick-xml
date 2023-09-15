@@ -144,8 +144,9 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
 /// their corresponding value.
 ///
-/// If feature `escape-html` is enabled, then recognizes all [HTML5 escapes].
+/// If feature [`escape-html`] is enabled, then recognizes all [HTML5 escapes].
 ///
+/// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
     unescape_with(raw, |_| None)
@@ -154,8 +155,9 @@ pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
 /// their corresponding value, using a resolver function for custom entities.
 ///
-/// If feature `escape-html` is enabled, then recognizes all [HTML5 escapes].
+/// If feature [`escape-html`] is enabled, then recognizes all [HTML5 escapes].
 ///
+/// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape_with<'input, 'entity, F>(
     raw: &'input str,

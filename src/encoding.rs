@@ -23,17 +23,18 @@ pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
 /// Decoder of byte slices into strings.
 ///
-/// If feature `encoding` is enabled, this encoding taken from the `"encoding"`
+/// If feature [`encoding`] is enabled, this encoding taken from the `"encoding"`
 /// XML declaration or assumes UTF-8, if XML has no <?xml ?> declaration, encoding
 /// key is not defined or contains unknown encoding.
 ///
 /// The library supports any UTF-8 compatible encodings that crate `encoding_rs`
 /// is supported. [*UTF-16 and ISO-2022-JP are not supported at the present*][utf16].
 ///
-/// If feature `encoding` is disabled, the decoder is always UTF-8 decoder:
+/// If feature [`encoding`] is disabled, the decoder is always UTF-8 decoder:
 /// any XML declarations are ignored.
 ///
 /// [utf16]: https://github.com/tafia/quick-xml/issues/158
+/// [`encoding`]: ../index.html#encoding
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Decoder {
     #[cfg(feature = "encoding")]

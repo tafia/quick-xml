@@ -646,11 +646,13 @@ where
     map: &'m mut MapAccess<'de, 'a, R, E>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
-    /// When feature `overlapped-lists` is not activated, iteration will stop
+    /// When feature [`overlapped-lists`] is not activated, iteration will stop
     /// when found a tag that does not pass this filter.
     ///
-    /// When feature `overlapped-lists` is activated, all tags, that not pass
+    /// When feature [`overlapped-lists`] is activated, all tags, that not pass
     /// this check, will be skipped.
+    ///
+    /// [`overlapped-lists`]: ../../index.html#overlapped-lists
     filter: TagFilter<'de>,
 
     /// Checkpoint after which all skipped events should be returned. All events,
