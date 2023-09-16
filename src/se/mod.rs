@@ -79,7 +79,7 @@ pub(crate) mod key;
 pub(crate) mod simple_type;
 
 use self::content::ContentSerializer;
-use self::element::{ElementSerializer, Tuple};
+use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
 use crate::errors::serialize::DeError;
 use crate::writer::Indentation;
@@ -609,16 +609,13 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     type Ok = ();
     type Error = DeError;
 
-    type SerializeSeq = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeSeq;
-    type SerializeTuple = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTuple;
-    type SerializeTupleStruct =
-        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTupleStruct;
-    type SerializeTupleVariant =
-        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeTupleVariant;
-    type SerializeMap = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeMap;
-    type SerializeStruct = <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeStruct;
-    type SerializeStructVariant =
-        <ElementSerializer<'w, 'r, W> as ser::Serializer>::SerializeStructVariant;
+    type SerializeSeq = ElementSerializer<'w, 'r, W>;
+    type SerializeTuple = ElementSerializer<'w, 'r, W>;
+    type SerializeTupleStruct = ElementSerializer<'w, 'r, W>;
+    type SerializeTupleVariant = Tuple<'w, 'r, W>;
+    type SerializeMap = Map<'w, 'r, W>;
+    type SerializeStruct = Struct<'w, 'r, W>;
+    type SerializeStructVariant = Struct<'w, 'r, W>;
 
     forward!(serialize_bool(bool));
 
