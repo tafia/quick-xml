@@ -1431,33 +1431,54 @@
 //! get their names from the field name. It cannot be deserialized, because `Enum`
 //! expects elements `<A/>`, `<B/>` or `<C/>`, but `AnyName` looked only for `<field/>`:
 //!
-//! ```no_run
+//! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! enum Enum { A, B, C }
 //!
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! struct AnyName {
-//!     // <field/>
+//!     // <field>A</field>, <field>B</field>, or <field>C</field>
 //!     field: Enum,
 //! }
+//! # assert_eq!(
+//! #     quick_xml::se::to_string(&AnyName { field: Enum::A }).unwrap(),
+//! #     "<AnyName><field>A</field></AnyName>",
+//! # );
+//! # assert_eq!(
+//! #     AnyName { field: Enum::B },
+//! #     quick_xml::de::from_str("<root><field>B</field></root>").unwrap(),
+//! # );
 //! ```
 //!
 //! If you rename field to `$value`, then `field` would be serialized as `<A/>`,
 //! `<B/>` or `<C/>`, depending on the its content. It is also possible to
 //! deserialize it from the same elements:
 //!
-//! ```no_run
+//! ```
 //! # use serde::{Deserialize, Serialize};
-//! # #[derive(Deserialize, Serialize)]
+//! # use pretty_assertions::assert_eq;
+//! # #[derive(Deserialize, Serialize, PartialEq, Debug)]
 //! # enum Enum { A, B, C }
 //! #
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! struct AnyName {
 //!     // <A/>, <B/> or <C/>
 //!     #[serde(rename = "$value")]
 //!     field: Enum,
 //! }
+//! # assert_eq!(
+//! #     quick_xml::se::to_string(&AnyName { field: Enum::A }).unwrap(),
+//! #     "<AnyName><A/></AnyName>",
+//! # );
+//! # assert_eq!(
+//! #     AnyName { field: Enum::B },
+//! #     quick_xml::de::from_str("<root><B/></root>").unwrap(),
+//! # );
 //! ```
 //!
 //! ### Primitives and sequences of primitives
@@ -1467,6 +1488,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1493,6 +1515,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1516,6 +1539,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1549,6 +1573,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
