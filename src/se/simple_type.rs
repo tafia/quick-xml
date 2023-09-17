@@ -294,11 +294,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(DeError::Unsupported(
-            format!(
-                "cannot serialize struct `{}` as an `xs:list` item",
-                name
-            )
-            .into(),
+            format!("cannot serialize struct `{}` as an `xs:list` item", name).into(),
         ))
     }
 

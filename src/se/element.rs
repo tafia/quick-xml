@@ -112,7 +112,11 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         if variant == TEXT_KEY {
             // We should write some text but we don't known what text to write
             Err(DeError::Unsupported(
-                format!("cannot serialize enum unit variant `{}::$text` as text content value", name).into(),
+                format!(
+                    "cannot serialize enum unit variant `{}::$text` as text content value",
+                    name
+                )
+                .into(),
             ))
         } else {
             let name = XmlName::try_from(variant)?;
@@ -216,7 +220,11 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         if variant == TEXT_KEY {
             Err(DeError::Unsupported(
-                format!("cannot serialize enum struct variant `{}::$text` as text content value", name).into(),
+                format!(
+                    "cannot serialize enum struct variant `{}::$text` as text content value",
+                    name
+                )
+                .into(),
             ))
         } else {
             self.key = XmlName::try_from(variant)?;

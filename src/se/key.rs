@@ -54,11 +54,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     /// a valid XML name, serialization of unit struct returns `Err(Unsupported)`
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
-            format!(
-                "cannot serialize unit struct `{}` as an XML tag name",
-                name
-            )
-            .into(),
+            format!("cannot serialize unit struct `{}` as an XML tag name", name).into(),
         ))
     }
 
