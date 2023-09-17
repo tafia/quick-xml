@@ -30,9 +30,9 @@ arbitrary = { version = "1", features = ["derive"], optional = true }
 criterion = "0.4"
 pretty_assertions = "1.4"
 regex = "1"
-# #[serde(other)] allowed not only inside field_identifier since 1.0.79
+# https://github.com/serde-rs/serde/issues/1904 is fixed since 1.0.206
 # serde does not follow semver in numbering and their dependencies, so we specifying patch here
-serde_derive = { version = "1.0.79" }
+serde_derive = { version = "1.0.206" }
 serde-value = "0.7"
 tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
