@@ -210,6 +210,16 @@ required-features = ["serialize"]
 path = "tests/serde-de.rs"
 
 [[test]]
+name = "serde-de-enum"
+required-features = ["serialize"]
+path = "tests/serde-de-enum.rs"
+
+[[test]]
+name = "serde-de-seq"
+required-features = ["serialize"]
+path = "tests/serde-de-seq.rs"
+
+[[test]]
 name = "serde-se"
 required-features = ["serialize"]
 path = "tests/serde-se.rs"
