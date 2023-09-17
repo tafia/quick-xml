@@ -451,7 +451,7 @@ mod without_root {
                 }
 
                 // It is unknown how to exactly serialize unit to a text
-                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
                 serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
@@ -466,7 +466,7 @@ mod without_root {
                         float: 4.2,
                         string: "newtype text",
                     }
-                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                    => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
             }
         }
 
@@ -912,7 +912,7 @@ mod without_root {
                     }
 
                     // It is unknown how to exactly serialize unit to a text
-                    err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                    err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                     serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                     // Tuple variant serialized as an `xs:list`
                     serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
@@ -922,7 +922,7 @@ mod without_root {
                             float: 4.2,
                             string: "newtype text",
                         }
-                        => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
                 }
             }
 
@@ -1403,7 +1403,7 @@ mod with_root {
                 }
 
                 // It is unknown how to exactly serialize unit to a text
-                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
                 serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
@@ -1418,7 +1418,7 @@ mod with_root {
                         float: 4.2,
                         string: "newtype text",
                     }
-                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                    => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
             }
         }
 
