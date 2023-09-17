@@ -699,7 +699,8 @@ mod adjacently_tagged {
         fn elements() {
             let data: Workaround = from_str(
                 r#"<root><tag>Tuple</tag><content>42</content><content>answer</content></root>"#,
-            ).unwrap();
+            )
+            .unwrap();
             assert_eq!(data, Workaround::Tuple(42.0, "answer".into()));
         }
 

@@ -55,8 +55,7 @@ mod top_level {
             .unwrap();
 
         let data: Vec<()> =
-            from_str(r#"<root/><root excess="attribute">42</root><root>answer</root>"#)
-                .unwrap();
+            from_str(r#"<root/><root excess="attribute">42</root><root>answer</root>"#).unwrap();
         assert_eq!(data, vec![(), (), ()]);
     }
 
@@ -3464,11 +3463,7 @@ mod variable_name {
                         assert_eq!(
                             data.unwrap(),
                             Pair {
-                                item: vec![
-                                    Choice::One,
-                                    Choice::Two,
-                                    Choice::Other("three".into())
-                                ],
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: vec![(), ()],
                             }
                         );
@@ -3505,11 +3500,7 @@ mod variable_name {
                         assert_eq!(
                             data.unwrap(),
                             Pair {
-                                item: vec![
-                                    Choice::One,
-                                    Choice::Two,
-                                    Choice::Other("three".into())
-                                ],
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                                 element: vec![(), ()],
                             }
                         );
@@ -3705,11 +3696,7 @@ mod variable_name {
                             data.unwrap(),
                             Pair {
                                 element: vec![(), ()],
-                                item: vec![
-                                    Choice::One,
-                                    Choice::Two,
-                                    Choice::Other("three".into())
-                                ],
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                             }
                         );
 
@@ -3746,11 +3733,7 @@ mod variable_name {
                             data.unwrap(),
                             Pair {
                                 element: vec![(), ()],
-                                item: vec![
-                                    Choice::One,
-                                    Choice::Two,
-                                    Choice::Other("three".into())
-                                ],
+                                item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
                             }
                         );
 
