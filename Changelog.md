@@ -16,6 +16,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 
 - [#545]: Resolve well-known namespaces (`xml` and `xmlns`) to their appropriate URIs.
   Also, enforce namespace constraints related to these well-known namespaces.
+- [#635]: Add support for async `ElementWriter` operations.
 
 ### Bug Fixes
 
@@ -29,6 +30,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#649]: Make features linkable and reference them in the docs.
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
+[#635]: https://github.com/tafia/quick-xml/pull/635
 [#643]: https://github.com/tafia/quick-xml/pull/643
 [#649]: https://github.com/tafia/quick-xml/pull/646
 [#651]: https://github.com/tafia/quick-xml/pull/651
