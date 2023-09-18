@@ -1,8 +1,9 @@
 use std::future::Future;
+use std::result::Result as StdResult;
 
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 use crate::events::{BytesCData, BytesText, Event};
 use crate::{ElementWriter, Writer};
 
@@ -252,6 +253,8 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// # use quick_xml::writer::Writer;
     /// # use quick_xml::events::BytesText;
     /// # use tokio::io::AsyncWriteExt;
+    /// use quick_xml::Error;
+    ///
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
     /// let mut tokio_buffer = tokio::io::BufWriter::new(&mut buffer);
@@ -260,7 +263,8 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// writer
     ///     .create_element("outer")
     ///     .with_attributes([("attr1", "value1"), ("attr2", "value2")])
-    ///     .write_inner_content_async(|writer| async move {
+    ///     // We need to provide error type, because it is not named somewhere explicitly
+    ///     .write_inner_content_async::<_, _, Error>(|writer| async move {
     ///         let fruits = ["apple", "orange", "banana"];
     ///         for (quant, item) in fruits.iter().enumerate() {
     ///             writer
@@ -272,12 +276,11 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     ///         writer
     ///             .create_element("inner")
     ///             .write_inner_content_async(|writer| async move {
-    ///                 writer.create_element("empty").write_empty_async().await?;
-    ///                 Ok(writer)
+    ///                 writer.create_element("empty").write_empty_async().await
     ///             })
     ///             .await?;
     ///
-    ///        Ok(writer)
+    ///         Ok(writer)
     ///     })
     ///     .await
     ///     .expect("cannot write content");
@@ -295,13 +298,14 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// </outer>"#
     /// );
     /// # }
-    pub async fn write_inner_content_async<F, Fut>(
+    pub async fn write_inner_content_async<F, Fut, E>(
         mut self,
         closure: F,
-    ) -> Result<&'a mut Writer<W>>
+    ) -> StdResult<&'a mut Writer<W>, E>
     where
         F: FnOnce(&'a mut Writer<W>) -> Fut,
-        Fut: Future<Output = Result<&'a mut Writer<W>>>,
+        Fut: Future<Output = StdResult<&'a mut Writer<W>, E>>,
+        E: From<Error>,
     {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))
