@@ -258,6 +258,54 @@ macro_rules! read_event_impl {
         }
         event
     }};
+    (
+        $self:ident, $buf:ident
+        $(, $await:ident)?
+    ) => {{
+        if let Some(end) = $self.state.pending_end() {
+            return Ok(end);
+        }
+        // Content in buffer before call is not a part of next event
+        let start = $buf.len();
+        let offset = $self.state.offset;
+        loop {
+            break match $self.reader.fill_buf() $(.$await)? {
+                Ok(bytes) if bytes.is_empty() => {
+                    let content = &$buf[start..];
+                    if content.is_empty() {
+                        Ok(Event::Eof)
+                    } else
+                    if let Err(error) = $self.state.parser.finish() {
+                        $self.state.last_error_offset = offset;
+                        Err(Error::Syntax(error))
+                    } else {
+                        // Content already trimmed, because we do not put whitespaces
+                        // to the buffer at all if they should be trimmed
+                        Ok(Event::Text(BytesText::wrap(content, $self.decoder())))
+                    }
+                }
+                Ok(bytes) => match $self.state.parse_into(bytes, $buf)? {
+                    ParseOutcome::Consume(offset, result) => {
+                        $self.reader.consume(offset);
+                        $self.state.make_event(result, &$buf[start..])
+                    }
+                    ParseOutcome::ConsumeAndEmitText(offset) => {
+                        $self.reader.consume(offset);
+                        Ok(Event::Text(BytesText::wrap(&$buf[start..], $self.decoder())))
+                    }
+                    ParseOutcome::ConsumeAndContinue(offset) => {
+                        $self.reader.consume(offset);
+                        continue;
+                    }
+                },
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    $self.state.last_error_offset = $self.state.offset;
+                    Err(Error::Io(e.into()))
+                }
+            };
+        }
+    }};
 }
 
 /// Read bytes up to `<` and skip it. If current byte (after skipping all space
@@ -456,7 +504,7 @@ pub type Span = Range<usize>;
 ///   Empty     -- End                   --> ClosedTag
 ///   _ -. Eof .-> Exit
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
     /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next

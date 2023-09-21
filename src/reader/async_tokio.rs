@@ -4,23 +4,13 @@
 
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, Result};
+use crate::events::{BytesText, Event};
 use crate::name::{QName, ResolveResult};
-use crate::reader::buffered_reader::impl_buffered_source;
+use crate::reader::state::ParseOutcome;
 use crate::reader::{
-    is_whitespace, BangType, NsReader, ParseState, ReadElementState, Reader, Span,
+    NsReader, Reader, Span,
 };
-
-/// A struct for read XML asynchronously from an [`AsyncBufRead`].
-///
-/// Having own struct allows us to implement anything without risk of name conflicts
-/// and does not suffer from the impossibility of having `async` in traits.
-struct TokioAdapter<'a, R>(&'a mut R);
-
-impl<'a, R: AsyncBufRead + Unpin> TokioAdapter<'a, R> {
-    impl_buffered_source!('b, 0, async, await);
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,13 +62,10 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// [`read_event_into()`]: Reader::read_event_into
     pub async fn read_event_into_async<'b>(
         &mut self,
-        mut buf: &'b mut Vec<u8>,
+        buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
         read_event_impl!(
             self, buf,
-            TokioAdapter(&mut self.reader),
-            read_until_open_async,
-            read_until_close_async,
             await
         )
     }
@@ -134,28 +121,11 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// [`Start`]: Event::Start
     pub async fn read_to_end_into_async<'n>(
         &mut self,
-        // We should name that lifetime due to https://github.com/rust-lang/rust/issues/63033`
+        // We should name that lifetime due to https://github.com/rust-lang/rust/issues/63033
         end: QName<'n>,
         buf: &mut Vec<u8>,
     ) -> Result<Span> {
         Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
-    }
-
-    /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    ///
-    /// Returns inner `Ok` if the loop should be broken and an event returned.
-    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
-    async fn read_until_open_async<'b>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-    ) -> Result<std::result::Result<Event<'b>, &'b mut Vec<u8>>> {
-        read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
-    }
-
-    /// Private function to read until `>` is found. This function expects that
-    /// it was called just after encounter a `<` symbol.
-    async fn read_until_close_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        read_until_close!(self, buf, TokioAdapter(&mut self.reader), await)
     }
 }
 

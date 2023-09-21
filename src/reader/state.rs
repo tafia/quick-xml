@@ -1,20 +1,39 @@
 #[cfg(feature = "encoding")]
-use encoding_rs::UTF_8;
+use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::parser::{FeedResult, Parser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 use crate::reader::{is_whitespace, BangType, Config, ParseState};
+use crate::utils::Bytes;
 
 use memchr;
+
+/// Result of a [`ReaderState::parse_into`] method.
+#[derive(Debug)]
+pub enum ParseOutcome {
+    /// The specified amount of data should be consumed. The parser result should
+    /// be converted to an [`Event`] using previously accumulated data and newly
+    /// consumed data.
+    Consume(usize, FeedResult),
+    /// The specified amount of data should be consumed. All accumulated data
+    /// and newly consumed data should be converted to an [`Event::Text`].
+    ConsumeAndEmitText(usize),
+    /// The specified amount of data should be consumed, but no event should be
+    /// generated. Used to skip whitespaces and BOM.
+    ConsumeAndContinue(usize),
+}
 
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.
 #[derive(Clone, Debug)]
 pub(super) struct ReaderState {
+    /// Current parsing state
+    pub parser: Parser,
     /// Number of bytes read from the source of data since the reader was created
     pub offset: usize,
     /// A snapshot of an `offset` of the last error returned. It can be less than
@@ -26,6 +45,14 @@ pub(super) struct ReaderState {
     pub state: ParseState,
     /// User-defined settings that affect parsing
     pub config: Config,
+    /// When text trimming from start is enabled, we need to track is we seen
+    /// a non-space symbol between getting chunks from the reader, because we
+    /// trim each chunk individually. If such symbol was seen, trim is not
+    /// required until current text event would be emitted.
+    ///
+    /// Used only together with buffering readers, because borrowing reader
+    /// already have all data available.
+    can_trim_start: bool,
     /// All currently Started elements which didn't have a matching
     /// End element yet.
     ///
@@ -312,15 +339,183 @@ impl ReaderState {
             encoding: self.encoding.encoding(),
         }
     }
+
+    /// Parses `bytes`, appending data to a `buf`. Used in buffered readers
+    pub fn parse_into<'a, 'b>(
+        &mut self,
+        bytes: &'a [u8],
+        buf: &'b mut Vec<u8>,
+    ) -> Result<ParseOutcome> {
+        let result = self.parser.feed(bytes)?;
+        match result {
+            FeedResult::NeedData => {
+                let mut content = bytes;
+                if self.config.trim_text_start
+                    && self.can_trim_start
+                    && self.parser.is_text_parsing()
+                {
+                    content = crate::events::trim_xml_start(bytes);
+                    // if we got some data while parsing text, we shouldn't to
+                    // trim text anymore, because this is spaces inside text content
+                    self.can_trim_start = content.is_empty();
+                }
+                buf.extend_from_slice(content);
+                let len = bytes.len();
+                self.offset += len;
+                Ok(ParseOutcome::ConsumeAndContinue(len))
+            }
+
+            FeedResult::EncodingUtf8Like(offset) => {
+                #[cfg(feature = "encoding")]
+                if self.encoding.can_be_refined() {
+                    self.encoding = EncodingRef::BomDetected(UTF_8);
+                }
+                self.offset += offset;
+                Ok(ParseOutcome::ConsumeAndContinue(offset))
+            }
+            FeedResult::EncodingUtf16BeLike(offset) => {
+                #[cfg(feature = "encoding")]
+                if self.encoding.can_be_refined() {
+                    self.encoding = EncodingRef::BomDetected(UTF_16BE);
+                }
+                self.offset += offset;
+                Ok(ParseOutcome::ConsumeAndContinue(offset))
+            }
+            FeedResult::EncodingUtf16LeLike(offset) => {
+                #[cfg(feature = "encoding")]
+                if self.encoding.can_be_refined() {
+                    self.encoding = EncodingRef::BomDetected(UTF_16LE);
+                }
+                self.offset += offset;
+                Ok(ParseOutcome::ConsumeAndContinue(offset))
+            }
+
+            FeedResult::EmitText(offset) => {
+                let mut content = &bytes[..offset];
+                if self.config.trim_text_start && self.can_trim_start {
+                    content = crate::events::trim_xml_start(content);
+                }
+                // Reset ability to trim start
+                self.can_trim_start = true;
+                if self.config.trim_text_end {
+                    content = crate::events::trim_xml_end(content);
+                }
+                buf.extend_from_slice(content);
+                self.offset += offset;
+                if buf.is_empty() {
+                    Ok(ParseOutcome::ConsumeAndContinue(offset))
+                } else {
+                    Ok(ParseOutcome::ConsumeAndEmitText(offset))
+                }
+            }
+            FeedResult::EmitComment(offset)
+            | FeedResult::EmitCData(offset)
+            | FeedResult::EmitDoctype(offset)
+            | FeedResult::EmitPI(offset)
+            | FeedResult::EmitEmptyTag(offset)
+            | FeedResult::EmitStartTag(offset)
+            | FeedResult::EmitEndTag(offset) => {
+                buf.extend_from_slice(&bytes[..offset]);
+                self.offset += offset;
+                Ok(ParseOutcome::Consume(offset, result))
+            }
+        }
+    }
+
+    /// Converts result from a parser to reader's event.
+    ///
+    /// # Parameters
+    /// - `result`: a result from [`Parser::feed()`]
+    /// - `content`: a buffer with event data
+    ///
+    /// [`Parser::feed()`]: crate::parser::Parser::feed()
+    pub fn make_event<'a>(&mut self, result: FeedResult, content: &'a [u8]) -> Result<Event<'a>> {
+        debug_assert_ne!(self.state, ParseState::Empty);
+
+        match result {
+            FeedResult::EmitText(_) | FeedResult::NeedData => {
+                Ok(Event::Text(BytesText::wrap(content, self.decoder())))
+            }
+            FeedResult::EmitCData(_) => {
+                debug_assert!(content.starts_with(b"<![CDATA["), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b"]]>"), "{:?}", Bytes(content));
+
+                Ok(Event::CData(BytesCData::wrap(
+                    &content[9..content.len() - 3],
+                    self.decoder(),
+                )))
+            }
+            FeedResult::EmitComment(_) => {
+                // `--` from start and end should not be overlapped
+                debug_assert!(content.len() >= 4 + 3, "{:?}", Bytes(content));
+                debug_assert!(content.starts_with(b"<!--"), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b"-->"), "{:?}", Bytes(content));
+
+                self.emit_bang(BangType::Comment, &content[1..content.len() - 1])
+            }
+            FeedResult::EmitDoctype(_) => {
+                debug_assert!(content.len() > 9, "{:?}", Bytes(content));
+                debug_assert!(
+                    content[0..9].eq_ignore_ascii_case(b"<!DOCTYPE"),
+                    "{:?}",
+                    Bytes(content)
+                );
+                debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
+
+                self.emit_bang(BangType::DocType, &content[1..content.len() - 1])
+            }
+            FeedResult::EmitPI(_) => {
+                debug_assert!(content.starts_with(b"<?"), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b"?>"), "{:?}", Bytes(content));
+
+                self.emit_question_mark(&content[1..content.len() - 1])
+            }
+            FeedResult::EmitEmptyTag(_) => {
+                debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b"/>"), "{:?}", Bytes(content));
+
+                self.emit_start(&content[1..content.len() - 1])
+            }
+            FeedResult::EmitStartTag(_) => {
+                debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
+
+                self.emit_start(&content[1..content.len() - 1])
+            }
+            FeedResult::EmitEndTag(_) => {
+                debug_assert!(content.starts_with(b"</"), "{:?}", Bytes(content));
+                debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
+
+                self.emit_end(&content[1..content.len() - 1])
+            }
+            FeedResult::EncodingUtf8Like(_)
+            | FeedResult::EncodingUtf16BeLike(_)
+            | FeedResult::EncodingUtf16LeLike(_) => unreachable!("processed outside"),
+        }
+    }
+
+    /// Get the pending event if the last returned event was a synthetic `Start`
+    /// event due to [`Config::expand_empty_elements`] setting.
+    ///
+    /// If this method returns something, the read next event should return this
+    /// event.
+    pub fn pending_end(&mut self) -> Option<Event<'static>> {
+        if let ParseState::Empty = self.state {
+            return Some(self.close_expanded_empty().unwrap());
+        }
+        None
+    }
 }
 
 impl Default for ReaderState {
     fn default() -> Self {
         Self {
+            parser: Parser::default(),
             offset: 0,
             last_error_offset: 0,
             state: ParseState::Init,
             config: Config::default(),
+            can_trim_start: true,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
 
