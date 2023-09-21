@@ -274,6 +274,7 @@ impl<R: BufRead> Reader<R> {
     /// # Examples
     ///
     /// ```
+    /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
     /// use quick_xml::reader::Reader;
     ///
