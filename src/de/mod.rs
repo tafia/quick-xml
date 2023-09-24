@@ -15,6 +15,7 @@
 //! Table of Contents
 //! =================
 //! - [Mapping XML to Rust types](#mapping-xml-to-rust-types)
+//!   - [Basics](#basics)
 //!   - [Optional attributes and elements](#optional-attributes-and-elements)
 //!   - [Choices (`xs:choice` XML Schema type)](#choices-xschoice-xml-schema-type)
 //!   - [Sequences (`xs:all` and `xs:sequence` XML Schema types)](#sequences-xsall-and-xssequence-xml-schema-types)
@@ -58,6 +59,11 @@
 //!
 //! <table>
 //! <thead>
+//! <tr><th colspan="2">
+//!
+//! ## Basics
+//!
+//! </th></tr>
 //! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! </thead>
 //! <tbody style="vertical-align:top;">
