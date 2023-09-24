@@ -1,0 +1,27 @@
+[package]
+name = "quick-dtd"
+version = "0.1.0"
+edition = "2021"
+
+description = "High performance DTD reader for quick-xml"
+
+documentation = "https://docs.rs/quick-dtd"
+repository = "https://github.com/tafia/quick-xml"
+
+keywords = ["dtd", "parser", "xml"]
+categories = ["parsing", "parser-implementations", "no-std"]
+license = "MIT"
+rust-version = "1.56"
+include = ["src/*", "LICENSE-MIT.md", "README.md"]
+
+[dependencies]
+document-features = { version = "0.2", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+
+[features]
+default = ["std"]
+
+## Enables support of Rust standard library
+std = []

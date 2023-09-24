@@ -1,0 +1,54 @@
+<!ELEMENT e EMPTY>
+<!ELEMENT e ANY>
+<!--/elementdecl/contentspec/Mixed-->
+<!ELEMENT e (#PCDATA|tag)*>
+<!ELEMENT e (#PCDATA)>
+<!--/elementdecl/contentspec/children/choice-->
+<!ELEMENT e (cp|cp?|cp*|cp+|(cp|cp)|(cp,cp))?>
+<!--/elementdecl/contentspec/children/seq-->
+<!ELEMENT e (cp,cp?,cp*,cp+,(cp|cp),(cp,cp))*>
+
+<!-- Requires search of "'> -->
+<!ATTLIST a-list>
+<!ATTLIST a-list a CDATA #REQUIRED>
+<!--/AttlistDecl/AttDef/AttType/TokenizedType -->
+<!ATTLIST a-list a IDREFS #IMPLIED>
+<!ATTLIST a-list a IDREF #FIXED ">">
+<!ATTLIST a-list a ID "'">
+<!ATTLIST a-list a ENTITY '"'>
+<!ATTLIST a-list a ENTITIES '&gt;'>
+<!ATTLIST a-list a NMTOKENS 'value'>
+<!ATTLIST a-list a NMTOKEN 'value'>
+<!--/AttlistDecl/AttDef/AttType/EnumeratedType -->
+<!ATTLIST a-list a NOTATION (n|n|n) #REQUIRED>
+<!ATTLIST a-list a (n|n|n) #REQUIRED>
+
+<!-- Requires search of "'> -->
+<!--/EntityDecl/GEDecl -->
+<!ENTITY en ">">
+<!ENTITY en '>'>
+<!ENTITY en SYSTEM "'>">
+<!ENTITY en SYSTEM '">' NDATA n-data>
+<!ENTITY en PUBLIC "'" '">'>
+<!ENTITY en PUBLIC '' '">' NDATA n-data>
+<!--/EntityDecl/PEDecl -->
+<!ENTITY % en "'>">
+<!ENTITY % en '">'>
+<!ENTITY % en SYSTEM "'>">
+<!ENTITY % en SYSTEM '">'>
+<!ENTITY % en PUBLIC "'" '">'>
+<!ENTITY % en PUBLIC '' '">'>
+
+<!-- Requires search of "'> -->
+<!NOTATION no SYSTEM "'>">
+<!NOTATION no SYSTEM '">'>
+<!NOTATION no PUBLIC "'" '">'>
+<!NOTATION no PUBLIC '' '">'>
+<!NOTATION no PUBLIC "'">
+<!NOTATION no PUBLIC ''>
+
+<!-- Requires search of > -->
+<?pi?>
+<?pi "'>?>
+
+<!-->-->
