@@ -206,7 +206,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     /// does not differ, so serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
-            "unit type `()` cannot be serialized as an `xs:list` item".into(),
+            "cannot serialize unit type `()` as an `xs:list` item".into(),
         ))
     }
 
@@ -215,7 +215,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "unit struct `{}` cannot be serialized as an `xs:list` item",
+                "cannot serialize unit struct `{}` as an `xs:list` item",
                 name
             )
             .into(),
@@ -233,7 +233,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     ) -> Result<Self::Ok, DeError> {
         Err(DeError::Unsupported(
             format!(
-                "enum newtype variant `{}::{}` cannot be serialized as an `xs:list` item",
+                "cannot serialize enum newtype variant `{}::{}` as an `xs:list` item",
                 name, variant
             )
             .into(),
@@ -242,13 +242,13 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         Err(DeError::Unsupported(
-            "sequence cannot be serialized as an `xs:list` item".into(),
+            "cannot serialize sequence as an `xs:list` item".into(),
         ))
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         Err(DeError::Unsupported(
-            "tuple cannot be serialized as an `xs:list` item".into(),
+            "cannot serialize tuple as an `xs:list` item".into(),
         ))
     }
 
@@ -259,7 +259,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "tuple struct `{}` cannot be serialized as an `xs:list` item",
+                "cannot serialize tuple struct `{}` as an `xs:list` item",
                 name
             )
             .into(),
@@ -275,7 +275,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "enum tuple variant `{}::{}` cannot be serialized as an `xs:list` item",
+                "cannot serialize enum tuple variant `{}::{}` as an `xs:list` item",
                 name, variant
             )
             .into(),
@@ -284,7 +284,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Err(DeError::Unsupported(
-            "map cannot be serialized as an `xs:list` item".into(),
+            "cannot serialize map as an `xs:list` item".into(),
         ))
     }
 
@@ -294,11 +294,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(DeError::Unsupported(
-            format!(
-                "struct `{}` cannot be serialized as an `xs:list` item",
-                name
-            )
-            .into(),
+            format!("cannot serialize struct `{}` as an `xs:list` item", name).into(),
         ))
     }
 
@@ -311,7 +307,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "enum struct variant `{}::{}` cannot be serialized as an `xs:list` item",
+                "cannot serialize enum struct variant `{}::{}` as an `xs:list` item",
                 name, variant
             )
             .into(),
@@ -389,7 +385,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         _value: &T,
     ) -> Result<Self::Ok, DeError> {
         Err(DeError::Unsupported(
-            format!("enum newtype variant `{}::{}` cannot be serialized as an attribute or text content value", name, variant).into(),
+            format!("cannot serialize enum newtype variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
 
@@ -426,13 +422,13 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         Err(DeError::Unsupported(
-            format!("enum tuple variant `{}::{}` cannot be serialized as an attribute or text content value", name, variant).into(),
+            format!("cannot serialize enum tuple variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Err(DeError::Unsupported(
-            "map cannot be serialized as an attribute or text content value".into(),
+            "cannot serialize map as an attribute or text content value".into(),
         ))
     }
 
@@ -443,7 +439,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "struct `{}` cannot be serialized as an attribute or text content value",
+                "cannot serialize struct `{}` as an attribute or text content value",
                 name
             )
             .into(),
@@ -458,7 +454,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(DeError::Unsupported(
-            format!("enum struct variant `{}::{}` cannot be serialized as an attribute or text content value", name, variant).into(),
+            format!("cannot serialize enum struct variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
 }
@@ -912,32 +908,32 @@ mod tests {
         serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");
 
         err!(unit: ()
-            => Unsupported("unit type `()` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize unit type `()` as an `xs:list` item"));
         err!(unit_struct: Unit
-            => Unsupported("unit struct `Unit` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize unit struct `Unit` as an `xs:list` item"));
 
         serialize_as!(enum_unit: Enum::Unit => "Unit");
         serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "&lt;&quot;&amp;&apos;&gt;");
 
         serialize_as!(newtype: Newtype(42) => "42");
         err!(enum_newtype: Enum::Newtype(42)
-            => Unsupported("enum newtype variant `Enum::Newtype` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an `xs:list` item"));
 
         err!(seq: vec![1, 2, 3]
-            => Unsupported("sequence cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize sequence as an `xs:list` item"));
         err!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-            => Unsupported("tuple cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize tuple as an `xs:list` item"));
         err!(tuple_struct: Tuple("first", 42)
-            => Unsupported("tuple struct `Tuple` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize tuple struct `Tuple` as an `xs:list` item"));
         err!(enum_tuple: Enum::Tuple("first", 42)
-            => Unsupported("enum tuple variant `Enum::Tuple` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an `xs:list` item"));
 
         err!(map: BTreeMap::from([(1, 2), (3, 4)])
-            => Unsupported("map cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize map as an `xs:list` item"));
         err!(struct_: Struct { key: "answer", val: 42 }
-            => Unsupported("struct `Struct` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize struct `Struct` as an `xs:list` item"));
         err!(enum_struct: Enum::Struct { key: "answer", val: 42 }
-            => Unsupported("enum struct variant `Enum::Struct` cannot be serialized as an `xs:list` item"));
+            => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an `xs:list` item"));
     }
 
     mod simple_type {
@@ -1037,7 +1033,7 @@ mod tests {
 
         serialize_as!(newtype: Newtype(42) => "42");
         err!(enum_newtype: Enum::Newtype(42)
-            => Unsupported("enum newtype variant `Enum::Newtype` cannot be serialized as an attribute or text content value"));
+            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an attribute or text content value"));
 
         serialize_as!(seq: vec![1, 2, 3] => "1 2 3");
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
@@ -1047,13 +1043,13 @@ mod tests {
             => "&lt;&quot;&amp;&apos;&gt; with&#9;&#10;&#13;&#32;spaces 3");
         serialize_as!(tuple_struct: Tuple("first", 42) => "first 42");
         err!(enum_tuple: Enum::Tuple("first", 42)
-            => Unsupported("enum tuple variant `Enum::Tuple` cannot be serialized as an attribute or text content value"));
+            => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an attribute or text content value"));
 
         err!(map: BTreeMap::from([(1, 2), (3, 4)])
-            => Unsupported("map cannot be serialized as an attribute or text content value"));
+            => Unsupported("cannot serialize map as an attribute or text content value"));
         err!(struct_: Struct { key: "answer", val: 42 }
-            => Unsupported("struct `Struct` cannot be serialized as an attribute or text content value"));
+            => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
         err!(enum_struct: Enum::Struct { key: "answer", val: 42 }
-            => Unsupported("enum struct variant `Enum::Struct` cannot be serialized as an attribute or text content value"));
+            => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
     }
 }

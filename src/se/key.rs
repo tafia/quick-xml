@@ -46,7 +46,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     /// a valid XML name, serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
-            "unit type `()` cannot be serialized as an XML tag name".into(),
+            "cannot serialize unit type `()` as an XML tag name".into(),
         ))
     }
 
@@ -54,11 +54,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     /// a valid XML name, serialization of unit struct returns `Err(Unsupported)`
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
         Err(DeError::Unsupported(
-            format!(
-                "unit struct `{}` cannot be serialized as an XML tag name",
-                name
-            )
-            .into(),
+            format!("cannot serialize unit struct `{}` as an XML tag name", name).into(),
         ))
     }
 
@@ -73,7 +69,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     ) -> Result<Self::Ok, DeError> {
         Err(DeError::Unsupported(
             format!(
-                "enum newtype variant `{}::{}` cannot be serialized as an XML tag name",
+                "cannot serialize enum newtype variant `{}::{}` as an XML tag name",
                 name, variant
             )
             .into(),
@@ -82,13 +78,13 @@ impl<W: Write> Serializer for QNameSerializer<W> {
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         Err(DeError::Unsupported(
-            "sequence cannot be serialized as an XML tag name".into(),
+            "cannot serialize sequence as an XML tag name".into(),
         ))
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         Err(DeError::Unsupported(
-            "tuple cannot be serialized as an XML tag name".into(),
+            "cannot serialize tuple as an XML tag name".into(),
         ))
     }
 
@@ -99,7 +95,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "tuple struct `{}` cannot be serialized as an XML tag name",
+                "cannot serialize tuple struct `{}` as an XML tag name",
                 name
             )
             .into(),
@@ -115,7 +111,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "enum tuple variant `{}::{}` cannot be serialized as an XML tag name",
+                "cannot serialize enum tuple variant `{}::{}` as an XML tag name",
                 name, variant
             )
             .into(),
@@ -124,7 +120,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Err(DeError::Unsupported(
-            "map cannot be serialized as an XML tag name".into(),
+            "cannot serialize map as an XML tag name".into(),
         ))
     }
 
@@ -134,7 +130,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(DeError::Unsupported(
-            format!("struct `{}` cannot be serialized as an XML tag name", name).into(),
+            format!("cannot serialize struct `{}` as an XML tag name", name).into(),
         ))
     }
 
@@ -147,7 +143,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         Err(DeError::Unsupported(
             format!(
-                "enum struct variant `{}::{}` cannot be serialized as an XML tag name",
+                "cannot serialize enum struct variant `{}::{}` as an XML tag name",
                 name, variant
             )
             .into(),
@@ -276,30 +272,30 @@ mod tests {
     serialize_as!(option_some: Some("non-escaped-string") => "non-escaped-string");
 
     err!(unit: ()
-        => Unsupported("unit type `()` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize unit type `()` as an XML tag name"));
     err!(unit_struct: Unit
-        => Unsupported("unit struct `Unit` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize unit struct `Unit` as an XML tag name"));
 
     serialize_as!(enum_unit: Enum::Unit => "Unit");
     serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<\"&'>");
 
     serialize_as!(newtype: Newtype(true) => "true");
     err!(enum_newtype: Enum::Newtype(false)
-        => Unsupported("enum newtype variant `Enum::Newtype` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an XML tag name"));
 
     err!(seq: vec![1, 2, 3]
-        => Unsupported("sequence cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize sequence as an XML tag name"));
     err!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
-        => Unsupported("tuple cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize tuple as an XML tag name"));
     err!(tuple_struct: Tuple("first", 42)
-        => Unsupported("tuple struct `Tuple` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize tuple struct `Tuple` as an XML tag name"));
     err!(enum_tuple: Enum::Tuple("first", 42)
-        => Unsupported("enum tuple variant `Enum::Tuple` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an XML tag name"));
 
     err!(map: BTreeMap::from([("_1", 2), ("_3", 4)])
-        => Unsupported("map cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize map as an XML tag name"));
     err!(struct_: Struct { key: "answer", val: 42 }
-        => Unsupported("struct `Struct` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize struct `Struct` as an XML tag name"));
     err!(enum_struct: Enum::Struct { key: "answer", val: 42 }
-        => Unsupported("enum struct variant `Enum::Struct` cannot be serialized as an XML tag name"));
+        => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an XML tag name"));
 }

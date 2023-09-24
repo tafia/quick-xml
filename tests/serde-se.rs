@@ -78,7 +78,7 @@ enum ExternallyTagged {
 ///
 /// Anyway, deserialization of that type in roundtrip suffers from
 /// <https://github.com/serde-rs/serde/issues/1183>
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 enum ExternallyTaggedWorkaround {
     Flatten {
         #[serde(flatten)]
@@ -213,7 +213,7 @@ mod without_root {
     use pretty_assertions::assert_eq;
 
     macro_rules! serialize_as {
-        ($name:ident: $data:expr => $expected:literal) => {
+        ($name:ident: $data:expr => $expected:expr) => {
             #[test]
             fn $name() {
                 serialize_as!(@ $data => $expected);
@@ -226,7 +226,7 @@ mod without_root {
                 );
             }
         };
-        (@ $data:expr => $expected:literal) => {
+        (@ $data:expr => $expected:expr) => {
             let mut buffer = String::new();
             let ser = Serializer::new(&mut buffer);
 
@@ -246,7 +246,7 @@ mod without_root {
     /// Checks that attempt to serialize given `$data` results to a
     /// serialization error `$kind` with `$reason`
     macro_rules! err {
-        ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+        ($name:ident: $data:expr => $kind:ident($reason:literal), $buffer:literal) => {
             #[test]
             fn $name() {
                 let mut buffer = String::new();
@@ -261,8 +261,11 @@ mod without_root {
                         e
                     ),
                 }
-                assert_eq!(buffer, "");
+                assert_eq!(buffer, $buffer);
             }
+        };
+        ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
+            err!($name: $data => $kind($reason), "");
         };
     }
 
@@ -370,6 +373,11 @@ mod without_root {
             use super::*;
             use pretty_assertions::assert_eq;
 
+            #[derive(Debug, PartialEq, Deserialize, Serialize)]
+            struct Root<T> {
+                field: T,
+            }
+
             serialize_as!(unit:
                 ExternallyTagged::Unit
                 => "<Unit/>");
@@ -451,7 +459,7 @@ mod without_root {
                 }
 
                 // It is unknown how to exactly serialize unit to a text
-                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
                 serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
@@ -466,7 +474,488 @@ mod without_root {
                         float: 4.2,
                         string: "newtype text",
                     }
-                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                    => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
+            }
+
+            /// Tests the enum type that is type of field of a struct.
+            /// The tests above does not cover those variants, because we use
+            /// different serializers for enums on top level and which represents
+            /// a field.
+            ///
+            /// Deserialization is not possible because we cannot choose with what
+            /// field we should associate the XML node that we see. To do that we
+            /// mark field by a special name `$value` ([`VALUE_KEY`]) and that is
+            /// tested in the `in_struct_value` module.
+            mod in_struct {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as_only!(unit:
+                    Root { field: ExternallyTagged::Unit }
+                    => "<Root>\
+                            <Unit/>\
+                        </Root>");
+                serialize_as_only!(newtype:
+                    Root { field: ExternallyTagged::Newtype(true) }
+                    => "<Root>\
+                            <Newtype>true</Newtype>\
+                        </Root>");
+                serialize_as_only!(tuple_struct:
+                    Root { field: ExternallyTagged::Tuple(42.0, "answer") }
+                    => "<Root>\
+                            <Tuple>42</Tuple>\
+                            <Tuple>answer</Tuple>\
+                        </Root>");
+                serialize_as_only!(struct_:
+                    Root { field: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => "<Root>\
+                            <Struct>\
+                                <float>42</float>\
+                                <string>answer</string>\
+                            </Struct>\
+                        </Root>");
+                serialize_as_only!(nested_struct:
+                    Root { field: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    => "<Root>\
+                            <Holder>\
+                                <nested>\
+                                    <float>42</float>\
+                                </nested>\
+                                <string>answer</string>\
+                            </Holder>\
+                        </Root>");
+                serialize_as_only!(flatten_struct:
+                    Root { field: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    => "<Root>\
+                            <Flatten>\
+                                <float>42</float>\
+                                <string>answer</string>\
+                            </Flatten>\
+                        </Root>");
+                serialize_as_only!(empty_struct:
+                    Root { field: ExternallyTagged::Empty {} }
+                    => "<Root>\
+                            <Empty/>\
+                        </Root>");
+                serialize_as_only!(text:
+                    Root { field: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => "<Root>\
+                            <Text>\
+                                42\
+                                <string>answer</string>\
+                            </Text>\
+                        </Root>");
+            }
+
+            /// The same tests as in `in_struct`, but enum at the second nesting
+            /// level.
+            mod in_struct2 {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Root<T> {
+                    field: T,
+                }
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Inner<T> {
+                    inner: T,
+                }
+
+                serialize_as_only!(unit:
+                    Root { field: Inner { inner: ExternallyTagged::Unit } }
+                    => "<Root>\
+                            <field>\
+                                <Unit/>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(newtype:
+                    Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
+                    => "<Root>\
+                            <field>\
+                                <Newtype>true</Newtype>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(tuple_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
+                    => "<Root>\
+                            <field>\
+                                <Tuple>42</Tuple>\
+                                <Tuple>answer</Tuple>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(struct_:
+                    Root { field: Inner { inner: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Struct>\
+                                    <float>42</float>\
+                                    <string>answer</string>\
+                                </Struct>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(nested_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Holder>\
+                                    <nested>\
+                                        <float>42</float>\
+                                    </nested>\
+                                    <string>answer</string>\
+                                </Holder>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(flatten_struct:
+                    Root { field: Inner { inner: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Flatten>\
+                                    <float>42</float>\
+                                    <string>answer</string>\
+                                </Flatten>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(empty_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Empty {} } }
+                    => "<Root>\
+                            <field>\
+                                <Empty/>\
+                            </field>\
+                        </Root>");
+                serialize_as_only!(text:
+                    Root { field: Inner { inner: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Text>\
+                                    42\
+                                    <string>answer</string>\
+                                </Text>\
+                            </field>\
+                        </Root>");
+            }
+
+            /// The same tests as in `in_struct`, but enum field renamed to `$value`.
+            mod in_struct_value {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Root<T> {
+                    #[serde(rename = "$value")]
+                    field: T,
+                }
+
+                serialize_as!(unit:
+                    Root { field: ExternallyTagged::Unit }
+                    => "<Root>\
+                            <Unit/>\
+                        </Root>");
+                serialize_as!(newtype:
+                    Root { field: ExternallyTagged::Newtype(true) }
+                    => "<Root>\
+                            <Newtype>true</Newtype>\
+                        </Root>");
+                serialize_as!(tuple_struct:
+                    Root { field: ExternallyTagged::Tuple(42.0, "answer") }
+                    => "<Root>\
+                            <Tuple>42</Tuple>\
+                            <Tuple>answer</Tuple>\
+                        </Root>");
+                serialize_as!(struct_:
+                    Root { field: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => "<Root>\
+                            <Struct>\
+                                <float>42</float>\
+                                <string>answer</string>\
+                            </Struct>\
+                        </Root>");
+                serialize_as!(nested_struct:
+                    Root { field: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    => "<Root>\
+                            <Holder>\
+                                <nested>\
+                                    <float>42</float>\
+                                </nested>\
+                                <string>answer</string>\
+                            </Holder>\
+                        </Root>");
+                // NOTE: Cannot be deserialized in roundtrip due to
+                // https://github.com/serde-rs/serde/issues/1183
+                serialize_as_only!(flatten_struct:
+                    Root { field: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    => "<Root>\
+                            <Flatten>\
+                                <float>42</float>\
+                                <string>answer</string>\
+                            </Flatten>\
+                        </Root>");
+                serialize_as!(empty_struct:
+                    Root { field: ExternallyTagged::Empty {} }
+                    => "<Root>\
+                            <Empty/>\
+                        </Root>");
+                serialize_as!(text:
+                    Root { field: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => "<Root>\
+                            <Text>\
+                                42\
+                                <string>answer</string>\
+                            </Text>\
+                        </Root>");
+            }
+
+            /// The same tests as in `in_struct2`, but enum field renamed to `$value`.
+            mod in_struct_value2 {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Inner<T> {
+                    #[serde(rename = "$value")]
+                    inner: T,
+                }
+
+                serialize_as!(unit:
+                    Root { field: Inner { inner: ExternallyTagged::Unit } }
+                    => "<Root>\
+                            <field>\
+                                <Unit/>\
+                            </field>\
+                        </Root>");
+                serialize_as!(newtype:
+                    Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
+                    => "<Root>\
+                            <field>\
+                                <Newtype>true</Newtype>\
+                            </field>\
+                        </Root>");
+                serialize_as!(tuple_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
+                    => "<Root>\
+                            <field>\
+                                <Tuple>42</Tuple>\
+                                <Tuple>answer</Tuple>\
+                            </field>\
+                        </Root>");
+                serialize_as!(struct_:
+                    Root { field: Inner { inner: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Struct>\
+                                    <float>42</float>\
+                                    <string>answer</string>\
+                                </Struct>\
+                            </field>\
+                        </Root>");
+                serialize_as!(nested_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Holder>\
+                                    <nested>\
+                                        <float>42</float>\
+                                    </nested>\
+                                    <string>answer</string>\
+                                </Holder>\
+                            </field>\
+                        </Root>");
+                // NOTE: Cannot be deserialized in roundtrip due to
+                // https://github.com/serde-rs/serde/issues/1183
+                serialize_as_only!(flatten_struct:
+                    Root { field: Inner { inner: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Flatten>\
+                                    <float>42</float>\
+                                    <string>answer</string>\
+                                </Flatten>\
+                            </field>\
+                        </Root>");
+                serialize_as!(empty_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Empty {} } }
+                    => "<Root>\
+                            <field>\
+                                <Empty/>\
+                            </field>\
+                        </Root>");
+                serialize_as!(text:
+                    Root { field: Inner { inner: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => "<Root>\
+                            <field>\
+                                <Text>\
+                                    42\
+                                    <string>answer</string>\
+                                </Text>\
+                            </field>\
+                        </Root>");
+            }
+
+            /// The same tests as in `in_struct`, but enum field renamed to `$text`.
+            ///
+            /// Text representation of enum is possible only for unit variants.
+            mod in_struct_text {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Root<T> {
+                    #[serde(rename = "$text")]
+                    field: T,
+                }
+
+                serialize_as!(unit:
+                    Root { field: ExternallyTagged::Unit }
+                    => "<Root>Unit</Root>");
+                err!(newtype:
+                    Root { field: ExternallyTagged::Newtype(true) }
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
+                    "<Root");
+                err!(tuple_struct:
+                    Root { field: ExternallyTagged::Tuple(42.0, "answer") }
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
+                    "<Root");
+                err!(struct_:
+                    Root { field: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as an attribute or text content value"),
+                    "<Root");
+                err!(nested_struct:
+                    Root { field: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as an attribute or text content value"),
+                    "<Root");
+                err!(flatten_struct:
+                    Root { field: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}
+                    // Flatten enum struct variants represented as newtype variants containing maps
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as an attribute or text content value"),
+                    "<Root");
+                err!(empty_struct:
+                    Root { field: ExternallyTagged::Empty {} }
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as an attribute or text content value"),
+                    "<Root");
+                err!(text:
+                    Root { field: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as an attribute or text content value"),
+                    "<Root");
+            }
+
+            /// The same tests as in `in_struct2`, but enum field renamed to `$text`.
+            ///
+            /// Text representation of enum is possible only for unit variants.
+            mod in_struct_text2 {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                struct Inner<T> {
+                    #[serde(rename = "$text")]
+                    inner: T,
+                }
+
+                serialize_as!(unit:
+                    Root { field: Inner { inner: ExternallyTagged::Unit } }
+                    => "<Root><field>Unit</field></Root>");
+                err!(newtype:
+                    Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
+                    "<Root");
+                err!(tuple_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
+                    "<Root");
+                err!(struct_:
+                    Root { field: Inner { inner: ExternallyTagged::Struct {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as an attribute or text content value"),
+                    "<Root");
+                err!(nested_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Holder {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as an attribute or text content value"),
+                    "<Root");
+                err!(flatten_struct:
+                    Root { field: Inner { inner: ExternallyTaggedWorkaround::Flatten {
+                        nested: Nested { float: 42.0 },
+                        string: "answer",
+                    }}}
+                    // Flatten enum struct variants represented as newtype variants containing maps
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as an attribute or text content value"),
+                    "<Root");
+                err!(empty_struct:
+                    Root { field: Inner { inner: ExternallyTagged::Empty {} } }
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as an attribute or text content value"),
+                    "<Root");
+                err!(text:
+                    Root { field: Inner { inner: ExternallyTagged::Text {
+                        float: 42.0,
+                        string: "answer"
+                    }}}
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as an attribute or text content value"),
+                    "<Root");
             }
         }
 
@@ -912,7 +1401,7 @@ mod without_root {
                     }
 
                     // It is unknown how to exactly serialize unit to a text
-                    err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                    err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                     serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                     // Tuple variant serialized as an `xs:list`
                     serialize_as!(tuple: Tuple::Text(4.2, "newtype text") => "4.2 newtype&#32;text");
@@ -922,7 +1411,7 @@ mod without_root {
                             float: 4.2,
                             string: "newtype text",
                         }
-                        => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
                 }
             }
 
@@ -1403,7 +1892,7 @@ mod with_root {
                 }
 
                 // It is unknown how to exactly serialize unit to a text
-                err!(unit: Unit::Text => Unsupported("`Unit::$text` unit variant cannot be serialized"));
+                err!(unit: Unit::Text => Unsupported("cannot serialize enum unit variant `Unit::$text` as text content value"));
                 serialize_as!(newtype: Newtype::Text("newtype text") => "newtype text");
                 // Tuple variant serialized as an `xs:list`
                 serialize_as!(tuple: Tuple::Text(4.2, "newtype-text".into()) => "4.2 newtype-text");
@@ -1418,7 +1907,7 @@ mod with_root {
                         float: 4.2,
                         string: "newtype text",
                     }
-                    => Unsupported("`Struct::$text` struct variant cannot be serialized"));
+                    => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
             }
         }
 
