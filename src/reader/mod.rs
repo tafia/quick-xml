@@ -7,7 +7,7 @@ use std::ops::Range;
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result};
 use crate::events::Event;
-use crate::reader::parser::Parser;
+use crate::reader::state::ReaderState;
 
 use memchr;
 
@@ -31,7 +31,7 @@ macro_rules! configure_methods {
         /// [`End`]: Event::End
         /// [`check_end_names`]: Self::check_end_names
         pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.expand_empty_elements = val;
+            self $(.$holder)? .state.expand_empty_elements = val;
             self
         }
 
@@ -58,8 +58,8 @@ macro_rules! configure_methods {
         /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
         /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
         pub fn trim_text(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.trim_text_start = val;
-            self $(.$holder)? .parser.trim_text_end = val;
+            self $(.$holder)? .state.trim_text_start = val;
+            self $(.$holder)? .state.trim_text_end = val;
             self
         }
 
@@ -83,7 +83,7 @@ macro_rules! configure_methods {
         /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
         /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
         pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.trim_text_end = val;
+            self $(.$holder)? .state.trim_text_end = val;
             self
         }
 
@@ -99,7 +99,7 @@ macro_rules! configure_methods {
         ///
         /// [`End`]: Event::End
         pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.trim_markup_names_in_closing_tags = val;
+            self $(.$holder)? .state.trim_markup_names_in_closing_tags = val;
             self
         }
 
@@ -137,7 +137,7 @@ macro_rules! configure_methods {
         /// [`End`]: Event::End
         /// [`expand_empty_elements`]: Self::expand_empty_elements
         pub fn check_end_names(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.check_end_names = val;
+            self $(.$holder)? .state.check_end_names = val;
             self
         }
 
@@ -152,7 +152,7 @@ macro_rules! configure_methods {
         ///
         /// [`Comment`]: Event::Comment
         pub fn check_comments(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .parser.check_comments = val;
+            self $(.$holder)? .state.check_comments = val;
             self
         }
     };
@@ -167,7 +167,7 @@ macro_rules! read_event_impl {
         $(, $await:ident)?
     ) => {{
         let event = loop {
-            match $self.parser.state {
+            match $self.state.state {
                 ParseState::Init => { // Go to OpenedTag state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
@@ -175,8 +175,8 @@ macro_rules! read_event_impl {
                     // feature enabled path
                     #[cfg(feature = "encoding")]
                     if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
-                        if $self.parser.encoding.can_be_refined() {
-                            $self.parser.encoding = crate::reader::EncodingRef::BomDetected(encoding);
+                        if $self.state.encoding.can_be_refined() {
+                            $self.state.encoding = crate::reader::EncodingRef::BomDetected(encoding);
                         }
                     }
 
@@ -200,12 +200,12 @@ macro_rules! read_event_impl {
                 },
                 // Go to ClosedTag state in next two arms
                 ParseState::OpenedTag => break $self.$read_until_close($buf) $(.$await)?,
-                ParseState::Empty => break $self.parser.close_expanded_empty(),
+                ParseState::Empty => break $self.state.close_expanded_empty(),
                 ParseState::Exit => break Ok(Event::Eof),
             };
         };
         match event {
-            Err(_) | Ok(Event::Eof) => $self.parser.state = ParseState::Exit,
+            Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Exit,
             _ => {}
         }
         event
@@ -228,24 +228,24 @@ macro_rules! read_until_open {
         $read_event:ident
         $(, $await:ident)?
     ) => {{
-        $self.parser.state = ParseState::OpenedTag;
+        $self.state.state = ParseState::OpenedTag;
 
-        if $self.parser.trim_text_start {
-            $reader.skip_whitespace(&mut $self.parser.offset) $(.$await)? ?;
+        if $self.state.trim_text_start {
+            $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if $reader.skip_one(b'<', &mut $self.parser.offset) $(.$await)? ? {
+        if $reader.skip_one(b'<', &mut $self.state.offset) $(.$await)? ? {
             // Pass $buf to the next next iteration of parsing loop
             return Ok(Err($buf));
         }
 
         match $reader
-            .read_bytes_until(b'<', $buf, &mut $self.parser.offset)
+            .read_bytes_until(b'<', $buf, &mut $self.state.offset)
             $(.$await)?
         {
             // Return Text event with `bytes` content
-            Ok(Some(bytes)) => $self.parser.emit_text(bytes).map(Ok),
+            Ok(Some(bytes)) => $self.state.emit_text(bytes).map(Ok),
             Ok(None) => Ok(Ok(Event::Eof)),
             Err(e) => Err(e),
         }
@@ -278,43 +278,43 @@ macro_rules! read_until_close {
         $reader:expr
         $(, $await:ident)?
     ) => {{
-        $self.parser.state = ParseState::ClosedTag;
+        $self.state.state = ParseState::ClosedTag;
 
         match $reader.peek_one() $(.$await)? {
             // `<!` - comment, CDATA or DOCTYPE declaration
             Ok(Some(b'!')) => match $reader
-                .read_bang_element($buf, &mut $self.parser.offset)
+                .read_bang_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => $self.parser.emit_bang(bang_type, bytes),
+                Ok(Some((bang_type, bytes))) => $self.state.emit_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
             Ok(Some(b'/')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.emit_end(bytes),
+                Ok(Some(bytes)) => $self.state.emit_end(bytes),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.parser.offset)
+                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.emit_question_mark(bytes),
+                Ok(Some(bytes)) => $self.state.emit_question_mark(bytes),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_element($buf, &mut $self.parser.offset)
+                .read_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.parser.emit_start(bytes),
+                Ok(Some(bytes)) => $self.state.emit_start(bytes),
                 Err(e) => Err(e),
             },
             Ok(None) => Ok(Event::Eof),
@@ -361,8 +361,8 @@ macro_rules! read_to_end {
 mod async_tokio;
 mod buffered_reader;
 mod ns_reader;
-mod parser;
 mod slice_reader;
+mod state;
 
 pub use ns_reader::NsReader;
 
@@ -524,7 +524,7 @@ pub struct Reader<R> {
     /// Source of data for parse
     reader: R,
     /// Configuration and current parse state
-    parser: Parser,
+    state: ReaderState,
 }
 
 /// Builder methods
@@ -533,7 +533,7 @@ impl<R> Reader<R> {
     pub fn from_reader(reader: R) -> Self {
         Self {
             reader,
-            parser: Parser::default(),
+            state: ReaderState::default(),
         }
     }
 
@@ -615,10 +615,10 @@ impl<R> Reader<R> {
     pub fn buffer_position(&self) -> usize {
         // when internal state is OpenedTag, we have actually read until '<',
         // which we don't want to show
-        if let ParseState::OpenedTag = self.parser.state {
-            self.parser.offset - 1
+        if let ParseState::OpenedTag = self.state.state {
+            self.state.offset - 1
         } else {
-            self.parser.offset
+            self.state.offset
         }
     }
 
@@ -633,7 +633,7 @@ impl<R> Reader<R> {
     /// [`encoding`]: ../index.html#encoding
     #[inline]
     pub fn decoder(&self) -> Decoder {
-        self.parser.decoder()
+        self.state.decoder()
     }
 }
 

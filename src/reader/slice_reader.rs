@@ -27,7 +27,7 @@ impl<'a> Reader<&'a [u8]> {
         #[cfg(feature = "encoding")]
         {
             let mut reader = Self::from_reader(s.as_bytes());
-            reader.parser.encoding = EncodingRef::Explicit(UTF_8);
+            reader.state.encoding = EncodingRef::Explicit(UTF_8);
             reader
         }
 
