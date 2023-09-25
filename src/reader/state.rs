@@ -137,46 +137,6 @@ impl ReaderState {
         Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
-    /// `buf` contains data between `<` and `>` and the first byte is `?`.
-    /// `self.offset` already after the `>`
-    ///
-    /// Returns `Decl` or `PI` event
-    pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        debug_assert!(buf.len() > 0);
-        debug_assert_eq!(buf[0], b'?');
-
-        let len = buf.len();
-        // We accept at least <??>
-        //                     ~~ - len = 2
-        if len > 1 && buf[len - 1] == b'?' {
-            // Cut of `?` and `?` from start and end
-            let content = &buf[1..len - 1];
-            let len = content.len();
-
-            if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
-
-                // Try getting encoding from the declaration event
-                #[cfg(feature = "encoding")]
-                if self.encoding.can_be_refined() {
-                    if let Some(encoding) = event.encoder() {
-                        self.encoding = EncodingRef::XmlDetected(encoding);
-                    }
-                }
-
-                Ok(Event::Decl(event))
-            } else {
-                Ok(Event::PI(BytesText::wrap(content, self.decoder())))
-            }
-        } else {
-            // <?....EOF
-            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-            //          so we move offset to it (-2 for `<` and `>`)
-            self.last_error_offset = self.offset - len - 2;
-            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
-        }
-    }
-
     /// Converts content of a tag to a `Start` or an `Empty` event
     ///
     /// # Parameters
@@ -404,7 +364,40 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<?"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b"?>"), "{:?}", Bytes(content));
 
-                self.emit_question_mark(&content[1..content.len() - 1])
+                let buf = &content[1..content.len() - 1];
+                debug_assert!(buf.len() > 0);
+                debug_assert_eq!(buf[0], b'?');
+
+                let len = buf.len();
+                // We accept at least <??>
+                //                     ~~ - len = 2
+                if len > 1 && buf[len - 1] == b'?' {
+                    // Cut of `?` and `?` from start and end
+                    let content = &buf[1..len - 1];
+                    let len = content.len();
+
+                    if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
+                        let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
+
+                        // Try getting encoding from the declaration event
+                        #[cfg(feature = "encoding")]
+                        if self.encoding.can_be_refined() {
+                            if let Some(encoding) = event.encoder() {
+                                self.encoding = EncodingRef::XmlDetected(encoding);
+                            }
+                        }
+
+                        Ok(Event::Decl(event))
+                    } else {
+                        Ok(Event::PI(BytesText::wrap(content, self.decoder())))
+                    }
+                } else {
+                    // <?....EOF
+                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+                    //          so we move offset to it (-2 for `<` and `>`)
+                    self.last_error_offset = self.offset - len - 2;
+                    Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+                }
             }
             FeedResult::EmitEmptyTag(_) => {
                 debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
