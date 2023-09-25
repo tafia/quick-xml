@@ -7,15 +7,13 @@ use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
+use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
-use crate::errors::{Error, Result, SyntaxError};
+use crate::errors::{Error, Result};
 use crate::events::{BytesText, Event};
 use crate::name::QName;
 use crate::parser::FeedResult;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
-
-use memchr;
+use crate::reader::{Reader, Span};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -331,110 +329,6 @@ impl<'a> Reader<&'a [u8]> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
-/// that will be borrowed by events. This implementation provides a zero-copy deserialization
-impl<'a> XmlSource<'a, ()> for &'a [u8] {
-    #[cfg(not(feature = "encoding"))]
-    fn remove_utf8_bom(&mut self) -> Result<()> {
-        if self.starts_with(crate::encoding::UTF8_BOM) {
-            *self = &self[crate::encoding::UTF8_BOM.len()..];
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "encoding")]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
-        if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
-            *self = &self[bom_len..];
-            return Ok(Some(enc));
-        }
-        Ok(None)
-    }
-
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<(&'a [u8], bool)> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        if let Some(i) = memchr::memchr(byte, self) {
-            *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            Ok((bytes, true))
-        } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
-            Ok((bytes, false))
-        }
-    }
-
-    fn read_bang_element(
-        &mut self,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<(BangType, &'a [u8])> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        debug_assert_eq!(self[0], b'!');
-
-        let bang_type = BangType::new(self[1..].first().copied())?;
-
-        if let Some((bytes, i)) = bang_type.parse(&[], self) {
-            *position += i;
-            *self = &self[i..];
-            return Ok((bang_type, bytes));
-        }
-
-        *position += self.len();
-        Err(bang_type.to_err())
-    }
-
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
-        let mut state = ReadElementState::Elem;
-
-        if let Some((bytes, i)) = state.change(self) {
-            // Position now just after the `>` symbol
-            *position += i;
-            *self = &self[i..];
-            return Ok(bytes);
-        }
-
-        *position += self.len();
-        Err(Error::Syntax(SyntaxError::UnclosedTag))
-    }
-
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        let whitespaces = self
-            .iter()
-            .position(|b| !is_whitespace(*b))
-            .unwrap_or(self.len());
-        *position += whitespaces;
-        *self = &self[whitespaces..];
-        Ok(())
-    }
-
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
-            *position += 1;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        Ok(self.first().copied())
-    }
-}
 
 #[cfg(test)]
 mod test {

@@ -298,55 +298,6 @@ pub type Span = Range<usize>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Possible reader states. The state transition diagram (`true` and `false` shows
-/// value of [`Config::expand_empty_elements`] option):
-///
-/// ```mermaid
-/// flowchart LR
-///   subgraph _
-///     direction LR
-///
-///     Init      -- "(no event)"\n                                       --> OpenedTag
-///     OpenedTag -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> ClosedTag
-///     ClosedTag -- "#lt;false#gt;\n(no event)"\nText                    --> OpenedTag
-///   end
-///   ClosedTag -- "#lt;true#gt;"\nStart --> Empty
-///   Empty     -- End                   --> ClosedTag
-///   _ -. Eof .-> Exit
-/// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum ParseState {
-    /// Initial state in which reader stay after creation. Transition from that
-    /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next
-    /// state is always `OpenedTag`. The reader will never return to this state. The
-    /// event emitted during transition to `OpenedTag` is a `StartEvent` if the
-    /// first symbol not `<`, otherwise no event are emitted.
-    Init,
-    /// State after seeing the `<` symbol. Depending on the next symbol all other
-    /// events could be generated.
-    ///
-    /// After generating one event the reader moves to the `ClosedTag` state.
-    OpenedTag,
-    /// State in which reader searches the `<` symbol of a markup. All bytes before
-    /// that symbol will be returned in the [`Event::Text`] event. After that
-    /// the reader moves to the `OpenedTag` state.
-    ///
-    /// [`Event::Text`]: crate::events::Event::Text
-    ClosedTag,
-    /// This state is used only if option [`expand_empty_elements`] is set to `true`.
-    /// Reader enters to this state when it is in a `ClosedTag` state and emits an
-    /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
-    /// after which reader returned to the `ClosedTag` state.
-    ///
-    /// [`expand_empty_elements`]: Config::expand_empty_elements
-    /// [`Event::Start`]: crate::events::Event::Start
-    /// [`Event::End`]: crate::events::Event::End
-    Empty,
-    /// Reader enters this state when `Eof` event generated or an error occurred.
-    /// This is the last state, the reader stay in it forever.
-    Exit,
-}
-
 /// A reference to an encoding together with information about how it was retrieved.
 ///
 /// The state transition diagram:
@@ -551,13 +502,7 @@ impl<R> Reader<R> {
 
     /// Gets the current byte position in the input data.
     pub fn buffer_position(&self) -> usize {
-        // when internal state is OpenedTag, we have actually read until '<',
-        // which we don't want to show
-        if let ParseState::OpenedTag = self.state.state {
-            self.state.offset - 1
-        } else {
-            self.state.offset
-        }
+        self.state.offset
     }
 
     /// Gets the last error byte position in the input data. If there is no errors
@@ -591,122 +536,6 @@ impl<R> Reader<R> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Represents an input for a reader that can return borrowed data.
-///
-/// There are two implementors of this trait: generic one that read data from
-/// `Self`, copies some part of it into a provided buffer of type `B` and then
-/// returns data that borrow from that buffer.
-///
-/// The other implementor is for `&[u8]` and instead of copying data returns
-/// borrowed data from `Self` instead. This implementation allows zero-copy
-/// deserialization.
-///
-/// # Parameters
-/// - `'r`: lifetime of a buffer from which events will borrow
-/// - `B`: a type of a buffer that can be used to store data read from `Self` and
-///   from which events can borrow
-trait XmlSource<'r, B> {
-    /// Removes UTF-8 BOM if it is present
-    #[cfg(not(feature = "encoding"))]
-    fn remove_utf8_bom(&mut self) -> Result<()>;
-
-    /// Determines encoding from the start of input and removes BOM if it is present
-    #[cfg(feature = "encoding")]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>>;
-
-    /// Read input until `byte` is found or end of input is reached.
-    ///
-    /// Returns a slice of data read up to `byte` (exclusive),
-    /// and a flag noting whether `byte` was found in the input or not.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc*def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     (b"abc".as_ref(), true)
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
-    /// # Parameters
-    /// - `byte`: Byte for search
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: B,
-        position: &mut usize,
-    ) -> Result<(&'r [u8], bool)>;
-
-    /// Read input until comment, CDATA or processing instruction is finished.
-    ///
-    /// This method expect that `<` already was read.
-    ///
-    /// Returns a slice of data read up to end of comment, CDATA or processing
-    /// instruction (`>`), which does not include into result.
-    ///
-    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
-    ///
-    /// # Parameters
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<(BangType, &'r [u8])>;
-
-    /// Read input until XML element is closed by approaching a `>` symbol.
-    /// Returns a buffer that contains a data between `<` and `>` or
-    /// [`SyntaxError::UnclosedTag`] if end-of-input was reached before reading `>`.
-    ///
-    /// Derived from `read_until`, but modified to handle XML attributes
-    /// using a minimal state machine.
-    ///
-    /// Attribute values are [defined] as follows:
-    /// ```plain
-    /// AttValue := '"' (([^<&"]) | Reference)* '"'
-    ///           | "'" (([^<&']) | Reference)* "'"
-    /// ```
-    /// (`Reference` is something like `&quot;`, but we don't care about
-    /// escaped characters at this level)
-    ///
-    /// # Parameters
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
-    /// [events]: crate::events::Event
-    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<&'r [u8]>;
-
-    /// Consume and discard all the whitespace until the next non-whitespace
-    /// character or EOF.
-    ///
-    /// # Parameters
-    /// - `position`: Will be increased by amount of bytes consumed
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
-
-    /// Consume and discard one character if it matches the given byte. Return
-    /// `true` if it matched.
-    ///
-    /// # Parameters
-    /// - `position`: Will be increased by 1 if byte is matched
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
-
-    /// Return one character without consuming it, so that future `read_*` calls
-    /// will still include it. On EOF, return `None`.
-    fn peek_one(&mut self) -> Result<Option<u8>>;
-}
 
 /// Possible elements started with `<!`
 #[derive(Debug, PartialEq)]
@@ -797,40 +626,6 @@ impl BangType {
             Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
             Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
         }
-    }
-}
-
-/// State machine for the [`XmlSource::read_element`]
-#[derive(Clone, Copy)]
-enum ReadElementState {
-    /// The initial state (inside element, but outside of attribute value)
-    Elem,
-    /// Inside a single-quoted attribute value
-    SingleQ,
-    /// Inside a double-quoted attribute value
-    DoubleQ,
-}
-impl ReadElementState {
-    /// Changes state by analyzing part of input.
-    /// Returns a tuple with part of chunk up to element closing symbol `>`
-    /// and a position after that symbol or `None` if such symbol was not found
-    #[inline(always)]
-    fn change<'b>(&mut self, chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
-        for i in memchr::memchr3_iter(b'>', b'\'', b'"', chunk) {
-            *self = match (*self, chunk[i]) {
-                // only allowed to match `>` while we are in state `Elem`
-                (Self::Elem, b'>') => return Some((&chunk[..i], i + 1)),
-                (Self::Elem, b'\'') => Self::SingleQ,
-                (Self::Elem, b'\"') => Self::DoubleQ,
-
-                // the only end_byte that gets us out if the same character
-                (Self::SingleQ, b'\'') | (Self::DoubleQ, b'"') => Self::Elem,
-
-                // all other bytes: no state change
-                _ => *self,
-            };
-        }
-        None
     }
 }
 

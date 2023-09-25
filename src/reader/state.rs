@@ -7,7 +7,7 @@ use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Even
 use crate::parser::{FeedResult, Parser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{is_whitespace, BangType, Config, ParseState};
+use crate::reader::{is_whitespace, BangType, Config};
 use crate::utils::Bytes;
 
 use memchr;
@@ -41,8 +41,6 @@ pub(super) struct ReaderState {
     /// and changing `offset` is not possible, because `Error::IllFormed` errors
     /// are recoverable.
     pub last_error_offset: usize,
-    /// Defines how to process next byte
-    pub state: ParseState,
     /// User-defined settings that affect parsing
     pub config: Config,
     /// When text trimming from start is enabled, we need to track is we seen
@@ -53,6 +51,10 @@ pub(super) struct ReaderState {
     /// Used only together with buffering readers, because borrowing reader
     /// already have all data available.
     can_trim_start: bool,
+    /// If case of [`Config::expand_empty_elements`] is true, this field will
+    /// be `true` if synthetic end event should be emitted on next call to read
+    /// event.
+    pending: bool,
     /// All currently Started elements which didn't have a matching
     /// End element yet.
     ///
@@ -271,7 +273,7 @@ impl ReaderState {
             let event = BytesStart::wrap(&content[..len - 1], name_len);
 
             if self.config.expand_empty_elements {
-                self.state = ParseState::Empty;
+                self.pending = true;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(&content[..name_len]);
                 Ok(Event::Start(event))
@@ -290,7 +292,7 @@ impl ReaderState {
 
     #[inline]
     pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.state = ParseState::ClosedTag;
+        self.pending = false;
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
@@ -403,7 +405,7 @@ impl ReaderState {
     ///
     /// [`Parser::feed()`]: crate::parser::Parser::feed()
     pub fn make_event<'a>(&mut self, result: FeedResult, content: &'a [u8]) -> Result<Event<'a>> {
-        debug_assert_ne!(self.state, ParseState::Empty);
+        debug_assert!(!self.pending, "synthetic end event won't be emitted");
 
         match result {
             FeedResult::EmitText(_) | FeedResult::NeedData => {
@@ -473,7 +475,7 @@ impl ReaderState {
     /// If this method returns something, the read next event should return this
     /// event.
     pub fn pending_end(&mut self) -> Option<Event<'static>> {
-        if let ParseState::Empty = self.state {
+        if self.pending {
             return Some(self.close_expanded_empty().unwrap());
         }
         None
@@ -486,9 +488,9 @@ impl Default for ReaderState {
             parser: Parser::default(),
             offset: 0,
             last_error_offset: 0,
-            state: ParseState::Init,
             config: Config::default(),
             can_trim_start: true,
+            pending: false,
             opened_buffer: Vec::new(),
             opened_starts: Vec::new(),
 
