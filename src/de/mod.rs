@@ -15,6 +15,7 @@
 //! Table of Contents
 //! =================
 //! - [Mapping XML to Rust types](#mapping-xml-to-rust-types)
+//!   - [Basics](#basics)
 //!   - [Optional attributes and elements](#optional-attributes-and-elements)
 //!   - [Choices (`xs:choice` XML Schema type)](#choices-xschoice-xml-schema-type)
 //!   - [Sequences (`xs:all` and `xs:sequence` XML Schema types)](#sequences-xsall-and-xssequence-xml-schema-types)
@@ -27,6 +28,7 @@
 //!     - [Enums and sequences of enums](#enums-and-sequences-of-enums)
 //! - [Frequently Used Patterns](#frequently-used-patterns)
 //!   - [`<element>` lists](#element-lists)
+//!   - [Overlapped (Out-of-Order) Elements](#overlapped-out-of-order-elements)
 //!   - [Enum::Unit Variants As a Text](#enumunit-variants-as-a-text)
 //!   - [Internally Tagged Enums](#internally-tagged-enums)
 //!
@@ -57,6 +59,11 @@
 //!
 //! <table>
 //! <thead>
+//! <tr><th colspan="2">
+//!
+//! ## Basics
+//!
+//! </th></tr>
 //! <tr><th>To parse all these XML's...</th><th>...use these Rust type(s)</th></tr>
 //! </thead>
 //! <tbody style="vertical-align:top;">
@@ -990,6 +997,9 @@
 //!
 //! NOTE: consequent text and CDATA nodes are merged into the one text node,
 //! so you cannot have two adjacent string types in your sequence.
+//!
+//! NOTE: In the case that the list might contain tags that are overlapped with
+//! tags that do not correspond to the list you should add the feature [`overlapped-lists`].
 //! </div>
 //! </td>
 //! </tr>
@@ -1673,6 +1683,31 @@
 //!
 //! Instead of writing such functions manually, you also could try <https://lib.rs/crates/serde-query>.
 //!
+//! Overlapped (Out-of-Order) Elements
+//! ----------------------------------
+//! In the case that the list might contain tags that are overlapped with
+//! tags that do not correspond to the list (this is a usual case in XML
+//! documents) like this:
+//! ```xml
+//! <any-name>
+//!   <item/>
+//!   <another-item/>
+//!   <item/>
+//!   <item/>
+//! </any-name>
+//! ```
+//! you should enable the [`overlapped-lists`] feature to make it possible
+//! to deserialize this to:
+//! ```no_run
+//! # use serde::Deserialize;
+//! #[derive(Deserialize)]
+//! #[serde(rename_all = "kebab-case")]
+//! struct AnyName {
+//!     item: Vec<()>,
+//!     another_item: (),
+//! }
+//! ```
+//!
 //! Enum::Unit Variants As a Text
 //! -----------------------------
 //! One frequent task and a typical mistake is to creation of mapping a text
@@ -1755,6 +1790,7 @@
 //! macro documentation for details.
 //!
 //!
+//! [`overlapped-lists`]: ../index.html#overlapped-lists
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
