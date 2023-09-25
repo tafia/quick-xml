@@ -6,7 +6,6 @@ use std::ops::Range;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
 use crate::reader::state::ReaderState;
 
 use memchr;
@@ -205,60 +204,6 @@ impl Default for Config {
 
 macro_rules! read_event_impl {
     (
-        $self:ident, $buf:ident,
-        $reader:expr,
-        $read_until_open:ident,
-        $read_until_close:ident
-        $(, $await:ident)?
-    ) => {{
-        let event = loop {
-            match $self.state.state {
-                ParseState::Init => { // Go to OpenedTag state
-                    // If encoding set explicitly, we not need to detect it. For example,
-                    // explicit UTF-8 set automatically if Reader was created using `from_str`.
-                    // But we still need to remove BOM for consistency with no encoding
-                    // feature enabled path
-                    #[cfg(feature = "encoding")]
-                    if let Some(encoding) = $reader.detect_encoding() $(.$await)? ? {
-                        if $self.state.encoding.can_be_refined() {
-                            $self.state.encoding = crate::reader::EncodingRef::BomDetected(encoding);
-                        }
-                    }
-
-                    // Removes UTF-8 BOM if it is present
-                    #[cfg(not(feature = "encoding"))]
-                    $reader.remove_utf8_bom() $(.$await)? ?;
-
-                    // Go to OpenedTag state
-                    match $self.$read_until_open($buf) $(.$await)? {
-                        Ok(Ok(ev)) => break Ok(ev),
-                        Ok(Err(b)) => $buf = b,
-                        Err(err)   => break Err(err),
-                    }
-                },
-                ParseState::ClosedTag => { // Go to OpenedTag state
-                    match $self.$read_until_open($buf) $(.$await)? {
-                        Ok(Ok(ev)) => break Ok(ev),
-                        Ok(Err(b)) => $buf = b,
-                        Err(err)   => break Err(err),
-                    }
-                },
-                // Go to ClosedTag state in next two arms
-                ParseState::OpenedTag => break $self.$read_until_close($buf) $(.$await)?,
-                ParseState::Empty => break $self.state.close_expanded_empty(),
-                ParseState::Exit => break Ok(Event::Eof),
-            };
-        };
-        match event {
-            // #513: In case of ill-formed errors we already consume the wrong data
-            // and change the state. We can continue parsing if we wish
-            Err(Error::IllFormed(_)) => {}
-            Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Exit,
-            _ => {}
-        }
-        event
-    }};
-    (
         $self:ident, $buf:ident
         $(, $await:ident)?
     ) => {{
@@ -304,141 +249,6 @@ macro_rules! read_event_impl {
                     Err(Error::Io(e.into()))
                 }
             };
-        }
-    }};
-}
-
-/// Read bytes up to `<` and skip it. If current byte (after skipping all space
-/// characters if [`Config::trim_text_start`] is `true`) is already `<`, then
-/// returns the next event, otherwise stay at position just after the `<` symbol.
-///
-/// Moves parser to the `OpenedTag` state.
-///
-/// This code is executed in two cases:
-/// - after start of parsing just after skipping BOM if it is present
-/// - after parsing `</tag>` or `<tag>`
-macro_rules! read_until_open {
-    (
-        $self:ident, $buf:ident,
-        $reader:expr,
-        $read_event:ident
-        $(, $await:ident)?
-    ) => {{
-        if $self.state.config.trim_text_start {
-            $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
-        }
-
-        // If we already at the `<` symbol, do not try to return an empty Text event
-        if $reader.skip_one(b'<', &mut $self.state.offset) $(.$await)? ? {
-            $self.state.state = ParseState::OpenedTag;
-            // Pass $buf to the next next iteration of parsing loop
-            return Ok(Err($buf));
-        }
-
-        match $reader
-            .read_bytes_until(b'<', $buf, &mut $self.state.offset)
-            $(.$await)?
-        {
-            Ok((bytes, found)) => {
-                if found {
-                    $self.state.state = ParseState::OpenedTag;
-                }
-                // Return Text event with `bytes` content or Eof if bytes is empty
-                $self.state.emit_text(bytes).map(Ok)
-            }
-            Err(e) => Err(e),
-        }
-    }};
-}
-
-/// Read bytes up to the `>` and skip it. This method is expected to be called
-/// after seeing the `<` symbol and skipping it. Inspects the next (current)
-/// symbol and returns an appropriate [`Event`]:
-///
-/// |Symbol |Event
-/// |-------|-------------------------------------
-/// |`!`    |[`Comment`], [`CData`] or [`DocType`]
-/// |`/`    |[`End`]
-/// |`?`    |[`PI`]
-/// |_other_|[`Start`] or [`Empty`]
-///
-/// Moves parser to the `ClosedTag` state.
-///
-/// [`Comment`]: Event::Comment
-/// [`CData`]: Event::CData
-/// [`DocType`]: Event::DocType
-/// [`End`]: Event::End
-/// [`PI`]: Event::PI
-/// [`Start`]: Event::Start
-/// [`Empty`]: Event::Empty
-macro_rules! read_until_close {
-    (
-        $self:ident, $buf:ident,
-        $reader:expr
-        $(, $await:ident)?
-    ) => {{
-        $self.state.state = ParseState::ClosedTag;
-
-        let start = $self.state.offset;
-        match $reader.peek_one() $(.$await)? {
-            // `<!` - comment, CDATA or DOCTYPE declaration
-            Ok(Some(b'!')) => match $reader
-                .read_bang_element($buf, &mut $self.state.offset)
-                $(.$await)?
-            {
-                Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
-                Err(e) => {
-                    // <!....EOF
-                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                    //          so we move offset to it (-1 for `<`)
-                    $self.state.last_error_offset = start - 1;
-                    Err(e)
-                }
-            },
-            // `</` - closing tag
-            Ok(Some(b'/')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
-                $(.$await)?
-            {
-                Ok((bytes, true)) => $self.state.emit_end(bytes),
-                Ok((_, false)) => {
-                    // We want to report error at `<`, but offset was increased,
-                    // so return it back (-1 for `<`)
-                    $self.state.last_error_offset = start - 1;
-                    Err(Error::Syntax(SyntaxError::UnclosedTag))
-                }
-                Err(e) => Err(e),
-            },
-            // `<?` - processing instruction
-            Ok(Some(b'?')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
-                $(.$await)?
-            {
-                Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
-                Ok((_, false)) => {
-                    // We want to report error at `<`, but offset was increased,
-                    // so return it back (-1 for `<`)
-                    $self.state.last_error_offset = start - 1;
-                    Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
-                }
-                Err(e) => Err(e),
-            },
-            // `<...` - opening or self-closed tag
-            Ok(Some(_)) => match $reader
-                .read_element($buf, &mut $self.state.offset)
-                $(.$await)?
-            {
-                Ok(bytes) => $self.state.emit_start(bytes),
-                Err(e) => Err(e),
-            },
-            // `<` - syntax error, tag not closed
-            Ok(None) => {
-                // We want to report error at `<`, but offset was increased,
-                // so return it back (-1 for `<`)
-                $self.state.last_error_offset = start - 1;
-                Err(Error::Syntax(SyntaxError::UnclosedTag))
-            }
-            Err(e) => Err(e),
         }
     }};
 }
@@ -520,6 +330,8 @@ enum ParseState {
     /// State in which reader searches the `<` symbol of a markup. All bytes before
     /// that symbol will be returned in the [`Event::Text`] event. After that
     /// the reader moves to the `OpenedTag` state.
+    ///
+    /// [`Event::Text`]: crate::events::Event::Text
     ClosedTag,
     /// This state is used only if option [`expand_empty_elements`] is set to `true`.
     /// Reader enters to this state when it is in a `ClosedTag` state and emits an
@@ -527,6 +339,8 @@ enum ParseState {
     /// after which reader returned to the `ClosedTag` state.
     ///
     /// [`expand_empty_elements`]: Config::expand_empty_elements
+    /// [`Event::Start`]: crate::events::Event::Start
+    /// [`Event::End`]: crate::events::Event::End
     Empty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
@@ -635,6 +449,7 @@ impl EncodingRef {
 /// }
 /// ```
 ///
+/// [`Event`]: crate::events::Event
 /// [`NsReader`]: crate::reader::NsReader
 #[derive(Clone)]
 pub struct Reader<R> {
@@ -772,39 +587,6 @@ impl<R> Reader<R> {
     #[inline]
     pub fn decoder(&self) -> Decoder {
         self.state.decoder()
-    }
-}
-
-/// Private sync reading methods
-impl<R> Reader<R> {
-    /// Read text into the given buffer, and return an event that borrows from
-    /// either that buffer or from the input itself, based on the type of the
-    /// reader.
-    fn read_event_impl<'i, B>(&mut self, mut buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        read_event_impl!(self, buf, self.reader, read_until_open, read_until_close)
-    }
-
-    /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    ///
-    /// Returns inner `Ok` if the loop should be broken and an event returned.
-    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
-    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<std::result::Result<Event<'i>, B>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        read_until_open!(self, buf, self.reader, read_event_impl)
-    }
-
-    /// Private function to read until `>` is found. This function expects that
-    /// it was called just after encounter a `<` symbol.
-    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        read_until_close!(self, buf, self.reader)
     }
 }
 

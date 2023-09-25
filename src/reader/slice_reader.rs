@@ -7,11 +7,12 @@ use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::events::{BytesText, Event};
 use crate::name::QName;
+use crate::parser::FeedResult;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
 use memchr;
@@ -71,7 +72,73 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'a>> {
-        self.read_event_impl(())
+        if let Some(end) = self.state.pending_end() {
+            return Ok(end);
+        }
+        loop {
+            if self.reader.is_empty() {
+                return Ok(Event::Eof);
+            }
+            let result = self.state.parser.feed(self.reader)?;
+            return match result {
+                FeedResult::NeedData => {
+                    let offset = self.reader.len();
+                    if let Err(error) = self.state.parser.finish() {
+                        // We need return Event::Eof after error
+                        self.consume(offset);
+                        Err(Error::Syntax(error))
+                    } else {
+                        match self.make_text(offset) {
+                            Some(event) => Ok(event),
+                            None => continue,
+                        }
+                    }
+                }
+
+                FeedResult::EncodingUtf8Like(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_8);
+                    }
+                    continue;
+                }
+                FeedResult::EncodingUtf16BeLike(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_16BE);
+                    }
+                    continue;
+                }
+                FeedResult::EncodingUtf16LeLike(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_16LE);
+                    }
+                    continue;
+                }
+
+                FeedResult::EmitText(offset) => match self.make_text(offset) {
+                    Some(event) => Ok(event),
+                    None => continue,
+                },
+                FeedResult::EmitComment(offset)
+                | FeedResult::EmitCData(offset)
+                | FeedResult::EmitDoctype(offset)
+                | FeedResult::EmitPI(offset)
+                | FeedResult::EmitEmptyTag(offset)
+                | FeedResult::EmitStartTag(offset)
+                | FeedResult::EmitEndTag(offset) => {
+                    let (content, source) = self.reader.split_at(offset);
+                    self.reader = source;
+
+                    self.state.offset += offset;
+                    self.state.make_event(result, content)
+                }
+            };
+        }
     }
 
     /// Reads until end element is found. This function is supposed to be called
@@ -157,6 +224,11 @@ impl<'a> Reader<&'a [u8]> {
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         Ok(read_to_end!(self, end, (), read_event_impl, {}))
     }
+    /// Tranpoline for a `read_to_end!` macro
+    #[inline]
+    fn read_event_impl(&mut self, _: ()) -> Result<Event<'a>> {
+        self.read_event()
+    }
 
     /// Reads content between start and end tags, including any markup. This
     /// function is supposed to be called after you already read a [`Start`] event.
@@ -230,6 +302,31 @@ impl<'a> Reader<&'a [u8]> {
         let span = self.read_to_end(end)?;
 
         self.decoder().decode(&buffer[0..span.len()])
+    }
+
+    #[inline]
+    fn consume(&mut self, count: usize) {
+        self.reader = &self.reader[count..];
+        self.state.offset += count;
+    }
+    /// Returns [`Event::Text`] with the content of reader up to `offset` or
+    /// `None` if no event should be generated because of trimming and getting
+    /// empty text.
+    ///
+    /// Consumes data up to `offset`.
+    fn make_text(&mut self, offset: usize) -> Option<Event<'a>> {
+        let (content, source) = self.reader.split_at(offset);
+        self.reader = source;
+        self.state.offset += offset;
+
+        let mut event = BytesText::wrap(content, self.decoder());
+        if self.state.config.trim_text_start && event.inplace_trim_start() {
+            return None;
+        }
+        if self.state.config.trim_text_end && event.inplace_trim_end() {
+            return None;
+        }
+        Some(Event::Text(event))
     }
 }
 
