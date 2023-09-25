@@ -1,9 +1,10 @@
 //! Contains high-level interface for an events-based XML emitter.
 
 use std::io::Write;
+use std::result::Result as StdResult;
 
 use crate::encoding::UTF8_BOM;
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
@@ -105,7 +106,7 @@ impl<W> Writer<W> {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```
     /// # use quick_xml::Result;
     /// # fn main() -> Result<()> {
     /// use quick_xml::events::{BytesStart, BytesText, Event};
@@ -127,7 +128,8 @@ impl<W> Writer<W> {
     ///
     /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
     /// writer.create_element("tag")
-    ///     .write_inner_content(|writer| {
+    ///     // We need to provide error type, because it is not named somewhere explicitly
+    ///     .write_inner_content::<_, Error>(|writer| {
     ///         let fruits = ["apple", "orange"];
     ///         for (quant, item) in fruits.iter().enumerate() {
     ///             writer
@@ -401,9 +403,10 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Create a new scope for writing XML inside the current element.
-    pub fn write_inner_content<F>(self, closure: F) -> Result<&'a mut Writer<W>>
+    pub fn write_inner_content<F, E>(self, closure: F) -> StdResult<&'a mut Writer<W>, E>
     where
-        F: FnOnce(&mut Writer<W>) -> Result<()>,
+        F: FnOnce(&mut Writer<W>) -> StdResult<(), E>,
+        E: From<Error>,
     {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
@@ -748,7 +751,7 @@ mod indentation {
             .create_element("outer")
             .with_attribute(("attr1", "value1"))
             .with_attribute(("attr2", "value2"))
-            .write_inner_content(|writer| {
+            .write_inner_content::<_, Error>(|writer| {
                 let fruits = ["apple", "orange", "banana"];
                 for (quant, item) in fruits.iter().enumerate() {
                     writer
@@ -759,8 +762,7 @@ mod indentation {
                 writer
                     .create_element("inner")
                     .write_inner_content(|writer| {
-                        writer.create_element("empty").write_empty()?;
-                        Ok(())
+                        writer.create_element("empty").write_empty().map(|_| ())
                     })?;
 
                 Ok(())
