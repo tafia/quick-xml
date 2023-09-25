@@ -290,15 +290,6 @@ impl ReaderState {
         }
     }
 
-    #[inline]
-    pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.pending = false;
-        let name = self
-            .opened_buffer
-            .split_off(self.opened_starts.pop().unwrap());
-        Ok(Event::End(BytesEnd::wrap(name.into())))
-    }
-
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
     ///
     /// If [`encoding`] feature is enabled, the used encoding may change after
@@ -476,7 +467,11 @@ impl ReaderState {
     /// event.
     pub fn pending_end(&mut self) -> Option<Event<'static>> {
         if self.pending {
-            return Some(self.close_expanded_empty().unwrap());
+            self.pending = false;
+            let name = self
+                .opened_buffer
+                .split_off(self.opened_starts.pop().unwrap());
+            return Some(Event::End(BytesEnd::wrap(name.into())));
         }
         None
     }
