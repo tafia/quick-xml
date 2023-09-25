@@ -5,242 +5,11 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use memchr;
-
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, Result};
+use crate::events::{BytesText, Event};
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
-
-macro_rules! impl_buffered_source {
-    ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
-        #[cfg(not(feature = "encoding"))]
-        $($async)? fn remove_utf8_bom(&mut self) -> Result<()> {
-            use crate::encoding::UTF8_BOM;
-
-            loop {
-                break match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) => {
-                        if n.starts_with(UTF8_BOM) {
-                            self $(.$reader)? .consume(UTF8_BOM.len());
-                        }
-                        Ok(())
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
-                };
-            }
-        }
-
-        #[cfg(feature = "encoding")]
-        $($async)? fn detect_encoding(&mut self) -> Result<Option<&'static encoding_rs::Encoding>> {
-            loop {
-                break match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) => if let Some((enc, bom_len)) = crate::encoding::detect_encoding(n) {
-                        self $(.$reader)? .consume(bom_len);
-                        Ok(Some(enc))
-                    } else {
-                        Ok(None)
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
-                };
-            }
-        }
-
-        #[inline]
-        $($async)? fn read_bytes_until $(<$lf>)? (
-            &mut self,
-            byte: u8,
-            buf: &'b mut Vec<u8>,
-            position: &mut usize,
-        ) -> Result<(&'b [u8], bool)> {
-            // search byte must be within the ascii range
-            debug_assert!(byte.is_ascii());
-
-            let mut read = 0;
-            let mut done = false;
-            let start = buf.len();
-            while !done {
-                let used = {
-                    let available = match self $(.$reader)? .fill_buf() $(.$await)? {
-                        Ok(n) if n.is_empty() => break,
-                        Ok(n) => n,
-                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => {
-                            *position += read;
-                            return Err(Error::Io(e.into()));
-                        }
-                    };
-
-                    match memchr::memchr(byte, available) {
-                        Some(i) => {
-                            buf.extend_from_slice(&available[..i]);
-                            done = true;
-                            i + 1
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            available.len()
-                        }
-                    }
-                };
-                self $(.$reader)? .consume(used);
-                read += used;
-            }
-            *position += read;
-
-            Ok((&buf[start..], done))
-        }
-
-        $($async)? fn read_bang_element $(<$lf>)? (
-            &mut self,
-            buf: &'b mut Vec<u8>,
-            position: &mut usize,
-        ) -> Result<(BangType, &'b [u8])> {
-            // Peeked one bang ('!') before being called, so it's guaranteed to
-            // start with it.
-            let start = buf.len();
-            let mut read = 1;
-            buf.push(b'!');
-            self $(.$reader)? .consume(1);
-
-            let bang_type = BangType::new(self.peek_one() $(.$await)? ?)?;
-
-            loop {
-                match self $(.$reader)? .fill_buf() $(.$await)? {
-                    // Note: Do not update position, so the error points to
-                    // somewhere sane rather than at the EOF
-                    Ok(n) if n.is_empty() => break,
-                    Ok(available) => {
-                        // We only parse from start because we don't want to consider
-                        // whatever is in the buffer before the bang element
-                        if let Some((consumed, used)) = bang_type.parse(&buf[start..], available) {
-                            buf.extend_from_slice(consumed);
-
-                            self $(.$reader)? .consume(used);
-                            read += used;
-
-                            *position += read;
-                            return Ok((bang_type, &buf[start..]));
-                        } else {
-                            buf.extend_from_slice(available);
-
-                            let used = available.len();
-                            self $(.$reader)? .consume(used);
-                            read += used;
-                        }
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e.into()));
-                    }
-                }
-            }
-
-            *position += read;
-            Err(bang_type.to_err())
-        }
-
-        #[inline]
-        $($async)? fn read_element $(<$lf>)? (
-            &mut self,
-            buf: &'b mut Vec<u8>,
-            position: &mut usize,
-        ) -> Result<&'b [u8]> {
-            let mut state = ReadElementState::Elem;
-            let mut read = 0;
-
-            let start = buf.len();
-            loop {
-                match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(available) => {
-                        if let Some((consumed, used)) = state.change(available) {
-                            buf.extend_from_slice(consumed);
-
-                            self $(.$reader)? .consume(used);
-                            read += used;
-
-                            // Position now just after the `>` symbol
-                            *position += read;
-                            return Ok(&buf[start..]);
-                        } else {
-                            // The `>` symbol not yet found, continue reading
-                            buf.extend_from_slice(available);
-
-                            let used = available.len();
-                            self $(.$reader)? .consume(used);
-                            read += used;
-                        }
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e.into()));
-                    }
-                };
-            }
-
-            *position += read;
-            Err(Error::Syntax(SyntaxError::UnclosedTag))
-        }
-
-        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-            loop {
-                break match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) => {
-                        let count = n.iter().position(|b| !is_whitespace(*b)).unwrap_or(n.len());
-                        if count > 0 {
-                            self $(.$reader)? .consume(count);
-                            *position += count;
-                            continue;
-                        } else {
-                            Ok(())
-                        }
-                    }
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
-                };
-            }
-        }
-
-        $($async)? fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-            // search byte must be within the ascii range
-            debug_assert!(byte.is_ascii());
-
-            match self.peek_one() $(.$await)? ? {
-                Some(b) if b == byte => {
-                    *position += 1;
-                    self $(.$reader)? .consume(1);
-                    Ok(true)
-                }
-                _ => Ok(false),
-            }
-        }
-
-        $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
-            loop {
-                break match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) if n.is_empty() => Ok(None),
-                    Ok(n) => Ok(Some(n[0])),
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
-                };
-            }
-        }
-    };
-}
-
-// Make it public for use in async implementations
-pub(super) use impl_buffered_source;
-
-/// Implementation of `XmlSource` for any `BufRead` reader using a user-given
-/// `Vec<u8>` as buffer that will be borrowed by events.
-impl<'b, R: BufRead> XmlSource<'b, &'b mut Vec<u8>> for R {
-    impl_buffered_source!();
-}
+use crate::reader::state::ParseOutcome;
+use crate::reader::{Reader, Span};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,7 +61,7 @@ impl<R: BufRead> Reader<R> {
     /// ```
     #[inline]
     pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        self.read_event_impl(buf)
+        read_event_impl!(self, buf)
     }
 
     /// Reads until end element is found using provided buffer as intermediate
@@ -384,7 +153,7 @@ impl<R: BufRead> Reader<R> {
     /// [`check_end_names`]: crate::reader::Config::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
-        Ok(read_to_end!(self, end, buf, read_event_impl, {
+        Ok(read_to_end!(self, end, buf, read_event_into, {
             buf.clear();
         }))
     }
@@ -405,7 +174,7 @@ mod test {
 
     check!(
         #[test]
-        read_event_impl,
+        read_event_into,
         &mut Vec::new()
     );
 
