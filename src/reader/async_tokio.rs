@@ -369,14 +369,11 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
 
 #[cfg(test)]
 mod test {
-    use super::TokioAdapter;
     use crate::reader::test::{check, small_buffers};
 
     check!(
         #[tokio::test]
         read_event_into_async,
-        read_until_close_async,
-        TokioAdapter,
         &mut Vec::new(),
         async, await
     );
