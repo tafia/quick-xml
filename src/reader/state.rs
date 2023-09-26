@@ -84,60 +84,6 @@ pub(super) struct ReaderState {
 }
 
 impl ReaderState {
-    /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
-    /// end name matches the last opened start name if `self.config.check_end_names` is set.
-    pub fn emit_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
-        // Strip the `/` character. `content` contains data between `</` and `>`
-        let content = &buf[1..];
-        // XML standard permits whitespaces after the markup name in closing tags.
-        // Let's strip them from the buffer before comparing tag names.
-        let name = if self.config.trim_markup_names_in_closing_tags {
-            if let Some(pos_end_name) = content.iter().rposition(|&b| !is_whitespace(b)) {
-                &content[..pos_end_name + 1]
-            } else {
-                content
-            }
-        } else {
-            content
-        };
-
-        let decoder = self.decoder();
-
-        // Get the index in self.opened_buffer of the name of the last opened tag
-        match self.opened_starts.pop() {
-            Some(start) => {
-                if self.config.check_end_names {
-                    let expected = &self.opened_buffer[start..];
-                    if name != expected {
-                        let expected = decoder.decode(expected).unwrap_or_default().into_owned();
-                        // #513: In order to allow error recovery we should drop content of the buffer
-                        self.opened_buffer.truncate(start);
-
-                        // Report error at start of the end tag at `<` character
-                        // -2 for `<` and `>`
-                        self.last_error_offset = self.offset - buf.len() - 2;
-                        return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
-                            expected,
-                            found: decoder.decode(name).unwrap_or_default().into_owned(),
-                        }));
-                    }
-                }
-
-                self.opened_buffer.truncate(start);
-            }
-            None => {
-                // Report error at start of the end tag at `<` character
-                // -2 for `<` and `>`
-                self.last_error_offset = self.offset - buf.len() - 2;
-                return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
-                    decoder.decode(name).unwrap_or_default().into_owned(),
-                )));
-            }
-        }
-
-        Ok(Event::End(BytesEnd::wrap(name.into())))
-    }
-
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
     ///
     /// If [`encoding`] feature is enabled, the used encoding may change after
@@ -384,7 +330,56 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"</"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
-                self.emit_end(&content[1..content.len() - 1])
+                let buf = &content[1..content.len() - 1];
+                // Strip the `/` character. `content` contains data between `</` and `>`
+                let content = &buf[1..];
+                // XML standard permits whitespaces after the markup name in closing tags.
+                // Let's strip them from the buffer before comparing tag names.
+                let name = if self.config.trim_markup_names_in_closing_tags {
+                    if let Some(pos_end_name) = content.iter().rposition(|&b| !is_whitespace(b)) {
+                        &content[..pos_end_name + 1]
+                    } else {
+                        content
+                    }
+                } else {
+                    content
+                };
+
+                let decoder = self.decoder();
+
+                // Get the index in self.opened_buffer of the name of the last opened tag
+                match self.opened_starts.pop() {
+                    Some(start) => {
+                        if self.config.check_end_names {
+                            let expected = &self.opened_buffer[start..];
+                            if name != expected {
+                                let expected = decoder.decode(expected).unwrap_or_default().into_owned();
+                                // #513: In order to allow error recovery we should drop content of the buffer
+                                self.opened_buffer.truncate(start);
+
+                                // Report error at start of the end tag at `<` character
+                                // -2 for `<` and `>`
+                                self.last_error_offset = self.offset - buf.len() - 2;
+                                return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
+                                    expected,
+                                    found: decoder.decode(name).unwrap_or_default().into_owned(),
+                                }));
+                            }
+                        }
+
+                        self.opened_buffer.truncate(start);
+                    }
+                    None => {
+                        // Report error at start of the end tag at `<` character
+                        // -2 for `<` and `>`
+                        self.last_error_offset = self.offset - buf.len() - 2;
+                        return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
+                            decoder.decode(name).unwrap_or_default().into_owned(),
+                        )));
+                    }
+                }
+
+                Ok(Event::End(BytesEnd::wrap(name.into())))
             }
             FeedResult::EncodingUtf8Like(_)
             | FeedResult::EncodingUtf16BeLike(_)
