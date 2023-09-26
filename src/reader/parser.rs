@@ -135,7 +135,7 @@ impl Parser {
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
         let name = if self.trim_markup_names_in_closing_tags {
-            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !is_whitespace(b)) {
                 let (name, _) = buf[1..].split_at(pos_end_name + 1);
                 name
             } else {
