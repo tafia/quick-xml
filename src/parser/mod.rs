@@ -15,6 +15,8 @@
 //! ```
 //! # use quick_xml::parser::Parser;
 //! use quick_xml::parser::FeedResult::*;
+//! // Use `without_encoding_detection` instead if you don't want
+//! // automatic encoding detection
 //! let mut parser = Parser::default();
 //! // Buffer for data of one event
 //! let mut buf = Vec::new();
@@ -25,6 +27,12 @@
 //!             // Return to the outer loop to request new chunk
 //!             NeedData => break,
 //!
+//!             EncodingUtf8Like(offset) |
+//!             EncodingUtf16BeLike(offset) |
+//!             EncodingUtf16LeLike(offset) => {
+//!                 // Consume BOM, but do not add it to the data
+//!                 chunk = &chunk[offset..];
+//!             }
 //!             EmitText(offset) |
 //!             EmitCData(offset) |
 //!             EmitComment(offset) |
@@ -54,9 +62,11 @@
 //! [`feed`]: Parser::feed()
 
 use crate::errors::SyntaxError;
+use bom::BomParser;
 use cdata::CDataParser;
 use quick_dtd::{CommentParser, DtdParser, PiParser, QuotedParser, OneOf};
 
+mod bom;
 mod cdata;
 
 /// An internal state of a parser. Used to preserve information about currently
@@ -64,6 +74,8 @@ mod cdata;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum State {
     /// Initial state used to begin parse XML events.
+    Start,
+    Bom(BomParser),
     Text,
 
     /// A `<` was seen, but nothing else.
@@ -128,7 +140,7 @@ enum State {
 
 impl Default for State {
     fn default() -> Self {
-        Self::Text
+        Self::Start
     }
 }
 
@@ -137,6 +149,20 @@ impl Default for State {
 pub enum FeedResult {
     /// All fed bytes should be consumed, new portion should be feed
     NeedData,
+
+    /// The specified amount of bytes should be consumed from the input and
+    /// encoding of the document set to the UTF-8 compatible.
+    /// The encoding should be refined after reading XML declaration.
+    EncodingUtf8Like(usize),
+    /// The specified amount of bytes should be consumed from the input and
+    /// encoding of the document set to the UTF-16 Big-Endian compatible.
+    /// The encoding should be refined after reading XML declaration.
+    EncodingUtf16BeLike(usize),
+    /// The specified amount of bytes should be consumed from the input and
+    /// encoding of the document set to the UTF-16 Little-Endian compatible.
+    /// The encoding should be refined after reading XML declaration.
+    EncodingUtf16LeLike(usize),
+
     /// The specified amount of bytes should be consumed from the input and
     /// [`Event::Text`] should be emitted.
     ///
@@ -301,10 +327,17 @@ pub enum FeedResult {
 /// mentioned in other transitions from that state.
 ///
 /// Each `Error` state on that diagram represents a [`SyntaxError`].
-/// Every successful match (`Emit*`) returns the parser to its initial state `Text`.
+/// Every successful match (`Emit*`) returns the parser to state `Text`.
 #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
 pub struct Parser(State);
 impl Parser {
+    /// Creates a parser that would not try to guess encoding from the input text.
+    /// This is useful when you already knows the encoding and parses a part of document.
+    #[inline]
+    pub fn without_encoding_detection() -> Self {
+        Self(State::Text)
+    }
+
     /// Performs parsing of the provided byte slice and returns the outcome.
     /// See [`Parser`] for more info.
     ///
@@ -317,6 +350,28 @@ impl Parser {
             let start = offset + 1;
             let rest = &bytes[start..];
             self.0 = match self.0 {
+                State::Start => match byte {
+                    0x00 => State::Bom(BomParser::X00),
+                    b'<' => State::Bom(BomParser::X3C),
+                    0xEF => State::Bom(BomParser::XEF),
+                    0xFE => State::Bom(BomParser::XFE),
+                    0xFF => State::Bom(BomParser::XFF),
+                    _ => return Ok(self.parse_text(trail, offset)),
+                },
+                State::Bom(ref mut parser) => {
+                    let encoding = match parser.feed(trail) {
+                        bom::FeedResult::Unknown => FeedResult::EncodingUtf8Like(0),
+                        bom::FeedResult::Utf8 => FeedResult::EncodingUtf8Like(0),
+                        bom::FeedResult::Utf16Be => FeedResult::EncodingUtf16BeLike(0),
+                        bom::FeedResult::Utf16Le => FeedResult::EncodingUtf16LeLike(0),
+                        bom::FeedResult::Utf8Bom => FeedResult::EncodingUtf8Like(3),
+                        bom::FeedResult::Utf16BeBom => FeedResult::EncodingUtf16BeLike(2),
+                        bom::FeedResult::Utf16LeBom => FeedResult::EncodingUtf16LeLike(2),
+                        bom::FeedResult::NeedData => return Ok(FeedResult::NeedData),
+                    };
+                    self.0 = State::Text;
+                    return Ok(encoding);
+                }
                 State::Text => match byte {
                     b'<' => State::Markup,
                     _ => return Ok(self.parse_text(trail, offset)),
@@ -430,6 +485,25 @@ impl Parser {
     #[rustfmt::skip]
     pub fn finish(self) -> Result<(), SyntaxError> {
         match self.0 {
+            // If nothing was fed into parser, document is empty.
+            // We allow empty documents, at least for now
+            State::Start |
+            State::Text => Ok(()),
+
+            // We need data when we tried to determine document encoding
+            // <
+            State::Bom(BomParser::X00_3C) |
+            State::Bom(BomParser::X00_3C_00) |
+            State::Bom(BomParser::X3C) |
+            State::Bom(BomParser::X3C_00) => Err(SyntaxError::UnclosedTag),
+            // <?
+            State::Bom(BomParser::X3C_3F) |
+            State::Bom(BomParser::X3C_00_3F) |
+            // <?x
+            State::Bom(BomParser::X3C_3F_78) => Err(SyntaxError::UnclosedPIOrXmlDecl),
+            // Threat unrecognized BOMs as text
+            State::Bom(_) => Ok(()),
+
             State::Markup |
             State::StartOrEmptyTag(..) |
             State::EndTag => Err(SyntaxError::UnclosedTag),
@@ -458,7 +532,6 @@ impl Parser {
             State::DoctypeFinish => Err(SyntaxError::UnclosedDoctype),
 
             State::PI(_) => Err(SyntaxError::UnclosedPIOrXmlDecl),
-            State::Text => Ok(()),
         }
     }
 
@@ -476,6 +549,7 @@ impl Parser {
     /// - `offset`: a position of `bytes` sub-slice in the one that was passed to `feed()`
     #[inline]
     fn parse_text(&mut self, bytes: &[u8], offset: usize) -> FeedResult {
+        self.0 = State::Text;
         match bytes.iter().position(|&b| b == b'<') {
             Some(i) => FeedResult::EmitText(offset + i),
             None => FeedResult::NeedData,
@@ -700,11 +774,11 @@ mod tests {
 
     #[test]
     fn text() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"text with > symbol"), Ok(NeedData));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"text with < symbol"), Ok(EmitText(10)));
         //                       ^^^^^^^^^^
         assert_eq!(parser.0, State::Text);
@@ -712,7 +786,7 @@ mod tests {
 
     #[test]
     fn cdata() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<![CDATA[cdata"), Ok(NeedData));
         assert!(matches!(parser.0, State::CData(_)));
         assert_eq!(parser.feed(b"]"), Ok(NeedData));
@@ -722,19 +796,19 @@ mod tests {
         assert_eq!(parser.feed(b">"), Ok(EmitCData(1)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<![CDATA[cdata]"), Ok(NeedData));
         assert!(matches!(parser.0, State::CData(_)));
         assert_eq!(parser.feed(b"]>"), Ok(EmitCData(2)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<![CDATA[cdata]]"), Ok(NeedData));
         assert!(matches!(parser.0, State::CData(_)));
         assert_eq!(parser.feed(b"><trail>"), Ok(EmitCData(1)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(
             parser.feed(b"<![CDATA[cdata content with ]] and ]> ]]>"),
             //            0                                       ^ = 40
@@ -745,7 +819,7 @@ mod tests {
 
     #[test]
     fn comment() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<!--"), Ok(NeedData));
         assert!(matches!(parser.0, State::Comment(_)));
         assert_eq!(parser.feed(b"-"), Ok(NeedData));
@@ -755,25 +829,25 @@ mod tests {
         assert_eq!(parser.feed(b">"), Ok(EmitComment(1)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<!---"), Ok(NeedData));
         assert!(matches!(parser.0, State::Comment(_)));
         assert_eq!(parser.feed(b"->"), Ok(EmitComment(2)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<!----"), Ok(NeedData));
         assert!(matches!(parser.0, State::Comment(_)));
         assert_eq!(parser.feed(b"><trail>"), Ok(EmitComment(1)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<!-->"), Ok(NeedData));
         assert!(matches!(parser.0, State::Comment(_)));
         assert_eq!(parser.feed(b"-->"), Ok(EmitComment(3)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(
             parser.feed(b"<!--comment with >, -> and ---->"),
             //            0                              ^ = 31
@@ -788,7 +862,7 @@ mod tests {
 
         #[test]
         fn only_name() {
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(parser.feed(b"<!DOCTYPE name>"), Ok(EmitDoctype(15)));
             //                       0             ^ = 14
             assert_eq!(parser.0, State::Text);
@@ -796,7 +870,7 @@ mod tests {
 
         #[test]
         fn with_external_id() {
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with SYSTEM \"[>']\">"),
                 //            0                             ^ = 28
@@ -804,7 +878,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with SYSTEM '[>\"]'>"),
                 //            0                            ^ = 28
@@ -812,7 +886,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with PUBLIC \"'\" '[>\"]'>"),
                 //            0                                  ^ = 32
@@ -820,7 +894,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with PUBLIC '' \"[>']\">"),
                 //            0                                ^ = 31
@@ -831,7 +905,7 @@ mod tests {
 
         #[test]
         fn with_subset() {
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with [<!ENTITY gt '>'>]>"),
                 //            0                                ^ = 33
@@ -839,7 +913,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with SYSTEM \">'\" []>"),
                 //            0                              ^ = 29
@@ -847,7 +921,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with SYSTEM '>\"' []>"),
                 //            0                             ^ = 29
@@ -855,7 +929,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with PUBLIC \"'\" '>\"' []>"),
                 //            0                                   ^ = 33
@@ -863,7 +937,7 @@ mod tests {
             );
             assert_eq!(parser.0, State::Text);
 
-            let mut parser = Parser::default();
+            let mut parser = Parser::without_encoding_detection();
             assert_eq!(
                 parser.feed(b"<!DOCTYPE with PUBLIC '' \">'\" []>"),
                 //            0                                 ^ = 32
@@ -875,30 +949,30 @@ mod tests {
 
     #[test]
     fn pi() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<??>"), Ok(EmitPI(4)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<?target?>"), Ok(EmitPI(10)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<?>?>"), Ok(EmitPI(5)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<???>"), Ok(EmitPI(5)));
         assert_eq!(parser.0, State::Text);
     }
 
     #[test]
     fn empty() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<empty/>"), Ok(EmitEmptyTag(8)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(
             parser.feed(b"<empty one=\"'/>\" two='\"/>'/>"),
             Ok(EmitEmptyTag(28))
@@ -908,15 +982,15 @@ mod tests {
 
     #[test]
     fn start() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<>"), Ok(EmitStartTag(2)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"<start>"), Ok(EmitStartTag(7)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(
             parser.feed(b"<start one=\"'>\" two='\">'>"),
             Ok(EmitStartTag(25))
@@ -926,15 +1000,15 @@ mod tests {
 
     #[test]
     fn end() {
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"</end>"), Ok(EmitEndTag(6)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"</ \r\n\t>"), Ok(EmitEndTag(7)));
         assert_eq!(parser.0, State::Text);
 
-        let mut parser = Parser::default();
+        let mut parser = Parser::without_encoding_detection();
         assert_eq!(parser.feed(b"</>"), Ok(EmitEndTag(3)));
         assert_eq!(parser.0, State::Text);
     }
