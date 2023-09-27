@@ -8,9 +8,7 @@ use crate::errors::{Error, Result};
 use crate::events::{BytesText, Event};
 use crate::name::{QName, ResolveResult};
 use crate::reader::state::ParseOutcome;
-use crate::reader::{
-    NsReader, Reader, Span,
-};
+use crate::reader::{NsReader, Reader, Span};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,14 +58,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// ```
     ///
     /// [`read_event_into()`]: Reader::read_event_into
-    pub async fn read_event_into_async<'b>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-    ) -> Result<Event<'b>> {
-        read_event_impl!(
-            self, buf,
-            await
-        )
+    pub async fn read_event_into_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
+        read_event_impl!(self, buf, await)
     }
 
     /// An asynchronous version of [`read_to_end_into()`].
