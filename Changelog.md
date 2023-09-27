@@ -20,6 +20,7 @@
 - [#675]: Rework the `quick_xml::Error` type to provide more accurate information:
   - `Error::UnexpectedBang` replaced by `SyntaxError`
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
+  - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
 
 [#675]: https://github.com/tafia/quick-xml/pull/675
 

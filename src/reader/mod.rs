@@ -347,10 +347,7 @@ macro_rules! read_to_end {
                     }
                     depth -= 1;
                 }
-                Ok(Event::Eof) => {
-                    let name = $self.decoder().decode($end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
+                Ok(Event::Eof) => return Err(Error::missed_end($end, $self.decoder())),
                 _ => (),
             }
         }

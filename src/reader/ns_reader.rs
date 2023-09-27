@@ -420,7 +420,7 @@ impl<R: BufRead> NsReader<R> {
     /// Manages nested cases where parent and child elements have the _literally_
     /// same name.
     ///
-    /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
+    /// If a corresponding [`End`] event is not found, an error of type [`IllFormed`]
     /// will be returned. In particularly, that error will be returned if you call
     /// this method without consuming the corresponding [`Start`] event first.
     ///
@@ -501,7 +501,7 @@ impl<R: BufRead> NsReader<R> {
     ///
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
-    /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
+    /// [`IllFormed`]: crate::errors::Error::IllFormed
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`expand_empty_elements`]: Self::expand_empty_elements
@@ -663,7 +663,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// Manages nested cases where parent and child elements have the _literally_
     /// same name.
     ///
-    /// If corresponding [`End`] event will not be found, the [`UnexpectedEof`]
+    /// If a corresponding [`End`] event is not found, an error of type [`IllFormed`]
     /// will be returned. In particularly, that error will be returned if you call
     /// this method without consuming the corresponding [`Start`] event first.
     ///
@@ -738,7 +738,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
-    /// [`UnexpectedEof`]: crate::errors::Error::UnexpectedEof
+    /// [`IllFormed`]: crate::errors::Error::IllFormed
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
     /// [`expand_empty_elements`]: Self::expand_empty_elements
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag

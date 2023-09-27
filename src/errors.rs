@@ -1,7 +1,9 @@
 //! Error management module
 
+use crate::encoding::Decoder;
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
+use crate::name::QName;
 use crate::utils::write_byte_string;
 use std::fmt;
 use std::io::Error as IoError;
@@ -60,6 +62,36 @@ impl std::error::Error for SyntaxError {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// An error returned if parsed document is not [well-formed], for example,
+/// an opened tag is not closed before end of input.
+///
+/// [well-formed]: https://www.w3.org/TR/xml11/#dt-wellformed
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IllFormedError {
+    /// The end tag was not found during reading of a sub-tree of elements due to
+    /// encountering an EOF from the underlying reader. This error is returned from
+    /// [`Reader::read_to_end`].
+    ///
+    /// [`Reader::read_to_end`]: crate::reader::Reader::read_to_end
+    MissedEnd(String),
+}
+
+impl fmt::Display for IllFormedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MissedEnd(tag) => write!(
+                f,
+                "start tag not closed: `</{}>` not found before end of input",
+                tag,
+            ),
+        }
+    }
+}
+
+impl std::error::Error for IllFormedError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// The error type used by this crate.
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -69,13 +101,13 @@ pub enum Error {
     Io(Arc<IoError>),
     /// The document does not corresponds to the XML grammar.
     Syntax(SyntaxError),
+    /// The document is not [well-formed](https://www.w3.org/TR/xml11/#dt-wellformed).
+    IllFormed(IllFormedError),
     /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// Unexpected End of File
-    UnexpectedEof(String),
     /// End event mismatch
     EndEventMismatch {
         /// Expected end event
@@ -118,6 +150,15 @@ pub enum Error {
     },
 }
 
+impl Error {
+    pub(crate) fn missed_end(name: QName, decoder: Decoder) -> Self {
+        match decoder.decode(name.as_ref()) {
+            Ok(name) => IllFormedError::MissedEnd(name.into()).into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
 impl From<IoError> for Error {
     /// Creates a new `Error::Io` from the given error
     #[inline]
@@ -131,6 +172,14 @@ impl From<SyntaxError> for Error {
     #[inline]
     fn from(error: SyntaxError) -> Self {
         Self::Syntax(error)
+    }
+}
+
+impl From<IllFormedError> for Error {
+    /// Creates a new `Error::IllFormed` from the given error
+    #[inline]
+    fn from(error: IllFormedError) -> Self {
+        Self::IllFormed(error)
     }
 }
 
@@ -173,9 +222,9 @@ impl fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
             Error::Syntax(e) => write!(f, "syntax error: {}", e),
+            Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
             Error::EndEventMismatch { expected, found } => {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
             }
@@ -210,6 +259,7 @@ impl std::error::Error for Error {
         match self {
             Error::Io(e) => Some(e),
             Error::Syntax(e) => Some(e),
+            Error::IllFormed(e) => Some(e),
             Error::NonDecodable(Some(e)) => Some(e),
             Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
