@@ -84,7 +84,7 @@ fn test_start_end_attr() {
 #[test]
 fn test_empty() {
     let mut r = Reader::from_str("<a />");
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     next_eq!(r, Empty, b"a");
 }
 
@@ -98,14 +98,14 @@ fn test_empty_can_be_expanded() {
 #[test]
 fn test_empty_attr() {
     let mut r = Reader::from_str("<a b=\"test\" />");
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     next_eq!(r, Empty, b"a");
 }
 
 #[test]
 fn test_start_end_comment() {
     let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     next_eq!(r, Start, b"b", Empty, b"a", Empty, b"a", Comment, b"t", End, b"b");
 }
 
@@ -165,7 +165,6 @@ fn test_trim_test() {
     next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
 
     let mut r = Reader::from_str(txt);
-    r.trim_text(false);
     next_eq!(r, Start, b"a", Start, b"b", Text, b"  ", End, b"b", End, b"a");
 }
 
@@ -193,7 +192,7 @@ fn test_start_attr() {
 #[test]
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     next_eq!(r, Start, b"a", Start, b"b", Text, b"test", End, b"b", Empty, b"c", End, b"a");
 }
 
@@ -276,7 +275,6 @@ fn test_write_empty_element_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;
     let mut reader = Reader::from_str(str_from);
-    reader.expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {
@@ -403,7 +401,7 @@ fn test_new_xml_decl_empty() {
 #[test]
 fn test_offset_err_end_element() {
     let mut r = Reader::from_str("</a>");
-    r.trim_text(true).check_end_names(true);
+    r.trim_text(true);
 
     match r.read_event() {
         Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
@@ -419,7 +417,7 @@ fn test_offset_err_end_element() {
 #[test]
 fn test_offset_err_comment() {
     let mut r = Reader::from_str("<a><!--b>");
-    r.trim_text(true).check_end_names(true);
+    r.trim_text(true);
 
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
@@ -440,7 +438,7 @@ fn test_offset_err_comment() {
 #[test]
 fn test_offset_err_comment_2_buf() {
     let mut r = Reader::from_str("<a><!--b>");
-    r.trim_text(true).check_end_names(true);
+    r.trim_text(true);
 
     let _ = r.read_event().unwrap();
     assert_eq!(r.buffer_position(), 3);
@@ -461,7 +459,7 @@ fn test_offset_err_comment_2_buf() {
 #[test]
 fn test_offset_err_comment_trim_text() {
     let mut r = Reader::from_str("<a>\r\n <!--b>");
-    r.trim_text(true).check_end_names(true);
+    r.trim_text(true);
 
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
@@ -523,7 +521,6 @@ fn test_read_write_roundtrip_results_in_identity() -> Result<()> {
     "#;
 
     let mut reader = Reader::from_str(input);
-    reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {
@@ -549,7 +546,6 @@ fn test_read_write_roundtrip() -> Result<()> {
     "#;
 
     let mut reader = Reader::from_str(input);
-    reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {
@@ -575,7 +571,6 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
     "#;
 
     let mut reader = Reader::from_str(input);
-    reader.trim_text(false).expand_empty_elements(false);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {

@@ -10,12 +10,12 @@ use crate::reader::{is_whitespace, BangType, ParseState};
 
 use memchr;
 
-/// A struct that holds a current parse state and a parser configuration.
+/// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.
 #[derive(Clone)]
-pub(super) struct Parser {
-    /// Number of bytes read from the source of data since the parser was created
+pub(super) struct ReaderState {
+    /// Number of bytes read from the source of data since the reader was created
     pub offset: usize,
     /// Defines how to process next byte
     pub state: ParseState,
@@ -58,7 +58,7 @@ pub(super) struct Parser {
     pub encoding: EncodingRef,
 }
 
-impl Parser {
+impl ReaderState {
     /// Trims whitespaces from `bytes`, if required, and returns a [`Text`] event.
     ///
     /// # Parameters
@@ -135,7 +135,7 @@ impl Parser {
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
         let name = if self.trim_markup_names_in_closing_tags {
-            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !b.is_ascii_whitespace()) {
+            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !is_whitespace(b)) {
                 let (name, _) = buf[1..].split_at(pos_end_name + 1);
                 name
             } else {
@@ -265,7 +265,7 @@ impl Parser {
     }
 }
 
-impl Default for Parser {
+impl Default for ReaderState {
     fn default() -> Self {
         Self {
             offset: 0,

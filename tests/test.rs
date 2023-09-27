@@ -27,7 +27,7 @@ fn test_sample() {
 fn test_attributes_empty() {
     let src = "<a att1='a' att2='b'/>";
     let mut r = Reader::from_str(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
@@ -55,7 +55,7 @@ fn test_attributes_empty() {
 fn test_attribute_equal() {
     let src = "<a att1=\"a=b\"/>";
     let mut r = Reader::from_str(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
@@ -76,7 +76,7 @@ fn test_attribute_equal() {
 fn test_comment_starting_with_gt() {
     let src = "<a /><!-->-->";
     let mut r = Reader::from_str(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     loop {
         match r.read_event() {
             Ok(Comment(e)) => {

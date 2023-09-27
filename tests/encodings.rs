@@ -31,7 +31,7 @@ fn test_koi8_r_encoding() {
     let src = include_bytes!("documents/opennews_all.rss").as_ref();
     let mut buf = vec![];
     let mut r = Reader::from_reader(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
     loop {
         match r.read_event_into(&mut buf) {
             Ok(Event::Text(e)) => {

@@ -134,7 +134,7 @@ fn attributes_empty_ns() {
     let src = "<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
     let mut r = NsReader::from_str(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
 
     let e = match r.read_resolved_event() {
         Ok((Unbound, Empty(e))) => e,
@@ -215,7 +215,7 @@ fn default_ns_shadowing_empty() {
     let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
     let mut r = NsReader::from_str(src);
-    r.trim_text(true).expand_empty_elements(false);
+    r.trim_text(true);
 
     // <outer xmlns='urn:example:o'>
     {
