@@ -284,6 +284,15 @@ fn main() {
             .expect(&format!("label `{}` is unsupported", label));
 
         process_index(enc, &codepoints);
+        if enc == ISO_8859_8 {
+            // ISO_8859_8_I does not have its own index in encoding/indexes.json,
+            // but it have the same mapping as ISO_8859_8.
+            //
+            // Wikipedia (https://en.wikipedia.org/wiki/ISO-8859-8-I):
+            // The WHATWG Encoding Standard used by HTML5 treats ISO-8859-8 and ISO-8859-8-I
+            // as distinct encodings with the same mapping due to influence on the layout direction
+            process_index(ISO_8859_8_I, &codepoints);
+        }
     }
     // https://encoding.spec.whatwg.org/#x-user-defined-decoder
     make_xml(X_USER_DEFINED, '\u{F780}'..='\u{F7FF}');
