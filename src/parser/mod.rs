@@ -345,10 +345,12 @@ impl Parser {
     /// - `bytes`: a slice to search a new XML event. Should contain text in
     ///   ASCII-compatible encoding
     pub fn feed(&mut self, bytes: &[u8]) -> Result<FeedResult, SyntaxError> {
+        dbg!((self.0, crate::utils::Bytes(bytes)));
         for (offset, &byte) in bytes.iter().enumerate() {
             let trail = &bytes[offset..];
             let start = offset + 1;
             let rest = &bytes[start..];
+            dbg!((self.0, offset, byte as char, crate::utils::Bytes(trail), crate::utils::Bytes(rest)));
             self.0 = match self.0 {
                 State::Start => match byte {
                     0x00 => State::Bom(BomParser::X00),
@@ -549,6 +551,7 @@ impl Parser {
     /// - `offset`: a position of `bytes` sub-slice in the one that was passed to `feed()`
     #[inline]
     fn parse_text(&mut self, bytes: &[u8], offset: usize) -> FeedResult {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes)));
         self.0 = State::Text;
         match bytes.iter().position(|&b| b == b'<') {
             Some(i) => FeedResult::EmitText(offset + i),
@@ -570,6 +573,7 @@ impl Parser {
         offset: usize,
         mut parser: CommentParser,
     ) -> FeedResult {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser));
         match parser.feed(bytes) {
             Some(i) => {
                 self.0 = State::Text;
@@ -593,6 +597,7 @@ impl Parser {
     /// - `offset`: a position of `bytes` sub-slice in the one that was passed to `feed()`
     /// - `braces_left`: count of braces that wasn't seen yet in the end of previous data chunk
     fn parse_cdata(&mut self, bytes: &[u8], offset: usize, mut parser: CDataParser) -> FeedResult {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser));
         match parser.feed(bytes) {
             Some(i) => {
                 self.0 = State::Text;
@@ -611,8 +616,9 @@ impl Parser {
         offset: usize,
         mut parser: QuotedParser,
     ) -> Result<FeedResult, SyntaxError> {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser));
         // Search `[` (start of DTD definitions) or `>` (end of <!DOCTYPE> tag)
-        match parser.one_of(bytes) {
+        match dbg!(parser.one_of(bytes)) {
             OneOf::Open(i) => self.parse_dtd(&bytes[i..], offset + i, DtdParser::default()),
             OneOf::Close(i) => {
                 self.0 = State::Text;
@@ -639,8 +645,9 @@ impl Parser {
         mut offset: usize,
         mut parser: DtdParser,
     ) -> Result<FeedResult, SyntaxError> {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser));
         loop {
-            let result = match parser.feed(bytes) {
+            let result = match dbg!(parser.feed(bytes)) {
                 // Skip recognized DTD structure
                 // TODO: Emit DTD events while parsing
                 quick_dtd::FeedResult::EmitPI(off)
@@ -669,7 +676,8 @@ impl Parser {
     }
 
     fn parse_doctype_finish(&mut self, bytes: &[u8], offset: usize) -> FeedResult {
-        match bytes.iter().position(|&b| b == b'>') {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes)));
+        match dbg!(bytes.iter().position(|&b| b == b'>')) {
             Some(i) => {
                 self.0 = State::Text;
                 // +1 for `>` which should be included in event
@@ -692,7 +700,8 @@ impl Parser {
     /// - `offset`: a position of `bytes` sub-slice in the one that was passed to `feed()`
     /// - `has_mark`: a flag that indicates was the previous fed data ended with `?`
     fn parse_pi(&mut self, bytes: &[u8], offset: usize, mut parser: PiParser) -> FeedResult {
-        match parser.feed(bytes) {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser));
+        match dbg!(parser.feed(bytes)) {
             Some(i) => {
                 self.0 = State::Text;
                 FeedResult::EmitPI(offset + i)
@@ -711,7 +720,8 @@ impl Parser {
     ///   That sub-slice begins on the byte that represents a tag name
     /// - `offset`: a position of `bytes` sub-slice in the one that was passed to `feed()`
     fn parse_end(&mut self, bytes: &[u8], offset: usize) -> FeedResult {
-        match bytes.iter().position(|&b| b == b'>') {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes)));
+        match dbg!(bytes.iter().position(|&b| b == b'>')) {
             Some(i) => {
                 self.0 = State::Text;
                 // +1 for `>` which should be included in event
@@ -740,7 +750,8 @@ impl Parser {
         mut parser: QuotedParser,
         has_slash: bool,
     ) -> FeedResult {
-        match parser.feed(bytes) {
+        dbg!((self.0, offset, crate::utils::Bytes(bytes), parser, has_slash));
+        match dbg!(parser.feed(bytes)) {
             Some(0) if has_slash => {
                 self.0 = State::Text;
                 // +1 for `>` which should be included in event

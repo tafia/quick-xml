@@ -70,6 +70,7 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'a>> {
+        dbg!(self.state.parser);
         if let Some(end) = self.state.pending_end() {
             return Ok(end);
         }
@@ -77,7 +78,7 @@ impl<'a> Reader<&'a [u8]> {
             if self.reader.is_empty() {
                 return Ok(Event::Eof);
             }
-            let result = self.state.parser.feed(self.reader)?;
+            let result = dbg!(self.state.parser.feed(self.reader))?;
             return match result {
                 FeedResult::NeedData => {
                     let offset = self.reader.len();

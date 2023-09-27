@@ -106,7 +106,8 @@ impl ReaderState {
         bytes: &'a [u8],
         buf: &'b mut Vec<u8>,
     ) -> Result<ParseOutcome> {
-        let result = self.parser.feed(bytes)?;
+        dbg!(&self);
+        let result = dbg!(self.parser.feed(bytes))?;
         match result {
             FeedResult::NeedData => {
                 let mut content = bytes;

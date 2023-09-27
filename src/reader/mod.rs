@@ -204,6 +204,7 @@ macro_rules! read_event_impl {
         $self:ident, $buf:ident
         $(, $await:ident)?
     ) => {{
+        dbg!("===============================================================");
         if let Some(end) = $self.state.pending_end() {
             return Ok(end);
         }
@@ -211,13 +212,14 @@ macro_rules! read_event_impl {
         let start = $buf.len();
         let offset = $self.state.offset;
         loop {
-            break match $self.reader.fill_buf() $(.$await)? {
+            dbg!("--------------------------------");
+            break match dbg!($self.reader.fill_buf() $(.$await)?) {
                 Ok(bytes) if bytes.is_empty() => {
                     let content = &$buf[start..];
                     if content.is_empty() {
                         Ok(Event::Eof)
                     } else
-                    if let Err(error) = $self.state.parser.finish() {
+                    if let Err(error) = dbg!($self.state.parser.finish()) {
                         $self.state.last_error_offset = offset;
                         Err(Error::Syntax(error))
                     } else {
@@ -226,7 +228,7 @@ macro_rules! read_event_impl {
                         Ok(Event::Text(BytesText::wrap(content, $self.decoder())))
                     }
                 }
-                Ok(bytes) => match $self.state.parse_into(bytes, $buf)? {
+                Ok(bytes) => match dbg!($self.state.parse_into(bytes, $buf))? {
                     ParseOutcome::Consume(offset, result) => {
                         $self.reader.consume(offset);
                         $self.state.make_event(result, &$buf[start..])
