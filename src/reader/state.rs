@@ -148,7 +148,9 @@ impl ReaderState {
 
         let decoder = self.decoder();
         let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
-            *offset -= buf.len();
+            // Report error at start of the end tag at `<` character
+            // +2 for `<` and `>`
+            *offset -= buf.len() + 2;
             Err(Error::EndEventMismatch {
                 expected,
                 found: decoder.decode(found).unwrap_or_default().into_owned(),

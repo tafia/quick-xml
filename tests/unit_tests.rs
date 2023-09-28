@@ -404,9 +404,9 @@ fn test_offset_err_end_element() {
     r.trim_text(true);
 
     match r.read_event() {
-        Err(_) if r.buffer_position() == 2 => (), // error at char 2: no opening tag
+        Err(_) if r.buffer_position() == 0 => (), // error at char 0: no opening tag
         Err(e) => panic!(
-            "expecting buf_pos = 2, found {}, err: {:?}",
+            "expecting buf_pos = 0, found {}, err: {:?}",
             r.buffer_position(),
             e
         ),
