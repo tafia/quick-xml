@@ -147,15 +147,6 @@ impl ReaderState {
         };
 
         let decoder = self.decoder();
-        let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
-            // Report error at start of the end tag at `<` character
-            // +2 for `<` and `>`
-            *offset -= buf.len() + 2;
-            Err(Error::EndEventMismatch {
-                expected,
-                found: decoder.decode(found).unwrap_or_default().into_owned(),
-            })
-        };
 
         // Get the index in self.opened_buffer of the name of the last opened tag
         match self.opened_starts.pop() {
@@ -167,17 +158,28 @@ impl ReaderState {
                         // #513: In order to allow error recovery we should drop content of the buffer
                         self.opened_buffer.truncate(start);
 
-                        return mismatch_err(expected, name, &mut self.offset);
+                        // Report error at start of the end tag at `<` character
+                        // +2 for `<` and `>`
+                        self.offset -= buf.len() + 2;
+                        return Err(Error::EndEventMismatch {
+                            expected,
+                            found: decoder.decode(name).unwrap_or_default().into_owned(),
+                        });
                     }
                 }
 
                 self.opened_buffer.truncate(start);
             }
-            None => {
-                if self.check_end_names {
-                    return mismatch_err("".to_string(), name, &mut self.offset);
-                }
+            None if self.check_end_names => {
+                // Report error at start of the end tag at `<` character
+                // +2 for `<` and `>`
+                self.offset -= buf.len() + 2;
+                return Err(Error::EndEventMismatch {
+                    expected: "".into(),
+                    found: decoder.decode(name).unwrap_or_default().into_owned(),
+                });
             }
+            None => {}
         }
 
         Ok(Event::End(BytesEnd::wrap(name.into())))
