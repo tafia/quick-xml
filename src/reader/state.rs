@@ -173,7 +173,7 @@ impl ReaderState {
             }
             None => {
                 if self.check_end_names {
-                    return mismatch_err("".to_string(), &buf[1..], &mut self.offset);
+                    return mismatch_err("".to_string(), name, &mut self.offset);
                 }
             }
         }
