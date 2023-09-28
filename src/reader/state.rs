@@ -132,17 +132,18 @@ impl ReaderState {
     /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
     /// end name matches the last opened start name if `self.check_end_names` is set.
     pub fn emit_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        // Strip the `/` character. `content` contains data between `</` and `>`
+        let content = &buf[1..];
         // XML standard permits whitespaces after the markup name in closing tags.
         // Let's strip them from the buffer before comparing tag names.
         let name = if self.trim_markup_names_in_closing_tags {
-            if let Some(pos_end_name) = buf[1..].iter().rposition(|&b| !is_whitespace(b)) {
-                let (name, _) = buf[1..].split_at(pos_end_name + 1);
-                name
+            if let Some(pos_end_name) = content.iter().rposition(|&b| !is_whitespace(b)) {
+                &content[..pos_end_name + 1]
             } else {
-                &buf[1..]
+                content
             }
         } else {
-            &buf[1..]
+            content
         };
 
         let decoder = self.decoder();
