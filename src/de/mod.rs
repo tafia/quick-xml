@@ -3747,12 +3747,11 @@ mod tests {
     #[test]
     fn read_string() {
         match from_str::<String>(r#"</root>"#) {
-            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                assert_eq!(expected, "");
-                assert_eq!(found, "root");
+            Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                assert_eq!(cause, IllFormedError::UnmatchedEnd("root".into()));
             }
             x => panic!(
-                "Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'root' }}))`, but got `{:?}`",
+                "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                 x
             ),
         }
@@ -4090,11 +4089,13 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag2");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag2".into()));
                         }
-                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag2' }}))`, but got `{:?}`", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4231,11 +4232,13 @@ mod tests {
         fn end() {
             let mut de = make_de("</tag>");
             match de.next() {
-                Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                    assert_eq!(expected, "");
-                    assert_eq!(found, "tag");
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                 }
-                x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), DeEvent::Eof);
         }
@@ -4308,11 +4311,13 @@ mod tests {
                 // Text is trimmed from both sides
                 assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                 match de.next() {
-                    Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                        assert_eq!(expected, "");
-                        assert_eq!(found, "tag");
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                     }
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4338,11 +4343,13 @@ mod tests {
                     // Text is trimmed from the start
                     assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4442,11 +4449,13 @@ mod tests {
                 let mut de = make_de("<![CDATA[ cdata ]]></tag>");
                 assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                 match de.next() {
-                    Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                        assert_eq!(expected, "");
-                        assert_eq!(found, "tag");
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                     }
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4470,11 +4479,13 @@ mod tests {
                     // Text is trimmed from the end
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4518,11 +4529,13 @@ mod tests {
                     let mut de = make_de("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]></tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }

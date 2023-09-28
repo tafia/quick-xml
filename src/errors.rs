@@ -74,6 +74,9 @@ pub enum IllFormedError {
     ///
     /// [`Reader::read_to_end`]: crate::reader::Reader::read_to_end
     MissedEnd(String),
+    /// The specified end tag was encountered without corresponding open tag at the
+    /// same level of hierarchy
+    UnmatchedEnd(String),
 }
 
 impl fmt::Display for IllFormedError {
@@ -84,6 +87,9 @@ impl fmt::Display for IllFormedError {
                 "start tag not closed: `</{}>` not found before end of input",
                 tag,
             ),
+            Self::UnmatchedEnd(tag) => {
+                write!(f, "close tag `</{}>` does not match any open tag", tag)
+            }
         }
     }
 }

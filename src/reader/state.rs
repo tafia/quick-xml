@@ -2,7 +2,7 @@
 use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result, SyntaxError};
+use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -174,10 +174,9 @@ impl ReaderState {
                 // Report error at start of the end tag at `<` character
                 // +2 for `<` and `>`
                 self.offset -= buf.len() + 2;
-                return Err(Error::EndEventMismatch {
-                    expected: "".into(),
-                    found: decoder.decode(name).unwrap_or_default().into_owned(),
-                });
+                return Err(Error::IllFormed(IllFormedError::UnmatchedEnd(
+                    decoder.decode(name).unwrap_or_default().into_owned(),
+                )));
             }
             None => {}
         }
