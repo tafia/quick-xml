@@ -9,6 +9,22 @@ use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 use quick_xml::Error;
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/94
+#[test]
+fn issue94() {
+    let data = br#"<Run>
+<!B>
+</Run>"#;
+    let mut reader = Reader::from_reader(&data[..]);
+    reader.trim_text(true);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) | Err(..) => break,
+            _ => (),
+        }
+    }
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/115
 #[test]
 fn issue115() {
@@ -20,6 +36,41 @@ fn issue115() {
         }
         _ => (),
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/299
+#[test]
+fn issue299() -> Result<(), Error> {
+    let xml = r#"
+<?xml version="1.0" encoding="utf8"?>
+<MICEX_DOC xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <SECURITY SecurityId="PLZL" ISIN="RU000A0JNAA8" SecShortName="Short Name" PriceType="CASH">
+    <RECORDS RecNo="1" TradeNo="1111" TradeDate="2021-07-08" TradeTime="15:00:00" BuySell="S" SettleCode="Y1Dt" Decimals="3" Price="13057.034" Quantity="766" Value="10001688.29" AccInt="0" Amount="10001688.29" Balance="766" TrdAccId="X0011" ClientDetails="2222" CPFirmId="3333" CPFirmShortName="Firm Short Name" Price2="13057.034" RepoPart="2" ReportTime="16:53:27" SettleTime="17:47:06" ClientCode="4444" DueDate="2021-07-09" EarlySettleStatus="N" RepoRate="5.45" RateType="FIX"/>
+  </SECURITY>
+</MICEX_DOC>
+"#;
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event()? {
+            Event::Start(e) | Event::Empty(e) => {
+                let attr_count = match e.name().as_ref() {
+                    b"MICEX_DOC" => 1,
+                    b"SECURITY" => 4,
+                    b"RECORDS" => 26,
+                    _ => unreachable!(),
+                };
+                assert_eq!(
+                    attr_count,
+                    e.attributes().filter(Result::is_ok).count(),
+                    "mismatch att count on '{:?}'",
+                    reader.decoder().decode(e.name().as_ref())
+                );
+            }
+            Event::Eof => break,
+            _ => (),
+        }
+    }
+    Ok(())
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/360
