@@ -436,27 +436,6 @@ fn test_offset_err_comment() {
 }
 
 #[test]
-fn test_offset_err_comment_2_buf() {
-    let mut r = Reader::from_str("<a><!--b>");
-    r.trim_text(true);
-
-    let _ = r.read_event().unwrap();
-    assert_eq!(r.buffer_position(), 3);
-
-    match r.read_event() {
-        // error at char 4: no closing --> tag found
-        Err(e) => assert_eq!(
-            r.buffer_position(),
-            4,
-            "expecting buf_pos = 4, found {}, err {:?}",
-            r.buffer_position(),
-            e
-        ),
-        e => panic!("expecting error, found {:?}", e),
-    }
-}
-
-#[test]
 fn test_offset_err_comment_trim_text() {
     let mut r = Reader::from_str("<a>\r\n <!--b>");
     r.trim_text(true);
