@@ -9,6 +9,57 @@ use std::str::Utf8Error;
 use std::string::FromUtf8Error;
 use std::sync::Arc;
 
+/// An error returned if parsed document does not correspond to the XML grammar,
+/// for example, a tag opened by `<` not closed with `>`. This error does not
+/// represent invalid XML constructs, for example, tags `<>` and `</>` a well-formed
+/// from syntax point-of-view.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SyntaxError {
+    /// The parser started to parse `<!`, but the input ended before it can recognize
+    /// anything.
+    InvalidBangMarkup,
+    /// The parser started to parse processing instruction or XML declaration (`<?`),
+    /// but the input ended before the `?>` sequence was found.
+    UnclosedPIOrXmlDecl,
+    /// The parser started to parse comment (`<!--`) content, but the input ended
+    /// before the `-->` sequence was found.
+    UnclosedComment,
+    /// The parser started to parse DTD (`<!DOCTYPE`) content, but the input ended
+    /// before the closing `>` character was found.
+    UnclosedDoctype,
+    /// The parser started to parse `<![CDATA[` content, but the input ended
+    /// before the `]]>` sequence was found.
+    UnclosedCData,
+    /// The parser started to parse tag content, but the input ended
+    /// before the closing `>` character was found.
+    UnclosedTag,
+}
+
+impl fmt::Display for SyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidBangMarkup => f.write_str("unknown or missed symbol in markup"),
+            Self::UnclosedPIOrXmlDecl => {
+                f.write_str("processing instruction or xml declaration not closed: `?>` not found before end of input")
+            }
+            Self::UnclosedComment => {
+                f.write_str("comment not closed: `-->` not found before end of input")
+            }
+            Self::UnclosedDoctype => {
+                f.write_str("DOCTYPE not closed: `>` not found before end of input")
+            }
+            Self::UnclosedCData => {
+                f.write_str("CDATA not closed: `]]>` not found before end of input")
+            }
+            Self::UnclosedTag => f.write_str("tag not closed: `>` not found before end of input"),
+        }
+    }
+}
+
+impl std::error::Error for SyntaxError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// The error type used by this crate.
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -16,6 +67,8 @@ pub enum Error {
     ///
     /// Contains the reference-counted I/O error to make the error type `Clone`able.
     Io(Arc<IoError>),
+    /// The document does not corresponds to the XML grammar.
+    Syntax(SyntaxError),
     /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
     ///
@@ -32,8 +85,6 @@ pub enum Error {
     },
     /// Unexpected token
     UnexpectedToken(String),
-    /// Unexpected <!>
-    UnexpectedBang(u8),
     /// Text not found, expected `Event::Text`
     TextNotFound,
     /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
@@ -75,6 +126,14 @@ impl From<IoError> for Error {
     }
 }
 
+impl From<SyntaxError> for Error {
+    /// Creates a new `Error::Syntax` from the given error
+    #[inline]
+    fn from(error: SyntaxError) -> Self {
+        Self::Syntax(error)
+    }
+}
+
 impl From<Utf8Error> for Error {
     /// Creates a new `Error::NonDecodable` from the given error
     #[inline]
@@ -113,6 +172,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::Syntax(e) => write!(f, "syntax error: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
@@ -120,11 +180,6 @@ impl fmt::Display for Error {
                 write!(f, "Expecting </{}> found </{}>", expected, found)
             }
             Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
-            Error::UnexpectedBang(b) => write!(
-                f,
-                "Only Comment (`--`), CDATA (`[CDATA[`) and DOCTYPE (`DOCTYPE`) nodes can start with a '!', but symbol `{}` found",
-                *b as char
-            ),
             Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
             Error::XmlDeclWithoutVersion(e) => write!(
                 f,
@@ -154,6 +209,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(e) => Some(e),
+            Error::Syntax(e) => Some(e),
             Error::NonDecodable(Some(e)) => Some(e),
             Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),

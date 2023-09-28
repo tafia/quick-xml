@@ -4,6 +4,7 @@
 
 use std::sync::mpsc;
 
+use quick_xml::errors::SyntaxError;
 use quick_xml::events::{BytesDecl, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -172,11 +173,8 @@ mod issue604 {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         match reader.read_event_into(&mut buf) {
-            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
-            x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
-                x
-            ),
+            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+            x => panic!("Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`", x),
         }
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
@@ -191,11 +189,8 @@ mod issue604 {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         match reader.read_event_into(&mut buf) {
-            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
-            x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
-                x
-            ),
+            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+            x => panic!("Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`", x),
         }
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }

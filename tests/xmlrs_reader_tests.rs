@@ -182,7 +182,7 @@ fn sample_ns_short() {
 fn eof_1() {
     test(
         r#"<?xml"#,
-        r#"Error: Unexpected EOF during reading XmlDecl"#,
+        r#"Error: syntax error: processing instruction or xml declaration not closed: `?>` not found before end of input"#,
         true,
     );
 }
@@ -191,7 +191,7 @@ fn eof_1() {
 fn bad_1() {
     test(
         r#"<?xml&.,"#,
-        r#"1:6 Error: Unexpected EOF during reading XmlDecl"#,
+        r#"1:6 Error: syntax error: processing instruction or xml declaration not closed: `?>` not found before end of input"#,
         true,
     );
 }

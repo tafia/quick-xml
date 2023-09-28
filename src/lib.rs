@@ -54,7 +54,7 @@
 #[cfg(feature = "serialize")]
 pub mod de;
 pub mod encoding;
-mod errors;
+pub mod errors;
 mod escapei;
 pub mod escape {
     //! Manage xml character escapes

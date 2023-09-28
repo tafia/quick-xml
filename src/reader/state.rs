@@ -2,7 +2,7 @@
 use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -203,7 +203,7 @@ impl ReaderState {
             }
         } else {
             self.offset -= len;
-            Err(Error::UnexpectedEof("XmlDecl".to_string()))
+            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }
 
