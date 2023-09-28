@@ -77,6 +77,13 @@ pub enum IllFormedError {
     /// The specified end tag was encountered without corresponding open tag at the
     /// same level of hierarchy
     UnmatchedEnd(String),
+    /// The specified end tag does not match the start tag at that nesting level.
+    MismatchedEnd {
+        /// Name of open tag, that is expected to be closed
+        expected: String,
+        /// Name of actually closed tag
+        found: String,
+    },
 }
 
 impl fmt::Display for IllFormedError {
@@ -90,6 +97,11 @@ impl fmt::Display for IllFormedError {
             Self::UnmatchedEnd(tag) => {
                 write!(f, "close tag `</{}>` does not match any open tag", tag)
             }
+            Self::MismatchedEnd { expected, found } => write!(
+                f,
+                "expected `</{}>`, but `</{}>` was found",
+                expected, found,
+            ),
         }
     }
 }
@@ -114,13 +126,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// End event mismatch
-    EndEventMismatch {
-        /// Expected end event
-        expected: String,
-        /// Found end event
-        found: String,
-    },
     /// Unexpected token
     UnexpectedToken(String),
     /// Text not found, expected `Event::Text`
@@ -231,9 +236,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::EndEventMismatch { expected, found } => {
-                write!(f, "Expecting </{}> found </{}>", expected, found)
-            }
             Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
             Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
             Error::XmlDeclWithoutVersion(e) => write!(

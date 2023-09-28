@@ -3760,14 +3760,14 @@ mod tests {
         assert_eq!(s, "");
 
         match from_str::<String>(r#"<root></other>"#) {
-            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                assert_eq!(expected, "root");
-                assert_eq!(found, "other");
-            }
-            x => panic!(
-                "Expected `Err(InvalidXml(EndEventMismatch {{ expected = 'root', found = 'other' }}))`, but got `{:?}`",
-                x
+            Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                cause,
+                IllFormedError::MismatchedEnd {
+                    expected: "root".into(),
+                    found: "other".into(),
+                }
             ),
+            x => panic!("Expected `Err(InvalidXml(IllFormed(_))`, but got `{:?}`", x),
         }
     }
 

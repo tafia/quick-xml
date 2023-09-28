@@ -652,7 +652,8 @@ macro_rules! maplike_errors {
 
         mod mismatched_end {
             use super::*;
-            use quick_xml::Error::EndEventMismatch;
+            use pretty_assertions::assert_eq;
+            use quick_xml::errors::{Error, IllFormedError};
 
             /// For struct we expect that error about mismatched tag appears
             /// earlier than error about missing fields
@@ -661,9 +662,15 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root></mismatched>"#);
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
                     x => panic!(
-                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                         x
                     ),
                 }
@@ -677,9 +684,15 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
                     x => panic!(
-                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                         x
                     ),
                 }
@@ -693,9 +706,15 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
                     x => panic!(
-                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                         x
                     ),
                 }
@@ -709,9 +728,15 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "string".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
                     x => panic!(
-                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                         x
                     ),
                 }

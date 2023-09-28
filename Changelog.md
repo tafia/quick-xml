@@ -18,6 +18,7 @@
 
 - [#675]: Minimum supported version of serde raised to 1.0.139
 - [#675]: Rework the `quick_xml::Error` type to provide more accurate information:
+  - `Error::EndEventMismatch` replaced by `IllFormedError::MismatchedEnd` in some cases
   - `Error::EndEventMismatch` replaced by `IllFormedError::UnmatchedEnd` in some cases
   - `Error::UnexpectedBang` replaced by `SyntaxError`
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases

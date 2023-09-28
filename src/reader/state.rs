@@ -161,10 +161,10 @@ impl ReaderState {
                         // Report error at start of the end tag at `<` character
                         // +2 for `<` and `>`
                         self.offset -= buf.len() + 2;
-                        return Err(Error::EndEventMismatch {
+                        return Err(Error::IllFormed(IllFormedError::MismatchedEnd {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
-                        });
+                        }));
                     }
                 }
 
