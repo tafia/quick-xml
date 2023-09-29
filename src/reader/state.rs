@@ -170,7 +170,7 @@ impl ReaderState {
 
                 self.opened_buffer.truncate(start);
             }
-            None if self.check_end_names => {
+            None => {
                 // Report error at start of the end tag at `<` character
                 // +2 for `<` and `>`
                 self.offset -= buf.len() + 2;
@@ -178,7 +178,6 @@ impl ReaderState {
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
             }
-            None => {}
         }
 
         Ok(Event::End(BytesEnd::wrap(name.into())))

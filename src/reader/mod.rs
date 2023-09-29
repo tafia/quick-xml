@@ -1740,22 +1740,15 @@ mod test {
                     );
                 }
 
+                /// Lone closing tags are not allowed, so testing it together with start tag
                 #[$test]
-                $($async)? fn start() {
-                    let mut reader = Reader::from_str("<tag>");
+                $($async)? fn start_and_end() {
+                    let mut reader = Reader::from_str("<tag></tag>");
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
                         Event::Start(BytesStart::new("tag"))
                     );
-                }
-
-                #[$test]
-                $($async)? fn end() {
-                    let mut reader = Reader::from_str("</tag>");
-                    // Because we expect invalid XML, do not check that
-                    // the end name paired with the start name
-                    reader.check_end_names(false);
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
