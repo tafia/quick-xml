@@ -2216,8 +2216,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 let result1 = self.reader.read_to_end(name);
                 let result2 = self.reader.read_to_end(name);
 
-                // In case of error `next` returns `Eof`
-                self.lookahead = self.reader.next();
+                // In case of error `next_impl` returns `Eof`
+                let _ = self.next_impl();
                 result1?;
                 result2?;
             }
@@ -2225,13 +2225,13 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             // Because this is end event, we already consume the whole tree, so
             // nothing to do, just update lookahead
             Ok(PayloadEvent::End(ref e)) if e.name() == name => {
-                self.lookahead = self.reader.next();
+                let _ = self.next_impl();
             }
             Ok(_) => {
                 let result = self.reader.read_to_end(name);
 
-                // In case of error `next` returns `Eof`
-                self.lookahead = self.reader.next();
+                // In case of error `next_impl` returns `Eof`
+                let _ = self.next_impl();
                 result?;
             }
             // Read next lookahead event, unpack error from the current lookahead
