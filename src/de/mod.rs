@@ -2115,6 +2115,11 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
         }
     }
 
+    /// Returns `true` if all events was consumed
+    fn is_empty(&self) -> bool {
+        matches!(self.lookahead, Ok(PayloadEvent::Eof))
+    }
+
     /// Read next event and put it in lookahead, return the current lookahead
     #[inline(always)]
     fn next_impl(&mut self) -> Result<PayloadEvent<'i>, DeError> {
@@ -2372,6 +2377,19 @@ where
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
         }
+    }
+
+    /// Returns `true` if all events was consumed.
+    pub fn is_empty(&self) -> bool {
+        #[cfg(feature = "overlapped-lists")]
+        if self.read.is_empty() {
+            return self.reader.is_empty();
+        }
+        #[cfg(not(feature = "overlapped-lists"))]
+        if self.peek.is_none() {
+            return self.reader.is_empty();
+        }
+        false
     }
 
     /// Set the maximum number of events that could be skipped during deserialization
@@ -2895,7 +2913,11 @@ where
         T: DeserializeSeed<'de>,
     {
         match self.peek()? {
-            DeEvent::Eof => Ok(None),
+            DeEvent::Eof => {
+                // We need to consume event in order to self.is_empty() worked
+                self.next()?;
+                Ok(None)
+            }
 
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
