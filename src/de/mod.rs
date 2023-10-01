@@ -1937,6 +1937,16 @@ macro_rules! deserialize_primitives {
             self.deserialize_tuple(len, visitor)
         }
 
+        /// Forwards deserialization to the [`deserialize_struct`](#method.deserialize_struct)
+        /// with empty name and fields.
+        #[inline]
+        fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_struct("", &[], visitor)
+        }
+
         /// Identifiers represented as [strings](#method.deserialize_str).
         fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -2846,13 +2856,6 @@ where
         V: Visitor<'de>,
     {
         visitor.visit_seq(self)
-    }
-
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_struct("", &[], visitor)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>

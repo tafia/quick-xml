@@ -485,7 +485,6 @@ where
 
     forward!(deserialize_unit);
 
-    forward!(deserialize_map);
     forward!(deserialize_struct(
         name: &'static str,
         fields: &'static [&'static str]
@@ -753,7 +752,6 @@ where
 
     forward!(deserialize_unit);
 
-    forward!(deserialize_map);
     forward!(deserialize_struct(
         name: &'static str,
         fields: &'static [&'static str]
