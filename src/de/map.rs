@@ -357,24 +357,6 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-macro_rules! forward {
-    (
-        $deserialize:ident
-        $(
-            ($($name:ident : $type:ty),*)
-        )?
-    ) => {
-        #[inline]
-        fn $deserialize<V: Visitor<'de>>(
-            self,
-            $($($name: $type,)*)?
-            visitor: V
-        ) -> Result<V::Value, Self::Error> {
-            self.map.de.$deserialize($($($name,)*)? visitor)
-        }
-    };
-}
-
 /// A deserializer for a value of map or struct. That deserializer slightly
 /// differently processes events for a primitive types and sequences than
 /// a [`Deserializer`].
@@ -534,19 +516,13 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_unit);
-
-    forward!(deserialize_struct(
-        name: &'static str,
-        fields: &'static [&'static str]
-    ));
-
-    forward!(deserialize_enum(
-        name: &'static str,
-        variants: &'static [&'static str]
-    ));
-
-    forward!(deserialize_any);
+    #[inline]
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_unit(visitor)
+    }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -604,6 +580,38 @@ where
             map: self.map,
             filter,
         })
+    }
+
+    #[inline]
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_struct(name, fields, visitor)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_enum(name, variants, visitor)
+    }
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_any(visitor)
     }
 }
 
@@ -864,19 +872,12 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_unit);
-
-    forward!(deserialize_struct(
-        name: &'static str,
-        fields: &'static [&'static str]
-    ));
-
-    forward!(deserialize_enum(
-        name: &'static str,
-        variants: &'static [&'static str]
-    ));
-
-    forward!(deserialize_any);
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_unit(visitor)
+    }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -919,6 +920,37 @@ where
     {
         let text = self.read_string()?;
         SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_struct(name, fields, visitor)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_enum(name, variants, visitor)
+    }
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_any(visitor)
     }
 }
 
