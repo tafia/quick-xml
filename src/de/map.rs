@@ -597,21 +597,24 @@ where
 
     fn deserialize_enum<V>(
         self,
-        name: &'static str,
-        variants: &'static [&'static str],
+        _name: &'static str,
+        _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_enum(name, variants, visitor)
+        visitor.visit_enum(crate::de::var::EnumAccess::new(self.map.de))
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_any(visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
+        }
     }
 }
 
@@ -859,7 +862,12 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.read_string_impl(true)
+        match self.map.de.next()? {
+            DeEvent::Text(e) => Ok(e.text),
+            DeEvent::Start(_) => self.map.de.read_text(),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
     }
 }
 
@@ -876,7 +884,15 @@ where
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_unit(visitor)
+        match self.map.de.next()? {
+            DeEvent::Start(s) => {
+                self.map.de.read_to_end(s.name())?;
+                visitor.visit_unit()
+            }
+            DeEvent::Text(_) => visitor.visit_unit(),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -924,33 +940,41 @@ where
 
     fn deserialize_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_struct(name, fields, visitor)
+        match self.map.de.next()? {
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Text(_) => Err(DeError::ExpectedStart),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
     }
 
     fn deserialize_enum<V>(
         self,
-        name: &'static str,
-        variants: &'static [&'static str],
+        _name: &'static str,
+        _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_enum(name, variants, visitor)
+        visitor.visit_enum(crate::de::var::EnumAccess::new(self.map.de))
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_any(visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
+        }
     }
 }
 
