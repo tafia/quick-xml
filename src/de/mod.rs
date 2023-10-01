@@ -2870,10 +2870,8 @@ where
         V: Visitor<'de>,
     {
         match self.peek()? {
-            DeEvent::Start(_) => self.deserialize_map(visitor),
-            // Redirect to deserialize_unit in order to consume an event and return an appropriate error
-            DeEvent::End(_) | DeEvent::Eof => self.deserialize_unit(visitor),
-            _ => self.deserialize_string(visitor),
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
         }
     }
 }
