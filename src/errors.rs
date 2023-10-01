@@ -12,9 +12,9 @@ use std::sync::Arc;
 /// The error type used by this crate.
 #[derive(Clone, Debug)]
 pub enum Error {
-    /// IO error.
+    /// XML document cannot be read from or written to underlying source.
     ///
-    /// `Arc<IoError>` instead of `IoError` since `IoError` is not `Clone`.
+    /// Contains the reference-counted I/O error to make the error type `Clone`able.
     Io(Arc<IoError>),
     /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error

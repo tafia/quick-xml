@@ -213,7 +213,7 @@ macro_rules! read_event_impl {
 }
 
 /// Read bytes up to `<` and skip it. If current byte (after skipping all space
-/// characters if [`Parser::trim_text_start`] is `true`) is already `<`, then
+/// characters if [`ReaderState::trim_text_start`] is `true`) is already `<`, then
 /// returns the next event, otherwise stay at position just after the `<` symbol.
 ///
 /// Moves parser to the `OpenedTag` state.
@@ -409,7 +409,7 @@ enum ParseState {
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
     /// after which reader returned to the `ClosedTag` state.
     ///
-    /// [`expand_empty_elements`]: Parser::expand_empty_elements
+    /// [`expand_empty_elements`]: ReaderState::expand_empty_elements
     Empty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
