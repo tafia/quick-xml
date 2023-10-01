@@ -373,6 +373,52 @@ macro_rules! forward {
 /// A deserializer for a value of map or struct. That deserializer slightly
 /// differently processes events for a primitive types and sequences than
 /// a [`Deserializer`].
+///
+/// This deserializer can see two kind of events at the start:
+/// - [`DeEvent::Text`]
+/// - [`DeEvent::Start`]
+///
+/// which represents two possible variants of items:
+/// ```xml
+/// <item>A tag item</item>
+/// A text item
+/// <yet another="tag item"/>
+/// ```
+///
+/// This deserializer are very similar to a [`SeqItemDeserializer`]. The only difference
+/// in the `deserialize_seq` method. This deserializer will act as an iterator
+/// over tags / text within it's parent tag, whereas the [`SeqItemDeserializer`]
+/// will represent sequences as an `xs:list`.
+///
+/// This deserializer processes items as following:
+/// - primitives (numbers, booleans, strings, characters) are deserialized either
+///   from a text content, or unwrapped from a one level of a tag. So, `123` and
+///   `<int>123</int>` both can be deserialized into an `u32`;
+/// - `Option`:
+///   - empty text of [`DeEvent::Text`] is deserialized as `None`;
+///   - everything else are deserialized as `Some` using the same deserializer,
+///     including `<tag/>` or `<tag></tag>`;
+/// - units (`()`) and unit structs consumes the whole text or element subtree;
+/// - newtype structs are deserialized by forwarding deserialization of inner type
+///   with the same deserializer;
+/// - sequences, tuples and tuple structs are deserialized by iterating within the
+///   parent tag and deserializing each tag or text content using [`SeqItemDeserializer`];
+/// - structs and maps are deserialized using new instance of [`MapAccess`];
+/// - enums:
+///   - in case of [`DeEvent::Text`] event the text content is deserialized as
+///     a `$text` variant. Enum content is deserialized from the text using
+///     [`SimpleTypeDeserializer`];
+///   - in case of [`DeEvent::Start`] event the tag name is deserialized as
+///     an enum tag, and the content inside are deserialized as an enum content.
+///     Depending on a variant kind deserialization is performed as:
+///     - unit variants: consuming text content or a subtree;
+///     - newtype variants: forward deserialization to the inner type using
+///       this deserializer;
+///     - tuple variants: call [`deserialize_tuple`] of this deserializer;
+///     - struct variants: call [`deserialize_struct`] of this deserializer.
+///
+/// [`deserialize_tuple`]: #method.deserialize_tuple
+/// [`deserialize_struct`]: #method.deserialize_struct
 struct MapValueDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
@@ -714,7 +760,59 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A deserializer for a single item of a sequence.
+/// A deserializer for a single item of a mixed sequence of tags and text.
+///
+/// This deserializer can see two kind of events at the start:
+/// - [`DeEvent::Text`]
+/// - [`DeEvent::Start`]
+///
+/// which represents two possible variants of items:
+/// ```xml
+/// <item>A tag item</item>
+/// A text item
+/// <yet another="tag item"/>
+/// ```
+///
+/// This deserializer are very similar to a [`MapValueDeserializer`]. The only difference
+/// in the `deserialize_seq` method. This deserializer will perform deserialization
+/// from the textual content (the text itself in case of [`DeEvent::Text`] event
+/// and the text between tags in case of [`DeEvent::Start`] event), whereas
+/// the [`MapValueDeserializer`] will iterate over tags / text within it's parent tag.
+///
+/// This deserializer processes items as following:
+/// - primitives (numbers, booleans, strings, characters) are deserialized either
+///   from a text content, or unwrapped from a one level of a tag. So, `123` and
+///   `<int>123</int>` both can be deserialized into an `u32`;
+/// - `Option`:
+///   - empty text of [`DeEvent::Text`] is deserialized as `None`;
+///   - everything else are deserialized as `Some` using the same deserializer,
+///     including `<tag/>` or `<tag></tag>`;
+/// - units (`()`) and unit structs consumes the whole text or element subtree;
+/// - newtype structs are deserialized as tuple structs with one element;
+/// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]
+///   (this is the difference):
+///   - in case of [`DeEvent::Text`] event text content passed to the deserializer directly;
+///   - in case of [`DeEvent::Start`] event the start and end tags are stripped,
+///     and text between them is passed to [`SimpleTypeDeserializer`]. If the tag
+///     contains something else other than text, an error is returned, but if it
+///     contains a text and something else (for example, `<item>text<tag/></item>`),
+///     then the trail is just ignored;
+/// - structs and maps are deserialized using new [`MapAccess`];
+/// - enums:
+///   - in case of [`DeEvent::Text`] event the text content is deserialized as
+///     a `$text` variant. Enum content is deserialized from the text using
+///     [`SimpleTypeDeserializer`];
+///   - in case of [`DeEvent::Start`] event the tag name is deserialized as
+///     an enum tag, and the content inside are deserialized as an enum content.
+///     Depending on a variant kind deserialization is performed as:
+///     - unit variants: consuming text content or a subtree;
+///     - newtype variants: forward deserialization to the inner type using
+///       this deserializer;
+///     - tuple variants: deserialize it as an `xs:list`;
+///     - struct variants: call [`deserialize_struct`] of this deserializer.
+///
+/// [`deserialize_tuple`]: #method.deserialize_tuple
+/// [`deserialize_struct`]: #method.deserialize_struct
 struct SeqItemDeserializer<'de, 'a, 'm, R, E>
 where
     R: XmlRead<'de>,
@@ -783,34 +881,12 @@ where
     ///   ...
     /// </>
     /// ```
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.map.de.next()? {
-            DeEvent::Text(e) => {
-                SimpleTypeDeserializer::from_text_content(e).deserialize_seq(visitor)
-            }
-            // This is a sequence element. We cannot treat it as another flatten
-            // sequence if type will require `deserialize_seq` We instead forward
-            // it to `xs:simpleType` implementation
-            DeEvent::Start(e) => {
-                let value = match self.map.de.next()? {
-                    DeEvent::Text(e) => {
-                        SimpleTypeDeserializer::from_text_content(e).deserialize_seq(visitor)
-                    }
-                    e => Err(DeError::Unsupported(
-                        format!("unsupported event {:?}", e).into(),
-                    )),
-                };
-                // TODO: May be assert that here we expect only matching closing tag?
-                self.map.de.read_to_end(e.name())?;
-                value
-            }
-            // SAFETY: we use that deserializer only when Start(element) or Text
-            // event was peeked already
-            _ => unreachable!(),
-        }
+        let text = self.read_string()?;
+        SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
     }
 
     #[inline]

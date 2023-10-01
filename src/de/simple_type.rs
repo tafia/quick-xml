@@ -495,12 +495,16 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
 
 impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// Creates a deserializer from a value, that possible borrowed from input
-    pub fn from_text_content(value: Text<'de>) -> Self {
-        let content = match value.text {
+    pub fn from_text(text: Cow<'de, str>) -> Self {
+        let content = match text {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
             Cow::Owned(content) => CowRef::Owned(content.into_bytes()),
         };
         Self::new(content, false, Decoder::utf8())
+    }
+    /// Creates a deserializer from a value, that possible borrowed from input
+    pub fn from_text_content(value: Text<'de>) -> Self {
+        Self::from_text(value.text)
     }
 
     /// Creates a deserializer from a part of value at specified range
