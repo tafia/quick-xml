@@ -802,6 +802,15 @@ mod fixed_name {
             use super::*;
             use pretty_assertions::assert_eq;
 
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct List {
+                /// Outer list mapped to elements, inner -- to `xs:list`.
+                ///
+                /// `#[serde(default)]` is not required, because correct
+                /// XML will always contains at least 1 element.
+                item: [Vec<String>; 1],
+            }
+
             /// Special case: zero elements
             #[test]
             fn zero() {
@@ -832,15 +841,6 @@ mod fixed_name {
             /// Special case: one element
             #[test]
             fn one() {
-                #[derive(Debug, Deserialize, PartialEq)]
-                struct List {
-                    /// Outer list mapped to elements, inner -- to `xs:list`.
-                    ///
-                    /// `#[serde(default)]` is not required, because correct
-                    /// XML will always contains at least 1 element.
-                    item: [Vec<String>; 1],
-                }
-
                 let data: List = from_str(
                     r#"
                     <root>
@@ -856,6 +856,21 @@ mod fixed_name {
                         item: [vec!["first".to_string(), "list".to_string()]]
                     }
                 );
+            }
+
+            /// Special case: empty `xs:list`
+            #[test]
+            fn empty() {
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+
+                assert_eq!(data, List { item: [vec![]] });
             }
 
             /// Special case: outer list is always mapped to an elements sequence,
@@ -1667,6 +1682,21 @@ mod fixed_name {
                         item: vec![vec!["first".to_string(), "list".to_string()]]
                     }
                 );
+            }
+
+            /// Special case: empty `xs:list`
+            #[test]
+            fn empty() {
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+
+                assert_eq!(data, List { item: vec![vec![]] });
             }
 
             /// Special case: outer list is always mapped to an elements sequence,
@@ -2866,6 +2896,16 @@ mod variable_name {
             use super::*;
             use pretty_assertions::assert_eq;
 
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct List {
+                /// Outer list mapped to elements, inner -- to `xs:list`.
+                ///
+                /// `#[serde(default)]` is not required, because correct
+                /// XML will always contains at least 1 element.
+                #[serde(rename = "$value")]
+                element: [Vec<String>; 1],
+            }
+
             /// Special case: zero elements
             #[test]
             fn zero() {
@@ -2897,16 +2937,6 @@ mod variable_name {
             /// Special case: one element
             #[test]
             fn one() {
-                #[derive(Debug, Deserialize, PartialEq)]
-                struct List {
-                    /// Outer list mapped to elements, inner -- to `xs:list`.
-                    ///
-                    /// `#[serde(default)]` is not required, because correct
-                    /// XML will always contains at least 1 element.
-                    #[serde(rename = "$value")]
-                    element: [Vec<String>; 1],
-                }
-
                 let data: List = from_str(
                     r#"
                     <root>
@@ -2922,6 +2952,21 @@ mod variable_name {
                         element: [vec!["first".to_string(), "list".to_string()]]
                     }
                 );
+            }
+
+            /// Special case: empty `xs:list`
+            #[test]
+            fn empty() {
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+
+                assert_eq!(data, List { element: [vec![]] });
             }
 
             /// Special case: outer list is always mapped to an elements sequence,
@@ -4004,6 +4049,26 @@ mod variable_name {
                     data,
                     List {
                         element: vec![vec!["first".to_string(), "list".to_string()]]
+                    }
+                );
+            }
+
+            /// Special case: empty `xs:list`
+            #[test]
+            fn empty() {
+                let data: List = from_str(
+                    r#"
+                    <root>
+                        <item/>
+                    </root>
+                    "#,
+                )
+                .unwrap();
+
+                assert_eq!(
+                    data,
+                    List {
+                        element: vec![vec![]]
                     }
                 );
             }
