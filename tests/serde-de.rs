@@ -189,11 +189,87 @@ mod trivial {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
+                #[test]
+                fn naked() {
+                    let item: $type = from_str(&format!("<root>{}</root>", $value)).unwrap();
+                    let expected: $type = $expected;
+                    assert_eq!(item, expected);
+
+                    match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn field() {
+                    let item: Field<$type> = from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
+                    assert_eq!(item, Field { value: $expected });
+
+                    match from_str::<Field<$type>>(&format!("<root><value><nested>{}</nested></value></root>", $value)) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!("<root><value>{}<something-else/></value></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!("<root><value><something-else/>{}</value></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
                 /// Tests deserialization from top-level tag content: `<root>...content...</root>`
                 #[test]
-                fn struct_() {
+                fn text() {
                     let item: Trivial<$type> = from_str(&format!("<root>{}</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
 
+                    // Unlike `naked` test, here we have a struct that is serialized to XML with
+                    // an implicit field `$text` and some other field "something-else" which not interested
+                    // for us in the Trivial structure. If you want the same behavior as for naked primitive,
+                    // use `$value` field which would consume all data, unless a dedicated field would present
+                    let item: Trivial<$type> = from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> = from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
                     match from_str::<Trivial<$type>>(&format!("<root><nested>{}</nested></root>", $value)) {
@@ -207,6 +283,11 @@ mod trivial {
                 }
             }
         };
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Field<T> {
+        value: T,
     }
 
     /// Well-formed XML must have a single tag at the root level.
