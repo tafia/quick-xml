@@ -1944,6 +1944,15 @@ macro_rules! deserialize_primitives {
         {
             self.deserialize_str(visitor)
         }
+
+        /// Forwards deserialization to the [`deserialize_unit`](#method.deserialize_unit).
+        #[inline]
+        fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_unit(visitor)
+        }
     };
 }
 
@@ -2851,30 +2860,6 @@ where
         V: Visitor<'de>,
     {
         deserialize_option!(self, self, visitor)
-    }
-
-    /// Always call `visitor.visit_unit()` because returned value ignored in any case.
-    ///
-    /// This method consumes any single [event][DeEvent] except the [`Start`]
-    /// event, in which case all events up to and including corresponding [`End`]
-    /// event will be consumed.
-    ///
-    /// This method returns error if current event is [`End`] or [`Eof`].
-    ///
-    /// [`Start`]: DeEvent::Start
-    /// [`End`]: DeEvent::End
-    /// [`Eof`]: DeEvent::Eof
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next()? {
-            DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
-            _ => (),
-        }
-        visitor.visit_unit()
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>

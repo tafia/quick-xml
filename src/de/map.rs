@@ -497,7 +497,6 @@ where
     ));
 
     forward!(deserialize_any);
-    forward!(deserialize_ignored_any);
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
@@ -766,7 +765,6 @@ where
     ));
 
     forward!(deserialize_any);
-    forward!(deserialize_ignored_any);
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
