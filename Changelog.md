@@ -22,6 +22,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 
 - [#660]: Fixed incorrect deserialization of `xs:list`s from empty tags (`<tag/>`
   or `<tag></tag>`). Previously an `DeError::UnexpectedEof")` was returned in that case
+- [#580]: Fixed incorrect deserialization of vectors of newtypes from sequences of tags.
 
 ### Misc Changes
 
@@ -35,6 +36,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
   (and newly added `ElementWriter::write_inner_content_async` of course).
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
+[#580]: https://github.com/tafia/quick-xml/issues/580
 [#619]: https://github.com/tafia/quick-xml/issues/619
 [#635]: https://github.com/tafia/quick-xml/pull/635
 [#643]: https://github.com/tafia/quick-xml/pull/643

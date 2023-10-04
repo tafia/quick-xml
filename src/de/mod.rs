@@ -1904,18 +1904,6 @@ macro_rules! deserialize_primitives {
             self.deserialize_unit(visitor)
         }
 
-        /// Representation of the newtypes the same as one-element [tuple](#method.deserialize_tuple).
-        fn deserialize_newtype_struct<V>(
-            self,
-            _name: &'static str,
-            visitor: V,
-        ) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_tuple(1, visitor)
-        }
-
         /// Representation of tuples the same as [sequences](#method.deserialize_seq).
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
         where
@@ -2837,6 +2825,19 @@ where
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
+    }
+
+    /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
+    /// with the same deserializer.
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
     }
 
     fn deserialize_enum<V>(

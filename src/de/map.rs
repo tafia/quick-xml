@@ -550,6 +550,19 @@ where
         deserialize_option!(self.map.de, self, visitor)
     }
 
+    /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
+    /// with the same deserializer.
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
     /// Deserializes each `<tag>` in
     /// ```xml
     /// <any-tag>
@@ -867,6 +880,20 @@ where
         V: Visitor<'de>,
     {
         deserialize_option!(self.map.de, self, visitor)
+    }
+
+    /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
+    /// with the [`SimpleTypeDeserializer`].
+    fn deserialize_newtype_struct<V>(
+        mut self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let text = self.read_string()?;
+        visitor.visit_newtype_struct(SimpleTypeDeserializer::from_text(text))
     }
 
     /// This method deserializes a sequence inside of element that itself is a
