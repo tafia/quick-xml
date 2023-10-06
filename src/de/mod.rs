@@ -1964,6 +1964,7 @@ pub use crate::errors::serialize::DeError;
 pub use resolver::{EntityResolver, NoEntityResolver};
 
 use crate::{
+    de::map::ElementMapAccess,
     encoding::Decoder,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
@@ -2786,7 +2787,7 @@ where
         match self.next()? {
             DeEvent::Start(e) => {
                 let name = e.name().as_ref().to_vec();
-                let map = map::MapAccess::new(self, e, fields)?;
+                let map = ElementMapAccess::new(self, e, fields)?;
                 let value = visitor.visit_map(map)?;
                 self.read_to_end(QName(&name))?;
                 Ok(value)

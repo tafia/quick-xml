@@ -12,13 +12,13 @@ use crate::{
     name::QName,
 };
 use serde::de::value::BorrowedStrDeserializer;
-use serde::de::{self, DeserializeSeed, SeqAccess, Visitor};
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
 /// Defines a source that should be used to deserialize a value in the next call
-/// to [`next_value_seed()`](de::MapAccess::next_value_seed)
+/// to [`next_value_seed()`](MapAccess::next_value_seed)
 #[derive(Debug, PartialEq)]
 enum ValueSource {
     /// Source are not specified, because [`next_key_seed()`] not yet called.
@@ -28,8 +28,8 @@ enum ValueSource {
     /// Attempt to call [`next_value_seed()`] while accessor in this state would
     /// return a [`DeError::KeyNotRead`] error.
     ///
-    /// [`next_key_seed()`]: de::MapAccess::next_key_seed
-    /// [`next_value_seed()`]: de::MapAccess::next_value_seed
+    /// [`next_key_seed()`]: MapAccess::next_key_seed
+    /// [`next_value_seed()`]: MapAccess::next_value_seed
     Unknown,
     /// Next value should be deserialized from an attribute value; value is located
     /// at specified span.
@@ -62,7 +62,7 @@ enum ValueSource {
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
     /// the whole element and how is will be done determined by the value deserializer.
-    /// The [`MapAccess`] do not consume any events in that state.
+    /// The [`ElementMapAccess`] do not consume any events in that state.
     ///
     /// Because in that state any encountered `<tag>` is mapped to the [`VALUE_KEY`]
     /// field, it is possible to use tag name as an enum discriminator, so `enum`s
@@ -105,7 +105,7 @@ enum ValueSource {
     /// [`next()`]: Deserializer::next()
     /// [`name()`]: BytesStart::name()
     /// [`Text`]: Self::Text
-    /// [list of known fields]: MapAccess::fields
+    /// [list of known fields]: ElementMapAccess::fields
     Content,
     /// Next value should be deserialized from an element with a dedicated name.
     /// If deserialized type is a sequence, then that sequence will collect all
@@ -118,7 +118,7 @@ enum ValueSource {
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
     /// the whole element and how is will be done determined by the value deserializer.
-    /// The [`MapAccess`] do not consume any events in that state.
+    /// The [`ElementMapAccess`] do not consume any events in that state.
     ///
     /// An illustration below shows, what data is used to deserialize key and value:
     /// ```xml
@@ -166,7 +166,7 @@ enum ValueSource {
 ///
 /// - `'a` lifetime represents a parent deserializer, which could own the data
 ///   buffer.
-pub(crate) struct MapAccess<'de, 'a, R, E>
+pub(crate) struct ElementMapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -192,18 +192,18 @@ where
     has_value_field: bool,
 }
 
-impl<'de, 'a, R, E> MapAccess<'de, 'a, R, E>
+impl<'de, 'a, R, E> ElementMapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    /// Create a new MapAccess
+    /// Create a new ElementMapAccess
     pub fn new(
         de: &'a mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
-        Ok(MapAccess {
+        Ok(Self {
             de,
             iter: IterState::new(start.name().as_ref().len(), false),
             start,
@@ -214,7 +214,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> de::MapAccess<'de> for MapAccess<'de, 'a, R, E>
+impl<'de, 'a, R, E> MapAccess<'de> for ElementMapAccess<'de, 'a, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -403,7 +403,7 @@ macro_rules! forward {
 ///   with the same deserializer;
 /// - sequences, tuples and tuple structs are deserialized by iterating within the
 ///   parent tag and deserializing each tag or text content using [`SeqItemDeserializer`];
-/// - structs and maps are deserialized using new instance of [`MapAccess`];
+/// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
 ///     a `$text` variant. Enum content is deserialized from the text using
@@ -426,7 +426,7 @@ where
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
     /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
@@ -585,7 +585,7 @@ where
                 // Clone is cheap if event borrows from the input
                 DeEvent::Start(e) => TagFilter::Include(e.clone()),
                 // SAFETY: we use that deserializer with `allow_start == true`
-                // only from the `MapAccess::next_value_seed` and only when we
+                // only from the `ElementMapAccess::next_value_seed` and only when we
                 // peeked `Start` event
                 _ => unreachable!(),
             }
@@ -698,7 +698,7 @@ where
 {
     /// Accessor to a map that creates this accessor and to a deserializer for
     /// a sequence items.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
     /// When feature [`overlapped-lists`] is not activated, iteration will stop
@@ -808,7 +808,7 @@ where
 ///     contains something else other than text, an error is returned, but if it
 ///     contains a text and something else (for example, `<item>text<tag/></item>`),
 ///     then the trail is just ignored;
-/// - structs and maps are deserialized using new [`MapAccess`];
+/// - structs and maps are deserialized using new [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
 ///     a `$text` variant. Enum content is deserialized from the text using
@@ -831,7 +831,7 @@ where
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
 }
 
 impl<'de, 'a, 'm, R, E> SeqItemDeserializer<'de, 'a, 'm, R, E>
