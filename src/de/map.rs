@@ -372,9 +372,9 @@ where
 /// <yet another="tag item"/>
 /// ```
 ///
-/// This deserializer are very similar to a [`SeqItemDeserializer`]. The only difference
+/// This deserializer are very similar to a [`ElementDeserializer`]. The only difference
 /// in the `deserialize_seq` method. This deserializer will act as an iterator
-/// over tags / text within it's parent tag, whereas the [`SeqItemDeserializer`]
+/// over tags / text within it's parent tag, whereas the [`ElementDeserializer`]
 /// will represent sequences as an `xs:list`.
 ///
 /// This deserializer processes items as following:
@@ -389,7 +389,7 @@ where
 /// - newtype structs are deserialized by forwarding deserialization of inner type
 ///   with the same deserializer;
 /// - sequences, tuples and tuple structs are deserialized by iterating within the
-///   parent tag and deserializing each tag or text content using [`SeqItemDeserializer`];
+///   parent tag and deserializing each tag or text content using [`ElementDeserializer`];
 /// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
@@ -776,9 +776,11 @@ where
                 // opened tag `self.map.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),
 
-                // Start(tag), Text
-                _ => seed
-                    .deserialize(SeqItemDeserializer { map: self.map })
+                DeEvent::Text(_) => seed
+                    .deserialize(TextDeserializer { map: self.map })
+                    .map(Some),
+                DeEvent::Start(_) => seed
+                    .deserialize(ElementDeserializer { map: self.map })
                     .map(Some),
             };
         }
@@ -840,7 +842,7 @@ where
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct SeqItemDeserializer<'de, 'd, 'm, R, E>
+struct ElementDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -850,7 +852,7 @@ where
     map: &'m mut ElementMapAccess<'de, 'd, R, E>,
 }
 
-impl<'de, 'd, 'm, R, E> SeqItemDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, 'm, R, E> ElementDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -871,7 +873,7 @@ where
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for ElementDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -978,13 +980,13 @@ where
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::EnumAccess<'de> for SeqItemDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::EnumAccess<'de> for ElementDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     type Error = DeError;
-    type Variant = VariantAccess<'de, 'm, R, E>;
+    type Variant = ElementVariantAccess<'de, 'm, R, E>;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
     where
@@ -1005,7 +1007,7 @@ where
         };
         Ok((
             name,
-            VariantAccess {
+            ElementVariantAccess {
                 de: self.map.de,
                 is_text,
             },
@@ -1013,7 +1015,7 @@ where
     }
 }
 
-struct VariantAccess<'de, 'd, R, E>
+struct ElementVariantAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -1024,7 +1026,265 @@ where
     is_text: bool,
 }
 
-impl<'de, 'd, R, E> de::VariantAccess<'de> for VariantAccess<'de, 'd, R, E>
+impl<'de, 'd, R, E> de::VariantAccess<'de> for ElementVariantAccess<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        match self.de.next()? {
+            // Consume subtree
+            DeEvent::Start(e) => self.de.read_to_end(e.name()),
+            // Does not needed to deserialize using SimpleTypeDeserializer, because
+            // it returns `()` when `deserialize_unit()` is requested
+            DeEvent::Text(_) => Ok(()),
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Start` or `Text` events are possible here"),
+        }
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` events are possible here"),
+            }
+        } else {
+            seed.deserialize(&mut *self.de)
+        }
+    }
+
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => {
+                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
+                }
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` events are possible here"),
+            }
+        } else {
+            self.de.deserialize_tuple(len, visitor)
+        }
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if self.is_text {
+            match self.de.next()? {
+                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e)
+                    .deserialize_struct("", fields, visitor),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` events are possible here"),
+            }
+        } else {
+            self.de.deserialize_struct("", fields, visitor)
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct TextDeserializer<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    /// Access to the map that created this deserializer. Gives access to the
+    /// context, such as list of fields, that current map known about.
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
+}
+
+impl<'de, 'd, 'm, R, E> TextDeserializer<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    /// Returns a next string as concatenated content of consequent [`Text`] and
+    /// [`CData`] events, used inside [`deserialize_primitives!()`].
+    ///
+    /// [`Text`]: crate::events::Event::Text
+    /// [`CData`]: crate::events::Event::CData
+    #[inline]
+    fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
+        match self.map.de.next()? {
+            DeEvent::Text(e) => Ok(e.text),
+            DeEvent::Start(_) => self.map.de.read_text(),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
+    }
+}
+
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for TextDeserializer<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    deserialize_primitives!(mut);
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.next()? {
+            DeEvent::Start(s) => {
+                self.map.de.read_to_end(s.name())?;
+                visitor.visit_unit()
+            }
+            DeEvent::Text(_) => visitor.visit_unit(),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
+    }
+
+    /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
+    /// with this deserializer.
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    /// This method deserializes a sequence inside of element that itself is a
+    /// sequence element:
+    ///
+    /// ```xml
+    /// <>
+    ///   ...
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   <self>inner sequence</self>
+    ///   ...
+    /// </>
+    /// ```
+    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        let text = self.read_string()?;
+        SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        _name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.next()? {
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Text(_) => Err(DeError::ExpectedStart),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_enum(self)
+    }
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.peek()? {
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
+        }
+    }
+}
+
+impl<'de, 'd, 'm, R, E> de::EnumAccess<'de> for TextDeserializer<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+    type Variant = TextVariantAccess<'de, 'm, R, E>;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let decoder = self.map.de.reader.decoder();
+        let (name, is_text) = match self.map.de.peek()? {
+            DeEvent::Start(e) => (
+                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
+                false,
+            ),
+            DeEvent::Text(_) => (
+                seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
+                true,
+            ),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
+            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+        };
+        Ok((
+            name,
+            TextVariantAccess {
+                de: self.map.de,
+                is_text,
+            },
+        ))
+    }
+}
+
+struct TextVariantAccess<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    de: &'d mut Deserializer<'de, R, E>,
+    /// `true` if variant should be deserialized from a textual content
+    /// and `false` if from tag
+    is_text: bool,
+}
+
+impl<'de, 'd, R, E> de::VariantAccess<'de> for TextVariantAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
