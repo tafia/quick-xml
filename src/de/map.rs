@@ -865,10 +865,9 @@ where
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
         match self.map.de.next()? {
-            DeEvent::Text(e) => Ok(e.text),
             DeEvent::Start(_) => self.map.de.read_text(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         }
     }
 }
@@ -891,9 +890,8 @@ where
                 self.map.de.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            DeEvent::Text(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         }
     }
 
@@ -901,10 +899,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            _ => visitor.visit_some(self),
-        }
+        visitor.visit_some(self)
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
@@ -951,9 +946,8 @@ where
     {
         match self.map.de.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Text(_) => Err(DeError::ExpectedStart),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         }
     }
 
@@ -969,14 +963,12 @@ where
         visitor.visit_enum(self)
     }
 
+    #[inline]
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
-            DeEvent::Text(_) => self.deserialize_str(visitor),
-            _ => self.deserialize_map(visitor),
-        }
+        self.deserialize_map(visitor)
     }
 }
 
@@ -993,23 +985,17 @@ where
         V: DeserializeSeed<'de>,
     {
         let decoder = self.map.de.reader.decoder();
-        let (name, is_text) = match self.map.de.peek()? {
-            DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
-                false,
-            ),
-            DeEvent::Text(_) => (
-                seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
-                true,
-            ),
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+        let name = match self.map.de.peek()? {
+            DeEvent::Start(e) => {
+                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?
+            }
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         };
         Ok((
             name,
             ElementVariantAccess {
                 de: self.map.de,
-                is_text,
             },
         ))
     }
@@ -1021,9 +1007,6 @@ where
     E: EntityResolver,
 {
     de: &'d mut Deserializer<'de, R, E>,
-    /// `true` if variant should be deserialized from a textual content
-    /// and `false` if from tag
-    is_text: bool,
 }
 
 impl<'de, 'd, R, E> de::VariantAccess<'de> for ElementVariantAccess<'de, 'd, R, E>
@@ -1037,9 +1020,6 @@ where
         match self.de.next()? {
             // Consume subtree
             DeEvent::Start(e) => self.de.read_to_end(e.name()),
-            // Does not needed to deserialize using SimpleTypeDeserializer, because
-            // it returns `()` when `deserialize_unit()` is requested
-            DeEvent::Text(_) => Ok(()),
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),
         }
@@ -1049,34 +1029,18 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
-            }
-        } else {
-            seed.deserialize(&mut *self.de)
-        }
+        seed.deserialize(&mut *self.de)
     }
 
+    #[inline]
     fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => {
-                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
-                }
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
-            }
-        } else {
-            self.de.deserialize_tuple(len, visitor)
-        }
+        self.de.deserialize_tuple(len, visitor)
     }
 
+    #[inline]
     fn struct_variant<V>(
         self,
         fields: &'static [&'static str],
@@ -1085,16 +1049,7 @@ where
     where
         V: Visitor<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e)
-                    .deserialize_struct("", fields, visitor),
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
-            }
-        } else {
-            self.de.deserialize_struct("", fields, visitor)
-        }
+        self.de.deserialize_struct("", fields, visitor)
     }
 }
 
@@ -1124,9 +1079,8 @@ where
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
         match self.map.de.next()? {
             DeEvent::Text(e) => Ok(e.text),
-            DeEvent::Start(_) => self.map.de.read_text(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         }
     }
 }
@@ -1145,13 +1099,9 @@ where
         V: Visitor<'de>,
     {
         match self.map.de.next()? {
-            DeEvent::Start(s) => {
-                self.map.de.read_to_end(s.name())?;
-                visitor.visit_unit()
-            }
             DeEvent::Text(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Start event
+            _ => unreachable!(),
         }
     }
 
@@ -1184,9 +1134,7 @@ where
     /// ```xml
     /// <>
     ///   ...
-    ///   <self>inner sequence</self>
-    ///   <self>inner sequence</self>
-    ///   <self>inner sequence</self>
+    ///   inner sequence as xs:list
     ///   ...
     /// </>
     /// ```
@@ -1198,21 +1146,17 @@ where
         SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
     }
 
+    #[inline]
     fn deserialize_struct<V>(
         self,
         _name: &'static str,
-        fields: &'static [&'static str],
-        visitor: V,
+        _fields: &'static [&'static str],
+        _visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Text(_) => Err(DeError::ExpectedStart),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
-        }
+        Err(DeError::ExpectedStart)
     }
 
     fn deserialize_enum<V>(
@@ -1227,14 +1171,12 @@ where
         visitor.visit_enum(self)
     }
 
+    #[inline]
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
-            DeEvent::Text(_) => self.deserialize_str(visitor),
-            _ => self.deserialize_map(visitor),
-        }
+        self.deserialize_str(visitor)
     }
 }
 
@@ -1250,24 +1192,16 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
-        let (name, is_text) = match self.map.de.peek()? {
-            DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
-                false,
-            ),
-            DeEvent::Text(_) => (
+        let name = match self.map.de.peek()? {
+            DeEvent::Text(_) =>
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
-                true,
-            ),
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+            // SAFETY: this deserializer created only when we peeked Text event
+            _ => unreachable!(),
         };
         Ok((
             name,
             TextVariantAccess {
                 de: self.map.de,
-                is_text,
             },
         ))
     }
@@ -1279,9 +1213,6 @@ where
     E: EntityResolver,
 {
     de: &'d mut Deserializer<'de, R, E>,
-    /// `true` if variant should be deserialized from a textual content
-    /// and `false` if from tag
-    is_text: bool,
 }
 
 impl<'de, 'd, R, E> de::VariantAccess<'de> for TextVariantAccess<'de, 'd, R, E>
@@ -1293,8 +1224,6 @@ where
 
     fn unit_variant(self) -> Result<(), Self::Error> {
         match self.de.next()? {
-            // Consume subtree
-            DeEvent::Start(e) => self.de.read_to_end(e.name()),
             // Does not needed to deserialize using SimpleTypeDeserializer, because
             // it returns `()` when `deserialize_unit()` is requested
             DeEvent::Text(_) => Ok(()),
@@ -1307,14 +1236,10 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
-            }
-        } else {
-            seed.deserialize(&mut *self.de)
+        match self.de.next()? {
+            DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Text` events are possible here"),
         }
     }
 
@@ -1322,16 +1247,12 @@ where
     where
         V: Visitor<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => {
-                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
-                }
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
+        match self.de.next()? {
+            DeEvent::Text(e) => {
+                SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
             }
-        } else {
-            self.de.deserialize_tuple(len, visitor)
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Text` events are possible here"),
         }
     }
 
@@ -1343,15 +1264,11 @@ where
     where
         V: Visitor<'de>,
     {
-        if self.is_text {
-            match self.de.next()? {
-                DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e)
-                    .deserialize_struct("", fields, visitor),
-                // SAFETY: the other events are filtered in `variant_seed()`
-                _ => unreachable!("Only `Text` events are possible here"),
-            }
-        } else {
-            self.de.deserialize_struct("", fields, visitor)
+        match self.de.next()? {
+            DeEvent::Text(e) => SimpleTypeDeserializer::from_text_content(e)
+                .deserialize_struct("", fields, visitor),
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Text` events are possible here"),
         }
     }
 }
