@@ -783,7 +783,7 @@ where
                     _ => unreachable!(),
                 },
                 DeEvent::Start(_) => seed
-                    .deserialize(ElementDeserializer { map: self.map })
+                    .deserialize(ElementDeserializer { de: self.map.de })
                     .map(Some),
             };
         }
@@ -845,17 +845,15 @@ where
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct ElementDeserializer<'de, 'd, 'm, R, E>
+struct ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    /// Access to the map that created this deserializer. Gives access to the
-    /// context, such as list of fields, that current map known about.
-    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
+    de: &'d mut Deserializer<'de, R, E>,
 }
 
-impl<'de, 'd, 'm, R, E> ElementDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -867,15 +865,15 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        match self.map.de.next()? {
-            DeEvent::Start(_) => self.map.de.read_text(),
+        match self.de.next()? {
+            DeEvent::Start(_) => self.de.read_text(),
             // SAFETY: this deserializer created only when we peeked Start event
             _ => unreachable!(),
         }
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for ElementDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> de::Deserializer<'de> for ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -888,9 +886,9 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.next()? {
+        match self.de.next()? {
             DeEvent::Start(s) => {
-                self.map.de.read_to_end(s.name())?;
+                self.de.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
             // SAFETY: this deserializer created only when we peeked Start event
@@ -947,8 +945,8 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+        match self.de.next()? {
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
             // SAFETY: this deserializer created only when we peeked Start event
             _ => unreachable!(),
         }
@@ -975,7 +973,7 @@ where
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::EnumAccess<'de> for ElementDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> de::EnumAccess<'de> for ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -987,8 +985,8 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
-        let name = match self.map.de.peek()? {
+        let decoder = self.de.reader.decoder();
+        let name = match self.de.peek()? {
             DeEvent::Start(e) => {
                 seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?
             }
@@ -999,7 +997,7 @@ where
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::VariantAccess<'de> for ElementDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> de::VariantAccess<'de> for ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -1007,9 +1005,9 @@ where
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        match self.map.de.next()? {
+        match self.de.next()? {
             // Consume subtree
-            DeEvent::Start(e) => self.map.de.read_to_end(e.name()),
+            DeEvent::Start(e) => self.de.read_to_end(e.name()),
             // SAFETY: the other events are filtered in `variant_seed()`
             _ => unreachable!("Only `Start` or `Text` events are possible here"),
         }
