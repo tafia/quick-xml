@@ -289,9 +289,14 @@ where
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
-                DeEvent::End(e) if e.name() == self.start.name() => Ok(None),
-                // This is a unmatched closing tag, so the XML is invalid
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                // The matching tag name is guaranteed by the reader if our
+                // deserializer implementation is correct
+                DeEvent::End(e) => {
+                    debug_assert_eq!(self.start.name(), e.name());
+                    // Consume End
+                    self.de.next()?;
+                    Ok(None)
+                }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),

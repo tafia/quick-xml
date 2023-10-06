@@ -2785,13 +2785,7 @@ where
         V: Visitor<'de>,
     {
         match self.next()? {
-            DeEvent::Start(e) => {
-                let name = e.name().as_ref().to_vec();
-                let map = ElementMapAccess::new(self, e, fields)?;
-                let value = visitor.visit_map(map)?;
-                self.read_to_end(QName(&name))?;
-                Ok(value)
-            }
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Text(_) => Err(DeError::ExpectedStart),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
