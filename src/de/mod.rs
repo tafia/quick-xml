@@ -1954,16 +1954,6 @@ macro_rules! deserialize_primitives {
     };
 }
 
-macro_rules! deserialize_option {
-    ($de:expr, $deserializer:ident, $visitor:ident) => {
-        match $de.peek()? {
-            DeEvent::Text(t) if t.is_empty() => $visitor.visit_none(),
-            DeEvent::Eof => $visitor.visit_none(),
-            _ => $visitor.visit_some($deserializer),
-        }
-    };
-}
-
 mod key;
 mod map;
 mod resolver;
@@ -2875,7 +2865,11 @@ where
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self, self, visitor)
+        match self.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Eof => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>

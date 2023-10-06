@@ -543,11 +543,14 @@ where
 
     forward!(deserialize_any);
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self.map.de, self, visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
@@ -870,11 +873,14 @@ where
 
     forward!(deserialize_any);
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self.map.de, self, visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
