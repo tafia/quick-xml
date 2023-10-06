@@ -1018,7 +1018,7 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.map.de)
+        seed.deserialize(self)
     }
 
     #[inline]
@@ -1170,7 +1170,7 @@ impl<'de> de::VariantAccess<'de> for TextDeserializer<'de> {
     where
         T: DeserializeSeed<'de>,
     {
-        seed.deserialize(SimpleTypeDeserializer::from_text_content(self.0))
+        seed.deserialize(self)
     }
 
     #[inline]
