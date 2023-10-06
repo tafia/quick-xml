@@ -1026,7 +1026,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_tuple(len, visitor)
+        self.deserialize_tuple(len, visitor)
     }
 
     #[inline]
@@ -1038,7 +1038,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.map.de.deserialize_struct("", fields, visitor)
+        self.deserialize_struct("", fields, visitor)
     }
 }
 
@@ -1173,13 +1173,15 @@ impl<'de> de::VariantAccess<'de> for TextDeserializer<'de> {
         seed.deserialize(SimpleTypeDeserializer::from_text_content(self.0))
     }
 
+    #[inline]
     fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0).deserialize_tuple(len, visitor)
+        self.deserialize_tuple(len, visitor)
     }
 
+    #[inline]
     fn struct_variant<V>(
         self,
         fields: &'static [&'static str],
@@ -1188,7 +1190,7 @@ impl<'de> de::VariantAccess<'de> for TextDeserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        SimpleTypeDeserializer::from_text_content(self.0).deserialize_struct("", fields, visitor)
+        self.deserialize_struct("", fields, visitor)
     }
 }
 
