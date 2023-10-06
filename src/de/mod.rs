@@ -1904,18 +1904,6 @@ macro_rules! deserialize_primitives {
             self.deserialize_unit(visitor)
         }
 
-        /// Representation of the newtypes the same as one-element [tuple](#method.deserialize_tuple).
-        fn deserialize_newtype_struct<V>(
-            self,
-            _name: &'static str,
-            visitor: V,
-        ) -> Result<V::Value, DeError>
-        where
-            V: Visitor<'de>,
-        {
-            self.deserialize_tuple(1, visitor)
-        }
-
         /// Representation of tuples the same as [sequences](#method.deserialize_seq).
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1937,12 +1925,31 @@ macro_rules! deserialize_primitives {
             self.deserialize_tuple(len, visitor)
         }
 
+        /// Forwards deserialization to the [`deserialize_struct`](#method.deserialize_struct)
+        /// with empty name and fields.
+        #[inline]
+        fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_struct("", &[], visitor)
+        }
+
         /// Identifiers represented as [strings](#method.deserialize_str).
         fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
             self.deserialize_str(visitor)
+        }
+
+        /// Forwards deserialization to the [`deserialize_unit`](#method.deserialize_unit).
+        #[inline]
+        fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
+        where
+            V: Visitor<'de>,
+        {
+            self.deserialize_unit(visitor)
         }
     };
 }
@@ -2820,6 +2827,19 @@ where
         }
     }
 
+    /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
+    /// with the same deserializer.
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DeError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
     fn deserialize_enum<V>(
         self,
         _name: &'static str,
@@ -2839,13 +2859,6 @@ where
         visitor.visit_seq(self)
     }
 
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        self.deserialize_struct("", &[], visitor)
-    }
-
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
@@ -2853,39 +2866,13 @@ where
         deserialize_option!(self, self, visitor)
     }
 
-    /// Always call `visitor.visit_unit()` because returned value ignored in any case.
-    ///
-    /// This method consumes any single [event][DeEvent] except the [`Start`]
-    /// event, in which case all events up to and including corresponding [`End`]
-    /// event will be consumed.
-    ///
-    /// This method returns error if current event is [`End`] or [`Eof`].
-    ///
-    /// [`Start`]: DeEvent::Start
-    /// [`End`]: DeEvent::End
-    /// [`Eof`]: DeEvent::Eof
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        match self.next()? {
-            DeEvent::Start(e) => self.read_to_end(e.name())?,
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
-            _ => (),
-        }
-        visitor.visit_unit()
-    }
-
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>
     where
         V: Visitor<'de>,
     {
         match self.peek()? {
-            DeEvent::Start(_) => self.deserialize_map(visitor),
-            // Redirect to deserialize_unit in order to consume an event and return an appropriate error
-            DeEvent::End(_) | DeEvent::Eof => self.deserialize_unit(visitor),
-            _ => self.deserialize_string(visitor),
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
         }
     }
 }

@@ -5,7 +5,7 @@
 use pretty_assertions::assert_eq;
 use quick_xml::de::from_str;
 use quick_xml::se::{to_string, to_string_with_root};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 /// Regression tests for https://github.com/tafia/quick-xml/issues/252.
@@ -375,5 +375,43 @@ fn issue540() {
         )
         .unwrap(),
         "<root><Variant/></root>"
+    );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/580.
+#[test]
+fn issue580() {
+    #[derive(Debug, Deserialize, PartialEq, Eq)]
+    struct Seq {
+        #[serde(rename = "$value")]
+        items: Vec<Wrapper>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq, Eq)]
+    struct Wrapper(#[serde(deserialize_with = "Item::parse")] Item);
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Item;
+    impl Item {
+        fn parse<'de, D>(_deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            Ok(Item)
+        }
+    }
+
+    assert_eq!(
+        from_str::<Seq>(
+            r#"
+        <Seq>
+            <One/>
+            <Two/>
+        </Seq>"#
+        )
+        .unwrap(),
+        Seq {
+            items: vec![Wrapper(Item), Wrapper(Item)],
+        }
     );
 }
