@@ -597,11 +597,6 @@ where
             filter,
         })
     }
-
-    #[inline]
-    fn is_human_readable(&self) -> bool {
-        self.map.de.is_human_readable()
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -913,11 +908,6 @@ where
     {
         let text = self.read_string()?;
         SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
-    }
-
-    #[inline]
-    fn is_human_readable(&self) -> bool {
-        self.map.de.is_human_readable()
     }
 }
 
