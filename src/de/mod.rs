@@ -1958,6 +1958,7 @@ mod key;
 mod map;
 mod resolver;
 mod simple_type;
+mod text;
 mod var;
 
 pub use crate::errors::serialize::DeError;
