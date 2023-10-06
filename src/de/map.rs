@@ -782,9 +782,16 @@ where
                     // SAFETY: we just checked that the next event is Text
                     _ => unreachable!(),
                 },
-                DeEvent::Start(_) => seed
-                    .deserialize(ElementDeserializer { de: self.map.de })
-                    .map(Some),
+                DeEvent::Start(_) => match self.map.de.next()? {
+                    DeEvent::Start(start) => seed
+                        .deserialize(ElementDeserializer {
+                            start,
+                            de: self.map.de,
+                        })
+                        .map(Some),
+                    // SAFETY: we just checked that the next event is Start
+                    _ => unreachable!(),
+                },
             };
         }
     }
@@ -850,6 +857,7 @@ where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
+    start: BytesStart<'de>,
     de: &'d mut Deserializer<'de, R, E>,
 }
 
@@ -865,11 +873,7 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        match self.de.next()? {
-            DeEvent::Start(_) => self.de.read_text(),
-            // SAFETY: this deserializer created only when we peeked Start event
-            _ => unreachable!(),
-        }
+        self.de.read_text()
     }
 }
 
@@ -886,14 +890,9 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.de.next()? {
-            DeEvent::Start(s) => {
-                self.de.read_to_end(s.name())?;
-                visitor.visit_unit()
-            }
-            // SAFETY: this deserializer created only when we peeked Start event
-            _ => unreachable!(),
-        }
+        // Consume subtree
+        self.de.read_to_end(self.start.name())?;
+        visitor.visit_unit()
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -945,11 +944,7 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
-            // SAFETY: this deserializer created only when we peeked Start event
-            _ => unreachable!(),
-        }
+        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
     }
 
     fn deserialize_enum<V>(
@@ -985,14 +980,10 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.de.reader.decoder();
-        let name = match self.de.peek()? {
-            DeEvent::Start(e) => {
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?
-            }
-            // SAFETY: this deserializer created only when we peeked Start event
-            _ => unreachable!(),
-        };
+        let name = seed.deserialize(QNameDeserializer::from_elem(
+            self.start.raw_name(),
+            self.de.reader.decoder(),
+        )?)?;
         Ok((name, self))
     }
 }
@@ -1005,12 +996,8 @@ where
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        match self.de.next()? {
-            // Consume subtree
-            DeEvent::Start(e) => self.de.read_to_end(e.name()),
-            // SAFETY: the other events are filtered in `variant_seed()`
-            _ => unreachable!("Only `Start` or `Text` events are possible here"),
-        }
+        // Consume subtree
+        self.de.read_to_end(self.start.name())
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
