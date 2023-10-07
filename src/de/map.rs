@@ -799,57 +799,45 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A deserializer for a single item of a mixed sequence of tags and text.
+/// A deserializer for a single tag item of a mixed sequence of tags and text.
 ///
-/// This deserializer can see two kind of events at the start:
-/// - [`DeEvent::Text`]
-/// - [`DeEvent::Start`]
-///
-/// which represents two possible variants of items:
-/// ```xml
-/// <item>A tag item</item>
-/// A text item
-/// <yet another="tag item"/>
-/// ```
-///
-/// This deserializer are very similar to a [`MapValueDeserializer`]. The only difference
-/// in the `deserialize_seq` method. This deserializer will perform deserialization
-/// from the textual content (the text itself in case of [`DeEvent::Text`] event
-/// and the text between tags in case of [`DeEvent::Start`] event), whereas
-/// the [`MapValueDeserializer`] will iterate over tags / text within it's parent tag.
+/// This deserializer are very similar to a [`MapValueDeserializer`] (when it
+/// processes the [`DeEvent::Start`] event). The only difference in the
+/// [`deserialize_seq`] method. This deserializer will perform deserialization
+/// from the textual content between start and end events, whereas the
+/// [`MapValueDeserializer`] will iterate over tags / text within it's parent tag.
 ///
 /// This deserializer processes items as following:
-/// - primitives (numbers, booleans, strings, characters) are deserialized either
-///   from a text content, or unwrapped from a one level of a tag. So, `123` and
-///   `<int>123</int>` both can be deserialized into an `u32`;
-/// - `Option`:
-///   - empty text of [`DeEvent::Text`] is deserialized as `None`;
-///   - everything else are deserialized as `Some` using the same deserializer,
-///     including `<tag/>` or `<tag></tag>`;
-/// - units (`()`) and unit structs consumes the whole text or element subtree;
-/// - newtype structs are deserialized as tuple structs with one element;
+/// - numbers are parsed from a text content between tags using [`FromStr`]. So,
+///   `<int>123</int>` can be deserialized into an `u32`;
+/// - booleans converted from a text content between tags according to the XML
+///   [specification]:
+///   - `"true"` and `"1"` converted to `true`;
+///   - `"false"` and `"0"` converted to `false`;
+/// - strings returned as a text content between tags;
+/// - characters also returned as strings. If string contain more than one character
+///   or empty, it is responsibility of a type to return an error;
+/// - `Option` are always deserialized as `Some` using the same deserializer,
+///   including `<tag/>` or `<tag></tag>`;
+/// - units (`()`) and unit structs consumes the whole element subtree;
+/// - newtype structs forwards deserialization to the inner type using
+///   [`SimpleTypeDeserializer`];
 /// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]
-///   (this is the difference):
-///   - in case of [`DeEvent::Text`] event text content passed to the deserializer directly;
-///   - in case of [`DeEvent::Start`] event the start and end tags are stripped,
-///     and text between them is passed to [`SimpleTypeDeserializer`]. If the tag
-///     contains something else other than text, an error is returned, but if it
-///     contains a text and something else (for example, `<item>text<tag/></item>`),
-///     then the trail is just ignored;
-/// - structs and maps are deserialized using new [`ElementMapAccess`];
+///   (this is the difference): text content between tags is passed to
+///   [`SimpleTypeDeserializer`];
+/// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
-///   - in case of [`DeEvent::Text`] event the text content is deserialized as
-///     a `$text` variant. Enum content is deserialized from the text using
-///     [`SimpleTypeDeserializer`];
-///   - in case of [`DeEvent::Start`] event the tag name is deserialized as
-///     an enum tag, and the content inside are deserialized as an enum content.
-///     Depending on a variant kind deserialization is performed as:
-///     - unit variants: consuming text content or a subtree;
-///     - newtype variants: forward deserialization to the inner type using
+///   - the variant name is deserialized using [`QNameDeserializer`] from the element name;
+///   - the content is deserialized using the same deserializer:
+///     - unit variants: consuming a subtree and return `()`;
+///     - newtype variants forwards deserialization to the inner type using
 ///       this deserializer;
-///     - tuple variants: deserialize it as an `xs:list`;
+///     - tuple variants: call [`deserialize_tuple`] of this deserializer;
 ///     - struct variants: call [`deserialize_struct`] of this deserializer.
 ///
+/// [`deserialize_seq`]: #method.deserialize_seq
+/// [`FromStr`]: std::str::FromStr
+/// [specification]: https://www.w3.org/TR/xmlschema11-2/#boolean
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
 struct ElementDeserializer<'de, 'd, R, E>
