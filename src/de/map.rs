@@ -164,16 +164,16 @@ enum ValueSource {
 ///   internal buffer of deserializer (i.e. deserializer itself) or an input
 ///   (in that case it is possible to approach zero-copy deserialization).
 ///
-/// - `'a` lifetime represents a parent deserializer, which could own the data
+/// - `'d` lifetime represents a parent deserializer, which could own the data
 ///   buffer.
-pub(crate) struct ElementMapAccess<'de, 'a, R, E>
+pub(crate) struct ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
-    de: &'a mut Deserializer<'de, R, E>,
+    de: &'d mut Deserializer<'de, R, E>,
     /// State of the iterator over attributes. Contains the next position in the
     /// inner `start` slice, from which next attribute should be parsed.
     iter: IterState,
@@ -192,14 +192,14 @@ where
     has_value_field: bool,
 }
 
-impl<'de, 'a, R, E> ElementMapAccess<'de, 'a, R, E>
+impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Create a new ElementMapAccess
     pub fn new(
-        de: &'a mut Deserializer<'de, R, E>,
+        de: &'d mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
@@ -214,7 +214,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> MapAccess<'de> for ElementMapAccess<'de, 'a, R, E>
+impl<'de, 'd, R, E> MapAccess<'de> for ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -419,14 +419,14 @@ macro_rules! forward {
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct MapValueDeserializer<'de, 'a, 'm, R, E>
+struct MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
     /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
@@ -504,7 +504,7 @@ where
     allow_start: bool,
 }
 
-impl<'de, 'a, 'm, R, E> MapValueDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -520,7 +520,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -691,14 +691,14 @@ impl<'de> TagFilter<'de> {
 ///
 /// [`Text`]: crate::events::Event::Text
 /// [`CData`]: crate::events::Event::CData
-struct MapValueSeqAccess<'de, 'a, 'm, R, E>
+struct MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Accessor to a map that creates this accessor and to a deserializer for
     /// a sequence items.
-    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
     /// When feature [`overlapped-lists`] is not activated, iteration will stop
@@ -718,7 +718,7 @@ where
 }
 
 #[cfg(feature = "overlapped-lists")]
-impl<'de, 'a, 'm, R, E> Drop for MapValueSeqAccess<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> Drop for MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -728,7 +728,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> SeqAccess<'de> for MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -824,17 +824,17 @@ where
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct SeqItemDeserializer<'de, 'a, 'm, R, E>
+struct SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut ElementMapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
 }
 
-impl<'de, 'a, 'm, R, E> SeqItemDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -850,7 +850,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
