@@ -2644,7 +2644,7 @@ where
     /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice. The reader guarantee that tag will match the open one
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, expects the `</tag>` after that
-    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    /// |[`DeEvent::Eof`]  |                           |Emits [`InvalidXml(IllFormed(MissedEnd))`](DeError::InvalidXml)
     ///
     /// [`Text`]: Event::Text
     /// [`CData`]: Event::CData
@@ -2652,7 +2652,7 @@ where
         match self.next()? {
             DeEvent::Text(e) => Ok(e.text),
             // allow one nested level
-            DeEvent::Start(_) if allow_start => self.read_text(),
+            DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then out deserializer has a bug
@@ -2662,7 +2662,11 @@ where
     }
     /// Consumes one [`DeEvent::Text`] event and ensures that it is followed by the
     /// [`DeEvent::End`] event.
-    fn read_text(&mut self) -> Result<Cow<'de, str>, DeError> {
+    ///
+    /// # Parameters
+    /// - `name`: name of a tag opened before reading text. The corresponding end tag
+    ///   should present in input just after the text
+    fn read_text(&mut self, name: QName) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => match self.next()? {
                 // The matching tag name is guaranteed by the reader
@@ -2670,7 +2674,7 @@ where
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
                 DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
@@ -3055,7 +3059,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end_into(name, &mut self.buf) {
-            Err(Error::IllFormed(_)) => Err(DeError::UnexpectedEof),
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
@@ -3087,7 +3090,6 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end(name) {
-            Err(Error::IllFormed(_)) => Err(DeError::UnexpectedEof),
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
@@ -3101,6 +3103,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::IllFormedError;
     use pretty_assertions::assert_eq;
 
     fn make_de<'de>(source: &'de str) -> Deserializer<'de, SliceReader<'de>> {
@@ -3631,8 +3634,13 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => {}
-                x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::MissedEnd("tag".into()))
+                }
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }
@@ -3645,8 +3653,13 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Text("".into()));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => {}
-                x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::MissedEnd("tag".into()))
+                }
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }

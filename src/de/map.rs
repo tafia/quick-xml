@@ -616,9 +616,9 @@ where
         if self.fixed_name {
             match self.map.de.next()? {
                 // Handles <field>UnitEnumVariant</field>
-                DeEvent::Start(_) => {
+                DeEvent::Start(e) => {
                     // skip <field>, read text after it and ensure that it is ended by </field>
-                    let text = self.map.de.read_text()?;
+                    let text = self.map.de.read_text(e.name())?;
                     if text.is_empty() {
                         // Map empty text (<field/>) to a special `$text` variant
                         visitor.visit_enum(SimpleTypeDeserializer::from_text(TEXT_KEY.into()))
@@ -1022,7 +1022,7 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        self.de.read_text()
+        self.de.read_text(self.start.name())
     }
 }
 

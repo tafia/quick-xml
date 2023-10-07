@@ -556,6 +556,8 @@ macro_rules! maplike_errors {
     ) => {
         mod non_closed {
             use super::*;
+            use pretty_assertions::assert_eq;
+            use quick_xml::errors::{Error, IllFormedError};
 
             /// For struct we expect that error about not closed tag appears
             /// earlier than error about missing fields
@@ -594,8 +596,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => {}
-                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
         }
