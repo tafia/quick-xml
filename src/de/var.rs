@@ -50,7 +50,9 @@ where
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
         };
         Ok((

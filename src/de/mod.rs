@@ -2619,7 +2619,7 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::End`]  |`</any-tag>`               |This is impossible situation, the method will panic if it happens
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     ///
@@ -2640,7 +2640,9 @@ where
             // allow one nested level
             DeEvent::Start(_) if allow_start => self.read_text(),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2816,7 +2818,9 @@ where
     {
         match self.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Text(_) => Err(DeError::ExpectedStart),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
@@ -2836,7 +2840,7 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|-------------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to and including corresponding `End` event
-    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`UnexpectedEnd("tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::End`]  |`</tag>`                   |This is impossible situation, the method will panic if it happens
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Calls `visitor.visit_unit()`. The content is ignored
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -2849,7 +2853,9 @@ where
                 visitor.visit_unit()
             }
             DeEvent::Text(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }

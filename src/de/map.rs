@@ -669,7 +669,9 @@ where
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
         };
         Ok((
@@ -927,9 +929,11 @@ where
                 DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
 
                 // Stop iteration after reaching a closing tag
-                DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
-                // This is a unmatched closing tag, so the XML is invalid
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                // The matching tag name is guaranteed by the reader
+                DeEvent::End(e) => {
+                    debug_assert_eq!(self.map.start.name(), e.name());
+                    Ok(None)
+                }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),

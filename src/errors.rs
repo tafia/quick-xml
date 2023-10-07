@@ -196,14 +196,6 @@ pub mod serialize {
         /// not expecting. This happens when you try to deserialize a primitive
         /// value (numbers, strings, booleans) from an XML element.
         UnexpectedStart(Vec<u8>),
-        /// Deserializer encounter an end tag with a specified name when it is
-        /// not expecting. Usually that should not be possible, because XML reader
-        /// is not able to produce such stream of events that lead to this error.
-        ///
-        /// If you get this error this likely indicates and error in the `quick_xml`.
-        /// Please open an issue at <https://github.com/tafia/quick-xml>, provide
-        /// your Rust code and XML input.
-        UnexpectedEnd(Vec<u8>),
         /// The [`Reader`] produced [`Event::Eof`] when it is not expecting,
         /// for example, after producing [`Event::Start`] but before corresponding
         /// [`Event::End`].
@@ -249,11 +241,6 @@ pub mod serialize {
                 DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
                     f.write_str("Unexpected `Event::Start(")?;
-                    write_byte_string(f, e)?;
-                    f.write_str(")`")
-                }
-                DeError::UnexpectedEnd(e) => {
-                    f.write_str("Unexpected `Event::End(")?;
                     write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
