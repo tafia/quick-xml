@@ -23,6 +23,9 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#660]: Fixed incorrect deserialization of `xs:list`s from empty tags (`<tag/>`
   or `<tag></tag>`). Previously an `DeError::UnexpectedEof")` was returned in that case
 - [#580]: Fixed incorrect deserialization of vectors of newtypes from sequences of tags.
+- [#661]: More string handling of serialized primitive values (booleans, numbers, strings,
+  unit structs, unit variants). `<int>123<something-else/></int>` is no longer valid
+  content. Previously all data after `123` up to closing tag would be silently skipped.
 
 ### Misc Changes
 
@@ -43,6 +46,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 [#649]: https://github.com/tafia/quick-xml/pull/646
 [#651]: https://github.com/tafia/quick-xml/pull/651
 [#660]: https://github.com/tafia/quick-xml/pull/660
+[#661]: https://github.com/tafia/quick-xml/pull/661
 
 
 ## 0.30.0 -- 2023-07-23

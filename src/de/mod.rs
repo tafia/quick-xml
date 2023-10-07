@@ -2581,11 +2581,15 @@ where
     /// events, merge them into one string. If there are no such events, returns
     /// an empty string.
     ///
-    /// If `allow_start` is `false`, then only text events is consumed, for other
+    /// If `allow_start` is `false`, then only text events are consumed, for other
     /// events an error is returned (see table below).
     ///
-    /// If `allow_start` is `true`, then first [`DeEvent::Text`] event is returned
-    /// and all other content is skipped until corresponding end tag will be consumed.
+    /// If `allow_start` is `true`, then two or three events are expected:
+    /// - [`DeEvent::Start`];
+    /// - _(optional)_ [`DeEvent::Text`] which content is returned;
+    /// - [`DeEvent::End`]. If text event was missed, an empty string is returned.
+    ///
+    /// Corresponding events are consumed.
     ///
     /// # Handling events
     ///
@@ -2603,9 +2607,8 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------------------------------------------------
     /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
-    /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice, if close tag matched the open one
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
-    /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, consumes events up to `</tag>`
+    /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice. The reader guarantee that tag will match the open one
+    /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, expects the `</tag>` after that
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     ///
     /// [`Text`]: Event::Text
@@ -2614,20 +2617,29 @@ where
         match self.next()? {
             DeEvent::Text(e) => Ok(e.text),
             // allow one nested level
-            DeEvent::Start(e) if allow_start => match self.next()? {
-                DeEvent::Text(t) => {
-                    self.read_to_end(e.name())?;
-                    Ok(t.text)
-                }
-                DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
-                // We can get End event in case of `<tag></tag>` or `<tag/>` input
-                // Return empty text in that case
-                DeEvent::End(end) if end.name() == e.name() => Ok("".into()),
-                DeEvent::End(end) => Err(DeError::UnexpectedEnd(end.name().as_ref().to_owned())),
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
-            },
+            DeEvent::Start(_) if allow_start => self.read_text(),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            DeEvent::Eof => Err(DeError::UnexpectedEof),
+        }
+    }
+    /// Consumes one [`DeEvent::Text`] event and ensures that it is followed by the
+    /// [`DeEvent::End`] event.
+    fn read_text(&mut self) -> Result<Cow<'de, str>, DeError> {
+        match self.next()? {
+            DeEvent::Text(e) => match self.next()? {
+                // The matching tag name is guaranteed by the reader
+                DeEvent::End(_) => Ok(e.text),
+                // SAFETY: Cannot be two consequent Text events, they would be merged into one
+                DeEvent::Text(_) => unreachable!(),
+                DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
+            },
+            // We can get End event in case of `<tag></tag>` or `<tag/>` input
+            // Return empty text in that case
+            // The matching tag name is guaranteed by the reader
+            DeEvent::End(_) => Ok("".into()),
+            DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }

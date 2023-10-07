@@ -183,32 +183,97 @@ mod trivial {
         eof!("<!--comment-->");
     }
 
-    /// Tests deserialization from top-level tag content: `<root>...content...</root>`
-    mod struct_ {
-        use super::*;
+    macro_rules! in_struct {
+        ($name:ident: $type:ty = $value:expr, $expected:expr) => {
+            mod $name {
+                use super::*;
+                use pretty_assertions::assert_eq;
 
-        /// Well-formed XML must have a single tag at the root level.
-        /// Any XML tag can be modeled as a struct, and content of this tag are modeled as
-        /// fields of this struct.
-        ///
-        /// Because we want to get access to unnamed content of the tag (usually, this internal
-        /// XML node called `$text`) we use a rename to a special name `$text`
-        #[derive(Debug, Deserialize, PartialEq)]
-        struct Trivial<T> {
-            #[serde(rename = "$text")]
-            value: T,
-        }
-
-        macro_rules! in_struct {
-            ($name:ident: $type:ty = $value:expr, $expected:expr) => {
                 #[test]
-                fn $name() {
-                    let item: Trivial<$type> = from_str($value).unwrap();
+                fn naked() {
+                    let item: $type = from_str(&format!("<root>{}</root>", $value)).unwrap();
+                    let expected: $type = $expected;
+                    assert_eq!(item, expected);
 
+                    match from_str::<$type>(&format!("<root><nested>{}</nested></root>", $value)) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<$type>(&format!("<root>{}<something-else/></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<$type>(&format!("<root><something-else/>{}</root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                #[test]
+                fn field() {
+                    let item: Field<$type> = from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
+                    assert_eq!(item, Field { value: $expected });
+
+                    match from_str::<Field<$type>>(&format!("<root><value><nested>{}</nested></value></root>", $value)) {
+                        // Expected unexpected start element `<nested>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!("<root><value>{}<something-else/></value></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+
+                    match from_str::<Field<$type>>(&format!("<root><value><something-else/>{}</value></root>", $value)) {
+                        // Expected unexpected start element `<something-else>`
+                        Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
+                        x => panic!(
+                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            x
+                        ),
+                    }
+                }
+
+                /// Tests deserialization from top-level tag content: `<root>...content...</root>`
+                #[test]
+                fn text() {
+                    let item: Trivial<$type> = from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    match from_str::<Trivial<$type>>(&format!("<outer>{}</outer>", $value)) {
-                        // Expected unexpected start element `<root>`
+                    // Unlike `naked` test, here we have a struct that is serialized to XML with
+                    // an implicit field `$text` and some other field "something-else" which not interested
+                    // for us in the Trivial structure. If you want the same behavior as for naked primitive,
+                    // use `$value` field which would consume all data, unless a dedicated field would present
+                    let item: Trivial<$type> = from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
+
+                    let item: Trivial<$type> = from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
+                    assert_eq!(item, Trivial { value: $expected });
+
+                    match from_str::<Trivial<$type>>(&format!("<root><nested>{}</nested></root>", $value)) {
+                        // Expected unexpected start element `<nested>`
                         Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
                             r#"Expected `Err(DeError::Custom("missing field `$text`"))`, but got `{:?}`"#,
@@ -216,130 +281,147 @@ mod trivial {
                         ),
                     }
                 }
-            };
+            }
+        };
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Field<T> {
+        value: T,
+    }
+
+    /// Well-formed XML must have a single tag at the root level.
+    /// Any XML tag can be modeled as a struct, and content of this tag are modeled as
+    /// fields of this struct.
+    ///
+    /// Because we want to get access to unnamed content of the tag (usually, this internal
+    /// XML node called `$text`) we use a rename to a special name `$text`
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Trivial<T> {
+        #[serde(rename = "$text")]
+        value: T,
+    }
+
+    /// Tests deserialization from text content in a tag
+    #[rustfmt::skip] // tests formatted in a table
+    mod text {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        in_struct!(i8_:    i8    = "-42", -42i8);
+        in_struct!(i16_:   i16   = "-4200", -4200i16);
+        in_struct!(i32_:   i32   = "-42000000", -42000000i32);
+        in_struct!(i64_:   i64   = "-42000000000000", -42000000000000i64);
+        in_struct!(isize_: isize = "-42000000000000", -42000000000000isize);
+
+        in_struct!(u8_:    u8    = "42", 42u8);
+        in_struct!(u16_:   u16   = "4200", 4200u16);
+        in_struct!(u32_:   u32   = "42000000", 42000000u32);
+        in_struct!(u64_:   u64   = "42000000000000", 42000000000000u64);
+        in_struct!(usize_: usize = "42000000000000", 42000000000000usize);
+
+        serde_if_integer128! {
+            in_struct!(u128_: u128 = "420000000000000000000000000000", 420000000000000000000000000000u128);
+            in_struct!(i128_: i128 = "-420000000000000000000000000000", -420000000000000000000000000000i128);
         }
 
-        /// Tests deserialization from text content in a tag
-        #[rustfmt::skip] // tests formatted in a table
-        mod text {
-            use super::*;
-            use pretty_assertions::assert_eq;
+        in_struct!(f32_: f32 = "4.2", 4.2f32);
+        in_struct!(f64_: f64 = "4.2", 4.2f64);
 
-            in_struct!(i8_:    i8    = "<root>-42</root>", -42i8);
-            in_struct!(i16_:   i16   = "<root>-4200</root>", -4200i16);
-            in_struct!(i32_:   i32   = "<root>-42000000</root>", -42000000i32);
-            in_struct!(i64_:   i64   = "<root>-42000000000000</root>", -42000000000000i64);
-            in_struct!(isize_: isize = "<root>-42000000000000</root>", -42000000000000isize);
+        in_struct!(false_: bool = "false", false);
+        in_struct!(true_: bool = "true", true);
+        in_struct!(char_: char = "r", 'r');
 
-            in_struct!(u8_:    u8    = "<root>42</root>", 42u8);
-            in_struct!(u16_:   u16   = "<root>4200</root>", 4200u16);
-            in_struct!(u32_:   u32   = "<root>42000000</root>", 42000000u32);
-            in_struct!(u64_:   u64   = "<root>42000000000000</root>", 42000000000000u64);
-            in_struct!(usize_: usize = "<root>42000000000000</root>", 42000000000000usize);
+        in_struct!(string: String = "escaped&#x20;string", "escaped string".into());
 
-            serde_if_integer128! {
-                in_struct!(u128_: u128 = "<root>420000000000000000000000000000</root>", 420000000000000000000000000000u128);
-                in_struct!(i128_: i128 = "<root>-420000000000000000000000000000</root>", -420000000000000000000000000000i128);
-            }
-
-            in_struct!(f32_: f32 = "<root>4.2</root>", 4.2f32);
-            in_struct!(f64_: f64 = "<root>4.2</root>", 4.2f64);
-
-            in_struct!(false_: bool = "<root>false</root>", false);
-            in_struct!(true_: bool = "<root>true</root>", true);
-            in_struct!(char_: char = "<root>r</root>", 'r');
-
-            in_struct!(string: String = "<root>escaped&#x20;string</root>", "escaped string".into());
-
-            /// XML does not able to store binary data
-            #[test]
-            fn byte_buf() {
-                match from_str::<Trivial<ByteBuf>>("<root>escaped&#x20;byte_buf</root>") {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
+        /// XML does not able to store binary data
+        #[test]
+        fn byte_buf() {
+            match from_str::<Trivial<ByteBuf>>("<root>escaped&#x20;byte_buf</root>") {
+                Err(DeError::Unsupported(msg)) => {
+                    assert_eq!(msg, "binary data content is not supported by XML format")
                 }
-            }
-
-            /// XML does not able to store binary data
-            #[test]
-            fn bytes() {
-                match from_str::<Trivial<Bytes>>("<root>escaped&#x20;byte_buf</root>") {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
-                }
+                x => panic!(
+                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    x
+                ),
             }
         }
 
-        /// Tests deserialization from CDATA content in a tag.
-        /// CDATA handling similar to text handling except that strings does not unescapes
-        #[rustfmt::skip] // tests formatted in a table
-        mod cdata {
-            use super::*;
-            use pretty_assertions::assert_eq;
-
-            in_struct!(i8_:    i8    = "<root><![CDATA[-42]]></root>", -42i8);
-            in_struct!(i16_:   i16   = "<root><![CDATA[-4200]]></root>", -4200i16);
-            in_struct!(i32_:   i32   = "<root><![CDATA[-42000000]]></root>", -42000000i32);
-            in_struct!(i64_:   i64   = "<root><![CDATA[-42000000000000]]></root>", -42000000000000i64);
-            in_struct!(isize_: isize = "<root><![CDATA[-42000000000000]]></root>", -42000000000000isize);
-
-            in_struct!(u8_:    u8    = "<root><![CDATA[42]]></root>", 42u8);
-            in_struct!(u16_:   u16   = "<root><![CDATA[4200]]></root>", 4200u16);
-            in_struct!(u32_:   u32   = "<root><![CDATA[42000000]]></root>", 42000000u32);
-            in_struct!(u64_:   u64   = "<root><![CDATA[42000000000000]]></root>", 42000000000000u64);
-            in_struct!(usize_: usize = "<root><![CDATA[42000000000000]]></root>", 42000000000000usize);
-
-            serde_if_integer128! {
-                in_struct!(u128_: u128 = "<root><![CDATA[420000000000000000000000000000]]></root>", 420000000000000000000000000000u128);
-                in_struct!(i128_: i128 = "<root><![CDATA[-420000000000000000000000000000]]></root>", -420000000000000000000000000000i128);
-            }
-
-            in_struct!(f32_: f32 = "<root><![CDATA[4.2]]></root>", 4.2f32);
-            in_struct!(f64_: f64 = "<root><![CDATA[4.2]]></root>", 4.2f64);
-
-            in_struct!(false_: bool = "<root><![CDATA[false]]></root>", false);
-            in_struct!(true_: bool = "<root><![CDATA[true]]></root>", true);
-            in_struct!(char_: char = "<root><![CDATA[r]]></root>", 'r');
-
-            // Escape sequences does not processed inside CDATA section
-            in_struct!(string: String = "<root><![CDATA[escaped&#x20;string]]></root>", "escaped&#x20;string".into());
-
-            /// XML does not able to store binary data
-            #[test]
-            fn byte_buf() {
-                match from_str::<Trivial<ByteBuf>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
+        /// XML does not able to store binary data
+        #[test]
+        fn bytes() {
+            match from_str::<Trivial<Bytes>>("<root>escaped&#x20;byte_buf</root>") {
+                Err(DeError::Unsupported(msg)) => {
+                    assert_eq!(msg, "binary data content is not supported by XML format")
                 }
+                x => panic!(
+                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    x
+                ),
             }
+        }
+    }
 
-            /// XML does not able to store binary data
-            #[test]
-            fn bytes() {
-                match from_str::<Trivial<Bytes>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
-                    x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
-                        x
-                    ),
+    /// Tests deserialization from CDATA content in a tag.
+    /// CDATA handling similar to text handling except that strings does not unescapes
+    #[rustfmt::skip] // tests formatted in a table
+    mod cdata {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        in_struct!(i8_:    i8    = "<![CDATA[-42]]>", -42i8);
+        in_struct!(i16_:   i16   = "<![CDATA[-4200]]>", -4200i16);
+        in_struct!(i32_:   i32   = "<![CDATA[-42000000]]>", -42000000i32);
+        in_struct!(i64_:   i64   = "<![CDATA[-42000000000000]]>", -42000000000000i64);
+        in_struct!(isize_: isize = "<![CDATA[-42000000000000]]>", -42000000000000isize);
+
+        in_struct!(u8_:    u8    = "<![CDATA[42]]>", 42u8);
+        in_struct!(u16_:   u16   = "<![CDATA[4200]]>", 4200u16);
+        in_struct!(u32_:   u32   = "<![CDATA[42000000]]>", 42000000u32);
+        in_struct!(u64_:   u64   = "<![CDATA[42000000000000]]>", 42000000000000u64);
+        in_struct!(usize_: usize = "<![CDATA[42000000000000]]>", 42000000000000usize);
+
+        serde_if_integer128! {
+            in_struct!(u128_: u128 = "<![CDATA[420000000000000000000000000000]]>", 420000000000000000000000000000u128);
+            in_struct!(i128_: i128 = "<![CDATA[-420000000000000000000000000000]]>", -420000000000000000000000000000i128);
+        }
+
+        in_struct!(f32_: f32 = "<![CDATA[4.2]]>", 4.2f32);
+        in_struct!(f64_: f64 = "<![CDATA[4.2]]>", 4.2f64);
+
+        in_struct!(false_: bool = "<![CDATA[false]]>", false);
+        in_struct!(true_: bool = "<![CDATA[true]]>", true);
+        in_struct!(char_: char = "<![CDATA[r]]>", 'r');
+
+        // Escape sequences does not processed inside CDATA section
+        in_struct!(string: String = "<![CDATA[escaped&#x20;string]]>", "escaped&#x20;string".into());
+
+        /// XML does not able to store binary data
+        #[test]
+        fn byte_buf() {
+            match from_str::<Trivial<ByteBuf>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
+                Err(DeError::Unsupported(msg)) => {
+                    assert_eq!(msg, "binary data content is not supported by XML format")
                 }
+                x => panic!(
+                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    x
+                ),
+            }
+        }
+
+        /// XML does not able to store binary data
+        #[test]
+        fn bytes() {
+            match from_str::<Trivial<Bytes>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
+                Err(DeError::Unsupported(msg)) => {
+                    assert_eq!(msg, "binary data content is not supported by XML format")
+                }
+                x => panic!(
+                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    x
+                ),
             }
         }
     }
