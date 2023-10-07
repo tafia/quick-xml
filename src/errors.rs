@@ -205,12 +205,6 @@ pub mod serialize {
         /// [`Event::Start`]: crate::events::Event::Start
         /// [`Event::End`]: crate::events::Event::End
         UnexpectedEof,
-        /// This error indicates that [`deserialize_struct`] was called, but there
-        /// is no any XML element in the input. That means that you try to deserialize
-        /// a struct not from an XML element.
-        ///
-        /// [`deserialize_struct`]: serde::de::Deserializer::deserialize_struct
-        ExpectedStart,
         /// An attempt to deserialize to a type, that is not supported by the XML
         /// store at current position, for example, attempt to deserialize `struct`
         /// from attribute or attempt to deserialize binary data.
@@ -245,7 +239,6 @@ pub mod serialize {
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
-                DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
                 #[cfg(feature = "overlapped-lists")]
                 DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),

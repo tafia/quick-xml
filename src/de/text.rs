@@ -32,7 +32,9 @@ use std::borrow::Cow;
 ///   deserializer;
 /// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]
 ///   (this is the difference): text content passed to the deserializer directly;
-/// - structs and maps returns [`DeError::ExpectedStart`];
+/// - structs and maps calls [`Visitor::visit_borrowed_str`] or [`Visitor::visit_string`],
+///   it is responsibility of the type to return an error if it do not able to process
+///   this data;
 /// - enums:
 ///   - the variant name is deserialized as `$text`;
 ///   - the content is deserialized using the same deserializer:
@@ -117,12 +119,15 @@ impl<'de> Deserializer<'de> for TextDeserializer<'de> {
         self,
         _name: &'static str,
         _fields: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        Err(DeError::ExpectedStart)
+        // Deserializer methods are only hints, if deserializer could not satisfy
+        // request, it should return the data that it has. It is responsibility
+        // of a Visitor to return an error if it does not understand the data
+        self.deserialize_str(visitor)
     }
 
     fn deserialize_enum<V>(

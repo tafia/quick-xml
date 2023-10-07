@@ -890,8 +890,14 @@ mod struct_ {
             match from_str::<Elements>(
                 "\nexcess text\t<root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => {}
-                x => panic!("Expected `Err(ExpectedStart)`, but got `{:?}`", x),
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"excess text\", expected struct Elements",
+                ),
+                x => panic!(
+                    r#"Expected `Err(Custom("invalid type: string \"excess text\", expected struct Elements"))`, but got `{:?}`"#,
+                    x
+                ),
             };
         }
 
@@ -901,8 +907,14 @@ mod struct_ {
             match from_str::<Elements>(
                 "<![CDATA[excess cdata]]><root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => {}
-                x => panic!("Expected `Err(ExpectedStart)`, but got `{:?}`", x),
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"excess cdata\", expected struct Elements",
+                ),
+                x => panic!(
+                    r#"Expected `Err(Custom("invalid type: string \"excess cdata\", expected struct Elements"))`, but got `{:?}`"#,
+                    x
+                ),
             };
         }
 

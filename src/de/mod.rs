@@ -2821,7 +2821,13 @@ where
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then out deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
-            DeEvent::Text(_) => Err(DeError::ExpectedStart),
+            // Deserializer methods are only hints, if deserializer could not satisfy
+            // request, it should return the data that it has. It is responsibility
+            // of a Visitor to return an error if it does not understand the data
+            DeEvent::Text(e) => match e.text {
+                Cow::Borrowed(s) => visitor.visit_borrowed_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            },
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
