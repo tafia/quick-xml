@@ -883,17 +883,16 @@ where
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
-    /// with the [`SimpleTypeDeserializer`].
+    /// with this deserializer.
     fn deserialize_newtype_struct<V>(
-        mut self,
+        self,
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let text = self.read_string()?;
-        visitor.visit_newtype_struct(SimpleTypeDeserializer::from_text(text))
+        visitor.visit_newtype_struct(self)
     }
 
     /// This method deserializes a sequence inside of element that itself is a
