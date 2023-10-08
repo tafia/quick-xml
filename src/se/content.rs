@@ -311,7 +311,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Err(DeError::Unsupported(
-            format!("serialization of map types is not supported in `$value` field").into(),
+            "serialization of map types is not supported in `$value` field".into(),
         ))
     }
 
