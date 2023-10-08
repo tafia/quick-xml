@@ -633,7 +633,7 @@ where
     E: EntityResolver,
 {
     type Error = DeError;
-    type Variant = MapValueVariantAccess<'de, 'm, R, E>;
+    type Variant = MapValueVariantAccess<'de, 'd, 'm, R, E>;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
     where
@@ -655,25 +655,27 @@ where
         Ok((
             name,
             MapValueVariantAccess {
-                de: self.map.de,
+                map: self.map,
                 is_text,
             },
         ))
     }
 }
 
-struct MapValueVariantAccess<'de, 'd, R, E>
+struct MapValueVariantAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    de: &'d mut Deserializer<'de, R, E>,
+    /// Access to the map that created this enum accessor. Gives access to the
+    /// context, such as list of fields, that current map known about.
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
     /// `true` if variant should be deserialized from a textual content
     /// and `false` if from tag
     is_text: bool,
 }
 
-impl<'de, 'd, R, E> de::VariantAccess<'de> for MapValueVariantAccess<'de, 'd, R, E>
+impl<'de, 'd, 'm, R, E> de::VariantAccess<'de> for MapValueVariantAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -681,9 +683,9 @@ where
     type Error = DeError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        match self.de.next()? {
+        match self.map.de.next()? {
             // Consume subtree
-            DeEvent::Start(e) => self.de.read_to_end(e.name()),
+            DeEvent::Start(e) => self.map.de.read_to_end(e.name()),
             // Does not needed to deserialize using SimpleTypeDeserializer, because
             // it returns `()` when `deserialize_unit()` is requested
             DeEvent::Text(_) => Ok(()),
@@ -697,13 +699,18 @@ where
         T: DeserializeSeed<'de>,
     {
         if self.is_text {
-            match self.de.next()? {
+            match self.map.de.next()? {
                 DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
                 // SAFETY: the other events are filtered in `variant_seed()`
                 _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
-            seed.deserialize(&mut *self.de)
+            seed.deserialize(MapValueDeserializer {
+                map: self.map,
+                // Because element name already was either mapped to a field name,
+                // or to a variant name, we should not treat it as variable
+                fixed_name: true,
+            })
         }
     }
 
@@ -712,7 +719,7 @@ where
         V: Visitor<'de>,
     {
         if self.is_text {
-            match self.de.next()? {
+            match self.map.de.next()? {
                 DeEvent::Text(e) => {
                     SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
                 }
@@ -720,7 +727,13 @@ where
                 _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
-            self.de.deserialize_tuple(len, visitor)
+            MapValueDeserializer {
+                map: self.map,
+                // Because element name already was either mapped to a field name,
+                // or to a variant name, we should not treat it as variable
+                fixed_name: true,
+            }
+            .deserialize_tuple(len, visitor)
         }
     }
 
@@ -732,8 +745,8 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.de.next()? {
-            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
+        match self.map.de.next()? {
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
             DeEvent::Text(e) => {
                 SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
             }
