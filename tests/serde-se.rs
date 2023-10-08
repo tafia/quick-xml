@@ -475,6 +475,156 @@ mod without_root {
                         string: "newtype text",
                     }
                     => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"));
+                /// Tests the enum type that is type of field of a struct.
+                /// The tests above does not cover those variants, because we use
+                /// different serializers for enums on top level and which represents
+                /// a field.
+                ///
+                /// According to general rules for structs, we should write `<field>` tag
+                /// for a `field` field. Because value of that field is an enum, we should
+                /// somehow know what the variant was written in order to deserialize it,
+                /// but `$text` variant say us that we should write enum content using
+                /// `xs:simpleType` serialization.
+                ///
+                /// Enum representation:
+                ///
+                /// |Kind   |In normal field `field`   |
+                /// |-------|--------------------------|
+                /// |Unit   |`<field/>`                |
+                /// |Newtype|`<field>42</field>`       |
+                /// |Tuple  |`<field>42 answer</field>`|
+                /// |Struct |Err(Unsupported)          |
+                mod normal_field {
+                    use super::*;
+                    use super::{Newtype, Struct, Tuple, Unit};
+                    use pretty_assertions::assert_eq;
+
+                    // `Root::field` contains text content, and because text content is empty,
+                    // `<field/>` is written
+                    serialize_as!(unit: Root { field: Unit::Text } => "<Root><field/></Root>");
+                    serialize_as!(newtype:
+                        Root { field: Newtype::Text("newtype text") }
+                        => "<Root><field>newtype text</field></Root>");
+                    serialize_as!(tuple:
+                        Root { field: Tuple::Text(42.0, "tuple-text".into()) }
+                        => "<Root><field>42 tuple-text</field></Root>");
+                    // Note, that spaces in strings, even escaped, would represent
+                    // the list item delimiters. Non-symmetric serialization follows
+                    // tradition: the XmlBeans Java library have the same behavior.
+                    // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                    serialize_as_only!(tuple_with_spaces:
+                        Root { field: Tuple::Text(42.0, "tuple text".into()) }
+                        => "<Root><field>42 tuple&#32;text</field></Root>");
+                    err!(struct_:
+                        Root { field: Struct::Text {
+                            float: 42.0,
+                            string: "answer"
+                        }}
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"),
+                        "<Root");
+                }
+
+                /// The same tests as in `normal_field`, but struct field renamed to `$value`.
+                ///
+                /// `$value` fields means, that struct field name won't be written, but instead
+                /// the whole representation of a field is dependent on its type. Its type is
+                /// an enum which variant tag is not written because variant content represents
+                /// text (that is what `$text` variant means). So the enum variant would be
+                /// serialized as a text, and because struct field itself not written, we get
+                /// the text wrapped in the `<Root>` tags.
+                ///
+                /// Enum representation:
+                ///
+                /// |Kind   |Top-level and in `$value` field|
+                /// |-------|-------------------------------|
+                /// |Unit   |_(empty)_                      |
+                /// |Newtype|`42`                           |
+                /// |Tuple  |`42 answer`                    |
+                /// |Struct |Err(Unsupported)               |
+                mod value_field {
+                    use super::*;
+                    use super::{Newtype, Struct, Tuple, Unit};
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    struct Root<T> {
+                        #[serde(rename = "$value")]
+                        field: T,
+                    }
+
+                    // Without #[serde(default)] on a field we cannot deserialize value
+                    // back, because there is no signs in the XML that `field` was written.
+                    // If we write the usual enum, then variant name would be written as
+                    // a tag, but because variant is a `$text`, nothing is written
+                    serialize_as_only!(unit: Root { field: Unit::Text } => "<Root/>");
+                    serialize_as!(newtype:
+                        Root { field: Newtype::Text("newtype text") }
+                        => "<Root>newtype text</Root>");
+                    serialize_as!(tuple:
+                        Root { field: Tuple::Text(42.0, "tuple-text".into()) }
+                        => "<Root>42 tuple-text</Root>");
+                    // Note, that spaces in strings, even escaped, would represent
+                    // the list item delimiters. Non-symmetric serialization follows
+                    // tradition: the XmlBeans Java library have the same behavior.
+                    // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
+                    serialize_as_only!(tuple_with_spaces:
+                        Root { field: Tuple::Text(42.0, "tuple text".into()) }
+                        => "<Root>42 tuple&#32;text</Root>");
+                    err!(struct_:
+                        Root { field: Struct::Text {
+                            float: 42.0,
+                            string: "answer"
+                        }}
+                        => Unsupported("cannot serialize `$text` struct variant of `Struct` enum"),
+                        "<Root");
+                }
+
+                /// The same tests as in `normal_field`, but struct field renamed to `$text`.
+                ///
+                /// Enum representation:
+                ///
+                /// |Kind   |In `$text` field     |
+                /// |-------|---------------------|
+                /// |Unit   |_(empty)_            |
+                /// |Newtype|Err(Unsupported) [^1]|
+                /// |Tuple  |Err(Unsupported) [^1]|
+                /// |Struct |Err(Unsupported)     |
+                ///
+                /// [^1]: Unfortunately, cannot be represented, because the possible
+                ///       representation (`42` and `42 answer`) will clash with
+                ///       representation of normal unit variant in normal field
+                mod text_field {
+                    use super::*;
+                    use super::{Newtype, Struct, Tuple, Unit};
+                    use pretty_assertions::assert_eq;
+
+                    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+                    struct Root<T> {
+                        #[serde(rename = "$text")]
+                        field: T,
+                    }
+
+                    // Without #[serde(default)] on a field we cannot deserialize value
+                    // back, because there is no signs in the XML that `field` was written.
+                    // If we write the usual enum, then variant name would be written as
+                    // a tag, but because variant is a `$text`, nothing is written
+                    serialize_as_only!(unit: Root { field: Unit::Text } => "<Root/>");
+                    err!(newtype:
+                        Root { field: Newtype::Text("newtype text") }
+                        => Unsupported("cannot serialize enum newtype variant `Newtype::$text` as an attribute or text content value"),
+                        "<Root");
+                    err!(tuple:
+                        Root { field: Tuple::Text(42.0, "tuple-text".into()) }
+                        => Unsupported("cannot serialize enum tuple variant `Tuple::$text` as an attribute or text content value"),
+                        "<Root");
+                    err!(struct_:
+                        Root { field: Struct::Text {
+                            float: 42.0,
+                            string: "answer"
+                        }}
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as an attribute or text content value"),
+                        "<Root");
+                }
             }
 
             /// Tests the enum type that is type of field of a struct.
