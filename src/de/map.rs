@@ -12,13 +12,13 @@ use crate::{
     name::QName,
 };
 use serde::de::value::BorrowedStrDeserializer;
-use serde::de::{self, DeserializeSeed, SeqAccess, Visitor};
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
 /// Defines a source that should be used to deserialize a value in the next call
-/// to [`next_value_seed()`](de::MapAccess::next_value_seed)
+/// to [`next_value_seed()`](MapAccess::next_value_seed)
 #[derive(Debug, PartialEq)]
 enum ValueSource {
     /// Source are not specified, because [`next_key_seed()`] not yet called.
@@ -28,8 +28,8 @@ enum ValueSource {
     /// Attempt to call [`next_value_seed()`] while accessor in this state would
     /// return a [`DeError::KeyNotRead`] error.
     ///
-    /// [`next_key_seed()`]: de::MapAccess::next_key_seed
-    /// [`next_value_seed()`]: de::MapAccess::next_value_seed
+    /// [`next_key_seed()`]: MapAccess::next_key_seed
+    /// [`next_value_seed()`]: MapAccess::next_value_seed
     Unknown,
     /// Next value should be deserialized from an attribute value; value is located
     /// at specified span.
@@ -62,7 +62,7 @@ enum ValueSource {
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
     /// the whole element and how is will be done determined by the value deserializer.
-    /// The [`MapAccess`] do not consume any events in that state.
+    /// The [`ElementMapAccess`] do not consume any events in that state.
     ///
     /// Because in that state any encountered `<tag>` is mapped to the [`VALUE_KEY`]
     /// field, it is possible to use tag name as an enum discriminator, so `enum`s
@@ -105,7 +105,7 @@ enum ValueSource {
     /// [`next()`]: Deserializer::next()
     /// [`name()`]: BytesStart::name()
     /// [`Text`]: Self::Text
-    /// [list of known fields]: MapAccess::fields
+    /// [list of known fields]: ElementMapAccess::fields
     Content,
     /// Next value should be deserialized from an element with a dedicated name.
     /// If deserialized type is a sequence, then that sequence will collect all
@@ -118,7 +118,7 @@ enum ValueSource {
     /// When in this state, next event, returned by [`next()`], will be a [`Start`],
     /// which represents both a key, and a value. Value would be deserialized from
     /// the whole element and how is will be done determined by the value deserializer.
-    /// The [`MapAccess`] do not consume any events in that state.
+    /// The [`ElementMapAccess`] do not consume any events in that state.
     ///
     /// An illustration below shows, what data is used to deserialize key and value:
     /// ```xml
@@ -164,16 +164,16 @@ enum ValueSource {
 ///   internal buffer of deserializer (i.e. deserializer itself) or an input
 ///   (in that case it is possible to approach zero-copy deserialization).
 ///
-/// - `'a` lifetime represents a parent deserializer, which could own the data
+/// - `'d` lifetime represents a parent deserializer, which could own the data
 ///   buffer.
-pub(crate) struct MapAccess<'de, 'a, R, E>
+pub(crate) struct ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Tag -- owner of attributes
     start: BytesStart<'de>,
-    de: &'a mut Deserializer<'de, R, E>,
+    de: &'d mut Deserializer<'de, R, E>,
     /// State of the iterator over attributes. Contains the next position in the
     /// inner `start` slice, from which next attribute should be parsed.
     iter: IterState,
@@ -192,18 +192,18 @@ where
     has_value_field: bool,
 }
 
-impl<'de, 'a, R, E> MapAccess<'de, 'a, R, E>
+impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    /// Create a new MapAccess
+    /// Create a new ElementMapAccess
     pub fn new(
-        de: &'a mut Deserializer<'de, R, E>,
+        de: &'d mut Deserializer<'de, R, E>,
         start: BytesStart<'de>,
         fields: &'static [&'static str],
     ) -> Result<Self, DeError> {
-        Ok(MapAccess {
+        Ok(Self {
             de,
             iter: IterState::new(start.name().as_ref().len(), false),
             start,
@@ -214,7 +214,7 @@ where
     }
 }
 
-impl<'de, 'a, R, E> de::MapAccess<'de> for MapAccess<'de, 'a, R, E>
+impl<'de, 'd, R, E> MapAccess<'de> for ElementMapAccess<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -289,9 +289,14 @@ where
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
-                DeEvent::End(e) if e.name() == self.start.name() => Ok(None),
-                // This is a unmatched closing tag, so the XML is invalid
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                // The matching tag name is guaranteed by the reader if our
+                // deserializer implementation is correct
+                DeEvent::End(e) => {
+                    debug_assert_eq!(self.start.name(), e.name());
+                    // Consume End
+                    self.de.next()?;
+                    Ok(None)
+                }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),
@@ -403,7 +408,7 @@ macro_rules! forward {
 ///   with the same deserializer;
 /// - sequences, tuples and tuple structs are deserialized by iterating within the
 ///   parent tag and deserializing each tag or text content using [`SeqItemDeserializer`];
-/// - structs and maps are deserialized using new instance of [`MapAccess`];
+/// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
 ///     a `$text` variant. Enum content is deserialized from the text using
@@ -419,14 +424,14 @@ macro_rules! forward {
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct MapValueDeserializer<'de, 'a, 'm, R, E>
+struct MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
     /// Determines, should [`Deserializer::read_string_impl()`] expand the second
     /// level of tags or not.
     ///
@@ -504,7 +509,7 @@ where
     allow_start: bool,
 }
 
-impl<'de, 'a, 'm, R, E> MapValueDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -520,7 +525,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for MapValueDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for MapValueDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -543,11 +548,14 @@ where
 
     forward!(deserialize_any);
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self.map.de, self, visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
@@ -582,7 +590,7 @@ where
                 // Clone is cheap if event borrows from the input
                 DeEvent::Start(e) => TagFilter::Include(e.clone()),
                 // SAFETY: we use that deserializer with `allow_start == true`
-                // only from the `MapAccess::next_value_seed` and only when we
+                // only from the `ElementMapAccess::next_value_seed` and only when we
                 // peeked `Start` event
                 _ => unreachable!(),
             }
@@ -596,11 +604,6 @@ where
             map: self.map,
             filter,
         })
-    }
-
-    #[inline]
-    fn is_human_readable(&self) -> bool {
-        self.map.de.is_human_readable()
     }
 }
 
@@ -693,14 +696,14 @@ impl<'de> TagFilter<'de> {
 ///
 /// [`Text`]: crate::events::Event::Text
 /// [`CData`]: crate::events::Event::CData
-struct MapValueSeqAccess<'de, 'a, 'm, R, E>
+struct MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Accessor to a map that creates this accessor and to a deserializer for
     /// a sequence items.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
     /// Filter that determines whether a tag is a part of this sequence.
     ///
     /// When feature [`overlapped-lists`] is not activated, iteration will stop
@@ -720,7 +723,7 @@ where
 }
 
 #[cfg(feature = "overlapped-lists")]
-impl<'de, 'a, 'm, R, E> Drop for MapValueSeqAccess<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> Drop for MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -730,7 +733,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> SeqAccess<'de> for MapValueSeqAccess<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> SeqAccess<'de> for MapValueSeqAccess<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -810,7 +813,7 @@ where
 ///     contains something else other than text, an error is returned, but if it
 ///     contains a text and something else (for example, `<item>text<tag/></item>`),
 ///     then the trail is just ignored;
-/// - structs and maps are deserialized using new [`MapAccess`];
+/// - structs and maps are deserialized using new [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
 ///     a `$text` variant. Enum content is deserialized from the text using
@@ -826,17 +829,17 @@ where
 ///
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct SeqItemDeserializer<'de, 'a, 'm, R, E>
+struct SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
-    map: &'m mut MapAccess<'de, 'a, R, E>,
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
 }
 
-impl<'de, 'a, 'm, R, E> SeqItemDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -852,7 +855,7 @@ where
     }
 }
 
-impl<'de, 'a, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'a, 'm, R, E>
+impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'd, 'm, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -875,25 +878,27 @@ where
 
     forward!(deserialize_any);
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DeError>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self.map.de, self, visitor)
+        match self.map.de.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
-    /// with the [`SimpleTypeDeserializer`].
+    /// with this deserializer.
     fn deserialize_newtype_struct<V>(
-        mut self,
+        self,
         _name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        let text = self.read_string()?;
-        visitor.visit_newtype_struct(SimpleTypeDeserializer::from_text(text))
+        visitor.visit_newtype_struct(self)
     }
 
     /// This method deserializes a sequence inside of element that itself is a
@@ -914,11 +919,6 @@ where
     {
         let text = self.read_string()?;
         SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
-    }
-
-    #[inline]
-    fn is_human_readable(&self) -> bool {
-        self.map.de.is_human_readable()
     }
 }
 

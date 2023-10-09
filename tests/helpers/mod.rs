@@ -17,10 +17,7 @@ where
 
     // If type was deserialized, the whole XML document should be consumed
     if let Ok(_) = result {
-        match <()>::deserialize(&mut de) {
-            Err(DeError::UnexpectedEof) => (),
-            e => panic!("Expected end `UnexpectedEof`, but got {:?}", e),
-        }
+        assert!(de.is_empty(), "the whole XML document should be consumed");
     }
 
     result

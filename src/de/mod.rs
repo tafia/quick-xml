@@ -1954,16 +1954,6 @@ macro_rules! deserialize_primitives {
     };
 }
 
-macro_rules! deserialize_option {
-    ($de:expr, $deserializer:ident, $visitor:ident) => {
-        match $de.peek()? {
-            DeEvent::Text(t) if t.is_empty() => $visitor.visit_none(),
-            DeEvent::Eof => $visitor.visit_none(),
-            _ => $visitor.visit_some($deserializer),
-        }
-    };
-}
-
 mod key;
 mod map;
 mod resolver;
@@ -1974,6 +1964,7 @@ pub use crate::errors::serialize::DeError;
 pub use resolver::{EntityResolver, NoEntityResolver};
 
 use crate::{
+    de::map::ElementMapAccess,
     encoding::Decoder,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
@@ -2124,6 +2115,11 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
         }
     }
 
+    /// Returns `true` if all events was consumed
+    fn is_empty(&self) -> bool {
+        matches!(self.lookahead, Ok(PayloadEvent::Eof))
+    }
+
     /// Read next event and put it in lookahead, return the current lookahead
     #[inline(always)]
     fn next_impl(&mut self) -> Result<PayloadEvent<'i>, DeError> {
@@ -2220,8 +2216,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 let result1 = self.reader.read_to_end(name);
                 let result2 = self.reader.read_to_end(name);
 
-                // In case of error `next` returns `Eof`
-                self.lookahead = self.reader.next();
+                // In case of error `next_impl` returns `Eof`
+                let _ = self.next_impl();
                 result1?;
                 result2?;
             }
@@ -2229,13 +2225,13 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             // Because this is end event, we already consume the whole tree, so
             // nothing to do, just update lookahead
             Ok(PayloadEvent::End(ref e)) if e.name() == name => {
-                self.lookahead = self.reader.next();
+                let _ = self.next_impl();
             }
             Ok(_) => {
                 let result = self.reader.read_to_end(name);
 
-                // In case of error `next` returns `Eof`
-                self.lookahead = self.reader.next();
+                // In case of error `next_impl` returns `Eof`
+                let _ = self.next_impl();
                 result?;
             }
             // Read next lookahead event, unpack error from the current lookahead
@@ -2381,6 +2377,19 @@ where
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
         }
+    }
+
+    /// Returns `true` if all events was consumed.
+    pub fn is_empty(&self) -> bool {
+        #[cfg(feature = "overlapped-lists")]
+        if self.read.is_empty() {
+            return self.reader.is_empty();
+        }
+        #[cfg(not(feature = "overlapped-lists"))]
+        if self.peek.is_none() {
+            return self.reader.is_empty();
+        }
+        false
     }
 
     /// Set the maximum number of events that could be skipped during deserialization
@@ -2794,13 +2803,7 @@ where
         V: Visitor<'de>,
     {
         match self.next()? {
-            DeEvent::Start(e) => {
-                let name = e.name().as_ref().to_vec();
-                let map = map::MapAccess::new(self, e, fields)?;
-                let value = visitor.visit_map(map)?;
-                self.read_to_end(QName(&name))?;
-                Ok(value)
-            }
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
             DeEvent::Text(_) => Err(DeError::ExpectedStart),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
@@ -2875,7 +2878,11 @@ where
     where
         V: Visitor<'de>,
     {
-        deserialize_option!(self, self, visitor)
+        match self.peek()? {
+            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Eof => visitor.visit_none(),
+            _ => visitor.visit_some(self),
+        }
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -2906,7 +2913,11 @@ where
         T: DeserializeSeed<'de>,
     {
         match self.peek()? {
-            DeEvent::Eof => Ok(None),
+            DeEvent::Eof => {
+                // We need to consume event in order to self.is_empty() worked
+                self.next()?;
+                Ok(None)
+            }
 
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),

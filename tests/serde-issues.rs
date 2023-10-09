@@ -5,7 +5,8 @@
 use pretty_assertions::assert_eq;
 use quick_xml::de::from_str;
 use quick_xml::se::{to_string, to_string_with_root};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::de::{Deserializer, IgnoredAny};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Regression tests for https://github.com/tafia/quick-xml/issues/252.
@@ -393,10 +394,13 @@ fn issue580() {
     #[derive(Debug, PartialEq, Eq)]
     struct Item;
     impl Item {
-        fn parse<'de, D>(_deserializer: D) -> Result<Self, D::Error>
+        fn parse<'de, D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
+            // We should consume something from the deserializer, otherwise this
+            // leads to infinity loop
+            IgnoredAny::deserialize(deserializer)?;
             Ok(Item)
         }
     }
