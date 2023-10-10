@@ -369,6 +369,14 @@ mod without_root {
     mod enum_ {
         use super::*;
 
+        /// Enum representation:
+        ///
+        /// |Kind   |Top-level and in `$value` field          |
+        /// |-------|-----------------------------------------|
+        /// |Unit   |`<Unit/>`                                |
+        /// |Newtype|`<Newtype>42</Newtype>`                  |
+        /// |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |
+        /// |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|
         mod externally_tagged {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -432,7 +440,16 @@ mod without_root {
                         <string>answer</string>\
                     </Text>");
 
-            /// Test serialization of the specially named variant `$text`
+            /// Test serialization of the specially named variant `$text`.
+            ///
+            /// Enum representation:
+            ///
+            /// |Kind   |Top-level, in `$text` and `$value` fields|
+            /// |-------|-----------------------------------------|
+            /// |Unit   |_(empty)_                                |
+            /// |Newtype|`42`                                     |
+            /// |Tuple  |`42 answer`                              |
+            /// |Struct |Err(Unsupported)                         |
             mod text_variant {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -488,12 +505,16 @@ mod without_root {
                 ///
                 /// Enum representation:
                 ///
-                /// |Kind   |In normal field `field`   |
-                /// |-------|--------------------------|
-                /// |Unit   |`<field/>`                |
-                /// |Newtype|`<field>42</field>`       |
-                /// |Tuple  |`<field>42 answer</field>`|
-                /// |Struct |Err(Unsupported)          |
+                /// |Kind   |In normal field `field`|
+                /// |-------|-----------------------|
+                /// |Unit   |`<field/>`             |
+                /// |Newtype|Err(Unsupported) [^1]  |
+                /// |Tuple  |Err(Unsupported) [^1]  |
+                /// |Struct |Err(Unsupported)       |
+                ///
+                /// [^1]: Unfortunately, cannot be represented, because the possible representation
+                ///       (`<field>42</field>` and `<field>42 answer</field>`) will clash with
+                ///       representation of normal unit variant in normal field
                 mod normal_field {
                     use super::*;
                     use super::{Newtype, Struct, Tuple, Unit};
@@ -502,19 +523,14 @@ mod without_root {
                     // `Root::field` contains text content, and because text content is empty,
                     // `<field/>` is written
                     serialize_as!(unit: Root { field: Unit::Text } => "<Root><field/></Root>");
-                    serialize_as!(newtype:
+                    err!(newtype:
                         Root { field: Newtype::Text("newtype text") }
-                        => "<Root><field>newtype text</field></Root>");
-                    serialize_as!(tuple:
+                        => Unsupported("cannot serialize enum newtype variant `Newtype::$text`"),
+                        "<Root");
+                    err!(tuple:
                         Root { field: Tuple::Text(42.0, "tuple-text".into()) }
-                        => "<Root><field>42 tuple-text</field></Root>");
-                    // Note, that spaces in strings, even escaped, would represent
-                    // the list item delimiters. Non-symmetric serialization follows
-                    // tradition: the XmlBeans Java library have the same behavior.
-                    // See also <https://stackoverflow.com/questions/45494204/escape-space-in-xml-xslist>
-                    serialize_as_only!(tuple_with_spaces:
-                        Root { field: Tuple::Text(42.0, "tuple text".into()) }
-                        => "<Root><field>42 tuple&#32;text</field></Root>");
+                        => Unsupported("cannot serialize enum tuple variant `Tuple::$text`"),
+                        "<Root");
                     err!(struct_:
                         Root { field: Struct::Text {
                             float: 42.0,
@@ -636,77 +652,43 @@ mod without_root {
             /// field we should associate the XML node that we see. To do that we
             /// mark field by a special name `$value` ([`VALUE_KEY`]) and that is
             /// tested in the `value_field` module.
+            ///
+            /// Enum representation:
+            ///
+            /// |Kind   |In normal field      |
+            /// |-------|---------------------|
+            /// |Unit   |`<field>Unit</field>`|
+            /// |Newtype|Err(Unsupported)     |
+            /// |Tuple  |Err(Unsupported)     |
+            /// |Struct |Err(Unsupported)     |
             mod normal_field {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
-                serialize_as_only!(unit:
+                serialize_as!(unit:
                     Root { field: ExternallyTagged::Unit }
                     => "<Root>\
-                            <Unit/>\
+                            <field>Unit</field>\
                         </Root>");
-                serialize_as_only!(newtype:
+                err!(newtype:
                     Root { field: ExternallyTagged::Newtype(true) }
-                    => "<Root>\
-                            <Newtype>true</Newtype>\
-                        </Root>");
-                serialize_as_only!(tuple:
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype`"),
+                    "<Root");
+                err!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
-                    => "<Root>\
-                            <Tuple>42</Tuple>\
-                            <Tuple>answer</Tuple>\
-                        </Root>");
-                serialize_as_only!(struct_:
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple`"),
+                    "<Root");
+                err!(struct_:
                     Root { field: ExternallyTagged::Struct {
                         float: 42.0,
                         string: "answer"
                     }}
-                    => "<Root>\
-                            <Struct>\
-                                <float>42</float>\
-                                <string>answer</string>\
-                            </Struct>\
-                        </Root>");
-                serialize_as_only!(nested_struct:
-                    Root { field: ExternallyTagged::Holder {
-                        nested: Nested { float: 42.0 },
-                        string: "answer",
-                    }}
-                    => "<Root>\
-                            <Holder>\
-                                <nested>\
-                                    <float>42</float>\
-                                </nested>\
-                                <string>answer</string>\
-                            </Holder>\
-                        </Root>");
-                serialize_as_only!(flatten_struct:
-                    Root { field: ExternallyTaggedWorkaround::Flatten {
-                        nested: Nested { float: 42.0 },
-                        string: "answer",
-                    }}
-                    => "<Root>\
-                            <Flatten>\
-                                <float>42</float>\
-                                <string>answer</string>\
-                            </Flatten>\
-                        </Root>");
-                serialize_as_only!(empty_struct:
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct`"),
+                    "<Root");
+                err!(empty_struct:
                     Root { field: ExternallyTagged::Empty {} }
-                    => "<Root>\
-                            <Empty/>\
-                        </Root>");
-                serialize_as_only!(text:
-                    Root { field: ExternallyTagged::Text {
-                        float: 42.0,
-                        string: "answer"
-                    }}
-                    => "<Root>\
-                            <Text>\
-                                42\
-                                <string>answer</string>\
-                            </Text>\
-                        </Root>");
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty`"),
+                    "<Root");
             }
 
             /// The same tests as in `normal_field`, but enum at the second nesting
@@ -725,92 +707,44 @@ mod without_root {
                     inner: T,
                 }
 
-                serialize_as_only!(unit:
+                serialize_as!(unit:
                     Root { field: Inner { inner: ExternallyTagged::Unit } }
                     => "<Root>\
                             <field>\
-                                <Unit/>\
+                                <inner>Unit</inner>\
                             </field>\
                         </Root>");
-                serialize_as_only!(newtype:
+                err!(newtype:
                     Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
-                    => "<Root>\
-                            <field>\
-                                <Newtype>true</Newtype>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(tuple:
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype`"),
+                    "<Root");
+                err!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
-                    => "<Root>\
-                            <field>\
-                                <Tuple>42</Tuple>\
-                                <Tuple>answer</Tuple>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(struct_:
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple`"),
+                    "<Root");
+                err!(struct_:
                     Root { field: Inner { inner: ExternallyTagged::Struct {
                         float: 42.0,
                         string: "answer"
                     }}}
-                    => "<Root>\
-                            <field>\
-                                <Struct>\
-                                    <float>42</float>\
-                                    <string>answer</string>\
-                                </Struct>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(nested_struct:
-                    Root { field: Inner { inner: ExternallyTagged::Holder {
-                        nested: Nested { float: 42.0 },
-                        string: "answer",
-                    }}}
-                    => "<Root>\
-                            <field>\
-                                <Holder>\
-                                    <nested>\
-                                        <float>42</float>\
-                                    </nested>\
-                                    <string>answer</string>\
-                                </Holder>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(flatten_struct:
-                    Root { field: Inner { inner: ExternallyTaggedWorkaround::Flatten {
-                        nested: Nested { float: 42.0 },
-                        string: "answer",
-                    }}}
-                    => "<Root>\
-                            <field>\
-                                <Flatten>\
-                                    <float>42</float>\
-                                    <string>answer</string>\
-                                </Flatten>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(empty_struct:
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct`"),
+                    "<Root");
+                err!(empty_struct:
                     Root { field: Inner { inner: ExternallyTagged::Empty {} } }
-                    => "<Root>\
-                            <field>\
-                                <Empty/>\
-                            </field>\
-                        </Root>");
-                serialize_as_only!(text:
-                    Root { field: Inner { inner: ExternallyTagged::Text {
-                        float: 42.0,
-                        string: "answer"
-                    }}}
-                    => "<Root>\
-                            <field>\
-                                <Text>\
-                                    42\
-                                    <string>answer</string>\
-                                </Text>\
-                            </field>\
-                        </Root>");
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty`"),
+                    "<Root");
             }
 
             /// The same tests as in `normal_field`, but enum field renamed to `$value`.
+            ///
+            /// Enum representation:
+            ///
+            /// |Kind   |Top-level and in `$value` field          |
+            /// |-------|-----------------------------------------|
+            /// |Unit   |`<Unit/>`                                |
+            /// |Newtype|`<Newtype>42</Newtype>`                  |
+            /// |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |
+            /// |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|
             mod value_field {
                 use super::*;
                 use pretty_assertions::assert_eq;
@@ -993,6 +927,15 @@ mod without_root {
             /// The same tests as in `normal_field`, but enum field renamed to `$text`.
             ///
             /// Text representation of enum is possible only for unit variants.
+            ///
+            /// Enum representation:
+            ///
+            /// |Kind   |In `$text` field|
+            /// |-------|----------------|
+            /// |Unit   |`Unit`          |
+            /// |Newtype|Err(Unsupported)|
+            /// |Tuple  |Err(Unsupported)|
+            /// |Struct |Err(Unsupported)|
             mod text_field {
                 use super::*;
                 use pretty_assertions::assert_eq;

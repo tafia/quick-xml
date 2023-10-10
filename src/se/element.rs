@@ -670,12 +670,12 @@ mod tests {
         serialize_as!(unit_struct: Unit => "<root/>");
         serialize_as!(unit_struct_escaped: UnitEscaped => "<root/>");
 
-        serialize_as!(enum_unit: Enum::Unit => "<Unit/>");
-        err!(enum_unit_escaped: Enum::UnitEscaped
-            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+        serialize_as!(enum_unit: Enum::Unit => "<root>Unit</root>");
+        serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<root>&lt;&quot;&amp;&apos;&gt;</root>");
 
         serialize_as!(newtype: Newtype(42) => "<root>42</root>");
-        serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+        err!(enum_newtype: Enum::Newtype(42)
+            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype`"));
 
         serialize_as!(seq: vec![1, 2, 3]
             => "<root>1</root>\
@@ -689,9 +689,8 @@ mod tests {
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\
                 <root>42</root>");
-        serialize_as!(enum_tuple: Enum::Tuple("first", 42)
-            => "<Tuple>first</Tuple>\
-                <Tuple>42</Tuple>");
+        err!(enum_tuple: Enum::Tuple("first", 42)
+            => Unsupported("cannot serialize enum tuple variant `Enum::Tuple`"));
 
         serialize_as!(map: BTreeMap::from([("_1", 2), ("_3", 4)])
             => "<root>\
@@ -704,12 +703,8 @@ mod tests {
                     <val>42</val>\
                     <val>42</val>\
                 </root>");
-        serialize_as!(enum_struct: Enum::Struct { key: "answer", val: (42, 42) }
-            => "<Struct>\
-                    <key>answer</key>\
-                    <val>42</val>\
-                    <val>42</val>\
-                </Struct>");
+        err!(enum_struct: Enum::Struct { key: "answer", val: (42, 42) }
+            => Unsupported("cannot serialize enum struct variant `Enum::Struct`"));
 
         /// Special field name `$text` should be serialized as text content.
         /// Sequences serialized as an `xs:list` content
@@ -1216,12 +1211,8 @@ mod tests {
             serialize_as!(struct_after: AttributesAfter { key: "answer", val: 42 }
                 => r#"<root val="42"><key>answer</key></root>"#);
 
-            serialize_as!(enum_: Enum::Attributes { key: "answer", val: (42, 42) }
-                => r#"<Attributes key="answer" val="42 42"/>"#);
-            serialize_as!(enum_before: Enum::AttributesBefore { key: "answer", val: 42 }
-                => r#"<AttributesBefore key="answer"><val>42</val></AttributesBefore>"#);
-            serialize_as!(enum_after: Enum::AttributesAfter { key: "answer", val: 42 }
-                => r#"<AttributesAfter val="42"><key>answer</key></AttributesAfter>"#);
+            err!(enum_: Enum::Attributes { key: "answer", val: (42, 42) }
+                => Unsupported("cannot serialize enum struct variant `Enum::Attributes`"));
 
             /// Test for https://github.com/tafia/quick-xml/issues/252
             mod optional {
@@ -1385,12 +1376,12 @@ mod tests {
         serialize_as!(unit_struct: Unit => "<root/>");
         serialize_as!(unit_struct_escaped: UnitEscaped => "<root/>");
 
-        serialize_as!(enum_unit: Enum::Unit => "<Unit/>");
-        err!(enum_unit_escaped: Enum::UnitEscaped
-            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+        serialize_as!(enum_unit: Enum::Unit => "<root>Unit</root>");
+        serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<root>&lt;&quot;&amp;&apos;&gt;</root>");
 
         serialize_as!(newtype: Newtype(42) => "<root>42</root>");
-        serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+        err!(enum_newtype: Enum::Newtype(42)
+            => Unsupported("cannot serialize enum newtype variant `Enum::Newtype`"));
 
         serialize_as!(seq: vec![1, 2, 3]
             => "<root>1</root>\n\
@@ -1404,9 +1395,8 @@ mod tests {
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "<root>first</root>\n\
                 <root>42</root>");
-        serialize_as!(enum_tuple: Enum::Tuple("first", 42)
-            => "<Tuple>first</Tuple>\n\
-                <Tuple>42</Tuple>");
+        err!(enum_tuple: Enum::Tuple("first", 42)
+            => Unsupported("cannot serialize enum tuple variant `Enum::Tuple`"));
 
         serialize_as!(map: BTreeMap::from([("_1", 2), ("_3", 4)])
             => "<root>\n  \
@@ -1419,12 +1409,8 @@ mod tests {
                     <val>42</val>\n  \
                     <val>42</val>\n\
                 </root>");
-        serialize_as!(enum_struct: Enum::Struct { key: "answer", val: (42, 42) }
-            => "<Struct>\n  \
-                    <key>answer</key>\n  \
-                    <val>42</val>\n  \
-                    <val>42</val>\n\
-                </Struct>");
+        err!(enum_struct: Enum::Struct { key: "answer", val: (42, 42) }
+            => Unsupported("cannot serialize enum struct variant `Enum::Struct`"));
 
         /// Special field name `$text` should be serialized as text content.
         /// Sequences serialized as an `xs:list` content
@@ -1960,16 +1946,8 @@ mod tests {
                         <key>answer</key>\n\
                     </root>");
 
-            serialize_as!(enum_: Enum::Attributes { key: "answer", val: (42, 42) }
-                => r#"<Attributes key="answer" val="42 42"/>"#);
-            serialize_as!(enum_before: Enum::AttributesBefore { key: "answer", val: 42 }
-                => "<AttributesBefore key=\"answer\">\n  \
-                        <val>42</val>\n\
-                    </AttributesBefore>");
-            serialize_as!(enum_after: Enum::AttributesAfter { key: "answer", val: 42 }
-                => "<AttributesAfter val=\"42\">\n  \
-                        <key>answer</key>\n\
-                    </AttributesAfter>");
+            err!(enum_: Enum::Attributes { key: "answer", val: (42, 42) }
+                => Unsupported("cannot serialize enum struct variant `Enum::Attributes`"));
 
             /// Test for https://github.com/tafia/quick-xml/issues/252
             mod optional {
@@ -2052,39 +2030,6 @@ mod tests {
             };
         }
 
-        /// Checks that attempt to serialize given `$data` results to a
-        /// serialization error `$kind` with `$reason`
-        macro_rules! err {
-            ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
-                #[test]
-                fn $name() {
-                    let mut buffer = String::new();
-                    let ser = ElementSerializer {
-                        ser: ContentSerializer {
-                            writer: &mut buffer,
-                            level: QuoteLevel::Full,
-                            indent: Indent::None,
-                            write_indent: false,
-                            expand_empty_elements: false,
-                        },
-                        key: XmlName("root"),
-                    };
-
-                    match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
-                        e => panic!(
-                            "Expected `{}({})`, found `{:?}`",
-                            stringify!($kind),
-                            $reason,
-                            e
-                        ),
-                    }
-                    // We can write something before fail
-                    // assert_eq!(buffer, "");
-                }
-            };
-        }
-
         serialize_as!(option_some_empty: Some("") => "<root></root>");
         serialize_as!(option_some_empty_str: Some("") => "<root></root>");
 
@@ -2092,8 +2037,7 @@ mod tests {
         serialize_as!(unit_struct: Unit => "<root></root>");
         serialize_as!(unit_struct_escaped: UnitEscaped => "<root></root>");
 
-        serialize_as!(enum_unit: Enum::Unit => "<Unit></Unit>");
-        err!(enum_unit_escaped: Enum::UnitEscaped
-            => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+        serialize_as!(enum_unit: Enum::Unit => "<root>Unit</root>");
+        serialize_as!(enum_unit_escaped: Enum::UnitEscaped => "<root>&lt;&quot;&amp;&apos;&gt;</root>");
     }
 }
