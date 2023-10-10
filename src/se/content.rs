@@ -1,5 +1,6 @@
 //! Contains serializer for content of an XML element
 
+use crate::de::TEXT_KEY;
 use crate::errors::serialize::DeError;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
@@ -22,19 +23,32 @@ macro_rules! write_primitive {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A serializer used to serialize content of the element. It does not write
-/// surrounding tags.
+/// A serializer used to serialize content of an element. It does not write
+/// surrounding tags. Unlike the [`ElementSerializer`], this serializer serializes
+/// enums using variant names as tag names, i. e. as `<variant>...</variant>`
 ///
 /// This serializer does the following:
-/// - primitives (booleans, numbers and strings) serialized as naked strings
-/// - `None` does not write anything
-/// - sequences serialized without delimiters. `[1, 2, 3]` would be serialized as `123`
-/// - units (`()`) and unit structs are not supported
-/// - structs and maps are not supported
-/// - unit variants serialized as self-closed `<${variant}/>`
-/// - tuple variants serialized as sequences where each is wrapped in
-///   `<${variant}>...</${variant}>`
-/// - struct variants serialized wrapped `<${variant}>...</${variant}>`
+/// - numbers converted to a decimal representation and serialized as naked strings;
+/// - booleans serialized ether as `"true"` or `"false"`;
+/// - strings and characters are serialized as naked strings;
+/// - `None` does not write anything;
+/// - `Some` and newtypes are serialized as an inner type using the same serializer;
+/// - units (`()`) and unit structs does not write anything;
+/// - sequences, tuples and tuple structs are serialized without delimiters.
+///   `[1, 2, 3]` would be serialized as `123` (if not using indent);
+/// - structs and maps are not supported ([`DeError::Unsupported`] is returned);
+/// - enums:
+///   - unit variants are serialized as self-closed `<variant/>`;
+///   - newtype variants are serialized as inner value wrapped in `<variant>...</variant>`;
+///   - tuple variants are serialized as sequences where each element is wrapped
+///     in `<variant>...</variant>`;
+///   - struct variants are serialized as a sequence of fields wrapped in
+///     `<variant>...</variant>`. Each field is serialized recursively using
+///     either [`ElementSerializer`], `ContentSerializer` (`$value` fields), or
+///     [`SimpleTypeSerializer`] (`$text` fields). In particular, the empty struct
+///     is serialized as `<variant/>`;
+///
+/// Usage of empty tags depends on the [`Self::expand_empty_elements`] setting.
 ///
 /// The difference between this serializer and [`SimpleTypeSerializer`] is in how
 /// sequences and maps are serialized. Unlike `SimpleTypeSerializer` it supports
@@ -202,15 +216,20 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         Ok(())
     }
 
-    /// Checks `variant` for XML name validity and writes `<${variant}/>`
+    /// If `variant` is a special `$text` variant, then do nothing, otherwise
+    /// checks `variant` for XML name validity and writes `<variant/>`.
     fn serialize_unit_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        let name = XmlName::try_from(variant)?;
-        self.write_empty(name)
+        if variant == TEXT_KEY {
+            Ok(())
+        } else {
+            let name = XmlName::try_from(variant)?;
+            self.write_empty(name)
+        }
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -221,8 +240,9 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         value.serialize(self)
     }
 
-    /// Checks `variant` for XML name validity and writes `value` as new element
-    /// with name `variant`.
+    /// If `variant` is a special `$text` variant, then writes `value` as a `xs:simpleType`,
+    /// otherwise checks `variant` for XML name validity and writes `value` as a new
+    /// `<variant>` element.
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
         self,
         _name: &'static str,
@@ -230,10 +250,15 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        })
+        if variant == TEXT_KEY {
+            value.serialize(self.into_simple_type_serializer())?;
+            Ok(())
+        } else {
+            value.serialize(ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            })
+        }
     }
 
     #[inline]
@@ -255,6 +280,14 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         self.serialize_tuple(len)
     }
 
+    /// Serializes variant as a tuple with name `variant`, producing
+    ///
+    /// ```xml
+    /// <variant><!-- 1st element of a tuple --></variant>
+    /// <variant><!-- 2nd element of a tuple --></variant>
+    /// <!-- ... -->
+    /// <variant><!-- Nth element of a tuple --></variant>
+    /// ```
     #[inline]
     fn serialize_tuple_variant(
         self,
@@ -263,14 +296,17 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        let ser = ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        };
-        // `ElementSerializer::serialize_tuple_variant` is the same as
-        // `ElementSerializer::serialize_tuple_struct`, except that it replaces `.key`
-        // to `variant` which is not required here
-        ser.serialize_tuple_struct(name, len).map(Tuple::Element)
+        if variant == TEXT_KEY {
+            self.into_simple_type_serializer()
+                .serialize_tuple_struct(name, len)
+                .map(Tuple::Text)
+        } else {
+            let ser = ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            };
+            ser.serialize_tuple_struct(name, len).map(Tuple::Element)
+        }
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -290,6 +326,16 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         ))
     }
 
+    /// Serializes variant as an element with name `variant`, producing
+    ///
+    /// ```xml
+    /// <variant>
+    ///   <!-- struct fields... -->
+    /// </variant>
+    /// ```
+    ///
+    /// If struct has no fields which is represented by nested elements or a text,
+    /// it may be serialized as self-closed element `<variant/>`.
     #[inline]
     fn serialize_struct_variant(
         self,
@@ -298,14 +344,17 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        let ser = ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        };
-        // `ElementSerializer::serialize_struct_variant` is the same as
-        // `ElementSerializer::serialize_struct`, except that it replaces `.key`
-        // to `variant` which is not required here
-        ser.serialize_struct(name, len)
+        if variant == TEXT_KEY {
+            Err(DeError::Unsupported(
+                format!("cannot serialize `$text` struct variant of `{}` enum", name).into(),
+            ))
+        } else {
+            let ser = ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            };
+            ser.serialize_struct(name, len)
+        }
     }
 }
 
