@@ -6,6 +6,8 @@
 use crate::errors::serialize::DeError;
 use crate::escapei::_escape;
 use crate::se::{Indent, QuoteLevel};
+use crate::utils::MergeIter;
+use memchr::{memchr2_iter, memchr3_iter, memchr_iter};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -29,67 +31,96 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
     use QuoteLevel::*;
     use QuoteTarget::*;
 
+    let bytes = value.as_bytes();
+
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items, cannot be used in the item
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
-            _ => false,
-        }),
+        (_, Full) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<', '>', '\'', '"': Required characters to escape
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr3_iter(b'>', b'\'', b'"', bytes),
+            ),
+        ),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items, cannot be used in the item
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            _ => false,
-        }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items, cannot be used in the item
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' => true,
-            _ => false,
-        }),
+        (Text, Partial) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<', '>': Required characters to escape
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr_iter(b'>', bytes),
+            ),
+        ),
+        (Text, Minimal) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<': Required characters to escape
+            MergeIter::new(
+                memchr3_iter(b' ', b'\r', b'\n', bytes),
+                memchr3_iter(b'\t', b'&', b'<', bytes),
+            ),
+        ),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items, cannot be used in the item
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            // Double quoted attribute should escape quote
-            b'"' => true,
-            _ => false,
-        }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items, cannot be used in the item
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' => true,
-            // Double quoted attribute should escape quote
-            b'"' => true,
-            _ => false,
-        }),
+        (DoubleQAttr, Partial) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<', '>': Required characters to escape
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr2_iter(b'>', b'"', bytes),
+            ),
+        ),
+        (DoubleQAttr, Minimal) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<': Required characters to escape
+            // '"': Double quoted attribute should escape quote
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr_iter(b'"', bytes),
+            ),
+        ),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            // Single quoted attribute should escape quote
-            b'\'' => true,
-            _ => false,
-        }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
-            // Spaces used as delimiters of list items
-            b' ' | b'\r' | b'\n' | b'\t' => true,
-            // Required characters to escape
-            b'&' | b'<' => true,
-            // Single quoted attribute should escape quote
-            b'\'' => true,
-            _ => false,
-        }),
+        (SingleQAttr, Partial) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<', '>': Required characters to escape
+            // '\'': Single quoted attribute should escape quote
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr2_iter(b'>', b'\'', bytes),
+            ),
+        ),
+        (SingleQAttr, Minimal) => _escape(
+            value,
+            // ' ', '\r', '\n', '\t': Spaces used as delimiters of list items, cannot be used in the item
+            // '&', '<': Required characters to escape
+            // '\'': Single quoted attribute should escape quote
+            MergeIter::new(
+                MergeIter::new(
+                    memchr3_iter(b' ', b'\r', b'\n', bytes),
+                    memchr3_iter(b'\t', b'&', b'<', bytes),
+                ),
+                memchr_iter(b'\'', bytes),
+            ),
+        ),
     }
 }
 
@@ -98,53 +129,61 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
     use QuoteLevel::*;
     use QuoteTarget::*;
 
+    let bytes = value.as_bytes();
+
     match (target, level) {
-        (_, Full) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' | b'>' | b'\'' | b'\"' => true,
-            _ => false,
-        }),
+        (_, Full) => _escape(
+            value,
+            // '&', '<', '>', '\'', '"': Required characters to escape
+            MergeIter::new(
+                memchr3_iter(b'&', b'<', b'>', bytes),
+                memchr2_iter(b'\'', b'"', bytes),
+            ),
+        ),
         //----------------------------------------------------------------------
-        (Text, Partial) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            _ => false,
-        }),
-        (Text, Minimal) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' => true,
-            _ => false,
-        }),
+        (Text, Partial) => _escape(
+            value,
+            // '&', '<', '>': Required characters to escape
+            memchr3_iter(b'&', b'<', b'>', bytes),
+        ),
+        (Text, Minimal) => _escape(
+            value,
+            // '&', '<': Required characters to escape
+            memchr2_iter(b'&', b'<', bytes),
+        ),
         //----------------------------------------------------------------------
-        (DoubleQAttr, Partial) => _escape(value, |ch| match ch {
+        (DoubleQAttr, Partial) => _escape(
+            value,
+            // '&', '<', '>': Required characters to escape
+            // '"': Double quoted attribute should escape quote
+            MergeIter::new(
+                memchr3_iter(b'&', b'<', b'>', bytes),
+                memchr_iter(b'"', bytes),
+            ),
+        ),
+        (DoubleQAttr, Minimal) => _escape(
+            value,
+            // '&', '<': Required characters to escape
+            // '"': Double quoted attribute should escape quote
             // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            // Double quoted attribute should escape quote
-            b'"' => true,
-            _ => false,
-        }),
-        (DoubleQAttr, Minimal) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' => true,
-            // Double quoted attribute should escape quote
-            b'"' => true,
-            _ => false,
-        }),
+            memchr3_iter(b'&', b'<', b'"', bytes),
+        ),
         //----------------------------------------------------------------------
-        (SingleQAttr, Partial) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' | b'>' => true,
-            // Single quoted attribute should escape quote
-            b'\'' => true,
-            _ => false,
-        }),
-        (SingleQAttr, Minimal) => _escape(value, |ch| match ch {
-            // Required characters to escape
-            b'&' | b'<' => true,
-            // Single quoted attribute should escape quote
-            b'\'' => true,
-            _ => false,
-        }),
+        (SingleQAttr, Partial) => _escape(
+            value,
+            // '&', '<', '>': Required characters to escape
+            // '\'': Single quoted attribute should escape quote
+            MergeIter::new(
+                memchr3_iter(b'&', b'<', b'>', bytes),
+                memchr_iter(b'\'', bytes),
+            ),
+        ),
+        (SingleQAttr, Minimal) => _escape(
+            value,
+            // '&', '<': Required characters to escape
+            // '\': Single quoted attribute should escape quote
+            memchr3_iter(b'&', b'<', b'\'', bytes),
+        ),
     }
 }
 

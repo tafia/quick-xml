@@ -1,9 +1,10 @@
 //! Manage xml character escapes
 
-use memchr::memchr2_iter;
+use memchr::{memchr2_iter, memchr3_iter};
 use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::utils::MergeIter;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
@@ -72,7 +73,14 @@ impl std::error::Error for EscapeError {}
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
 pub fn escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
+    let bytes = raw.as_bytes();
+    _escape(
+        raw,
+        MergeIter::new(
+            memchr3_iter(b'<', b'>', b'&', bytes),
+            memchr2_iter(b'\'', b'"', bytes),
+        ),
+    )
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
@@ -89,24 +97,23 @@ pub fn escape(raw: &str) -> Cow<str> {
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
 pub fn partial_escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
+    _escape(raw, memchr3_iter(b'<', b'>', b'&', raw.as_bytes()))
 }
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
+pub(crate) fn _escape<It>(raw: &str, escapes: It) -> Cow<str>
+where
+    It: Iterator<Item = usize>,
+{
     let bytes = raw.as_bytes();
     let mut escaped = None;
-    let mut iter = bytes.iter();
-    let mut pos = 0;
-    while let Some(i) = iter.position(|&b| escape_chars(b)) {
-        if escaped.is_none() {
-            escaped = Some(Vec::with_capacity(raw.len()));
-        }
-        let escaped = escaped.as_mut().expect("initialized");
-        let new_pos = pos + i;
-        escaped.extend_from_slice(&bytes[pos..new_pos]);
-        match bytes[new_pos] {
+    let mut last_pos = 0;
+    for i in escapes {
+        let escaped = escaped.get_or_insert_with(|| Vec::with_capacity(raw.len()));
+        let byte = bytes[i];
+        escaped.extend_from_slice(&bytes[last_pos..i]);
+        match byte {
             b'<' => escaped.extend_from_slice(b"&lt;"),
             b'>' => escaped.extend_from_slice(b"&gt;"),
             b'\'' => escaped.extend_from_slice(b"&apos;"),
@@ -124,11 +131,11 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
                 "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"
             ),
         }
-        pos = new_pos + 1;
+        last_pos = i + 1;
     }
 
     if let Some(mut escaped) = escaped {
-        if let Some(raw) = bytes.get(pos..) {
+        if let Some(raw) = bytes.get(last_pos..) {
             escaped.extend_from_slice(raw);
         }
         // SAFETY: we operate on UTF-8 input and search for an one byte chars only,

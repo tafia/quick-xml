@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, Cow};
 use std::fmt::{self, Debug, Formatter};
+use std::iter::Peekable;
 use std::ops::Deref;
 
 #[cfg(feature = "serialize")]
@@ -33,6 +34,62 @@ pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
     }
     write!(f, "\"")?;
     Ok(())
+}
+
+pub(crate) struct MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+{
+    it1: Peekable<It1>,
+    it2: Peekable<It2>,
+}
+
+impl<It1, It2> MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+{
+    pub fn new(it1: It1, it2: It2) -> Self {
+        Self {
+            it1: it1.peekable(),
+            it2: it2.peekable(),
+        }
+    }
+}
+
+impl<It1, It2> Iterator for MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+    It1::Item: PartialOrd,
+{
+    type Item = It1::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.it1.peek(), self.it2.peek()) {
+            (None, _) => self.it2.next(),
+            (_, None) => self.it1.next(),
+            (Some(a), Some(b)) => {
+                if a < b {
+                    self.it1.next()
+                } else {
+                    self.it2.next()
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (min1, max1) = self.it1.size_hint();
+        let (min2, max2) = self.it2.size_hint();
+        let min = min1.saturating_add(min2);
+        let max = match (max1, max2) {
+            (Some(max1), Some(max2)) => max1.checked_add(max2),
+            _ => None,
+        };
+        (min, max)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
