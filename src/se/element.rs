@@ -5,6 +5,7 @@ use crate::errors::serialize::DeError;
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
+use crate::se::text::TextSerializer;
 use crate::se::{Indent, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
@@ -438,7 +439,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
         };
 
         if key == TEXT_KEY {
-            value.serialize(ser.into_simple_type_serializer())?;
+            value.serialize(TextSerializer(ser.into_simple_type_serializer()))?;
         } else if key == VALUE_KEY {
             value.serialize(ser)?;
         } else {
@@ -821,7 +822,7 @@ mod tests {
                         content: Enum::Newtype(42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
 
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
@@ -838,7 +839,7 @@ mod tests {
                         content: Enum::Tuple("first", 42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
 
                 // Complex types cannot be serialized in `$text` field
                 err!(map:
@@ -847,21 +848,21 @@ mod tests {
                         content: BTreeMap::from([("_1", 2), ("_3", 4)]),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize map as an attribute or text content value"));
+                    => Unsupported("cannot serialize map as text content value"));
                 err!(struct_:
                     Text {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize struct `Struct` as text content value"));
                 err!(enum_struct:
                     Text {
                         before: "answer",
                         content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
             }
 
             /// `$text` field inside a struct
@@ -948,7 +949,7 @@ mod tests {
                         content: Enum::Newtype(42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
 
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
@@ -965,7 +966,7 @@ mod tests {
                         content: Enum::Tuple("first", 42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
 
                 // Complex types cannot be serialized in `$text` field
                 err!(map:
@@ -974,21 +975,21 @@ mod tests {
                         content: BTreeMap::from([("_1", 2), ("_3", 4)]),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize map as an attribute or text content value"));
+                    => Unsupported("cannot serialize map as text content value"));
                 err!(struct_:
                     Text {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize struct `Struct` as text content value"));
                 err!(enum_struct:
                     Text {
                         before: "answer",
                         content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
             }
         }
 
@@ -1527,7 +1528,7 @@ mod tests {
                         content: Enum::Newtype(42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
 
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
@@ -1544,7 +1545,7 @@ mod tests {
                         content: Enum::Tuple("first", 42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
 
                 // Complex types cannot be serialized in `$text` field
                 err!(map:
@@ -1553,21 +1554,21 @@ mod tests {
                         content: BTreeMap::from([("_1", 2), ("_3", 4)]),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize map as an attribute or text content value"));
+                    => Unsupported("cannot serialize map as text content value"));
                 err!(struct_:
                     Text {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize struct `Struct` as text content value"));
                 err!(enum_struct:
                     Text {
                         before: "answer",
                         content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
             }
 
             /// `$text` field inside a struct
@@ -1666,7 +1667,7 @@ mod tests {
                         content: Enum::Newtype(42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
 
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
@@ -1683,7 +1684,7 @@ mod tests {
                         content: Enum::Tuple("first", 42),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
 
                 // Complex types cannot be serialized in `$text` field
                 err!(map:
@@ -1692,21 +1693,21 @@ mod tests {
                         content: BTreeMap::from([("_1", 2), ("_3", 4)]),
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize map as an attribute or text content value"));
+                    => Unsupported("cannot serialize map as text content value"));
                 err!(struct_:
                     Text {
                         before: "answer",
                         content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize struct `Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize struct `Struct` as text content value"));
                 err!(enum_struct:
                     Text {
                         before: "answer",
                         content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
-                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
+                    => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
             }
         }
 

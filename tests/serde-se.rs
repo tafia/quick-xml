@@ -627,18 +627,18 @@ mod without_root {
                     serialize_as_only!(unit: Root { field: Unit::Text } => "<Root/>");
                     err!(newtype:
                         Root { field: Newtype::Text("newtype text") }
-                        => Unsupported("cannot serialize enum newtype variant `Newtype::$text` as an attribute or text content value"),
+                        => Unsupported("cannot serialize enum newtype variant `Newtype::$text` as text content value"),
                         "<Root");
                     err!(tuple:
                         Root { field: Tuple::Text(42.0, "tuple-text".into()) }
-                        => Unsupported("cannot serialize enum tuple variant `Tuple::$text` as an attribute or text content value"),
+                        => Unsupported("cannot serialize enum tuple variant `Tuple::$text` as text content value"),
                         "<Root");
                     err!(struct_:
                         Root { field: Struct::Text {
                             float: 42.0,
                             string: "answer"
                         }}
-                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as an attribute or text content value"),
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"),
                         "<Root");
                 }
             }
@@ -951,25 +951,25 @@ mod without_root {
                     => "<Root>Unit</Root>");
                 err!(newtype:
                     Root { field: ExternallyTagged::Newtype(true) }
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as text content value"),
                     "<Root");
                 err!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
-                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as text content value"),
                     "<Root");
                 err!(struct_:
                     Root { field: ExternallyTagged::Struct {
                         float: 42.0,
                         string: "answer"
                     }}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as text content value"),
                     "<Root");
                 err!(nested_struct:
                     Root { field: ExternallyTagged::Holder {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as text content value"),
                     "<Root");
                 err!(flatten_struct:
                     Root { field: ExternallyTaggedWorkaround::Flatten {
@@ -977,18 +977,18 @@ mod without_root {
                         string: "answer",
                     }}
                     // Flatten enum struct variants represented as newtype variants containing maps
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as text content value"),
                     "<Root");
                 err!(empty_struct:
                     Root { field: ExternallyTagged::Empty {} }
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as text content value"),
                     "<Root");
                 err!(text:
                     Root { field: ExternallyTagged::Text {
                         float: 42.0,
                         string: "answer"
                     }}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as text content value"),
                     "<Root");
             }
 
@@ -1010,25 +1010,25 @@ mod without_root {
                     => "<Root><field>Unit</field></Root>");
                 err!(newtype:
                     Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as text content value"),
                     "<Root");
                 err!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
-                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as text content value"),
                     "<Root");
                 err!(struct_:
                     Root { field: Inner { inner: ExternallyTagged::Struct {
                         float: 42.0,
                         string: "answer"
                     }}}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Struct` as text content value"),
                     "<Root");
                 err!(nested_struct:
                     Root { field: Inner { inner: ExternallyTagged::Holder {
                         nested: Nested { float: 42.0 },
                         string: "answer",
                     }}}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Holder` as text content value"),
                     "<Root");
                 err!(flatten_struct:
                     Root { field: Inner { inner: ExternallyTaggedWorkaround::Flatten {
@@ -1036,18 +1036,18 @@ mod without_root {
                         string: "answer",
                     }}}
                     // Flatten enum struct variants represented as newtype variants containing maps
-                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum newtype variant `ExternallyTaggedWorkaround::Flatten` as text content value"),
                     "<Root");
                 err!(empty_struct:
                     Root { field: Inner { inner: ExternallyTagged::Empty {} } }
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Empty` as text content value"),
                     "<Root");
                 err!(text:
                     Root { field: Inner { inner: ExternallyTagged::Text {
                         float: 42.0,
                         string: "answer"
                     }}}
-                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as an attribute or text content value"),
+                    => Unsupported("cannot serialize enum struct variant `ExternallyTagged::Text` as text content value"),
                     "<Root");
             }
         }

@@ -77,6 +77,7 @@ mod content;
 mod element;
 pub(crate) mod key;
 pub(crate) mod simple_type;
+mod text;
 
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};

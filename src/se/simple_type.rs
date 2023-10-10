@@ -7,7 +7,8 @@ use crate::errors::serialize::DeError;
 use crate::escapei::_escape;
 use crate::se::{Indent, QuoteLevel};
 use serde::ser::{
-    Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
+    Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
+    SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
 use std::borrow::Cow;
@@ -595,6 +596,24 @@ impl<'i, W: Write> SerializeTuple for SimpleSeq<'i, W> {
 }
 
 impl<'i, W: Write> SerializeTupleStruct for SimpleSeq<'i, W> {
+    type Ok = W;
+    type Error = DeError;
+
+    #[inline]
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: ?Sized + Serialize,
+    {
+        SerializeSeq::serialize_element(self, value)
+    }
+
+    #[inline]
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeSeq::end(self)
+    }
+}
+
+impl<'i, W: Write> SerializeTupleVariant for SimpleSeq<'i, W> {
     type Ok = W;
     type Error = DeError;
 
