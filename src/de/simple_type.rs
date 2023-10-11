@@ -882,6 +882,9 @@ mod tests {
     struct Newtype(String);
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Tuple((), ());
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct BorrowedNewtype<'a>(&'a str);
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -1040,7 +1043,7 @@ mod tests {
                 => Unsupported("sequences are not supported as `xs:list` items"));
         err!(tuple: ((), ()) = "non-escaped string"
                 => Unsupported("tuples are not supported as `xs:list` items"));
-        err!(tuple_struct: ((), ()) = "non-escaped string"
+        err!(tuple_struct: Tuple = "non-escaped string"
                 => Unsupported("tuples are not supported as `xs:list` items"));
 
         err!(map: HashMap<(), ()> = "non-escaped string"

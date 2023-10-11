@@ -316,6 +316,9 @@ mod tests {
     struct Newtype(String);
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Tuple((), ());
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct Struct {
         key: String,
         val: usize,
@@ -459,8 +462,8 @@ mod tests {
         => Custom("invalid type: string \"name\", expected a sequence"));
     err!(tuple: ((), ()) = "name"
         => Custom("invalid type: string \"name\", expected a tuple of size 2"));
-    err!(tuple_struct: ((), ()) = "name"
-        => Custom("invalid type: string \"name\", expected a tuple of size 2"));
+    err!(tuple_struct: Tuple = "name"
+        => Custom("invalid type: string \"name\", expected tuple struct Tuple"));
 
     err!(map: HashMap<(), ()> = "name"
         => Custom("invalid type: string \"name\", expected a map"));

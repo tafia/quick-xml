@@ -384,7 +384,7 @@ mod without_root {
             serialize_as!(newtype:
                 ExternallyTagged::Newtype(true)
                 => "<Newtype>true</Newtype>");
-            serialize_as!(tuple_struct:
+            serialize_as!(tuple:
                 ExternallyTagged::Tuple(42.0, "answer")
                 => "<Tuple>42</Tuple>\
                     <Tuple>answer</Tuple>");
@@ -500,7 +500,7 @@ mod without_root {
                     => "<Root>\
                             <Newtype>true</Newtype>\
                         </Root>");
-                serialize_as_only!(tuple_struct:
+                serialize_as_only!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
                     => "<Root>\
                             <Tuple>42</Tuple>\
@@ -589,7 +589,7 @@ mod without_root {
                                 <Newtype>true</Newtype>\
                             </field>\
                         </Root>");
-                serialize_as_only!(tuple_struct:
+                serialize_as_only!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
                     => "<Root>\
                             <field>\
@@ -681,7 +681,7 @@ mod without_root {
                     => "<Root>\
                             <Newtype>true</Newtype>\
                         </Root>");
-                serialize_as!(tuple_struct:
+                serialize_as!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
                     => "<Root>\
                             <Tuple>42</Tuple>\
@@ -767,7 +767,7 @@ mod without_root {
                                 <Newtype>true</Newtype>\
                             </field>\
                         </Root>");
-                serialize_as!(tuple_struct:
+                serialize_as!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
                     => "<Root>\
                             <field>\
@@ -860,7 +860,7 @@ mod without_root {
                     Root { field: ExternallyTagged::Newtype(true) }
                     => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
                     "<Root");
-                err!(tuple_struct:
+                err!(tuple:
                     Root { field: ExternallyTagged::Tuple(42.0, "answer") }
                     => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
                     "<Root");
@@ -919,7 +919,7 @@ mod without_root {
                     Root { field: Inner { inner: ExternallyTagged::Newtype(true) } }
                     => Unsupported("cannot serialize enum newtype variant `ExternallyTagged::Newtype` as an attribute or text content value"),
                     "<Root");
-                err!(tuple_struct:
+                err!(tuple:
                     Root { field: Inner { inner: ExternallyTagged::Tuple(42.0, "answer") } }
                     => Unsupported("cannot serialize enum tuple variant `ExternallyTagged::Tuple` as an attribute or text content value"),
                     "<Root");
@@ -1048,7 +1048,7 @@ mod without_root {
                         <tag>Newtype</tag>\
                         <content>true</content>\
                     </AdjacentlyTagged>");
-            serialize_as!(tuple_struct:
+            serialize_as!(tuple:
                 AdjacentlyTagged::Tuple(42.0, "answer")
                 => "<AdjacentlyTagged>\
                         <tag>Tuple</tag>\
@@ -1126,7 +1126,7 @@ mod without_root {
                 => Unsupported("cannot serialize `()` without defined root tag"));
             err!(newtype: Untagged::Newtype(true)
                 => Unsupported("cannot serialize `bool` without defined root tag"));
-            err!(tuple_struct: Untagged::Tuple(42.0, "answer")
+            err!(tuple: Untagged::Tuple(42.0, "answer")
                 => Unsupported("cannot serialize unnamed tuple without defined root tag"));
             // NOTE: Cannot be deserialized in roundtrip due to
             // https://github.com/serde-rs/serde/issues/1183
@@ -1328,7 +1328,7 @@ mod without_root {
                 serialize_as!(newtype:
                     ExternallyTagged::Newtype(true)
                     => "<Newtype>true</Newtype>");
-                serialize_as!(tuple_struct:
+                serialize_as!(tuple:
                     ExternallyTagged::Tuple(42.0, "answer")
                     => "<Tuple>42</Tuple>\n\
                         <Tuple>answer</Tuple>");
@@ -1496,7 +1496,7 @@ mod without_root {
                             <tag>Newtype</tag>\n  \
                             <content>true</content>\n\
                         </AdjacentlyTagged>");
-                serialize_as!(tuple_struct:
+                serialize_as!(tuple:
                     AdjacentlyTagged::Tuple(42.0, "answer")
                     => "<AdjacentlyTagged>\n  \
                             <tag>Tuple</tag>\n  \
@@ -1570,7 +1570,7 @@ mod without_root {
                     => Unsupported("cannot serialize `()` without defined root tag"));
                 err!(newtype: Untagged::Newtype(true)
                     => Unsupported("cannot serialize `bool` without defined root tag"));
-                err!(tuple_struct: Untagged::Tuple(42.0, "answer")
+                err!(tuple: Untagged::Tuple(42.0, "answer")
                     => Unsupported("cannot serialize unnamed tuple without defined root tag"));
                 serialize_as!(struct_:
                     Untagged::Struct {
@@ -1817,7 +1817,7 @@ mod with_root {
             serialize_as!(newtype:
                 ExternallyTagged::Newtype(true)
                 => "<Newtype>true</Newtype>");
-            serialize_as!(tuple_struct:
+            serialize_as!(tuple:
                 ExternallyTagged::Tuple(42.0, "answer")
                 => "<Tuple>42</Tuple>\
                     <Tuple>answer</Tuple>");
@@ -2002,7 +2002,7 @@ mod with_root {
                         <tag>Newtype</tag>\
                         <content>true</content>\
                     </root>");
-            serialize_as!(tuple_struct:
+            serialize_as!(tuple:
                 AdjacentlyTagged::Tuple(42.0, "answer")
                 => "<root>\
                         <tag>Tuple</tag>\
@@ -2086,7 +2086,7 @@ mod with_root {
                 => "<root>true</root>");
             // NOTE: Cannot be deserialized in roundtrip due to
             // https://github.com/serde-rs/serde/issues/1183
-            serialize_as_only!(tuple_struct:
+            serialize_as_only!(tuple:
                 Untagged::Tuple(42.0, "answer")
                 => "<root>42</root>\
                     <root>answer</root>");
