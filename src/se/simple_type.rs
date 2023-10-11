@@ -177,9 +177,7 @@ pub struct AtomicSerializer<W: Write> {
 
 impl<W: Write> AtomicSerializer<W> {
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
-        Ok(self
-            .writer
-            .write_str(&escape_item(value, self.target, self.level))?)
+        Ok(self.writer.write_str(value)?)
     }
 }
 
@@ -198,7 +196,7 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     write_primitive!();
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
-        self.write_str(value)?;
+        self.write_str(&escape_item(value, self.target, self.level))?;
         Ok(self.writer)
     }
 
@@ -337,9 +335,7 @@ pub struct SimpleTypeSerializer<'i, W: Write> {
 impl<'i, W: Write> SimpleTypeSerializer<'i, W> {
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
         self.indent.write_indent(&mut self.writer)?;
-        Ok(self
-            .writer
-            .write_str(&escape_list(value, self.target, self.level))?)
+        Ok(self.writer.write_str(value)?)
     }
 }
 
@@ -358,10 +354,9 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
     write_primitive!();
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
-        if value.is_empty() {
-            self.indent = Indent::None;
+        if !value.is_empty() {
+            self.write_str(&escape_list(value, self.target, self.level))?;
         }
-        self.write_str(value)?;
         Ok(self.writer)
     }
 
