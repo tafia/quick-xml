@@ -338,12 +338,12 @@ impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeSeq>::serialize_element(self, value)
+        SerializeSeq::serialize_element(self, value)
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeSeq>::end(self)
+        SerializeSeq::end(self)
     }
 }
 
@@ -356,12 +356,12 @@ impl<'w, 'i, W: Write> SerializeTupleStruct for ContentSerializer<'w, 'i, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeSeq>::serialize_element(self, value)
+        SerializeSeq::serialize_element(self, value)
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeSeq>::end(self)
+        SerializeSeq::end(self)
     }
 }
 
