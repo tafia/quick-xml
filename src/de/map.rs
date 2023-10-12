@@ -4,6 +4,7 @@ use crate::{
     de::key::QNameDeserializer,
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
+    de::text::TextDeserializer,
     de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     encoding::Decoder,
     errors::serialize::DeError,
@@ -12,7 +13,7 @@ use crate::{
     name::QName,
 };
 use serde::de::value::BorrowedStrDeserializer;
-use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, DeserializeSeed, Deserializer as _, MapAccess, SeqAccess, Visitor};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
@@ -357,24 +358,6 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-macro_rules! forward {
-    (
-        $deserialize:ident
-        $(
-            ($($name:ident : $type:ty),*)
-        )?
-    ) => {
-        #[inline]
-        fn $deserialize<V: Visitor<'de>>(
-            self,
-            $($($name: $type,)*)?
-            visitor: V
-        ) -> Result<V::Value, Self::Error> {
-            self.map.de.$deserialize($($($name,)*)? visitor)
-        }
-    };
-}
-
 /// A deserializer for a value of map or struct. That deserializer slightly
 /// differently processes events for a primitive types and sequences than
 /// a [`Deserializer`].
@@ -390,9 +373,9 @@ macro_rules! forward {
 /// <yet another="tag item"/>
 /// ```
 ///
-/// This deserializer are very similar to a [`SeqItemDeserializer`]. The only difference
+/// This deserializer are very similar to a [`ElementDeserializer`]. The only difference
 /// in the `deserialize_seq` method. This deserializer will act as an iterator
-/// over tags / text within it's parent tag, whereas the [`SeqItemDeserializer`]
+/// over tags / text within it's parent tag, whereas the [`ElementDeserializer`]
 /// will represent sequences as an `xs:list`.
 ///
 /// This deserializer processes items as following:
@@ -407,7 +390,7 @@ macro_rules! forward {
 /// - newtype structs are deserialized by forwarding deserialization of inner type
 ///   with the same deserializer;
 /// - sequences, tuples and tuple structs are deserialized by iterating within the
-///   parent tag and deserializing each tag or text content using [`SeqItemDeserializer`];
+///   parent tag and deserializing each tag or text content using [`ElementDeserializer`];
 /// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
 ///   - in case of [`DeEvent::Text`] event the text content is deserialized as
@@ -534,19 +517,13 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_unit);
-
-    forward!(deserialize_struct(
-        name: &'static str,
-        fields: &'static [&'static str]
-    ));
-
-    forward!(deserialize_enum(
-        name: &'static str,
-        variants: &'static [&'static str]
-    ));
-
-    forward!(deserialize_any);
+    #[inline]
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_unit(visitor)
+    }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
@@ -604,6 +581,41 @@ where
             map: self.map,
             filter,
         })
+    }
+
+    #[inline]
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.map.de.deserialize_struct(name, fields, visitor)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_enum(crate::de::var::EnumAccess::new(self.map.de))
+    }
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.peek()? {
+            DeEvent::Text(_) => self.deserialize_str(visitor),
+            _ => self.deserialize_map(visitor),
+        }
     }
 }
 
@@ -765,10 +777,21 @@ where
                 // opened tag `self.map.start`
                 DeEvent::Eof => Err(DeError::UnexpectedEof),
 
-                // Start(tag), Text
-                _ => seed
-                    .deserialize(SeqItemDeserializer { map: self.map })
-                    .map(Some),
+                DeEvent::Text(_) => match self.map.de.next()? {
+                    DeEvent::Text(e) => seed.deserialize(TextDeserializer(e)).map(Some),
+                    // SAFETY: we just checked that the next event is Text
+                    _ => unreachable!(),
+                },
+                DeEvent::Start(_) => match self.map.de.next()? {
+                    DeEvent::Start(start) => seed
+                        .deserialize(ElementDeserializer {
+                            start,
+                            de: self.map.de,
+                        })
+                        .map(Some),
+                    // SAFETY: we just checked that the next event is Start
+                    _ => unreachable!(),
+                },
             };
         }
     }
@@ -776,70 +799,57 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A deserializer for a single item of a mixed sequence of tags and text.
+/// A deserializer for a single tag item of a mixed sequence of tags and text.
 ///
-/// This deserializer can see two kind of events at the start:
-/// - [`DeEvent::Text`]
-/// - [`DeEvent::Start`]
-///
-/// which represents two possible variants of items:
-/// ```xml
-/// <item>A tag item</item>
-/// A text item
-/// <yet another="tag item"/>
-/// ```
-///
-/// This deserializer are very similar to a [`MapValueDeserializer`]. The only difference
-/// in the `deserialize_seq` method. This deserializer will perform deserialization
-/// from the textual content (the text itself in case of [`DeEvent::Text`] event
-/// and the text between tags in case of [`DeEvent::Start`] event), whereas
-/// the [`MapValueDeserializer`] will iterate over tags / text within it's parent tag.
+/// This deserializer are very similar to a [`MapValueDeserializer`] (when it
+/// processes the [`DeEvent::Start`] event). The only difference in the
+/// [`deserialize_seq`] method. This deserializer will perform deserialization
+/// from the textual content between start and end events, whereas the
+/// [`MapValueDeserializer`] will iterate over tags / text within it's parent tag.
 ///
 /// This deserializer processes items as following:
-/// - primitives (numbers, booleans, strings, characters) are deserialized either
-///   from a text content, or unwrapped from a one level of a tag. So, `123` and
-///   `<int>123</int>` both can be deserialized into an `u32`;
-/// - `Option`:
-///   - empty text of [`DeEvent::Text`] is deserialized as `None`;
-///   - everything else are deserialized as `Some` using the same deserializer,
-///     including `<tag/>` or `<tag></tag>`;
-/// - units (`()`) and unit structs consumes the whole text or element subtree;
-/// - newtype structs are deserialized as tuple structs with one element;
+/// - numbers are parsed from a text content between tags using [`FromStr`]. So,
+///   `<int>123</int>` can be deserialized into an `u32`;
+/// - booleans converted from a text content between tags according to the XML
+///   [specification]:
+///   - `"true"` and `"1"` converted to `true`;
+///   - `"false"` and `"0"` converted to `false`;
+/// - strings returned as a text content between tags;
+/// - characters also returned as strings. If string contain more than one character
+///   or empty, it is responsibility of a type to return an error;
+/// - `Option` are always deserialized as `Some` using the same deserializer,
+///   including `<tag/>` or `<tag></tag>`;
+/// - units (`()`) and unit structs consumes the whole element subtree;
+/// - newtype structs forwards deserialization to the inner type using
+///   [`SimpleTypeDeserializer`];
 /// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]
-///   (this is the difference):
-///   - in case of [`DeEvent::Text`] event text content passed to the deserializer directly;
-///   - in case of [`DeEvent::Start`] event the start and end tags are stripped,
-///     and text between them is passed to [`SimpleTypeDeserializer`]. If the tag
-///     contains something else other than text, an error is returned, but if it
-///     contains a text and something else (for example, `<item>text<tag/></item>`),
-///     then the trail is just ignored;
-/// - structs and maps are deserialized using new [`ElementMapAccess`];
+///   (this is the difference): text content between tags is passed to
+///   [`SimpleTypeDeserializer`];
+/// - structs and maps are deserialized using new instance of [`ElementMapAccess`];
 /// - enums:
-///   - in case of [`DeEvent::Text`] event the text content is deserialized as
-///     a `$text` variant. Enum content is deserialized from the text using
-///     [`SimpleTypeDeserializer`];
-///   - in case of [`DeEvent::Start`] event the tag name is deserialized as
-///     an enum tag, and the content inside are deserialized as an enum content.
-///     Depending on a variant kind deserialization is performed as:
-///     - unit variants: consuming text content or a subtree;
-///     - newtype variants: forward deserialization to the inner type using
+///   - the variant name is deserialized using [`QNameDeserializer`] from the element name;
+///   - the content is deserialized using the same deserializer:
+///     - unit variants: consuming a subtree and return `()`;
+///     - newtype variants forwards deserialization to the inner type using
 ///       this deserializer;
-///     - tuple variants: deserialize it as an `xs:list`;
+///     - tuple variants: call [`deserialize_tuple`] of this deserializer;
 ///     - struct variants: call [`deserialize_struct`] of this deserializer.
 ///
+/// [`deserialize_seq`]: #method.deserialize_seq
+/// [`FromStr`]: std::str::FromStr
+/// [specification]: https://www.w3.org/TR/xmlschema11-2/#boolean
 /// [`deserialize_tuple`]: #method.deserialize_tuple
 /// [`deserialize_struct`]: #method.deserialize_struct
-struct SeqItemDeserializer<'de, 'd, 'm, R, E>
+struct ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
-    /// Access to the map that created this deserializer. Gives access to the
-    /// context, such as list of fields, that current map known about.
-    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
+    start: BytesStart<'de>,
+    de: &'d mut Deserializer<'de, R, E>,
 }
 
-impl<'de, 'd, 'm, R, E> SeqItemDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -851,11 +861,11 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.read_string_impl(true)
+        self.de.read_text()
     }
 }
 
-impl<'de, 'd, 'm, R, E> de::Deserializer<'de> for SeqItemDeserializer<'de, 'd, 'm, R, E>
+impl<'de, 'd, R, E> de::Deserializer<'de> for ElementDeserializer<'de, 'd, R, E>
 where
     R: XmlRead<'de>,
     E: EntityResolver,
@@ -864,28 +874,20 @@ where
 
     deserialize_primitives!(mut);
 
-    forward!(deserialize_unit);
-
-    forward!(deserialize_struct(
-        name: &'static str,
-        fields: &'static [&'static str]
-    ));
-
-    forward!(deserialize_enum(
-        name: &'static str,
-        variants: &'static [&'static str]
-    ));
-
-    forward!(deserialize_any);
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        // Consume subtree
+        self.de.read_to_end(self.start.name())?;
+        visitor.visit_unit()
+    }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
-            DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
-            _ => visitor.visit_some(self),
-        }
+        visitor.visit_some(self)
     }
 
     /// Forwards deserialization of the inner type. Always calls [`Visitor::visit_newtype_struct`]
@@ -919,6 +921,98 @@ where
     {
         let text = self.read_string()?;
         SimpleTypeDeserializer::from_text(text).deserialize_seq(visitor)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        _name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_map(ElementMapAccess::new(self.de, self.start, fields)?)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_enum(self)
+    }
+
+    #[inline]
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_map(visitor)
+    }
+}
+
+impl<'de, 'd, R, E> de::EnumAccess<'de> for ElementDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+    type Variant = Self;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let name = seed.deserialize(QNameDeserializer::from_elem(
+            self.start.raw_name(),
+            self.de.reader.decoder(),
+        )?)?;
+        Ok((name, self))
+    }
+}
+
+impl<'de, 'd, R, E> de::VariantAccess<'de> for ElementDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        // Consume subtree
+        self.de.read_to_end(self.start.name())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        seed.deserialize(self)
+    }
+
+    #[inline]
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    #[inline]
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_struct("", fields, visitor)
     }
 }
 

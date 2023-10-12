@@ -26,6 +26,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#661]: More string handling of serialized primitive values (booleans, numbers, strings,
   unit structs, unit variants). `<int>123<something-else/></int>` is no longer valid
   content. Previously all data after `123` up to closing tag would be silently skipped.
+- [#567]: Fixed incorrect deserialization of vectors of enums from sequences of tags.
 
 ### Misc Changes
 
@@ -40,6 +41,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#662]: Get rid of some allocations during serde deserialization.
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
+[#567]: https://github.com/tafia/quick-xml/issues/567
 [#580]: https://github.com/tafia/quick-xml/issues/580
 [#619]: https://github.com/tafia/quick-xml/issues/619
 [#635]: https://github.com/tafia/quick-xml/pull/635

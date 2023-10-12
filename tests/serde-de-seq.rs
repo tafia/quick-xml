@@ -167,8 +167,8 @@ mod fixed_name {
         use pretty_assertions::assert_eq;
 
         #[derive(Debug, PartialEq, Deserialize)]
-        struct List {
-            item: [(); 3],
+        struct List<T = ()> {
+            item: [T; 3],
         }
 
         /// Simple case: count of elements matches expected size of sequence,
@@ -791,6 +791,31 @@ mod fixed_name {
                             attribute: Some("value".to_string()),
                             element: Some("value".to_string()),
                         },
+                    ],
+                }
+            );
+        }
+
+        #[test]
+        fn list_of_list() {
+            let data: List<Vec<String>> = from_str(
+                r#"
+                <root>
+                    <item>first item</item>
+                    <item>second item</item>
+                    <item>third item</item>
+                </root>
+                "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                List {
+                    item: [
+                        vec!["first".to_string(), "item".to_string()],
+                        vec!["second".to_string(), "item".to_string()],
+                        vec!["third".to_string(), "item".to_string()],
                     ],
                 }
             );
@@ -1889,9 +1914,9 @@ mod variable_name {
         use pretty_assertions::assert_eq;
 
         #[derive(Debug, PartialEq, Deserialize)]
-        struct List {
+        struct List<T = Choice> {
             #[serde(rename = "$value")]
-            item: [Choice; 3],
+            item: [T; 3],
         }
 
         /// Simple case: count of elements matches expected size of sequence,
@@ -2888,6 +2913,37 @@ mod variable_name {
                 "#,
             )
             .unwrap_err();
+        }
+
+        /// Test for https://github.com/tafia/quick-xml/issues/567
+        #[test]
+        fn list_of_enum() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            enum Enum {
+                Variant(Vec<String>),
+            }
+
+            let data: List<Enum> = from_str(
+                r#"
+                <root>
+                    <Variant>first item</Variant>
+                    <Variant>second item</Variant>
+                    <Variant>third item</Variant>
+                </root>
+                "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                List {
+                    item: [
+                        Enum::Variant(vec!["first".to_string(), "item".to_string()]),
+                        Enum::Variant(vec!["second".to_string(), "item".to_string()]),
+                        Enum::Variant(vec!["third".to_string(), "item".to_string()]),
+                    ],
+                }
+            );
         }
 
         /// Checks that sequences represented by elements can contain sequences,
