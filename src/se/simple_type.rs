@@ -168,20 +168,23 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
 ///
 /// [item]: https://www.w3.org/TR/xmlschema11-1/#std-item_type_definition
 /// [simple type]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
-pub struct AtomicSerializer<W: Write> {
+pub struct AtomicSerializer<'i, W: Write> {
     pub writer: W,
     pub target: QuoteTarget,
     /// Defines which XML characters need to be escaped
     pub level: QuoteLevel,
+    /// Indent that should be written before the content if content is not an empty string
+    pub(crate) indent: Indent<'i>,
 }
 
-impl<W: Write> AtomicSerializer<W> {
+impl<'i, W: Write> AtomicSerializer<'i, W> {
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
+        self.indent.write_indent(&mut self.writer)?;
         Ok(self.writer.write_str(value)?)
     }
 }
 
-impl<W: Write> Serializer for AtomicSerializer<W> {
+impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     type Ok = W;
     type Error = DeError;
 
@@ -196,7 +199,9 @@ impl<W: Write> Serializer for AtomicSerializer<W> {
     write_primitive!();
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
-        self.write_str(&escape_item(value, self.target, self.level))?;
+        if !value.is_empty() {
+            self.write_str(&escape_item(value, self.target, self.level))?;
+        }
         Ok(self.writer)
     }
 
@@ -390,8 +395,8 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
             writer: self.writer,
             target: self.target,
             level: self.level,
-            first: true,
             indent: self.indent,
+            first: true,
         })
     }
 
@@ -459,10 +464,10 @@ pub struct SimpleSeq<'i, W: Write> {
     writer: W,
     target: QuoteTarget,
     level: QuoteLevel,
-    /// If `true`, nothing was written yet
-    first: bool,
     /// Indent that should be written before the content if content is not an empty string
     indent: Indent<'i>,
+    /// If `true`, nothing was written yet
+    first: bool,
 }
 
 impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
@@ -475,16 +480,18 @@ impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
     {
         // Write indent for the first element and delimiter for others
         //FIXME: sequence with only empty strings will be serialized as indent only + delimiters
-        if self.first {
-            self.indent.write_indent(&mut self.writer)?;
+        let indent = if self.first {
+            self.indent.borrow()
         } else {
             self.writer.write_char(' ')?;
-        }
+            Indent::None
+        };
         self.first = false;
         value.serialize(AtomicSerializer {
             writer: &mut self.writer,
             target: self.target,
             level: self.level,
+            indent,
         })?;
         Ok(())
     }
@@ -828,6 +835,7 @@ mod tests {
                         writer: String::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
                     };
 
                     let buffer = $data.serialize(ser).unwrap();
@@ -847,6 +855,7 @@ mod tests {
                         writer: &mut buffer,
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
+                        indent: Indent::None,
                     };
 
                     match $data.serialize(ser).unwrap_err() {

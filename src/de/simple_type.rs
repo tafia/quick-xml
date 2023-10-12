@@ -958,6 +958,7 @@ mod tests {
                             writer: String::new(),
                             target: QuoteTarget::Text,
                             level: QuoteLevel::Full,
+                            indent: Indent::None,
                         })
                         .unwrap(),
                         $input
