@@ -36,6 +36,7 @@ pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
     Ok(())
 }
 
+/// An iterator that merges two sorted iterators into one sorted iterator
 pub(crate) struct MergeIter<It1, It2>
 where
     It1: Iterator,
@@ -283,5 +284,37 @@ mod tests {
             67, 108, 97, 115, 115, 32, 73, 82, 73, 61, 34, 35, 66, 34,
         ]);
         assert_eq!(format!("{:?}", bytes), r##""Class IRI=\"#B\"""##);
+    }
+
+    #[test]
+    fn merge_empty() {
+        let iter = MergeIter::new(vec![].into_iter(), vec![].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![]);
+    }
+
+    #[test]
+    fn merge_single_empty() {
+        let iter = MergeIter::new(vec![1].into_iter(), vec![].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1]);
+        let iter = MergeIter::new(vec![].into_iter(), vec![1].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1]);
+    }
+
+    #[test]
+    fn merge_whole_side_before() {
+        let iter = MergeIter::new(vec![1, 2, 3].into_iter(), vec![4, 5, 6].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn merge_interleave() {
+        let iter = MergeIter::new(
+            vec![1, 2, 8, 20].into_iter(),
+            vec![3, 4, 22, 23].into_iter(),
+        );
+        assert_eq!(
+            iter.collect::<Vec<usize>>(),
+            vec![1, 2, 3, 4, 8, 20, 22, 23]
+        );
     }
 }
