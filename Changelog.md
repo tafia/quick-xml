@@ -39,6 +39,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 - [#619]: Allow to raise application errors in `ElementWriter::write_inner_content`
   (and newly added `ElementWriter::write_inner_content_async` of course).
 - [#662]: Get rid of some allocations during serde deserialization.
+- [#665]: Improve serialization of `xs:list`s when some elements serialized to an empty string.
 
 [#545]: https://github.com/tafia/quick-xml/pull/545
 [#567]: https://github.com/tafia/quick-xml/issues/567
@@ -51,6 +52,7 @@ MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 [#660]: https://github.com/tafia/quick-xml/pull/660
 [#661]: https://github.com/tafia/quick-xml/pull/661
 [#662]: https://github.com/tafia/quick-xml/pull/662
+[#665]: https://github.com/tafia/quick-xml/pull/665
 
 
 ## 0.30.0 -- 2023-07-23

@@ -953,16 +953,17 @@ mod tests {
                     assert_eq!(data, $result);
 
                     // Roundtrip to ensure that serializer corresponds to deserializer
-                    assert_eq!(
-                        data.serialize(AtomicSerializer {
-                            writer: String::new(),
+                    let mut buffer = String::new();
+                    let has_written = data
+                        .serialize(AtomicSerializer {
+                            writer: &mut buffer,
                             target: QuoteTarget::Text,
                             level: QuoteLevel::Full,
-                            indent: Indent::None,
+                            indent: Some(Indent::None),
                         })
-                        .unwrap(),
-                        $input
-                    );
+                        .unwrap();
+                    assert_eq!(buffer, $input);
+                    assert_eq!(has_written, !buffer.is_empty());
                 }
             };
         }

@@ -150,6 +150,15 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+macro_rules! write_atomic {
+    ($method:ident ( $ty:ty )) => {
+        fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
+            self.write_str(&value.to_string())?;
+            Ok(true)
+        }
+    };
+}
+
 /// A serializer that handles ordinary [simple type definition][item] with
 /// `{variety} = atomic`, or an ordinary [simple type] definition with
 /// `{variety} = union` whose basic members are all atomic.
@@ -166,6 +175,8 @@ fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
 ///
 /// Serialization of all other types returns [`Unsupported`][DeError::Unsupported] error.
 ///
+/// This serializer returns `true` if something was written and `false` otherwise.
+///
 /// [item]: https://www.w3.org/TR/xmlschema11-1/#std-item_type_definition
 /// [simple type]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 pub struct AtomicSerializer<'i, W: Write> {
@@ -173,19 +184,26 @@ pub struct AtomicSerializer<'i, W: Write> {
     pub target: QuoteTarget,
     /// Defines which XML characters need to be escaped
     pub level: QuoteLevel,
-    /// Indent that should be written before the content if content is not an empty string
-    pub(crate) indent: Indent<'i>,
+    /// When `Some`, the indent that should be written before the content
+    /// if content is not an empty string.
+    /// When `None` an `xs:list` delimiter (a space) should be written
+    pub(crate) indent: Option<Indent<'i>>,
 }
 
 impl<'i, W: Write> AtomicSerializer<'i, W> {
     fn write_str(&mut self, value: &str) -> Result<(), DeError> {
-        self.indent.write_indent(&mut self.writer)?;
+        if let Some(indent) = self.indent.as_mut() {
+            indent.write_indent(&mut self.writer)?;
+        } else {
+            // TODO: Customization point -- possible non-XML compatible extension to specify delimiter char
+            self.writer.write_char(' ')?;
+        }
         Ok(self.writer.write_str(value)?)
     }
 }
 
 impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
-    type Ok = W;
+    type Ok = bool;
     type Error = DeError;
 
     type SerializeSeq = Impossible<Self::Ok, Self::Error>;
@@ -196,13 +214,53 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
-    write_primitive!();
+    fn serialize_bool(mut self, value: bool) -> Result<Self::Ok, Self::Error> {
+        self.write_str(if value { "true" } else { "false" })?;
+        Ok(true)
+    }
+
+    write_atomic!(serialize_i8(i8));
+    write_atomic!(serialize_i16(i16));
+    write_atomic!(serialize_i32(i32));
+    write_atomic!(serialize_i64(i64));
+
+    write_atomic!(serialize_u8(u8));
+    write_atomic!(serialize_u16(u16));
+    write_atomic!(serialize_u32(u32));
+    write_atomic!(serialize_u64(u64));
+
+    serde_if_integer128! {
+        write_atomic!(serialize_i128(i128));
+        write_atomic!(serialize_u128(u128));
+    }
+
+    write_atomic!(serialize_f32(f32));
+    write_atomic!(serialize_f64(f64));
+
+    fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
+        self.serialize_str(&value.to_string())
+    }
 
     fn serialize_str(mut self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
             self.write_str(&escape_item(value, self.target, self.level))?;
         }
-        Ok(self.writer)
+        Ok(!value.is_empty())
+    }
+
+    fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
+        //TODO: Customization point - allow user to decide how to encode bytes
+        Err(DeError::Unsupported(
+            "`serialize_bytes` not supported yet".into(),
+        ))
+    }
+
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        Ok(false)
+    }
+
+    fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
+        value.serialize(self)
     }
 
     /// We cannot store anything, so the absence of a unit and presence of it
@@ -223,6 +281,23 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
             )
             .into(),
         ))
+    }
+
+    fn serialize_unit_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+    ) -> Result<Self::Ok, Self::Error> {
+        self.serialize_str(variant)
+    }
+
+    fn serialize_newtype_struct<T: ?Sized + Serialize>(
+        self,
+        _name: &'static str,
+        value: &T,
+    ) -> Result<Self::Ok, Self::Error> {
+        value.serialize(self)
     }
 
     /// We cannot store both a variant discriminant and a variant value,
@@ -396,7 +471,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
             target: self.target,
             level: self.level,
             indent: self.indent,
-            first: true,
+            is_empty: true,
         })
     }
 
@@ -466,8 +541,8 @@ pub struct SimpleSeq<'i, W: Write> {
     level: QuoteLevel,
     /// Indent that should be written before the content if content is not an empty string
     indent: Indent<'i>,
-    /// If `true`, nothing was written yet
-    first: bool,
+    /// If `true`, nothing was written yet to the `writer`
+    is_empty: bool,
 }
 
 impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
@@ -479,20 +554,19 @@ impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
         T: ?Sized + Serialize,
     {
         // Write indent for the first element and delimiter for others
-        //FIXME: sequence with only empty strings will be serialized as indent only + delimiters
-        let indent = if self.first {
-            self.indent.borrow()
+        let indent = if self.is_empty {
+            Some(self.indent.borrow())
         } else {
-            self.writer.write_char(' ')?;
-            Indent::None
+            None
         };
-        self.first = false;
-        value.serialize(AtomicSerializer {
+        if value.serialize(AtomicSerializer {
             writer: &mut self.writer,
             target: self.target,
             level: self.level,
             indent,
-        })?;
+        })? {
+            self.is_empty = false;
+        }
         Ok(())
     }
 
@@ -831,15 +905,17 @@ mod tests {
             ($name:ident: $data:expr => $expected:literal) => {
                 #[test]
                 fn $name() {
+                    let mut buffer = String::new();
                     let ser = AtomicSerializer {
-                        writer: String::new(),
+                        writer: &mut buffer,
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
-                        indent: Indent::None,
+                        indent: Some(Indent::None),
                     };
 
-                    let buffer = $data.serialize(ser).unwrap();
+                    let has_written = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(has_written, !buffer.is_empty());
                 }
             };
         }
@@ -855,7 +931,7 @@ mod tests {
                         writer: &mut buffer,
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
-                        indent: Indent::None,
+                        indent: Some(Indent::None),
                     };
 
                     match $data.serialize(ser).unwrap_err() {
@@ -1042,7 +1118,7 @@ mod tests {
         serialize_as!(seq: vec![1, 2, 3] => "1 2 3");
         serialize_as!(seq_empty: Vec::<usize>::new() => "");
         serialize_as!(seq_with_1_empty_str: vec![""] => "");
-        serialize_as!(seq_with_2_empty_strs: vec!["", ""] => " ");
+        serialize_as!(seq_with_2_empty_strs: vec!["", ""] => "");
         serialize_as!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
             => "&lt;&quot;&amp;&apos;&gt; with&#9;&#10;&#13;&#32;spaces 3");
         serialize_as!(tuple_struct: Tuple("first", 42) => "first 42");
@@ -1072,7 +1148,7 @@ mod tests {
                 target: QuoteTarget::Text,
                 level: QuoteLevel::Full,
                 indent: Indent::Owned(indent),
-                first: true,
+                is_empty: true,
             };
 
             SerializeSeq::end(ser).unwrap();
@@ -1089,7 +1165,7 @@ mod tests {
                 target: QuoteTarget::Text,
                 level: QuoteLevel::Full,
                 indent: Indent::Owned(indent),
-                first: true,
+                is_empty: true,
             };
 
             SerializeSeq::serialize_element(&mut ser, "").unwrap();
@@ -1109,7 +1185,7 @@ mod tests {
                 target: QuoteTarget::Text,
                 level: QuoteLevel::Full,
                 indent: Indent::Owned(indent),
-                first: true,
+                is_empty: true,
             };
 
             SerializeSeq::serialize_element(&mut ser, "").unwrap();
@@ -1129,7 +1205,7 @@ mod tests {
                 target: QuoteTarget::Text,
                 level: QuoteLevel::Full,
                 indent: Indent::Owned(indent),
-                first: true,
+                is_empty: true,
             };
 
             SerializeSeq::serialize_element(&mut ser, &1).unwrap();
@@ -1149,7 +1225,7 @@ mod tests {
                 target: QuoteTarget::Text,
                 level: QuoteLevel::Full,
                 indent: Indent::Owned(indent),
-                first: true,
+                is_empty: true,
             };
 
             SerializeSeq::serialize_element(&mut ser, &1).unwrap();
