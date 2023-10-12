@@ -1047,4 +1047,107 @@ mod tests {
         err!(enum_struct: Enum::Struct { key: "answer", val: 42 }
             => Unsupported("cannot serialize enum struct variant `Enum::Struct` as an attribute or text content value"));
     }
+
+    mod simple_seq {
+        use super::*;
+        use crate::writer::Indentation;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn empty_seq() {
+            let mut buffer = String::new();
+            let mut indent = Indentation::new(b'*', 2);
+            indent.grow();
+            let ser = SimpleSeq {
+                writer: &mut buffer,
+                target: QuoteTarget::Text,
+                level: QuoteLevel::Full,
+                indent: Indent::Owned(indent),
+                first: true,
+            };
+
+            SerializeSeq::end(ser).unwrap();
+            assert_eq!(buffer, "");
+        }
+
+        #[test]
+        fn all_items_empty() {
+            let mut buffer = String::new();
+            let mut indent = Indentation::new(b'*', 2);
+            indent.grow();
+            let mut ser = SimpleSeq {
+                writer: &mut buffer,
+                target: QuoteTarget::Text,
+                level: QuoteLevel::Full,
+                indent: Indent::Owned(indent),
+                first: true,
+            };
+
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::end(ser).unwrap();
+            assert_eq!(buffer, "");
+        }
+
+        #[test]
+        fn some_items_empty1() {
+            let mut buffer = String::new();
+            let mut indent = Indentation::new(b'*', 2);
+            indent.grow();
+            let mut ser = SimpleSeq {
+                writer: &mut buffer,
+                target: QuoteTarget::Text,
+                level: QuoteLevel::Full,
+                indent: Indent::Owned(indent),
+                first: true,
+            };
+
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::serialize_element(&mut ser, &1).unwrap();
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::end(ser).unwrap();
+            assert_eq!(buffer, "\n**1");
+        }
+
+        #[test]
+        fn some_items_empty2() {
+            let mut buffer = String::new();
+            let mut indent = Indentation::new(b'*', 2);
+            indent.grow();
+            let mut ser = SimpleSeq {
+                writer: &mut buffer,
+                target: QuoteTarget::Text,
+                level: QuoteLevel::Full,
+                indent: Indent::Owned(indent),
+                first: true,
+            };
+
+            SerializeSeq::serialize_element(&mut ser, &1).unwrap();
+            SerializeSeq::serialize_element(&mut ser, "").unwrap();
+            SerializeSeq::serialize_element(&mut ser, &2).unwrap();
+            SerializeSeq::end(ser).unwrap();
+            assert_eq!(buffer, "\n**1 2");
+        }
+
+        #[test]
+        fn items() {
+            let mut buffer = String::new();
+            let mut indent = Indentation::new(b'*', 2);
+            indent.grow();
+            let mut ser = SimpleSeq {
+                writer: &mut buffer,
+                target: QuoteTarget::Text,
+                level: QuoteLevel::Full,
+                indent: Indent::Owned(indent),
+                first: true,
+            };
+
+            SerializeSeq::serialize_element(&mut ser, &1).unwrap();
+            SerializeSeq::serialize_element(&mut ser, &2).unwrap();
+            SerializeSeq::serialize_element(&mut ser, &3).unwrap();
+            SerializeSeq::end(ser).unwrap();
+            assert_eq!(buffer, "\n**1 2 3");
+        }
+    }
 }
