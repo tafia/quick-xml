@@ -433,7 +433,7 @@ mod without_root {
                     </Text>");
 
             /// Test serialization of the specially named variant `$text`
-            mod text {
+            mod text_variant {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -485,8 +485,8 @@ mod without_root {
             /// Deserialization is not possible because we cannot choose with what
             /// field we should associate the XML node that we see. To do that we
             /// mark field by a special name `$value` ([`VALUE_KEY`]) and that is
-            /// tested in the `in_struct_value` module.
-            mod in_struct {
+            /// tested in the `value_field` module.
+            mod normal_field {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -559,9 +559,9 @@ mod without_root {
                         </Root>");
             }
 
-            /// The same tests as in `in_struct`, but enum at the second nesting
+            /// The same tests as in `normal_field`, but enum at the second nesting
             /// level.
-            mod in_struct2 {
+            mod normal_field2 {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -660,8 +660,8 @@ mod without_root {
                         </Root>");
             }
 
-            /// The same tests as in `in_struct`, but enum field renamed to `$value`.
-            mod in_struct_value {
+            /// The same tests as in `normal_field`, but enum field renamed to `$value`.
+            mod value_field {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -742,8 +742,8 @@ mod without_root {
                         </Root>");
             }
 
-            /// The same tests as in `in_struct2`, but enum field renamed to `$value`.
-            mod in_struct_value2 {
+            /// The same tests as in `normal_field2`, but enum field renamed to `$value`.
+            mod value_field2 {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -840,10 +840,10 @@ mod without_root {
                         </Root>");
             }
 
-            /// The same tests as in `in_struct`, but enum field renamed to `$text`.
+            /// The same tests as in `normal_field`, but enum field renamed to `$text`.
             ///
             /// Text representation of enum is possible only for unit variants.
-            mod in_struct_text {
+            mod text_field {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
@@ -899,10 +899,10 @@ mod without_root {
                     "<Root");
             }
 
-            /// The same tests as in `in_struct2`, but enum field renamed to `$text`.
+            /// The same tests as in `normal_field2`, but enum field renamed to `$text`.
             ///
             /// Text representation of enum is possible only for unit variants.
-            mod in_struct_text2 {
+            mod text_field2 {
                 use super::*;
                 use pretty_assertions::assert_eq;
 
