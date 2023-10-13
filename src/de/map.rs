@@ -613,7 +613,27 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_enum(self)
+        if self.fixed_name {
+            match self.map.de.next()? {
+                // Handles <field>UnitEnumVariant</field>
+                DeEvent::Start(_) => {
+                    // skip <field>, read text after it and ensure that it is ended by </field>
+                    let text = self.map.de.read_text()?;
+                    if text.is_empty() {
+                        // Map empty text (<field/>) to a special `$text` variant
+                        visitor.visit_enum(SimpleTypeDeserializer::from_text(TEXT_KEY.into()))
+                    } else {
+                        visitor.visit_enum(SimpleTypeDeserializer::from_text(text))
+                    }
+                }
+                // SAFETY: we use that deserializer with `fixed_name == true`
+                // only from the `MapAccess::next_value_seed` and only when we
+                // peeked `Start` event
+                _ => unreachable!(),
+            }
+        } else {
+            visitor.visit_enum(self)
+        }
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
