@@ -143,9 +143,8 @@ where
         } else {
             match self.de.next()? {
                 DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-                DeEvent::Text(_) => Err(DeError::ExpectedStart),
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Start` events are possible here"),
             }
         }
     }
