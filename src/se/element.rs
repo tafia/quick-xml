@@ -7,12 +7,13 @@ use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::{Indent, XmlName};
 use serde::ser::{
-    Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
-    SerializeTupleStruct, SerializeTupleVariant, Serializer,
+    Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
+    SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
 };
 use serde::serde_if_integer128;
 use std::fmt::Write;
 
+/// Writes simple type content between [`ElementSerializer::key`] tags.
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         fn $method(self, value: $ty) -> Result<Self::Ok, Self::Error> {
@@ -23,8 +24,39 @@ macro_rules! write_primitive {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A serializer used to serialize element with specified name.
+/// A serializer used to serialize element with specified name. Unlike the [`ContentSerializer`],
+/// this serializer never uses variant names of enum variants, and because of that
+/// it is unable to serialize any enum values, except unit variants.
+///
+/// This serializer is used for an ordinary fields in structs, which are not special
+/// fields named `$text` ([`TEXT_KEY`]) or `$value` ([`VALUE_KEY`]). `$text` field
+/// should be serialized using [`SimpleTypeSerializer`] and `$value` field should be
+/// serialized using [`ContentSerializer`].
+///
+/// This serializer does the following:
+/// - numbers converted to a decimal representation and serialized as `<key>value</key>`;
+/// - booleans serialized ether as `<key>true</key>` or `<key>false</key>`;
+/// - strings and characters are serialized as `<key>value</key>`. In particular,
+///   an empty string is serialized as `<key/>`;
+/// - `None` is serialized as `<key/>`;
+/// - `Some` and newtypes are serialized as an inner type using the same serializer;
+/// - units (`()`) and unit structs are serialized as `<key/>`;
+/// - sequences, tuples and tuple structs are serialized as repeated `<key>` tag.
+///   In particular, empty sequence is serialized to nothing;
+/// - structs are serialized as a sequence of fields wrapped in a `<key>` tag. Each
+///   field is serialized recursively using either `ElementSerializer`, [`ContentSerializer`]
+///   (`$value` fields), or [`SimpleTypeSerializer`] (`$text` fields).
+///   In particular, the empty struct is serialized as `<key/>`;
+/// - maps are serialized as a sequence of entries wrapped in a `<key>` tag. If key is
+///   serialized to a special name, the same rules as for struct fields are applied.
+///   In particular, the empty map is serialized as `<key/>`;
+/// - enums:
+///   - unit variants are serialized as `<key>variant</key>`;
+///   - other variants are not supported ([`DeError::Unsupported`] is returned);
+///
+/// Usage of empty tags depends on the [`ContentSerializer::expand_empty_elements`] setting.
 pub struct ElementSerializer<'w, 'k, W: Write> {
+    /// The inner serializer that contains the settings and mostly do the actual work
     pub ser: ContentSerializer<'w, 'k, W>,
     /// Tag name used to wrap serialized types except enum variants which uses the variant name
     pub(super) key: XmlName<'k>,
@@ -37,7 +69,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     type SerializeSeq = Self;
     type SerializeTuple = Self;
     type SerializeTupleStruct = Self;
-    type SerializeTupleVariant = Tuple<'w, 'k, W>;
+    type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
     type SerializeMap = Map<'w, 'k, W>;
     type SerializeStruct = Struct<'w, 'k, W>;
     type SerializeStructVariant = Struct<'w, 'k, W>;
@@ -103,24 +135,21 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         self.ser.write_empty(self.key)
     }
 
+    /// Writes a tag with name [`Self::key`] and content of unit variant inside.
+    /// If variant is a special `$text` value, then empty tag `<key/>` is written.
+    /// Otherwise a `<key>variant</key>` is written.
     fn serialize_unit_variant(
         self,
         name: &'static str,
-        _variant_index: u32,
+        variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
-            // We should write some text but we don't known what text to write
-            Err(DeError::Unsupported(
-                format!(
-                    "cannot serialize enum unit variant `{}::$text` as text content value",
-                    name
-                )
-                .into(),
-            ))
+            self.ser.write_empty(self.key)
         } else {
-            let name = XmlName::try_from(variant)?;
-            self.ser.write_empty(name)
+            self.ser.write_wrapped(self.key, |ser| {
+                ser.serialize_unit_variant(name, variant_index, variant)
+            })
         }
     }
 
@@ -132,20 +161,23 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         value.serialize(self)
     }
 
+    /// Always returns [`DeError::Unsupported`]. Newtype variants can be serialized
+    /// only in `$value` fields, which is serialized using [`ContentSerializer`].
+    #[inline]
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
-        mut self,
-        _name: &'static str,
+        self,
+        name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        value: &T,
+        _value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        if variant == TEXT_KEY {
-            value.serialize(self.ser.into_simple_type_serializer())?;
-            Ok(())
-        } else {
-            self.key = XmlName::try_from(variant)?;
-            value.serialize(self)
-        }
+        Err(DeError::Unsupported(
+            format!(
+                "cannot serialize enum newtype variant `{}::{}`",
+                name, variant
+            )
+            .into(),
+        ))
     }
 
     #[inline]
@@ -167,23 +199,23 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         self.serialize_tuple(len)
     }
 
+    /// Always returns [`DeError::Unsupported`]. Tuple variants can be serialized
+    /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_tuple_variant(
-        mut self,
+        self,
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        if variant == TEXT_KEY {
-            self.ser
-                .into_simple_type_serializer()
-                .serialize_tuple_struct(name, len)
-                .map(Tuple::Text)
-        } else {
-            self.key = XmlName::try_from(variant)?;
-            self.serialize_tuple_struct(name, len).map(Tuple::Element)
-        }
+        Err(DeError::Unsupported(
+            format!(
+                "cannot serialize enum tuple variant `{}::{}`",
+                name, variant
+            )
+            .into(),
+        ))
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -210,26 +242,23 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         })
     }
 
+    /// Always returns [`DeError::Unsupported`]. Struct variants can be serialized
+    /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_struct_variant(
-        mut self,
+        self,
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        if variant == TEXT_KEY {
-            Err(DeError::Unsupported(
-                format!(
-                    "cannot serialize enum struct variant `{}::$text` as text content value",
-                    name
-                )
-                .into(),
-            ))
-        } else {
-            self.key = XmlName::try_from(variant)?;
-            self.serialize_struct(name, len)
-        }
+        Err(DeError::Unsupported(
+            format!(
+                "cannot serialize enum struct variant `{}::{}`",
+                name, variant
+            )
+            .into(),
+        ))
     }
 }
 
@@ -245,7 +274,7 @@ impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
             ser: self.ser.new_seq_element_serializer(),
             key: self.key,
         })?;
-        // Write indent for next element
+        // Write indent for the next element
         self.ser.write_indent = true;
         Ok(())
     }

@@ -536,7 +536,7 @@ mod without_root {
                             float: 42.0,
                             string: "answer"
                         }}
-                        => Unsupported("cannot serialize enum struct variant `Struct::$text` as text content value"),
+                        => Unsupported("cannot serialize enum struct variant `Struct::$text`"),
                         "<Root");
                 }
 
