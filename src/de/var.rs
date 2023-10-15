@@ -1,5 +1,6 @@
 use crate::{
     de::key::QNameDeserializer,
+    de::map::ElementMapAccess,
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::{DeEvent, Deserializer, XmlRead, TEXT_KEY},
@@ -103,7 +104,7 @@ where
                 _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
-            seed.deserialize(&mut *self.de)
+            seed.deserialize(self.de)
         }
     }
 
@@ -140,7 +141,12 @@ where
                 _ => unreachable!("Only `Text` events are possible here"),
             }
         } else {
-            self.de.deserialize_struct("", fields, visitor)
+            match self.de.next()? {
+                DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.de, e, fields)?),
+                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                DeEvent::Text(_) => Err(DeError::ExpectedStart),
+                DeEvent::Eof => Err(DeError::UnexpectedEof),
+            }
         }
     }
 }
