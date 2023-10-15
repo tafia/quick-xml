@@ -390,8 +390,12 @@ impl<'n> XmlName<'n> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub(crate) enum Indent<'i> {
+    /// No indent should be written before the element
     None,
+    /// The specified indent should be written. The type owns the buffer with indent
     Owned(Indentation),
+    /// The specified indent should be written. The type borrows buffer with indent
+    /// from its owner
     Borrow(&'i mut Indentation),
 }
 

@@ -882,6 +882,9 @@ mod tests {
     struct Newtype(String);
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    struct Tuple((), ());
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
     struct BorrowedNewtype<'a>(&'a str);
 
     #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -950,15 +953,17 @@ mod tests {
                     assert_eq!(data, $result);
 
                     // Roundtrip to ensure that serializer corresponds to deserializer
-                    assert_eq!(
-                        data.serialize(AtomicSerializer {
-                            writer: String::new(),
+                    let mut buffer = String::new();
+                    let has_written = data
+                        .serialize(AtomicSerializer {
+                            writer: &mut buffer,
                             target: QuoteTarget::Text,
                             level: QuoteLevel::Full,
+                            indent: Some(Indent::None),
                         })
-                        .unwrap(),
-                        $input
-                    );
+                        .unwrap();
+                    assert_eq!(buffer, $input);
+                    assert_eq!(has_written, !buffer.is_empty());
                 }
             };
         }
@@ -1040,7 +1045,7 @@ mod tests {
                 => Unsupported("sequences are not supported as `xs:list` items"));
         err!(tuple: ((), ()) = "non-escaped string"
                 => Unsupported("tuples are not supported as `xs:list` items"));
-        err!(tuple_struct: ((), ()) = "non-escaped string"
+        err!(tuple_struct: Tuple = "non-escaped string"
                 => Unsupported("tuples are not supported as `xs:list` items"));
 
         err!(map: HashMap<(), ()> = "non-escaped string"

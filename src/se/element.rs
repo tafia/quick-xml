@@ -265,12 +265,12 @@ impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeSeq>::serialize_element(self, value)
+        SerializeSeq::serialize_element(self, value)
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeSeq>::end(self)
+        SerializeSeq::end(self)
     }
 }
 
@@ -283,12 +283,12 @@ impl<'w, 'k, W: Write> SerializeTupleStruct for ElementSerializer<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeSeq>::serialize_element(self, value)
+        SerializeSeq::serialize_element(self, value)
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeSeq>::end(self)
+        SerializeSeq::end(self)
     }
 }
 
@@ -314,16 +314,16 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
         T: ?Sized + Serialize,
     {
         match self {
-            Tuple::Element(ser) => SerializeTuple::serialize_element(ser, value),
-            Tuple::Text(ser) => SerializeTuple::serialize_element(ser, value),
+            Self::Element(ser) => SerializeTuple::serialize_element(ser, value),
+            Self::Text(ser) => SerializeTuple::serialize_element(ser, value),
         }
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
         match self {
-            Tuple::Element(ser) => SerializeTuple::end(ser),
-            Tuple::Text(ser) => SerializeTuple::end(ser).map(|_| ()),
+            Self::Element(ser) => SerializeTuple::end(ser),
+            Self::Text(ser) => SerializeTuple::end(ser).map(|_| ()),
         }
     }
 }
@@ -461,12 +461,12 @@ impl<'w, 'k, W: Write> SerializeStructVariant for Struct<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
-        <Self as SerializeStruct>::serialize_field(self, key, value)
+        SerializeStruct::serialize_field(self, key, value)
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        <Self as SerializeStruct>::end(self)
+        SerializeStruct::end(self)
     }
 }
 
