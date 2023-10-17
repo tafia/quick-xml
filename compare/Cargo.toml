@@ -9,7 +9,7 @@ edition = "2021"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-maybe_xml = "0.3"
+maybe_xml = "0.6"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
 rusty_xml = { version = "0.3", package = "RustyXML" }

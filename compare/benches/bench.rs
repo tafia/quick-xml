@@ -79,24 +79,18 @@ fn low_level_comparison(c: &mut Criterion) {
             BenchmarkId::new("maybe_xml", filename),
             *data,
             |b, input| {
-                use maybe_xml::eval::recv::Evaluator;
-                use maybe_xml::token::borrowed::Token;
+                use maybe_xml::Lexer;
+                use maybe_xml::token::Ty;
 
                 b.iter(|| {
-                    let mut input = input.as_bytes();
-                    let mut eval = Evaluator::new();
+                    let lexer = Lexer::from_slice(input.as_bytes());
 
                     let mut count = criterion::black_box(0);
-                    loop {
-                        let consumed = eval.recv(input);
-                        match eval.next_token() {
-                            Ok(Some(Token::StartTag(_))) => count += 1,
-                            Ok(Some(Token::EmptyElementTag(_))) => count += 1,
-                            Ok(Some(Token::Eof)) => break,
-                            Ok(Some(Token::EofWithBytesNotEvaluated(_))) => break,
+                    for token in lexer.into_iter() {
+                        match token.ty() {
+                            Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
                             _ => (),
                         }
-                        input = &input[consumed..];
                     }
                     assert_eq!(count, total_tags, "Overall tag count in {}", filename);
                 })
