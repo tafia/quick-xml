@@ -338,7 +338,7 @@ where
             // is a `Start` event (the value deserializer will see that event)
             ValueSource::Content => seed.deserialize(MapValueDeserializer {
                 map: self,
-                allow_start: false,
+                fixed_name: false,
             }),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -349,7 +349,7 @@ where
             // will see that event)
             ValueSource::Nested => seed.deserialize(MapValueDeserializer {
                 map: self,
-                allow_start: true,
+                fixed_name: true,
             }),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
@@ -361,6 +361,13 @@ where
 /// A deserializer for a value of map or struct. That deserializer slightly
 /// differently processes events for a primitive types and sequences than
 /// a [`Deserializer`].
+///
+/// This deserializer used to deserialize two kinds of fields:
+/// - usual fields with a dedicated name, such as `field_one` or `field_two`, in
+///   that case field [`Self::fixed_name`] is `true`;
+/// - the special `$value` field which represents any tag or a textual content
+///   in the XML which would be found in the document, in that case field
+///   [`Self::fixed_name`] is `false`.
 ///
 /// This deserializer can see two kind of events at the start:
 /// - [`DeEvent::Text`]
@@ -415,10 +422,10 @@ where
     /// Access to the map that created this deserializer. Gives access to the
     /// context, such as list of fields, that current map known about.
     map: &'m mut ElementMapAccess<'de, 'd, R, E>,
-    /// Determines, should [`Deserializer::read_string_impl()`] expand the second
-    /// level of tags or not.
+    /// Whether this deserializer was created for deserialization from an element
+    /// with fixed name, or the elements with different names or even text are allowed.
     ///
-    /// If this field is `true`, we process the following XML shape:
+    /// If this field is `true`, we process `<tag>` element in the following XML shape:
     ///
     /// ```xml
     /// <any-tag>
@@ -467,16 +474,16 @@ where
     ///
     /// The whole map represented by an `<any-tag>` element, the map key is
     /// implicit and equals to the [`VALUE_KEY`] constant, and the value is
-    /// a [`Text`], or a [`Start`] event (the value deserializer
-    /// will see one of those events). In the first two cases the value of this
-    /// field do not matter (because we already see the textual event and there
-    /// no reasons to look "inside" something), but in the last case the primitives
-    /// should raise a deserialization error, because that means that you trying
-    /// to deserialize the following struct:
+    /// a [`Text`], or a [`Start`] event (the value deserializer will see one of
+    /// those events). In the first two cases the value of this field do not matter
+    /// (because we already see the textual event and there no reasons to look
+    /// "inside" something), but in the last case the primitives should raise
+    /// a deserialization error, because that means that you trying to deserialize
+    /// the following struct:
     ///
     /// ```ignore
     /// struct AnyName {
-    ///   #[serde(rename = "$text")]
+    ///   #[serde(rename = "$value")]
     ///   any_name: String,
     /// }
     /// ```
@@ -489,7 +496,7 @@ where
     ///
     /// [`Text`]: DeEvent::Text
     /// [`Start`]: DeEvent::Start
-    allow_start: bool,
+    fixed_name: bool,
 }
 
 impl<'de, 'd, 'm, R, E> MapValueDeserializer<'de, 'd, 'm, R, E>
@@ -504,7 +511,8 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        self.map.de.read_string_impl(self.allow_start)
+        // TODO: Read the whole content to fix https://github.com/tafia/quick-xml/issues/483
+        self.map.de.read_string_impl(self.fixed_name)
     }
 }
 
@@ -562,11 +570,11 @@ where
     where
         V: Visitor<'de>,
     {
-        let filter = if self.allow_start {
+        let filter = if self.fixed_name {
             match self.map.de.peek()? {
                 // Clone is cheap if event borrows from the input
                 DeEvent::Start(e) => TagFilter::Include(e.clone()),
-                // SAFETY: we use that deserializer with `allow_start == true`
+                // SAFETY: we use that deserializer with `fixed_name == true`
                 // only from the `ElementMapAccess::next_value_seed` and only when we
                 // peeked `Start` event
                 _ => unreachable!(),
@@ -605,7 +613,7 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_enum(crate::de::var::EnumAccess::new(self.map.de))
+        visitor.visit_enum(self)
     }
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -615,6 +623,135 @@ where
         match self.map.de.peek()? {
             DeEvent::Text(_) => self.deserialize_str(visitor),
             _ => self.deserialize_map(visitor),
+        }
+    }
+}
+
+impl<'de, 'd, 'm, R, E> de::EnumAccess<'de> for MapValueDeserializer<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+    type Variant = MapValueVariantAccess<'de, 'd, 'm, R, E>;
+
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        let decoder = self.map.de.reader.decoder();
+        let (name, is_text) = match self.map.de.peek()? {
+            DeEvent::Start(e) => (
+                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
+                false,
+            ),
+            DeEvent::Text(_) => (
+                seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
+                true,
+            ),
+            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
+            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+        };
+        Ok((
+            name,
+            MapValueVariantAccess {
+                map: self.map,
+                is_text,
+            },
+        ))
+    }
+}
+
+struct MapValueVariantAccess<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    /// Access to the map that created this enum accessor. Gives access to the
+    /// context, such as list of fields, that current map known about.
+    map: &'m mut ElementMapAccess<'de, 'd, R, E>,
+    /// `true` if variant should be deserialized from a textual content
+    /// and `false` if from tag
+    is_text: bool,
+}
+
+impl<'de, 'd, 'm, R, E> de::VariantAccess<'de> for MapValueVariantAccess<'de, 'd, 'm, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        match self.map.de.next()? {
+            // Consume subtree
+            DeEvent::Start(e) => self.map.de.read_to_end(e.name()),
+            // Does not needed to deserialize using SimpleTypeDeserializer, because
+            // it returns `()` when `deserialize_unit()` is requested
+            DeEvent::Text(_) => Ok(()),
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Start` or `Text` events are possible here"),
+        }
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        if self.is_text {
+            match self.map.de.next()? {
+                DeEvent::Text(e) => seed.deserialize(SimpleTypeDeserializer::from_text_content(e)),
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` events are possible here"),
+            }
+        } else {
+            seed.deserialize(MapValueDeserializer {
+                map: self.map,
+                // Because element name already was either mapped to a field name,
+                // or to a variant name, we should not treat it as variable
+                fixed_name: true,
+            })
+        }
+    }
+
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        if self.is_text {
+            match self.map.de.next()? {
+                DeEvent::Text(e) => {
+                    SimpleTypeDeserializer::from_text_content(e).deserialize_tuple(len, visitor)
+                }
+                // SAFETY: the other events are filtered in `variant_seed()`
+                _ => unreachable!("Only `Text` events are possible here"),
+            }
+        } else {
+            MapValueDeserializer {
+                map: self.map,
+                // Because element name already was either mapped to a field name,
+                // or to a variant name, we should not treat it as variable
+                fixed_name: true,
+            }
+            .deserialize_tuple(len, visitor)
+        }
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.map.de.next()? {
+            DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self.map.de, e, fields)?),
+            DeEvent::Text(e) => {
+                SimpleTypeDeserializer::from_text_content(e).deserialize_struct("", fields, visitor)
+            }
+            // SAFETY: the other events are filtered in `variant_seed()`
+            _ => unreachable!("Only `Start` or `Text` events are possible here"),
         }
     }
 }
