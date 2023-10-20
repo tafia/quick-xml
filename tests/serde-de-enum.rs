@@ -331,7 +331,7 @@ mod externally_tagged {
             fn text() {
                 match from_str::<Text>(" text ") {
                     Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
                 }
             }
 
@@ -339,7 +339,7 @@ mod externally_tagged {
             fn cdata() {
                 match from_str::<Text>("<![CDATA[ cdata ]]>") {
                     Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
                 }
             }
 
@@ -347,7 +347,7 @@ mod externally_tagged {
             fn mixed() {
                 match from_str::<Text>(" te <![CDATA[ cdata ]]> xt ") {
                     Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but found {:?}", x),
+                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
                 }
             }
         }

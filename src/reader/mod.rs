@@ -1074,9 +1074,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("CData"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1094,9 +1093,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("CData"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1177,9 +1175,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1195,9 +1192,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1213,9 +1209,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1231,9 +1226,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1249,9 +1243,8 @@ mod test {
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            x => panic!(
+                                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                                 x
                             ),
                         }
@@ -1315,9 +1308,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1333,9 +1325,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1369,9 +1360,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1395,9 +1385,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1413,9 +1402,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1449,9 +1437,8 @@ mod test {
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                x => panic!(
+                                    r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                                     x
                                 ),
                             }
@@ -1644,9 +1631,8 @@ mod test {
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedEof("CData"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -1658,9 +1644,8 @@ mod test {
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -1672,9 +1657,8 @@ mod test {
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -1686,9 +1670,8 @@ mod test {
 
                     match reader.$read_until_close($buf) $(.$await)? {
                         Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                        x => panic!(
+                            r#"Expected `Err(UnexpectedEof("DOCTYPE"))`, but got `{:?}`"#,
                             x
                         ),
                     }

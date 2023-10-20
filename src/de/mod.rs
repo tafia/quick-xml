@@ -3539,7 +3539,7 @@ mod tests {
 
             match List::deserialize(&mut de) {
                 Err(DeError::TooManyEvents(count)) => assert_eq!(count.get(), 3),
-                e => panic!("Expected `Err(TooManyEvents(3))`, but found {:?}", e),
+                e => panic!("Expected `Err(TooManyEvents(3))`, but got `{:?}`", e),
             }
         }
 
@@ -3605,8 +3605,8 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => (),
-                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+                Err(DeError::UnexpectedEof) => {}
+                x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }
@@ -3619,8 +3619,8 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Text("".into()));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => (),
-                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+                Err(DeError::UnexpectedEof) => {}
+                x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }
@@ -3713,7 +3713,7 @@ mod tests {
                 assert_eq!(found, "root");
             }
             x => panic!(
-                r#"Expected `Err(InvalidXml(EndEventMismatch("", "root")))`, but found {:?}"#,
+                "Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'root' }}))`, but got `{:?}`",
                 x
             ),
         }
@@ -3727,7 +3727,7 @@ mod tests {
                 assert_eq!(found, "other");
             }
             x => panic!(
-                r#"Expected `Err(InvalidXml(EndEventMismatch("root", "other")))`, but found {:?}"#,
+                "Expected `Err(InvalidXml(EndEventMismatch {{ expected = 'root', found = 'other' }}))`, but got `{:?}`",
                 x
             ),
         }
@@ -4055,7 +4055,7 @@ mod tests {
                             assert_eq!(expected, "");
                             assert_eq!(found, "tag2");
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag2' }})`, but got {:?}", x),
+                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag2' }}))`, but got `{:?}`", x),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4196,7 +4196,7 @@ mod tests {
                     assert_eq!(expected, "");
                     assert_eq!(found, "tag");
                 }
-                x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
             }
             assert_eq!(de.next().unwrap(), DeEvent::Eof);
         }
@@ -4273,7 +4273,7 @@ mod tests {
                         assert_eq!(expected, "");
                         assert_eq!(found, "tag");
                     }
-                    x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4303,7 +4303,7 @@ mod tests {
                             assert_eq!(expected, "");
                             assert_eq!(found, "tag");
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4407,7 +4407,7 @@ mod tests {
                         assert_eq!(expected, "");
                         assert_eq!(found, "tag");
                     }
-                    x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4435,7 +4435,7 @@ mod tests {
                             assert_eq!(expected, "");
                             assert_eq!(found, "tag");
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4483,7 +4483,7 @@ mod tests {
                             assert_eq!(expected, "");
                             assert_eq!(found, "tag");
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }}))`, but got `{:?}`", x),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }

@@ -931,7 +931,7 @@ mod namespaces {
                         assert_eq!(namespace, b"not_correct_namespace");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -949,7 +949,7 @@ mod namespaces {
                         assert_eq!(namespace, b"");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -970,7 +970,7 @@ mod namespaces {
                         assert_eq!(namespace, b"http://www.w3.org/XML/1998/namespace");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -1016,7 +1016,7 @@ mod namespaces {
                         assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -1037,7 +1037,7 @@ mod namespaces {
                         assert_eq!(namespace, b"not_correct_namespace");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -1055,7 +1055,7 @@ mod namespaces {
                         assert_eq!(namespace, b"");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }
@@ -1076,7 +1076,7 @@ mod namespaces {
                         assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
                     }
                     x => panic!(
-                        "Expected `Error::ReservedNamespaceError`, but found {:?}",
+                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
                         x
                     ),
                 }

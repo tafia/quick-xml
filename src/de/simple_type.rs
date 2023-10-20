@@ -886,7 +886,7 @@ mod tests {
                 match err {
                     DeError::$kind(e) => assert_eq!(e, $reason),
                     _ => panic!(
-                        "Expected `{}({})`, found `{:?}`",
+                        "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),
                         $reason,
                         err
@@ -1004,7 +1004,7 @@ mod tests {
                     match err {
                         DeError::$kind(e) => assert_eq!(e, $reason),
                         _ => panic!(
-                            "Expected `{}({})`, found `{:?}`",
+                            "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
                             $reason,
                             err

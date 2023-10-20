@@ -70,7 +70,7 @@ fn ignored_any() {
     let err = from_str::<IgnoredAny>("");
     match err {
         Err(DeError::UnexpectedEof) => {}
-        other => panic!("Expected `UnexpectedEof`, found {:?}", other),
+        x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
     }
 
     from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
@@ -91,9 +91,9 @@ mod trivial {
             #[test]
             fn $name() {
                 match from_str::<$type>($value) {
-                    Err(DeError::UnexpectedEof) => (),
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -134,7 +134,7 @@ mod trivial {
                         assert_eq!(msg, "binary data content is not supported by XML format")
                     }
                     x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -148,7 +148,7 @@ mod trivial {
                         assert_eq!(msg, "binary data content is not supported by XML format")
                     }
                     x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -157,9 +157,9 @@ mod trivial {
             #[test]
             fn unit() {
                 match from_str::<()>($value) {
-                    Err(DeError::UnexpectedEof) => (),
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -199,7 +199,7 @@ mod trivial {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -208,7 +208,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -217,7 +217,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -232,7 +232,7 @@ mod trivial {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -241,7 +241,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -250,7 +250,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -276,7 +276,7 @@ mod trivial {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
-                            r#"Expected `Err(DeError::Custom("missing field `$text`"))`, but got `{:?}`"#,
+                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -342,7 +342,7 @@ mod trivial {
                     assert_eq!(msg, "binary data content is not supported by XML format")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -356,7 +356,7 @@ mod trivial {
                     assert_eq!(msg, "binary data content is not supported by XML format")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -405,7 +405,7 @@ mod trivial {
                     assert_eq!(msg, "binary data content is not supported by XML format")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -419,7 +419,7 @@ mod trivial {
                     assert_eq!(msg, "binary data content is not supported by XML format")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -554,8 +554,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => {}
+                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
                 }
             }
 
@@ -564,8 +564,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$attributes>(r#"<root float="42" string="answer">"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => {}
+                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
                 }
             }
 
@@ -574,8 +574,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer</string>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => {}
+                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
                 }
             }
 
@@ -584,8 +584,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::UnexpectedEof) => {}
+                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
                 }
             }
         }
@@ -601,8 +601,8 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root></mismatched>"#);
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
                 }
             }
 
@@ -614,8 +614,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
                 }
             }
 
@@ -627,8 +627,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
                 }
             }
 
@@ -640,8 +640,8 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
+                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
                 }
             }
         }
@@ -862,8 +862,8 @@ mod struct_ {
             match from_str::<Elements>(
                 "\nexcess text\t<root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => (),
-                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+                Err(DeError::ExpectedStart) => {}
+                x => panic!("Expected `Err(ExpectedStart)`, but got `{:?}`", x),
             };
         }
 
@@ -873,8 +873,8 @@ mod struct_ {
             match from_str::<Elements>(
                 "<![CDATA[excess cdata]]><root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => (),
-                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+                Err(DeError::ExpectedStart) => {}
+                x => panic!("Expected `Err(ExpectedStart)`, but got `{:?}`", x),
             };
         }
 
@@ -1069,7 +1069,7 @@ mod xml_schema_lists {
                 match err {
                     DeError::$kind(e) => assert_eq!(e, $err),
                     _ => panic!(
-                        "Expected `{}({})`, found `{:?}`",
+                        "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),
                         $err,
                         err
@@ -1323,7 +1323,7 @@ mod borrow {
                     "invalid type: string \"with escape sequence: <\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with escape sequence: <\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -1342,7 +1342,7 @@ mod borrow {
                     "invalid type: string \"with escape sequence: <\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with escape sequence: <\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -1356,7 +1356,7 @@ mod borrow {
                     "invalid type: string \"with \\\"escape\\\" sequences\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with \"escape\" sequences\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with \"escape\" sequences\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }

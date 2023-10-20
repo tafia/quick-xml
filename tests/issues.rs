@@ -149,7 +149,7 @@ mod issue514 {
                 assert_eq!(found, "other-tag");
             }
             x => panic!(
-                r#"Expected `Err(EndEventMismatch("some-tag", "other-tag"))`, but found {:?}"#,
+                "Expected `Err(EndEventMismatch {{ expected = 'some-tag', found = 'other-tag' }})`, but got `{:?}`",
                 x
             ),
         }
@@ -174,7 +174,7 @@ mod issue604 {
         match reader.read_event_into(&mut buf) {
             Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
             x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
+                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                 x
             ),
         }
@@ -193,7 +193,7 @@ mod issue604 {
         match reader.read_event_into(&mut buf) {
             Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
             x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
+                r#"Expected `Err(UnexpectedEof("Comment"))`, but got `{:?}`"#,
                 x
             ),
         }
