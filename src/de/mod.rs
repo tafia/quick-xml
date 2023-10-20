@@ -1867,6 +1867,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Character represented as [strings](#method.deserialize_str).
+        #[inline]
         fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1886,6 +1887,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        #[inline]
         fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1893,15 +1895,17 @@ macro_rules! deserialize_primitives {
             self.deserialize_str(visitor)
         }
 
-        /// Returns [`DeError::Unsupported`]
-        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
+        /// Forwards deserialization to the [`deserialize_any`](#method.deserialize_any).
+        #[inline]
+        fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            Err(DeError::Unsupported("binary data content is not supported by XML format".into()))
+            self.deserialize_any(visitor)
         }
 
         /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).
+        #[inline]
         fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1910,6 +1914,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of the named units the same as [unnamed units](#method.deserialize_unit).
+        #[inline]
         fn deserialize_unit_struct<V>(
             self,
             _name: &'static str,
@@ -1922,6 +1927,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+        #[inline]
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1930,6 +1936,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+        #[inline]
         fn deserialize_tuple_struct<V>(
             self,
             _name: &'static str,
@@ -1953,6 +1960,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Identifiers represented as [strings](#method.deserialize_str).
+        #[inline]
         fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
