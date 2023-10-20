@@ -16,7 +16,7 @@ mod issue252 {
 
     #[test]
     fn attributes() {
-        #[derive(Serialize, Debug, PartialEq)]
+        #[derive(Debug, Deserialize, Serialize, PartialEq)]
         struct OptionalAttributes {
             #[serde(rename = "@a")]
             a: Option<&'static str>,
@@ -26,31 +26,41 @@ mod issue252 {
             b: Option<&'static str>,
         }
 
+        // Writing `a=""` for a `None` we reflects serde_json behavior which also
+        // writes `a: null` for `None`, and reflect they deserialization asymmetry
+        let xml = r#"<OptionalAttributes a=""/>"#;
         assert_eq!(
             to_string(&OptionalAttributes { a: None, b: None }).unwrap(),
-            r#"<OptionalAttributes a=""/>"#
+            xml
         );
         assert_eq!(
-            to_string(&OptionalAttributes {
+            from_str::<OptionalAttributes>(xml).unwrap(),
+            OptionalAttributes {
                 a: Some(""),
-                b: Some("")
-            })
-            .unwrap(),
-            r#"<OptionalAttributes a="" b=""/>"#
+                b: None
+            }
         );
-        assert_eq!(
-            to_string(&OptionalAttributes {
-                a: Some("a"),
-                b: Some("b")
-            })
-            .unwrap(),
-            r#"<OptionalAttributes a="a" b="b"/>"#
-        );
+
+        let value = OptionalAttributes {
+            a: Some(""),
+            b: Some(""),
+        };
+        let xml = r#"<OptionalAttributes a="" b=""/>"#;
+        assert_eq!(to_string(&value).unwrap(), xml);
+        assert_eq!(from_str::<OptionalAttributes>(xml).unwrap(), value);
+
+        let value = OptionalAttributes {
+            a: Some("a"),
+            b: Some("b"),
+        };
+        let xml = r#"<OptionalAttributes a="a" b="b"/>"#;
+        assert_eq!(to_string(&value).unwrap(), xml);
+        assert_eq!(from_str::<OptionalAttributes>(xml).unwrap(), value);
     }
 
     #[test]
     fn elements() {
-        #[derive(Serialize, Debug, PartialEq)]
+        #[derive(Debug, Deserialize, Serialize, PartialEq)]
         struct OptionalElements {
             a: Option<&'static str>,
 
@@ -58,26 +68,36 @@ mod issue252 {
             b: Option<&'static str>,
         }
 
+        // Writing `<a/>` for a `None` we reflects serde_json behavior which also
+        // writes `a: null` for `None`, and reflect they deserialization asymmetry
+        let xml = "<OptionalElements><a/></OptionalElements>";
         assert_eq!(
             to_string(&OptionalElements { a: None, b: None }).unwrap(),
-            r#"<OptionalElements><a/></OptionalElements>"#
+            xml
         );
         assert_eq!(
-            to_string(&OptionalElements {
+            from_str::<OptionalElements>(xml).unwrap(),
+            OptionalElements {
                 a: Some(""),
-                b: Some("")
-            })
-            .unwrap(),
-            r#"<OptionalElements><a/><b/></OptionalElements>"#
+                b: None
+            }
         );
-        assert_eq!(
-            to_string(&OptionalElements {
-                a: Some("a"),
-                b: Some("b")
-            })
-            .unwrap(),
-            r#"<OptionalElements><a>a</a><b>b</b></OptionalElements>"#
-        );
+
+        let value = OptionalElements {
+            a: Some(""),
+            b: Some(""),
+        };
+        let xml = "<OptionalElements><a/><b/></OptionalElements>";
+        assert_eq!(to_string(&value).unwrap(), xml);
+        assert_eq!(from_str::<OptionalElements>(xml).unwrap(), value);
+
+        let value = OptionalElements {
+            a: Some("a"),
+            b: Some("b"),
+        };
+        let xml = "<OptionalElements><a>a</a><b>b</b></OptionalElements>";
+        assert_eq!(to_string(&value).unwrap(), xml);
+        assert_eq!(from_str::<OptionalElements>(xml).unwrap(), value);
     }
 }
 

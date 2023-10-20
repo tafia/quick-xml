@@ -481,7 +481,32 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - attribute values (`<... ...="value" ...>`)
 /// - mixed text / CDATA content (`<...>text<![CDATA[cdata]]></...>`)
 ///
+/// This deserializer processes items as following:
+/// - numbers are parsed from a text content using [`FromStr`];
+/// - booleans converted from the text according to the XML [specification]:
+///   - `"true"` and `"1"` converted to `true`;
+///   - `"false"` and `"0"` converted to `false`;
+/// - strings returned as is;
+/// - characters also returned as strings. If string contain more than one character
+///   or empty, it is responsibility of a type to return an error;
+/// - `Option` always deserialized as `Some` using the same deserializer.
+///   If attribute or text content is missed, then the deserializer even wouldn't
+///   be used, so if it is used, then the value should be;
+/// - units (`()`) and unit structs always deserialized successfully;
+/// - newtype structs forwards deserialization to the inner type using the same
+///   deserializer;
+/// - sequences, tuples and tuple structs are deserialized as `xs:list`s. Only
+///   sequences of primitive types is possible to deserialize this way and they
+///   should be delimited by a space (` `, `\t`, `\r`, or `\n`);
+/// - structs and maps returns [`DeError::Unsupported`];
+/// - enums:
+///   - unit variants: just return `()`;
+///   - all other variants returns [`DeError::Unsupported`];
+/// - identifiers are deserialized as strings.
+///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
+/// [`FromStr`]: std::str::FromStr
+/// [specification]: https://www.w3.org/TR/xmlschema11-2/#boolean
 pub struct SimpleTypeDeserializer<'de, 'a> {
     /// - In case of attribute contains escaped attribute value
     /// - In case of text contains unescaped text value
@@ -642,11 +667,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        if self.content.is_empty() {
-            visitor.visit_none()
-        } else {
-            visitor.visit_some(self)
-        }
+        visitor.visit_some(self)
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -1225,7 +1246,7 @@ mod tests {
         err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#32;string"
              => Unsupported("binary data content is not supported by XML format"));
 
-        simple!(utf8, option_none: Option<&str> = "" => None);
+        simple!(utf8, option_none: Option<&str> = "" => Some(""));
         simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
 
         simple_only!(utf8, unit: () = "any data" => ());
@@ -1311,7 +1332,7 @@ mod tests {
         unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#32;string"
                      => "binary data content is not supported by XML format");
 
-        utf16!(option_none: Option<()> = "" => None);
+        utf16!(option_none: Option<()> = "" => Some(()));
         utf16!(option_some: Option<()> = "any data" => Some(()));
 
         utf16!(unit: () = "any data" => ());
