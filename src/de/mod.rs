@@ -509,8 +509,9 @@
 //!   /// Use unit variant, if you do not care of a content.
 //!   /// You can use tuple variant if you want to parse
 //!   /// textual content as an xs:list.
-//!   /// Struct variants are not supported and will return
-//!   /// Err(Unsupported)
+//!   /// Struct variants are will pass a string to the
+//!   /// struct enum variant visitor, which typically
+//!   /// returns Err(Custom)
 //!   #[serde(rename = "$text")]
 //!   Text(String),
 //! }
@@ -613,8 +614,9 @@
 //!   /// Use unit variant, if you do not care of a content.
 //!   /// You can use tuple variant if you want to parse
 //!   /// textual content as an xs:list.
-//!   /// Struct variants are not supported and will return
-//!   /// Err(Unsupported)
+//!   /// Struct variants are will pass a string to the
+//!   /// struct enum variant visitor, which typically
+//!   /// returns Err(Custom)
 //!   #[serde(rename = "$text")]
 //!   Text(String),
 //! }
@@ -1377,9 +1379,9 @@
 //! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
 //! |-------|-----------------------------------------|---------------------|---------------------|
 //! |Unit   |`<Unit/>`                                |`<field>Unit</field>`|`Unit`               |
-//! |Newtype|`<Newtype>42</Newtype>`                  |Err(Unsupported)     |Err(Unsupported)     |
-//! |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |Err(Unsupported)     |Err(Unsupported)     |
-//! |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|Err(Unsupported)     |Err(Unsupported)     |
+//! |Newtype|`<Newtype>42</Newtype>`                  |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//! |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//! |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|Err(Custom) [^0]     |Err(Custom) [^0]     |
 //!
 //! `$text` enum variant
 //! --------------------
@@ -1387,9 +1389,13 @@
 //! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
 //! |-------|-----------------------------------------|---------------------|---------------------|
 //! |Unit   |_(empty)_                                |`<field/>`           |_(empty)_            |
-//! |Newtype|`42`                                     |Err(Unsupported) [^1]|Err(Unsupported) [^2]|
-//! |Tuple  |`42 answer`                              |Err(Unsupported) [^3]|Err(Unsupported) [^4]|
-//! |Struct |Err(Unsupported)                         |Err(Unsupported)     |Err(Unsupported)     |
+//! |Newtype|`42`                                     |Err(Custom) [^0] [^1]|Err(Custom) [^0] [^2]|
+//! |Tuple  |`42 answer`                              |Err(Custom) [^0] [^3]|Err(Custom) [^0] [^4]|
+//! |Struct |Err(Custom) [^0]                         |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//!
+//! [^0]: Error is returned by the deserialized type. In case of derived implementation a `Custom`
+//!       error will be returned, but custom deserialize implementation can successfully deserialize
+//!       value from a string which will be passed to it.
 //!
 //! [^1]: If this serialize as `<field>42</field>` then it will be ambiguity during deserialization,
 //!       because it clash with `Unit` representation in normal field.

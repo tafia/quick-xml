@@ -354,11 +354,11 @@ mod trivial {
         #[test]
         fn byte_buf() {
             match from_str::<Trivial<ByteBuf>>("<root>escaped&#x20;byte_buf</root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped byte_buf\", expected byte data")
                 }
                 x => panic!(
-                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped byte_buf\", expected byte data"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -368,11 +368,11 @@ mod trivial {
         #[test]
         fn bytes() {
             match from_str::<Trivial<Bytes>>("<root>escaped&#x20;byte_buf</root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped byte_buf\", expected borrowed bytes")
                 }
                 x => panic!(
-                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped byte_buf\", expected borrowed bytes"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -417,11 +417,11 @@ mod trivial {
         #[test]
         fn byte_buf() {
             match from_str::<Trivial<ByteBuf>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped&#x20;byte_buf\", expected byte data")
                 }
                 x => panic!(
-                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped&#x20;byte_buf\", expected byte data"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -431,11 +431,11 @@ mod trivial {
         #[test]
         fn bytes() {
             match from_str::<Trivial<Bytes>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped&#x20;byte_buf\", expected borrowed bytes")
                 }
                 x => panic!(
-                    r#"Expected `Err(Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped&#x20;byte_buf\", expected borrowed bytes"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -1158,7 +1158,7 @@ mod xml_schema_lists {
             "third 3".to_string(),
         ]);
         err!(byte_buf: ByteBuf = r#"<root list="first second  third&#x20;3"/>"#
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+            => Custom("invalid type: string \"first\", expected byte data"));
 
         list!(unit: () = r#"<root list="1 second  false"/>"# => vec![(), (), ()]);
     }
@@ -1209,7 +1209,7 @@ mod xml_schema_lists {
                 "3".to_string(),
             ]);
             err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"first\", expected byte data"));
 
             list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
         }
@@ -1248,7 +1248,7 @@ mod xml_schema_lists {
                 "third&#x20;3".to_string(),
             ]);
             err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"first\", expected byte data"));
 
             list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
         }

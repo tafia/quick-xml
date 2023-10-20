@@ -320,6 +320,7 @@ mod externally_tagged {
         /// Struct variant cannot be directly deserialized from `Text` / `CData` events
         mod struct_ {
             use super::*;
+            use pretty_assertions::assert_eq;
 
             #[derive(Debug, Deserialize, PartialEq)]
             enum Text {
@@ -330,24 +331,42 @@ mod externally_tagged {
             #[test]
             fn text() {
                 match from_str::<Text>(" text ") {
-                    Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
+                    Err(DeError::Custom(reason)) => assert_eq!(
+                        reason,
+                        "invalid type: string \"text\", expected struct variant Text::Struct"
+                    ),
+                    x => panic!(
+                        r#"Expected `Err(Custom("invalid type: string \"text\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        x
+                    ),
                 }
             }
 
             #[test]
             fn cdata() {
                 match from_str::<Text>("<![CDATA[ cdata ]]>") {
-                    Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
+                    Err(DeError::Custom(reason)) => assert_eq!(
+                        reason,
+                        "invalid type: string \" cdata \", expected struct variant Text::Struct"
+                    ),
+                    x => panic!(
+                        r#"Expected `Err(Custom("invalid type: string \" cdata \", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        x
+                    ),
                 }
             }
 
             #[test]
             fn mixed() {
                 match from_str::<Text>(" te <![CDATA[ cdata ]]> xt ") {
-                    Err(DeError::Unsupported(_)) => {}
-                    x => panic!("Expected `Err(Unsupported(_))`, but got `{:?}`", x),
+                    Err(DeError::Custom(reason)) => assert_eq!(
+                        reason,
+                        "invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"
+                    ),
+                    x => panic!(
+                        r#"Expected `Err(Custom("invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        x
+                    ),
                 }
             }
         }

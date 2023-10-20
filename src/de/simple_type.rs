@@ -9,6 +9,7 @@ use crate::errors::serialize::DeError;
 use crate::escape::unescape;
 use crate::utils::CowRef;
 use memchr::memchr;
+use serde::de::value::UnitDeserializer;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
 use serde::{self, serde_if_integer128};
 use std::borrow::Cow;
@@ -40,15 +41,17 @@ macro_rules! unsupported {
         $(
             ($($type:ty),*)
         )?
-        => $message:literal
     ) => {
         #[inline]
         fn $deserialize<V: Visitor<'de>>(
             self,
             $($(_: $type,)*)?
-            _visitor: V
+            visitor: V
         ) -> Result<V::Value, Self::Error> {
-            Err(DeError::Unsupported($message.into()))
+            // Deserializer methods are only hints, if deserializer could not satisfy
+            // request, it should return the data that it has. It is responsibility
+            // of a Visitor to return an error if it does not understand the data
+            self.deserialize_str(visitor)
         }
     };
 }
@@ -138,7 +141,8 @@ impl<'de, 'a> Content<'de, 'a> {
 ///
 /// Identifiers represented as strings and deserialized accordingly.
 ///
-/// Deserialization of all other types returns [`Unsupported`][DeError::Unsupported] error.
+/// Deserialization of all other types will provide a string and in most cases
+/// the deserialization will fail because visitor does not expect that.
 ///
 /// The `Owned` variant of the content acts as a storage for data, allocated by
 /// an external deserializer that pass it via [`ListIter`].
@@ -305,71 +309,68 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         visitor.visit_unit()
     }
 
-    unsupported!(deserialize_bytes        => "byte arrays are not supported as `xs:list` items");
-    unsupported!(deserialize_byte_buf     => "byte arrays are not supported as `xs:list` items");
-    unsupported!(deserialize_seq          => "sequences are not supported as `xs:list` items");
-    unsupported!(deserialize_tuple(usize) => "tuples are not supported as `xs:list` items");
-    unsupported!(deserialize_tuple_struct(&'static str, usize) => "tuples are not supported as `xs:list` items");
-    unsupported!(deserialize_map          => "maps are not supported as `xs:list` items");
-    unsupported!(deserialize_struct(&'static str, &'static [&'static str]) => "structures are not supported as `xs:list` items");
+    unsupported!(deserialize_bytes);
+    unsupported!(deserialize_byte_buf);
+    unsupported!(deserialize_seq);
+    unsupported!(deserialize_tuple(usize));
+    unsupported!(deserialize_tuple_struct(&'static str, usize));
+    unsupported!(deserialize_map);
+    unsupported!(deserialize_struct(&'static str, &'static [&'static str]));
 }
 
 impl<'de, 'a> EnumAccess<'de> for AtomicDeserializer<'de, 'a> {
     type Error = DeError;
-    type Variant = AtomicUnitOnly;
+    type Variant = UnitOnly;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), DeError>
     where
         V: DeserializeSeed<'de>,
     {
         let name = seed.deserialize(self)?;
-        Ok((name, AtomicUnitOnly))
+        Ok((name, UnitOnly))
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Deserializer of variant data, that supports only unit variants.
-/// Attempt to deserialize newtype, tuple or struct variant will return a
-/// [`DeError::Unsupported`] error.
-pub struct AtomicUnitOnly;
-impl<'de> VariantAccess<'de> for AtomicUnitOnly {
+/// Attempt to deserialize newtype will provide [`UnitDeserializer`].
+/// Attempt to deserialize tuple or struct variant will result to call of
+/// [`Visitor::visit_unit`].
+pub struct UnitOnly;
+impl<'de> VariantAccess<'de> for UnitOnly {
     type Error = DeError;
 
     #[inline]
-    fn unit_variant(self) -> Result<(), DeError> {
+    fn unit_variant(self) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value, DeError>
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
     where
         T: DeserializeSeed<'de>,
     {
-        Err(DeError::Unsupported(
-            "enum newtype variants are not supported as `xs:list` items".into(),
-        ))
+        seed.deserialize(UnitDeserializer::<Self::Error>::new())
     }
 
-    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value, DeError>
+    #[inline]
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        Err(DeError::Unsupported(
-            "enum tuple variants are not supported as `xs:list` items".into(),
-        ))
+        visitor.visit_unit()
     }
 
+    #[inline]
     fn struct_variant<V>(
         self,
         _fields: &'static [&'static str],
-        _visitor: V,
-    ) -> Result<V::Value, DeError>
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        Err(DeError::Unsupported(
-            "enum struct variants are not supported as `xs:list` items".into(),
-        ))
+        visitor.visit_unit()
     }
 }
 
@@ -498,10 +499,11 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - sequences, tuples and tuple structs are deserialized as `xs:list`s. Only
 ///   sequences of primitive types is possible to deserialize this way and they
 ///   should be delimited by a space (` `, `\t`, `\r`, or `\n`);
-/// - structs and maps returns [`DeError::Unsupported`];
+/// - structs and maps delegates to [`Self::deserialize_str`];
 /// - enums:
 ///   - unit variants: just return `()`;
-///   - all other variants returns [`DeError::Unsupported`];
+///   - newtype variants: deserialize from [`UnitDeserializer`];
+///   - tuple and struct variants: call [`Visitor::visit_unit`];
 /// - identifiers are deserialized as strings.
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
@@ -615,6 +617,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     deserialize_num!(deserialize_f64 => visit_f64);
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
+    #[inline]
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -638,6 +641,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
+    #[inline]
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -645,17 +649,17 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
-    /// Returns [`DeError::Unsupported`]
-    fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    #[inline]
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        Err(DeError::Unsupported(
-            "binary data content is not supported by XML format".into(),
-        ))
+        self.deserialize_str(visitor)
     }
 
-    /// Forwards deserialization to the [`Self::deserialize_bytes`]
+    /// Forwards deserialization to the [`Self::deserialize_str`]
+    #[inline]
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -670,6 +674,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         visitor.visit_some(self)
     }
 
+    #[inline]
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -678,6 +683,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Forwards deserialization to the [`Self::deserialize_unit`]
+    #[inline]
     fn deserialize_unit_struct<V>(
         self,
         _name: &'static str,
@@ -711,6 +717,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Representation of tuples the same as [sequences][Self::deserialize_seq].
+    #[inline]
     fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -719,6 +726,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Representation of named tuples the same as [unnamed tuples][Self::deserialize_tuple].
+    #[inline]
     fn deserialize_tuple_struct<V>(
         self,
         _name: &'static str,
@@ -731,9 +739,8 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_tuple(len, visitor)
     }
 
-    unsupported!(deserialize_map => "maps are not supported for XSD `simpleType`s");
-    unsupported!(deserialize_struct(&'static str, &'static [&'static str])
-                 => "structures are not supported for XSD `simpleType`s");
+    unsupported!(deserialize_map);
+    unsupported!(deserialize_struct(&'static str, &'static [&'static str]));
 
     fn deserialize_enum<V>(
         self,
@@ -748,6 +755,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     }
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
+    #[inline]
     fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -755,6 +763,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
+    #[inline]
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
@@ -765,60 +774,14 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
 
 impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
     type Error = DeError;
-    type Variant = SimpleTypeUnitOnly;
+    type Variant = UnitOnly;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), DeError>
     where
         V: DeserializeSeed<'de>,
     {
         let name = seed.deserialize(self)?;
-        Ok((name, SimpleTypeUnitOnly))
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Deserializer of variant data, that supports only unit variants.
-/// Attempt to deserialize newtype, tuple or struct variant will return a
-/// [`DeError::Unsupported`] error.
-pub struct SimpleTypeUnitOnly;
-impl<'de> VariantAccess<'de> for SimpleTypeUnitOnly {
-    type Error = DeError;
-
-    #[inline]
-    fn unit_variant(self) -> Result<(), DeError> {
-        Ok(())
-    }
-
-    fn newtype_variant_seed<T>(self, _seed: T) -> Result<T::Value, DeError>
-    where
-        T: DeserializeSeed<'de>,
-    {
-        Err(DeError::Unsupported(
-            "enum newtype variants are not supported for XSD `simpleType`s".into(),
-        ))
-    }
-
-    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        Err(DeError::Unsupported(
-            "enum tuple variants are not supported for XSD `simpleType`s".into(),
-        ))
-    }
-
-    fn struct_variant<V>(
-        self,
-        _fields: &'static [&'static str],
-        _visitor: V,
-    ) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        Err(DeError::Unsupported(
-            "enum struct variants are not supported for XSD `simpleType`s".into(),
-        ))
+        Ok((name, UnitOnly))
     }
 }
 
@@ -1046,9 +1009,9 @@ mod tests {
                 => Custom("invalid type: string \"escaped string\", expected a borrowed string"));
 
         err!(byte_buf: ByteBuf = "&lt;escaped&#32;string"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"<escaped string\", expected byte data"));
         err!(borrowed_bytes: Bytes = "non-escaped string"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected borrowed bytes"));
 
         deserialized_to!(option_none: Option<&str> = "" => None);
         deserialized_to!(option_some: Option<&str> = "non-escaped-string" => Some("non-escaped-string"));
@@ -1063,24 +1026,24 @@ mod tests {
                 => BorrowedNewtype("non-escaped string"));
 
         err!(seq: Vec<()> = "non-escaped string"
-                => Unsupported("sequences are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected a sequence"));
         err!(tuple: ((), ()) = "non-escaped string"
-                => Unsupported("tuples are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected a tuple of size 2"));
         err!(tuple_struct: Tuple = "non-escaped string"
-                => Unsupported("tuples are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected tuple struct Tuple"));
 
         err!(map: HashMap<(), ()> = "non-escaped string"
-                => Unsupported("maps are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected a map"));
         err!(struct_: Struct = "non-escaped string"
-                => Unsupported("structures are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"non-escaped string\", expected struct Struct"));
 
         deserialized_to!(enum_unit: Enum = "Unit" => Enum::Unit);
         err!(enum_newtype: Enum = "Newtype"
-                => Unsupported("enum newtype variants are not supported as `xs:list` items"));
+                => Custom("invalid type: unit value, expected a string"));
         err!(enum_tuple: Enum = "Tuple"
-                => Unsupported("enum tuple variants are not supported as `xs:list` items"));
+                => Custom("invalid type: unit value, expected tuple variant Enum::Tuple"));
         err!(enum_struct: Enum = "Struct"
-                => Unsupported("enum struct variants are not supported as `xs:list` items"));
+                => Custom("invalid type: unit value, expected struct variant Enum::Struct"));
         err!(enum_other: Enum = "any data"
                 => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
@@ -1240,11 +1203,11 @@ mod tests {
 
         simple!(utf8, string: String = "&lt;escaped string" => "<escaped string");
         err!(utf8, byte_buf: ByteBuf = "&lt;escaped&#32;string"
-             => Unsupported("binary data content is not supported by XML format"));
+             => Custom("invalid type: string \"<escaped string\", expected byte data"));
 
         simple!(utf8, borrowed_str: &str = "non-escaped string" => "non-escaped string");
         err!(utf8, borrowed_bytes: Bytes = "&lt;escaped&#32;string"
-             => Unsupported("binary data content is not supported by XML format"));
+             => Custom("invalid type: string \"<escaped string\", expected borrowed bytes"));
 
         simple!(utf8, option_none: Option<&str> = "" => Some(""));
         simple!(utf8, option_some: Option<&str> = "non-escaped string" => Some("non-escaped string"));
@@ -1262,17 +1225,17 @@ mod tests {
             => BorrowedNewtype("non-escaped string"));
 
         err!(utf8, map: HashMap<(), ()> = "any data"
-             => Unsupported("maps are not supported for XSD `simpleType`s"));
+             => Custom("invalid type: string \"any data\", expected a map"));
         err!(utf8, struct_: Struct = "any data"
-             => Unsupported("structures are not supported for XSD `simpleType`s"));
+             => Custom("invalid type: string \"any data\", expected struct Struct"));
 
         simple!(utf8, enum_unit: Enum = "Unit" => Enum::Unit);
         err!(utf8, enum_newtype: Enum = "Newtype"
-             => Unsupported("enum newtype variants are not supported for XSD `simpleType`s"));
+             => Custom("invalid type: unit value, expected a string"));
         err!(utf8, enum_tuple: Enum = "Tuple"
-             => Unsupported("enum tuple variants are not supported for XSD `simpleType`s"));
+             => Custom("invalid type: unit value, expected tuple variant Enum::Tuple"));
         err!(utf8, enum_struct: Enum = "Struct"
-             => Unsupported("enum struct variants are not supported for XSD `simpleType`s"));
+             => Custom("invalid type: unit value, expected struct variant Enum::Struct"));
         err!(utf8, enum_other: Enum = "any data"
              => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
 
@@ -1301,7 +1264,7 @@ mod tests {
 
         macro_rules! unsupported {
             ($name:ident: $type:ty = $xml:literal => $err:literal) => {
-                err!(utf16, $name: $type = to_utf16($xml) => Unsupported($err));
+                err!(utf16, $name: $type = to_utf16($xml) => Custom($err));
             };
         }
 
@@ -1330,7 +1293,7 @@ mod tests {
 
         utf16!(string: String = "&lt;escaped&#32;string" => "<escaped string");
         unsupported!(borrowed_bytes: Bytes = "&lt;escaped&#32;string"
-                     => "binary data content is not supported by XML format");
+                    => "invalid type: string \"<escaped string\", expected borrowed bytes");
 
         utf16!(option_none: Option<()> = "" => Some(()));
         utf16!(option_some: Option<()> = "any data" => Some(()));
@@ -1341,23 +1304,23 @@ mod tests {
         utf16!(newtype_owned: Newtype = "&lt;escaped&#32;string" => Newtype("<escaped string".into()));
 
         // UTF-16 data never borrow because data was decoded not in-place
-        err!(utf16, newtype_borrowed: BorrowedNewtype = to_utf16("non-escaped string")
-             => Custom("invalid type: string \"non-escaped string\", expected a borrowed string"));
+        unsupported!(newtype_borrowed: BorrowedNewtype = "non-escaped string"
+                    => "invalid type: string \"non-escaped string\", expected a borrowed string");
 
         unsupported!(map: HashMap<(), ()> = "any data"
-                     => "maps are not supported for XSD `simpleType`s");
+                    => "invalid type: string \"any data\", expected a map");
         unsupported!(struct_: Struct = "any data"
-                     => "structures are not supported for XSD `simpleType`s");
+                    => "invalid type: string \"any data\", expected struct Struct");
 
         utf16!(enum_unit: Enum = "Unit" => Enum::Unit);
         unsupported!(enum_newtype: Enum = "Newtype"
-                     => "enum newtype variants are not supported for XSD `simpleType`s");
+                    => "invalid type: unit value, expected a string");
         unsupported!(enum_tuple: Enum = "Tuple"
-                     => "enum tuple variants are not supported for XSD `simpleType`s");
+                    => "invalid type: unit value, expected tuple variant Enum::Tuple");
         unsupported!(enum_struct: Enum = "Struct"
-                     => "enum struct variants are not supported for XSD `simpleType`s");
-        err!(utf16, enum_other: Enum = to_utf16("any data")
-             => Custom("unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`"));
+                    => "invalid type: unit value, expected struct variant Enum::Struct");
+        unsupported!(enum_other: Enum = "any data"
+                    => "unknown variant `any data`, expected one of `Unit`, `Newtype`, `Tuple`, `Struct`");
 
         utf16!(identifier: Id = "Field" => Id::Field);
         utf16!(ignored_any: Any = "any data" => Any(IgnoredAny));

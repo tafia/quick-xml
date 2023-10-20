@@ -16,6 +16,10 @@
 
 ### Misc Changes
 
+- [#675]: Minimum supported version of serde raised to 1.0.139
+
+[#675]: https://github.com/tafia/quick-xml/pull/675
+
 
 ## 0.31.0 -- 2023-10-22
 
