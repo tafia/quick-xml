@@ -199,11 +199,6 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
 /// [`#[serde(with = "...")]`][with], [`#[serde(deserialize_with = "...")]`][de-with]
 /// and [`#[serde(serialize_with = "...")]`][se-with].
 ///
-/// When you serialize unit variants of enums, they are serialized as an empty
-/// element, like `<Unit/>`. If your enum consist only of unit variants,
-/// it is frequently required to serialize them as string content of an
-/// element, like `<field>Unit</field>`. To make this possible use this module.
-///
 /// ```
 /// # use pretty_assertions::assert_eq;
 /// use quick_xml::de::from_str;
@@ -257,6 +252,45 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
 /// }
 /// ```
 /// Read about the meaning of a special [`$text`] field.
+///
+/// In versions of quick-xml before 0.31.0 this module used to represent enum
+/// unit variants as `<field>EnumUnitVariant</field>` instead of `<EnumUnitVariant/>`.
+/// Since version 0.31.0 this is default representation of enums in normal fields,
+/// and `<EnumUnitVariant/>` requires `$value` field:
+///
+/// ```
+/// # use pretty_assertions::assert_eq;
+/// use quick_xml::de::from_str;
+/// use quick_xml::se::to_string;
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize, PartialEq, Debug)]
+/// enum SomeEnum {
+///     // Default implementation serializes enum as an `<EnumValue/>` element
+///     EnumValue,
+/// # /*
+///     ...
+/// # */
+/// }
+///
+/// #[derive(Serialize, Deserialize, PartialEq, Debug)]
+/// #[serde(rename = "some-container")]
+/// struct SomeContainer {
+///     #[serde(rename = "$value")]
+///     field: SomeEnum,
+/// }
+///
+/// let container = SomeContainer {
+///     field: SomeEnum::EnumValue,
+/// };
+/// let xml = "\
+///     <some-container>\
+///         <EnumValue/>\
+///     </some-container>";
+///
+/// assert_eq!(to_string(&container).unwrap(), xml);
+/// assert_eq!(from_str::<SomeContainer>(xml).unwrap(), container);
+/// ```
 ///
 /// [with]: https://serde.rs/field-attrs.html#with
 /// [de-with]: https://serde.rs/field-attrs.html#deserialize_with

@@ -1,5 +1,6 @@
 //! Contains serializer for content of an XML element
 
+use crate::de::TEXT_KEY;
 use crate::errors::serialize::DeError;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
@@ -22,19 +23,32 @@ macro_rules! write_primitive {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A serializer used to serialize content of the element. It does not write
-/// surrounding tags.
+/// A serializer used to serialize content of an element. It does not write
+/// surrounding tags. Unlike the [`ElementSerializer`], this serializer serializes
+/// enums using variant names as tag names, i. e. as `<variant>...</variant>`
 ///
 /// This serializer does the following:
-/// - primitives (booleans, numbers and strings) serialized as naked strings
-/// - `None` does not write anything
-/// - sequences serialized without delimiters. `[1, 2, 3]` would be serialized as `123`
-/// - units (`()`) and unit structs are not supported
-/// - structs and maps are not supported
-/// - unit variants serialized as self-closed `<${variant}/>`
-/// - tuple variants serialized as sequences where each is wrapped in
-///   `<${variant}>...</${variant}>`
-/// - struct variants serialized wrapped `<${variant}>...</${variant}>`
+/// - numbers converted to a decimal representation and serialized as naked strings;
+/// - booleans serialized ether as `"true"` or `"false"`;
+/// - strings and characters are serialized as naked strings;
+/// - `None` does not write anything;
+/// - `Some` and newtypes are serialized as an inner type using the same serializer;
+/// - units (`()`) and unit structs does not write anything;
+/// - sequences, tuples and tuple structs are serialized without delimiters.
+///   `[1, 2, 3]` would be serialized as `123` (if not using indent);
+/// - structs and maps are not supported ([`DeError::Unsupported`] is returned);
+/// - enums:
+///   - unit variants are serialized as self-closed `<variant/>`;
+///   - newtype variants are serialized as inner value wrapped in `<variant>...</variant>`;
+///   - tuple variants are serialized as sequences where each element is wrapped
+///     in `<variant>...</variant>`;
+///   - struct variants are serialized as a sequence of fields wrapped in
+///     `<variant>...</variant>`. Each field is serialized recursively using
+///     either [`ElementSerializer`], `ContentSerializer` (`$value` fields), or
+///     [`SimpleTypeSerializer`] (`$text` fields). In particular, the empty struct
+///     is serialized as `<variant/>`;
+///
+/// Usage of empty tags depends on the [`Self::expand_empty_elements`] setting.
 ///
 /// The difference between this serializer and [`SimpleTypeSerializer`] is in how
 /// sequences and maps are serialized. Unlike `SimpleTypeSerializer` it supports
@@ -202,15 +216,20 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         Ok(())
     }
 
-    /// Checks `variant` for XML name validity and writes `<${variant}/>`
+    /// If `variant` is a special `$text` variant, then do nothing, otherwise
+    /// checks `variant` for XML name validity and writes `<variant/>`.
     fn serialize_unit_variant(
         self,
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        let name = XmlName::try_from(variant)?;
-        self.write_empty(name)
+        if variant == TEXT_KEY {
+            Ok(())
+        } else {
+            let name = XmlName::try_from(variant)?;
+            self.write_empty(name)
+        }
     }
 
     fn serialize_newtype_struct<T: ?Sized + Serialize>(
@@ -221,8 +240,9 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         value.serialize(self)
     }
 
-    /// Checks `variant` for XML name validity and writes `value` as new element
-    /// with name `variant`.
+    /// If `variant` is a special `$text` variant, then writes `value` as a `xs:simpleType`,
+    /// otherwise checks `variant` for XML name validity and writes `value` as a new
+    /// `<variant>` element.
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
         self,
         _name: &'static str,
@@ -230,10 +250,15 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        })
+        if variant == TEXT_KEY {
+            value.serialize(self.into_simple_type_serializer())?;
+            Ok(())
+        } else {
+            value.serialize(ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            })
+        }
     }
 
     #[inline]
@@ -255,6 +280,14 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         self.serialize_tuple(len)
     }
 
+    /// Serializes variant as a tuple with name `variant`, producing
+    ///
+    /// ```xml
+    /// <variant><!-- 1st element of a tuple --></variant>
+    /// <variant><!-- 2nd element of a tuple --></variant>
+    /// <!-- ... -->
+    /// <variant><!-- Nth element of a tuple --></variant>
+    /// ```
     #[inline]
     fn serialize_tuple_variant(
         self,
@@ -263,14 +296,17 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        let ser = ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        };
-        // `ElementSerializer::serialize_tuple_variant` is the same as
-        // `ElementSerializer::serialize_tuple_struct`, except that it replaces `.key`
-        // to `variant` which is not required here
-        ser.serialize_tuple_struct(name, len).map(Tuple::Element)
+        if variant == TEXT_KEY {
+            self.into_simple_type_serializer()
+                .serialize_tuple_struct(name, len)
+                .map(Tuple::Text)
+        } else {
+            let ser = ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            };
+            ser.serialize_tuple_struct(name, len).map(Tuple::Element)
+        }
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
@@ -290,6 +326,16 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         ))
     }
 
+    /// Serializes variant as an element with name `variant`, producing
+    ///
+    /// ```xml
+    /// <variant>
+    ///   <!-- struct fields... -->
+    /// </variant>
+    /// ```
+    ///
+    /// If struct has no fields which is represented by nested elements or a text,
+    /// it may be serialized as self-closed element `<variant/>`.
     #[inline]
     fn serialize_struct_variant(
         self,
@@ -298,14 +344,17 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        let ser = ElementSerializer {
-            key: XmlName::try_from(variant)?,
-            ser: self,
-        };
-        // `ElementSerializer::serialize_struct_variant` is the same as
-        // `ElementSerializer::serialize_struct`, except that it replaces `.key`
-        // to `variant` which is not required here
-        ser.serialize_struct(name, len)
+        if variant == TEXT_KEY {
+            Err(DeError::Unsupported(
+                format!("cannot serialize `$text` struct variant of `{}` enum", name).into(),
+            ))
+        } else {
+            let ser = ElementSerializer {
+                key: XmlName::try_from(variant)?,
+                ser: self,
+            };
+            ser.serialize_struct(name, len)
+        }
     }
 }
 
@@ -394,6 +443,7 @@ pub(super) mod tests {
         pub val: (usize, usize),
     }
 
+    /// Struct with a special `$text` field
     #[derive(Debug, Serialize, PartialEq)]
     pub struct Text<T> {
         pub before: &'static str,
@@ -402,6 +452,7 @@ pub(super) mod tests {
         pub after: &'static str,
     }
 
+    /// Struct with a special `$value` field
     #[derive(Debug, Serialize, PartialEq)]
     pub struct Value<T> {
         pub before: &'static str,
@@ -465,12 +516,14 @@ pub(super) mod tests {
 
     #[derive(Debug, Serialize, PartialEq)]
     pub enum SpecialEnum<T> {
+        /// Struct variant with a special `$text` field
         Text {
             before: &'static str,
             #[serde(rename = "$text")]
             content: T,
             after: &'static str,
         },
+        /// Struct variant with a special `$value` field
         Value {
             before: &'static str,
             #[serde(rename = "$value")]
@@ -486,7 +539,7 @@ pub(super) mod tests {
 
         /// Checks that given `$data` successfully serialized as `$expected`
         macro_rules! serialize_as {
-            ($name:ident: $data:expr => $expected:literal) => {
+            ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
                     let mut buffer = String::new();
@@ -618,7 +671,7 @@ pub(super) mod tests {
                 </Struct>");
 
         /// Special field name `$text` should be serialized as a text content
-        mod text {
+        mod text_field {
             use super::*;
             use pretty_assertions::assert_eq;
 
@@ -642,6 +695,255 @@ pub(super) mod tests {
                         42 42\
                         <after>answer</after>\
                     </Text>");
+        }
+
+        /// `$text` field inside a struct variant of an enum
+        mod enum_with_text_field {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            macro_rules! text {
+                ($name:ident: $data:expr => $expected:literal) => {
+                    serialize_as!($name:
+                        SpecialEnum::Text {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => concat!(
+                            "<Text><before>answer</before>",
+                            $expected,
+                            "<after>answer</after></Text>",
+                        ));
+                };
+            }
+
+            text!(false_: false => "false");
+            text!(true_:  true  => "true");
+
+            text!(i8_:    -42i8                => "-42");
+            text!(i16_:   -4200i16             => "-4200");
+            text!(i32_:   -42000000i32         => "-42000000");
+            text!(i64_:   -42000000000000i64   => "-42000000000000");
+            text!(isize_: -42000000000000isize => "-42000000000000");
+
+            text!(u8_:    42u8                => "42");
+            text!(u16_:   4200u16             => "4200");
+            text!(u32_:   42000000u32         => "42000000");
+            text!(u64_:   42000000000000u64   => "42000000000000");
+            text!(usize_: 42000000000000usize => "42000000000000");
+
+            serde_if_integer128! {
+                text!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+                text!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            }
+
+            text!(f32_: 4.2f32 => "4.2");
+            text!(f64_: 4.2f64 => "4.2");
+
+            text!(char_non_escaped: 'h' => "h");
+            text!(char_lt:   '<' => "&lt;");
+            text!(char_gt:   '>' => "&gt;");
+            text!(char_amp:  '&' => "&amp;");
+            text!(char_apos: '\'' => "&apos;");
+            text!(char_quot: '"' => "&quot;");
+            //TODO: add a setting to escape leading/trailing spaces, in order to
+            // pretty-print does not change the content
+            text!(char_space: ' ' => " ");
+
+            text!(str_non_escaped: "non-escaped string" => "non-escaped string");
+            text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+
+            err!(bytes:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Bytes(b"<\"escaped & bytes'>"),
+                    after: "answer",
+                }
+                => Unsupported("`serialize_bytes` not supported yet"));
+
+            text!(option_none: Option::<&str>::None => "");
+            text!(option_some: Some("non-escaped string") => "non-escaped string");
+            text!(option_some_empty_str: Some("") => "");
+
+            text!(unit: () => "");
+            text!(unit_struct: Unit => "");
+            text!(unit_struct_escaped: UnitEscaped => "");
+
+            text!(enum_unit: Enum::Unit => "Unit");
+            text!(enum_unit_escaped: Enum::UnitEscaped => "&lt;&quot;&amp;&apos;&gt;");
+
+            text!(newtype: Newtype(42) => "42");
+            // We have no space where name of a variant can be stored
+            err!(enum_newtype:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Newtype(42),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
+
+            // Sequences are serialized separated by spaces, all spaces inside are escaped
+            text!(seq: vec![1, 2, 3] => "1 2 3");
+            text!(seq_empty: Vec::<usize>::new() => "");
+            text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
+                => "&lt;&quot;&amp;&apos;&gt; \
+                    with&#9;&#10;&#13;&#32;spaces \
+                    3");
+            text!(tuple_struct: Tuple("first", 42) => "first 42");
+            // We have no space where name of a variant can be stored
+            err!(enum_tuple:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Tuple("first", 42),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
+
+            // Complex types cannot be serialized in `$text` field
+            err!(map:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: BTreeMap::from([("_1", 2), ("_3", 4)]),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize map as text content value"));
+            err!(struct_:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize struct `Struct` as text content value"));
+            err!(enum_struct:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
+        }
+
+        /// `$value` field inside a struct variant of an enum
+        mod enum_with_value_field {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            macro_rules! value {
+                ($name:ident: $data:expr => $expected:literal) => {
+                    serialize_as!($name:
+                        SpecialEnum::Value {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => concat!(
+                            "<Value><before>answer</before>",
+                            $expected,
+                            "<after>answer</after></Value>",
+                        ));
+                };
+            }
+
+            value!(false_: false => "false");
+            value!(true_:  true  => "true");
+
+            value!(i8_:    -42i8                => "-42");
+            value!(i16_:   -4200i16             => "-4200");
+            value!(i32_:   -42000000i32         => "-42000000");
+            value!(i64_:   -42000000000000i64   => "-42000000000000");
+            value!(isize_: -42000000000000isize => "-42000000000000");
+
+            value!(u8_:    42u8                => "42");
+            value!(u16_:   4200u16             => "4200");
+            value!(u32_:   42000000u32         => "42000000");
+            value!(u64_:   42000000000000u64   => "42000000000000");
+            value!(usize_: 42000000000000usize => "42000000000000");
+
+            serde_if_integer128! {
+                value!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+                value!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            }
+
+            value!(f32_: 4.2f32 => "4.2");
+            value!(f64_: 4.2f64 => "4.2");
+
+            value!(char_non_escaped: 'h' => "h");
+            value!(char_lt:   '<' => "&lt;");
+            value!(char_gt:   '>' => "&gt;");
+            value!(char_amp:  '&' => "&amp;");
+            value!(char_apos: '\'' => "&apos;");
+            value!(char_quot: '"' => "&quot;");
+            //TODO: add a setting to escape leading/trailing spaces, in order to
+            // pretty-print does not change the content
+            value!(char_space: ' ' => " ");
+
+            value!(str_non_escaped: "non-escaped string" => "non-escaped string");
+            value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+
+            err!(bytes:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Bytes(b"<\"escaped & bytes'>"),
+                    after: "answer",
+                }
+                => Unsupported("`serialize_bytes` not supported yet"));
+
+            value!(option_none: Option::<&str>::None => "");
+            value!(option_some: Some("non-escaped string") => "non-escaped string");
+            value!(option_some_empty_str: Some("") => "");
+
+            value!(unit: () => "");
+            value!(unit_struct: Unit => "");
+            value!(unit_struct_escaped: UnitEscaped => "");
+
+            value!(enum_unit: Enum::Unit => "<Unit/>");
+            err!(enum_unit_escaped:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Enum::UnitEscaped,
+                    after: "answer",
+                }
+                => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+
+            value!(newtype: Newtype(42) => "42");
+            value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+
+            // Note that sequences of primitives serialized without delimiters!
+            value!(seq: vec![1, 2, 3] => "123");
+            value!(seq_empty: Vec::<usize>::new() => "");
+            value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
+                => "&lt;&quot;&amp;&apos;&gt;\
+                    with\t\n\r spaces\
+                    3");
+            value!(tuple_struct: Tuple("first", 42) => "first42");
+            value!(enum_tuple: Enum::Tuple("first", 42)
+                => "<Tuple>first</Tuple>\
+                    <Tuple>42</Tuple>");
+
+            // We cannot wrap map or struct in any container and should not
+            // flatten it, so it is impossible to serialize maps and structs
+            err!(map:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: BTreeMap::from([("_1", 2), ("_3", 4)]),
+                    after: "answer",
+                }
+                => Unsupported("serialization of map types is not supported in `$value` field"));
+            err!(struct_:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+            value!(enum_struct:
+                Enum::Struct { key: "answer", val: (42, 42) }
+                => "<Struct>\
+                        <key>answer</key>\
+                        <val>42</val>\
+                        <val>42</val>\
+                    </Struct>");
         }
 
         mod attributes {
@@ -677,7 +979,7 @@ pub(super) mod tests {
 
         /// Checks that given `$data` successfully serialized as `$expected`
         macro_rules! serialize_as {
-            ($name:ident: $data:expr => $expected:literal) => {
+            ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
                     let mut buffer = String::new();
@@ -810,7 +1112,7 @@ pub(super) mod tests {
                 </Struct>");
 
         /// Special field name `$text` should be serialized as text content
-        mod text {
+        mod text_field {
             use super::*;
             use pretty_assertions::assert_eq;
 
@@ -834,6 +1136,279 @@ pub(super) mod tests {
                         42 42\n  \
                         <after>answer</after>\n\
                     </Text>");
+        }
+
+        /// `$text` field inside a struct variant of an enum
+        mod enum_with_text_field {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            macro_rules! text {
+                ($name:ident: $data:expr) => {
+                    serialize_as!($name:
+                        SpecialEnum::Text {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => "<Text>\n  \
+                                <before>answer</before>\n  \
+                                <after>answer</after>\n\
+                            </Text>");
+                };
+                ($name:ident: $data:expr => $expected:literal) => {
+                    serialize_as!($name:
+                        SpecialEnum::Text {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => concat!(
+                            "<Text>\n  <before>answer</before>\n  ",
+                            $expected,
+                            "\n  <after>answer</after>\n</Text>",
+                        ));
+                };
+            }
+
+            text!(false_: false => "false");
+            text!(true_:  true  => "true");
+
+            text!(i8_:    -42i8                => "-42");
+            text!(i16_:   -4200i16             => "-4200");
+            text!(i32_:   -42000000i32         => "-42000000");
+            text!(i64_:   -42000000000000i64   => "-42000000000000");
+            text!(isize_: -42000000000000isize => "-42000000000000");
+
+            text!(u8_:    42u8                => "42");
+            text!(u16_:   4200u16             => "4200");
+            text!(u32_:   42000000u32         => "42000000");
+            text!(u64_:   42000000000000u64   => "42000000000000");
+            text!(usize_: 42000000000000usize => "42000000000000");
+
+            serde_if_integer128! {
+                text!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+                text!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            }
+
+            text!(f32_: 4.2f32 => "4.2");
+            text!(f64_: 4.2f64 => "4.2");
+
+            text!(char_non_escaped: 'h' => "h");
+            text!(char_lt:   '<' => "&lt;");
+            text!(char_gt:   '>' => "&gt;");
+            text!(char_amp:  '&' => "&amp;");
+            text!(char_apos: '\'' => "&apos;");
+            text!(char_quot: '"' => "&quot;");
+            //TODO: add a setting to escape leading/trailing spaces, in order to
+            // pretty-print does not change the content
+            text!(char_space: ' ' => " ");
+
+            text!(str_non_escaped: "non-escaped string" => "non-escaped string");
+            text!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+
+            err!(bytes:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Bytes(b"<\"escaped & bytes'>"),
+                    after: "answer",
+                }
+                => Unsupported("`serialize_bytes` not supported yet"));
+
+            text!(option_none: Option::<&str>::None);
+            text!(option_some: Some("non-escaped string") => "non-escaped string");
+            text!(option_some_empty_str: Some(""));
+
+            text!(unit: ());
+            text!(unit_struct: Unit);
+            text!(unit_struct_escaped: UnitEscaped);
+
+            text!(enum_unit: Enum::Unit => "Unit");
+            text!(enum_unit_escaped: Enum::UnitEscaped => "&lt;&quot;&amp;&apos;&gt;");
+
+            text!(newtype: Newtype(42) => "42");
+            // We have no space where name of a variant can be stored
+            err!(enum_newtype:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Newtype(42),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum newtype variant `Enum::Newtype` as text content value"));
+
+            // Sequences are serialized separated by spaces, all spaces inside are escaped
+            text!(seq: vec![1, 2, 3] => "1 2 3");
+            text!(seq_empty: Vec::<usize>::new());
+            text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
+                => "&lt;&quot;&amp;&apos;&gt; \
+                    with&#9;&#10;&#13;&#32;spaces \
+                    3");
+            text!(tuple_struct: Tuple("first", 42) => "first 42");
+            // We have no space where name of a variant can be stored
+            err!(enum_tuple:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Tuple("first", 42),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum tuple variant `Enum::Tuple` as text content value"));
+
+            // Complex types cannot be serialized in `$text` field
+            err!(map:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: BTreeMap::from([("_1", 2), ("_3", 4)]),
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize map as text content value"));
+            err!(struct_:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize struct `Struct` as text content value"));
+            err!(enum_struct:
+                SpecialEnum::Text {
+                    before: "answer",
+                    content: Enum::Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("cannot serialize enum struct variant `Enum::Struct` as text content value"));
+        }
+
+        /// `$value` field inside a struct variant of an enum
+        mod enum_with_value_field {
+            use super::*;
+            use pretty_assertions::assert_eq;
+
+            macro_rules! value {
+                ($name:ident: $data:expr) => {
+                    serialize_as!($name:
+                        SpecialEnum::Value {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => "<Value>\n  \
+                                <before>answer</before>\n  \
+                                <after>answer</after>\n\
+                            </Value>");
+                };
+                ($name:ident: $data:expr => $expected:literal) => {
+                    serialize_as!($name:
+                        SpecialEnum::Value {
+                            before: "answer",
+                            content: $data,
+                            after: "answer",
+                        }
+                        => concat!(
+                            "<Value>\n  <before>answer</before>\n  ",
+                            $expected,
+                            "\n  <after>answer</after>\n</Value>",
+                        ));
+                };
+            }
+
+            value!(false_: false => "false");
+            value!(true_:  true  => "true");
+
+            value!(i8_:    -42i8                => "-42");
+            value!(i16_:   -4200i16             => "-4200");
+            value!(i32_:   -42000000i32         => "-42000000");
+            value!(i64_:   -42000000000000i64   => "-42000000000000");
+            value!(isize_: -42000000000000isize => "-42000000000000");
+
+            value!(u8_:    42u8                => "42");
+            value!(u16_:   4200u16             => "4200");
+            value!(u32_:   42000000u32         => "42000000");
+            value!(u64_:   42000000000000u64   => "42000000000000");
+            value!(usize_: 42000000000000usize => "42000000000000");
+
+            serde_if_integer128! {
+                value!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
+                value!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            }
+
+            value!(f32_: 4.2f32 => "4.2");
+            value!(f64_: 4.2f64 => "4.2");
+
+            value!(char_non_escaped: 'h' => "h");
+            value!(char_lt:   '<' => "&lt;");
+            value!(char_gt:   '>' => "&gt;");
+            value!(char_amp:  '&' => "&amp;");
+            value!(char_apos: '\'' => "&apos;");
+            value!(char_quot: '"' => "&quot;");
+            //TODO: add a setting to escape leading/trailing spaces, in order to
+            // pretty-print does not change the content
+            value!(char_space: ' ' => " ");
+
+            value!(str_non_escaped: "non-escaped string" => "non-escaped string");
+            value!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+
+            err!(bytes:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Bytes(b"<\"escaped & bytes'>"),
+                    after: "answer",
+                }
+                => Unsupported("`serialize_bytes` not supported yet"));
+
+            value!(option_none: Option::<&str>::None);
+            value!(option_some: Some("non-escaped string") => "non-escaped string");
+            value!(option_some_empty_str: Some(""));
+
+            value!(unit: ());
+            value!(unit_struct: Unit);
+            value!(unit_struct_escaped: UnitEscaped);
+
+            value!(enum_unit: Enum::Unit => "<Unit/>");
+            err!(enum_unit_escaped:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Enum::UnitEscaped,
+                    after: "answer",
+                }
+                => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
+
+            value!(newtype: Newtype(42) => "42");
+            value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+
+            // Note that sequences of primitives serialized without delimiters!
+            value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
+            value!(seq_empty: Vec::<usize>::new());
+            value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
+                => "&lt;&quot;&amp;&apos;&gt;\n  \
+                    with\t\n\r spaces\n  \
+                    3");
+            value!(tuple_struct: Tuple("first", 42) => "first\n  42");
+            value!(enum_tuple: Enum::Tuple("first", 42)
+                => "<Tuple>first</Tuple>\n  \
+                    <Tuple>42</Tuple>");
+
+            // We cannot wrap map or struct in any container and should not
+            // flatten it, so it is impossible to serialize maps and structs
+            err!(map:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: BTreeMap::from([("_1", 2), ("_3", 4)]),
+                    after: "answer",
+                }
+                => Unsupported("serialization of map types is not supported in `$value` field"));
+            err!(struct_:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Struct { key: "answer", val: (42, 42) },
+                    after: "answer",
+                }
+                => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
+            value!(enum_struct:
+                Enum::Struct { key: "answer", val: (42, 42) }
+                => "<Struct>\n    \
+                        <key>answer</key>\n    \
+                        <val>42</val>\n    \
+                        <val>42</val>\n  \
+                    </Struct>");
         }
 
         mod attributes {

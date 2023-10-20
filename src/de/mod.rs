@@ -20,6 +20,9 @@
 //!   - [Choices (`xs:choice` XML Schema type)](#choices-xschoice-xml-schema-type)
 //!   - [Sequences (`xs:all` and `xs:sequence` XML Schema types)](#sequences-xsall-and-xssequence-xml-schema-types)
 //! - [Composition Rules](#composition-rules)
+//! - [Enum Representations](#enum-representations)
+//!   - [Normal enum variant](#normal-enum-variant)
+//!   - [`$text` enum variant](#text-enum-variant)
 //! - [Difference between `$text` and `$value` special names](#difference-between-text-and-value-special-names)
 //!   - [`$text`](#text)
 //!   - [`$value`](#value)
@@ -29,7 +32,6 @@
 //! - [Frequently Used Patterns](#frequently-used-patterns)
 //!   - [`<element>` lists](#element-lists)
 //!   - [Overlapped (Out-of-Order) Elements](#overlapped-out-of-order-elements)
-//!   - [Enum::Unit Variants As a Text](#enumunit-variants-as-a-text)
 //!   - [Internally Tagged Enums](#internally-tagged-enums)
 //!
 //!
@@ -1351,6 +1353,58 @@
 //!
 //!
 //!
+//! Enum Representations
+//! ====================
+//!
+//! `quick-xml` represents enums differently in normal fields, `$text` fields and
+//! `$value` fields. A normal representation is compatible with serde's adjacent
+//! and internal tags feature -- tag for adjacently and internally tagged enums
+//! are serialized using [`Serializer::serialize_unit_variant`] and deserialized
+//! using [`Deserializer::deserialize_enum`].
+//!
+//! Use those simple rules to remember, how enum would be represented in XML:
+//! - In `$value` field the representation is always the same as top-level representation;
+//! - In `$text` field the representation is always the same as in normal field,
+//!   but surrounding tags with field name are removed;
+//! - In normal field the representation is always contains a tag with a field name.
+//!
+//! Normal enum variant
+//! -------------------
+//!
+//! To model an `xs:choice` XML construct use `$value` field.
+//! To model a top-level `xs:choice` just use the enum type.
+//!
+//! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
+//! |-------|-----------------------------------------|---------------------|---------------------|
+//! |Unit   |`<Unit/>`                                |`<field>Unit</field>`|`Unit`               |
+//! |Newtype|`<Newtype>42</Newtype>`                  |Err(Unsupported)     |Err(Unsupported)     |
+//! |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |Err(Unsupported)     |Err(Unsupported)     |
+//! |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|Err(Unsupported)     |Err(Unsupported)     |
+//!
+//! `$text` enum variant
+//! --------------------
+//!
+//! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
+//! |-------|-----------------------------------------|---------------------|---------------------|
+//! |Unit   |_(empty)_                                |`<field/>`           |_(empty)_            |
+//! |Newtype|`42`                                     |Err(Unsupported) [^1]|Err(Unsupported) [^2]|
+//! |Tuple  |`42 answer`                              |Err(Unsupported) [^3]|Err(Unsupported) [^4]|
+//! |Struct |Err(Unsupported)                         |Err(Unsupported)     |Err(Unsupported)     |
+//!
+//! [^1]: If this serialize as `<field>42</field>` then it will be ambiguity during deserialization,
+//!       because it clash with `Unit` representation in normal field.
+//!
+//! [^2]: If this serialize as `42` then it will be ambiguity during deserialization,
+//!       because it clash with `Unit` representation in `$text` field.
+//!
+//! [^3]: If this serialize as `<field>42 answer</field>` then it will be ambiguity during deserialization,
+//!       because it clash with `Unit` representation in normal field.
+//!
+//! [^4]: If this serialize as `42 answer` then it will be ambiguity during deserialization,
+//!       because it clash with `Unit` representation in `$text` field.
+//!
+//!
+//!
 //! Difference between `$text` and `$value` special names
 //! =====================================================
 //!
@@ -1431,33 +1485,54 @@
 //! get their names from the field name. It cannot be deserialized, because `Enum`
 //! expects elements `<A/>`, `<B/>` or `<C/>`, but `AnyName` looked only for `<field/>`:
 //!
-//! ```no_run
+//! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! enum Enum { A, B, C }
 //!
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! struct AnyName {
-//!     // <field/>
+//!     // <field>A</field>, <field>B</field>, or <field>C</field>
 //!     field: Enum,
 //! }
+//! # assert_eq!(
+//! #     quick_xml::se::to_string(&AnyName { field: Enum::A }).unwrap(),
+//! #     "<AnyName><field>A</field></AnyName>",
+//! # );
+//! # assert_eq!(
+//! #     AnyName { field: Enum::B },
+//! #     quick_xml::de::from_str("<root><field>B</field></root>").unwrap(),
+//! # );
 //! ```
 //!
 //! If you rename field to `$value`, then `field` would be serialized as `<A/>`,
 //! `<B/>` or `<C/>`, depending on the its content. It is also possible to
 //! deserialize it from the same elements:
 //!
-//! ```no_run
+//! ```
 //! # use serde::{Deserialize, Serialize};
-//! # #[derive(Deserialize, Serialize)]
+//! # use pretty_assertions::assert_eq;
+//! # #[derive(Deserialize, Serialize, PartialEq, Debug)]
 //! # enum Enum { A, B, C }
 //! #
+//! # #[derive(PartialEq, Debug)]
 //! #[derive(Deserialize, Serialize)]
 //! struct AnyName {
 //!     // <A/>, <B/> or <C/>
 //!     #[serde(rename = "$value")]
 //!     field: Enum,
 //! }
+//! # assert_eq!(
+//! #     quick_xml::se::to_string(&AnyName { field: Enum::A }).unwrap(),
+//! #     "<AnyName><A/></AnyName>",
+//! # );
+//! # assert_eq!(
+//! #     AnyName { field: Enum::B },
+//! #     quick_xml::de::from_str("<root><B/></root>").unwrap(),
+//! # );
 //! ```
 //!
 //! ### Primitives and sequences of primitives
@@ -1467,6 +1542,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1493,6 +1569,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1516,6 +1593,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1549,6 +1627,7 @@
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
+//! # use pretty_assertions::assert_eq;
 //! # use quick_xml::de::from_str;
 //! # use quick_xml::se::to_string;
 //! #[derive(Deserialize, Serialize, PartialEq, Debug)]
@@ -1708,75 +1787,6 @@
 //! }
 //! ```
 //!
-//! Enum::Unit Variants As a Text
-//! -----------------------------
-//! One frequent task and a typical mistake is to creation of mapping a text
-//! content of some tag to a Rust `enum`. For example, for the XML:
-//!
-//! ```xml
-//! <some-container>
-//!   <field>EnumValue</field>
-//! </some-container>
-//! ```
-//! one could create an _incorrect_ mapping
-//!
-//! ```
-//! # use serde::{Deserialize, Serialize};
-//! #
-//! #[derive(Serialize, Deserialize)]
-//! enum SomeEnum {
-//!     EnumValue,
-//! # /*
-//!     ...
-//! # */
-//! }
-//!
-//! #[derive(Serialize, Deserialize)]
-//! #[serde(rename = "some-container")]
-//! struct SomeContainer {
-//!     field: SomeEnum,
-//! }
-//! ```
-//!
-//! Actually, those types will be serialized into:
-//! ```xml
-//! <some-container>
-//!   <EnumValue/>
-//! </some-container>
-//! ```
-//! and will not be able to be deserialized.
-//!
-//! You can easily see what's wrong if you think about attributes, which could
-//! be defined in the `<field>` tag:
-//! ```xml
-//! <some-container>
-//!   <field some="attribute">EnumValue</field>
-//! </some-container>
-//! ```
-//!
-//! After that you can find the correct solution, using the principles explained
-//! above. You should wrap `SomeEnum` into wrapper struct under the [`$text`](#text)
-//! name:
-//! ```
-//! # use serde::{Serialize, Deserialize};
-//! # type SomeEnum = ();
-//! #[derive(Serialize, Deserialize)]
-//! struct Field {
-//!     // Use a special name `$text` to map field to the text content
-//!     #[serde(rename = "$text")]
-//!     content: SomeEnum,
-//! }
-//!
-//! #[derive(Serialize, Deserialize)]
-//! #[serde(rename = "some-container")]
-//! struct SomeContainer {
-//!     field: Field,
-//! }
-//! ```
-//!
-//! If you still want to keep your struct untouched, you can instead use the
-//! helper module [`text_content`].
-//!
 //!
 //! Internally Tagged Enums
 //! -----------------------
@@ -1794,7 +1804,8 @@
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
-//! [`text_content`]: crate::serde_helpers::text_content
+//! [`Serializer::serialize_unit_variant`]: serde::Serializer::serialize_unit_variant
+//! [`Deserializer::deserialize_enum`]: serde::Deserializer::deserialize_enum
 //! [Tagged enums]: https://serde.rs/enum-representations.html#internally-tagged
 //! [serde#1183]: https://github.com/serde-rs/serde/issues/1183
 //! [serde#1495]: https://github.com/serde-rs/serde/issues/1495
