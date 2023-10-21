@@ -670,10 +670,8 @@ where
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
-            // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
-            DeEvent::End(e) => unreachable!("{:?}", e),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+            // SAFETY: we use that deserializer only when we peeked `Start` or `Text` event
+            _ => unreachable!(),
         };
         Ok((
             name,
