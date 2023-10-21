@@ -225,10 +225,14 @@ mod trivial {
 
                 #[test]
                 fn field() {
-                    let item: Field<$type> = from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
+                    let item: Field<$type> =
+                        from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
                     assert_eq!(item, Field { value: $expected });
 
-                    match from_str::<Field<$type>>(&format!("<root><value><nested>{}</nested></value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><nested>{}</nested></value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
                         x => panic!(
@@ -237,7 +241,10 @@ mod trivial {
                         ),
                     }
 
-                    match from_str::<Field<$type>>(&format!("<root><value>{}<something-else/></value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value>{}<something-else/></value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
@@ -246,7 +253,10 @@ mod trivial {
                         ),
                     }
 
-                    match from_str::<Field<$type>>(&format!("<root><value><something-else/>{}</value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><something-else/>{}</value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
@@ -259,20 +269,26 @@ mod trivial {
                 /// Tests deserialization from top-level tag content: `<root>...content...</root>`
                 #[test]
                 fn text() {
-                    let item: Trivial<$type> = from_str(&format!("<root>{}</root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
                     // Unlike `naked` test, here we have a struct that is serialized to XML with
                     // an implicit field `$text` and some other field "something-else" which not interested
                     // for us in the Trivial structure. If you want the same behavior as for naked primitive,
                     // use `$value` field which would consume all data, unless a dedicated field would present
-                    let item: Trivial<$type> = from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    let item: Trivial<$type> = from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    match from_str::<Trivial<$type>>(&format!("<root><nested>{}</nested></root>", $value)) {
+                    match from_str::<Trivial<$type>>(&format!(
+                        "<root><nested>{}</nested></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
@@ -602,7 +618,10 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -615,7 +634,10 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -628,7 +650,10 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -641,7 +666,10 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(EndEventMismatch { .. })) => {}
-                    x => panic!("Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(EndEventMismatch {{ .. }}))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
         }
@@ -1315,9 +1343,7 @@ mod borrow {
 
         #[test]
         fn top_level() {
-            match from_str::<&str>(
-                r#"<root>with escape sequence: &lt;</root>"#,
-            ) {
+            match from_str::<&str>(r#"<root>with escape sequence: &lt;</root>"#) {
                 Err(DeError::Custom(reason)) => assert_eq!(
                     reason,
                     "invalid type: string \"with escape sequence: <\", expected a borrowed string"
