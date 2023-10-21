@@ -8,6 +8,7 @@ use crate::{
     de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     encoding::Decoder,
     errors::serialize::DeError,
+    errors::Error,
     events::attributes::IterState,
     events::BytesStart,
     name::QName,
@@ -300,7 +301,7 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                DeEvent::Eof => Err(Error::missed_end(self.start.name(), decoder).into()),
             }
         }
     }

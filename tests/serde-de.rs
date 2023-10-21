@@ -566,8 +566,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => {}
-                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -576,8 +581,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$attributes>(r#"<root float="42" string="answer">"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => {}
-                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -586,8 +596,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer</string>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => {}
-                    x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
