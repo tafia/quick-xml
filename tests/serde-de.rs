@@ -547,12 +547,13 @@ mod tuple_struct {
 // seq tests are so big, so it in the separate file serde-de-seq.rs to speed-up compilation
 
 macro_rules! maplike_errors {
-    ($type:ty) => {
-        maplike_errors!($type, $type);
+    ($type:ty, $list:ty) => {
+        maplike_errors!($type, $type, $list);
     };
     (
         $attributes:ty,
-        $mixed:ty
+        $mixed:ty,
+        $list:ty
     ) => {
         mod non_closed {
             use super::*;
@@ -594,6 +595,19 @@ macro_rules! maplike_errors {
             #[test]
             fn elements_root() {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer</string>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
+                }
+
+                // Reaches `DeEvent::Eof` in `MapValueSeqAccess::next_element_seed`
+                let data = from_str::<$list>(r#"<root><item>1</item><item>2</item>"#);
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
@@ -755,7 +769,7 @@ mod map {
         );
     }
 
-    maplike_errors!(HashMap<(), ()>);
+    maplike_errors!(HashMap<(), ()>, HashMap<(), Vec<u32>>);
 }
 
 mod struct_ {
@@ -784,6 +798,12 @@ mod struct_ {
         #[serde(rename = "@float")]
         float: f64,
         string: String,
+    }
+
+    /// Type where one field represented by list type
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct List {
+        item: Vec<f64>,
     }
 
     #[test]
@@ -983,7 +1003,7 @@ mod struct_ {
         }
     }
 
-    maplike_errors!(Attributes, Mixed);
+    maplike_errors!(Attributes, Mixed, List);
 }
 
 mod nested_struct {
