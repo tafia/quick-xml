@@ -10,6 +10,15 @@
 
 ## Unreleased
 
+### New Features
+
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.31.0 -- 2023-10-22
+
 MSRV bumped to 1.56! Crate now uses Rust 2021 edition.
 
 Enum representation was changed (it was buggy anyway) to ensure compatibility with
