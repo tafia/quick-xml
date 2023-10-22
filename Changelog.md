@@ -30,6 +30,8 @@ serde >= 1.0.181
   unit structs, unit variants). `<int>123<something-else/></int>` is no longer valid
   content. Previously all data after `123` up to closing tag would be silently skipped.
 - [#567]: Fixed incorrect deserialization of vectors of enums from sequences of tags.
+- [#671]: Fixed deserialization of empty `simpleType`s (for example, attributes) into
+  `Option` fields: now they are always deserialized as `Some("")`.
 
 ### Misc Changes
 
@@ -58,6 +60,7 @@ serde >= 1.0.181
 [#661]: https://github.com/tafia/quick-xml/pull/661
 [#662]: https://github.com/tafia/quick-xml/pull/662
 [#665]: https://github.com/tafia/quick-xml/pull/665
+[#671]: https://github.com/tafia/quick-xml/issues/671
 
 
 ## 0.30.0 -- 2023-07-23
