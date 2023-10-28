@@ -201,7 +201,7 @@ fn dashes_in_comments() {
     test(
         r#"<!-- comment -- --><hello/>"#,
         r#"
-        |Error: Unexpected token '--'
+        |Error: ill-formed document: forbidden string `--` was found in a comment
         "#,
         true,
     );
@@ -209,7 +209,7 @@ fn dashes_in_comments() {
     test(
         r#"<!-- comment ---><hello/>"#,
         r#"
-        |Error: Unexpected token '--'
+        |Error: ill-formed document: forbidden string `--` was found in a comment
         "#,
         true,
     );

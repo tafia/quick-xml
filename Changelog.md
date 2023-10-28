@@ -23,6 +23,7 @@
   - `Error::UnexpectedBang` replaced by `SyntaxError`
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
+  - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
 
 [#675]: https://github.com/tafia/quick-xml/pull/675
 

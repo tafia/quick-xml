@@ -84,6 +84,17 @@ pub enum IllFormedError {
         /// Name of actually closed tag
         found: String,
     },
+    /// A comment contains forbidden double-hyphen (`--`) sequence inside.
+    ///
+    /// According to the [specification], for compatibility, comments MUST NOT contain
+    /// double-hyphen (`--`) sequence, in particular, they cannot end by `--->`.
+    ///
+    /// The quick-xml by default does not check that, because this restriction is
+    /// mostly artificial, but you can enable it in the [configuration].
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-comments
+    /// [configuration]: crate::reader::Reader::check_comments
+    DoubleHyphenInComment,
 }
 
 impl fmt::Display for IllFormedError {
@@ -102,6 +113,9 @@ impl fmt::Display for IllFormedError {
                 "expected `</{}>`, but `</{}>` was found",
                 expected, found,
             ),
+            Self::DoubleHyphenInComment => {
+                write!(f, "forbidden string `--` was found in a comment")
+            }
         }
     }
 }
@@ -126,8 +140,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// Unexpected token
-    UnexpectedToken(String),
     /// Text not found, expected `Event::Text`
     TextNotFound,
     /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
@@ -236,7 +248,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
             Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
             Error::XmlDeclWithoutVersion(e) => write!(
                 f,

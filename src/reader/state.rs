@@ -97,7 +97,7 @@ impl ReaderState {
                         .position(|p| buf[3 + p + 1] == b'-')
                     {
                         self.offset += len - p;
-                        return Err(Error::UnexpectedToken("--".to_string()));
+                        return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
