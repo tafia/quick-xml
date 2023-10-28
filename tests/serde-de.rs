@@ -593,6 +593,20 @@ macro_rules! maplike_errors {
 
             #[test]
             fn elements_child() {
+                // Reaches `Deserializer::read_text` when text is not present
+                let data = from_str::<$mixed>(r#"<root float="42"><string>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
+                }
+
+                // Reaches `Deserializer::read_text` when text is present
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer"#);
 
                 match data {

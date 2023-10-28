@@ -2681,7 +2681,7 @@ where
             // The matching tag name is guaranteed by the reader
             DeEvent::End(_) => Ok("".into()),
             DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
         }
     }
 
