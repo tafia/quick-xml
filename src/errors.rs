@@ -140,12 +140,24 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
-    /// that was found or `None` if an xml declaration doesn't contain attributes.
-    XmlDeclWithoutVersion(Option<String>),
-    /// Empty `Event::DocType`. `<!doctype foo>` is correct but `<!doctype > is not.
+    /// A `version` attribute was not found in an XML declaration or is not the
+    /// first attribute.
     ///
-    /// See <https://www.w3.org/TR/xml11/#NT-doctypedecl>
+    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
+    /// a `version` attribute and it MUST be the first attribute. This error indicates,
+    /// that the declaration does not contain attributes at all (if contains `None`)
+    /// or either `version` attribute is not present or not the first attribute in
+    /// the declaration. In the last case it contains the name of the found attribute.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
+    XmlDeclWithoutVersion(Option<String>),
+    /// A document type definition (DTD) does not contain a name of a root element.
+    ///
+    /// According to the [specification], document type definition (`<!doctype foo>`)
+    /// MUST contain a name which defines a document type. If that name is missed,
+    /// this error is returned.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
     EmptyDocType,
     /// Attribute parsing error
     InvalidAttr(AttrError),
@@ -246,12 +258,16 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::XmlDeclWithoutVersion(e) => write!(
+            Error::XmlDeclWithoutVersion(None) => {
+                write!(f, "an XML declaration does not contain `version` attribute")
+            }
+            Error::XmlDeclWithoutVersion(Some(attr)) => {
+                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
+            }
+            Error::EmptyDocType => write!(
                 f,
-                "XmlDecl must start with 'version' attribute, found {:?}",
-                e
+                "`<!DOCTYPE>` declaration does not contain a name of a document type"
             ),
-            Error::EmptyDocType => write!(f, "DOCTYPE declaration must not be empty"),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {
