@@ -20,6 +20,7 @@
 - [#675]: Rework the `quick_xml::Error` type to provide more accurate information:
   - `Error::EndEventMismatch` replaced by `IllFormedError::MismatchedEnd` in some cases
   - `Error::EndEventMismatch` replaced by `IllFormedError::UnmatchedEnd` in some cases
+  - `Error::TextNotFound` was removed because not used
   - `Error::UnexpectedBang` replaced by `SyntaxError`
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases

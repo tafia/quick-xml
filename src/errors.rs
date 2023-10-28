@@ -140,8 +140,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// Text not found, expected `Event::Text`
-    TextNotFound,
     /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
     /// that was found or `None` if an xml declaration doesn't contain attributes.
     XmlDeclWithoutVersion(Option<String>),
@@ -248,7 +246,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
             Error::XmlDeclWithoutVersion(e) => write!(
                 f,
                 "XmlDecl must start with 'version' attribute, found {:?}",
