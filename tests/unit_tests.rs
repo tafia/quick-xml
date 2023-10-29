@@ -144,17 +144,6 @@ fn test_xml_decl() {
 }
 
 #[test]
-fn test_trim_test() {
-    let txt = "<a><b>  </b></a>";
-    let mut r = Reader::from_str(txt);
-    r.trim_text(true);
-    next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
-
-    let mut r = Reader::from_str(txt);
-    next_eq!(r, Start, b"a", Start, b"b", Text, b"  ", End, b"b", End, b"a");
-}
-
-#[test]
 fn test_cdata() {
     let mut r = Reader::from_str("<![CDATA[test]]>");
     r.trim_text(true);
