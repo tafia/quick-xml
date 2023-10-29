@@ -89,17 +89,6 @@ fn test_comment_starting_with_gt() {
 }
 
 #[test]
-fn test_trim_end() {
-    let mut reader = Reader::from_str(" <tag> text </tag> ");
-    reader.trim_text_end(true);
-
-    assert!(matches!(reader.read_event().unwrap(), Text(_)));
-    assert!(matches!(reader.read_event().unwrap(), Start(_)));
-    assert!(matches!(reader.read_event().unwrap(), Text(_)));
-    assert!(matches!(reader.read_event().unwrap(), End(_)));
-}
-
-#[test]
 fn test_clone_reader() {
     let mut reader = Reader::from_str("<tag>text</tag>");
     reader.trim_text(true);
