@@ -5,6 +5,7 @@
 //!
 //! Please keep tests sorted (exceptions are allowed if options are tightly related).
 
+use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
 
@@ -30,6 +31,73 @@ mod expand_empty_elements {
     fn true_() {
         let mut reader = Reader::from_str("<root/>");
         reader.expand_empty_elements(true);
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("root"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::End(BytesEnd::new("root"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+}
+
+mod trim_markup_names_in_closing_tags {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    mod false_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn check_end_names_false() {
+            let mut reader = Reader::from_str("<root></root \t\r\n>");
+            reader.trim_markup_names_in_closing_tags(false);
+            // We need to disable checks, otherwise the error will be returned when read end
+            reader.check_end_names(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("root"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("root \t\r\n"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn check_end_names_true() {
+            let mut reader = Reader::from_str("<root></root \t\r\n>");
+            reader.trim_markup_names_in_closing_tags(false);
+            reader.check_end_names(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("root"))
+            );
+            match reader.read_event() {
+                Err(Error::IllFormed(cause)) => assert_eq!(
+                    cause,
+                    IllFormedError::MismatchedEnd {
+                        expected: "root".into(),
+                        found: "root \t\r\n".into(),
+                    }
+                ),
+                x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
+            }
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+    }
+
+    #[test]
+    fn true_() {
+        let mut reader = Reader::from_str("<root></root \t\r\n>");
+        reader.trim_markup_names_in_closing_tags(true);
 
         assert_eq!(
             reader.read_event().unwrap(),
