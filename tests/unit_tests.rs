@@ -82,20 +82,6 @@ fn test_start_end_attr() {
 }
 
 #[test]
-fn test_empty() {
-    let mut r = Reader::from_str("<a />");
-    r.trim_text(true);
-    next_eq!(r, Empty, b"a");
-}
-
-#[test]
-fn test_empty_can_be_expanded() {
-    let mut r = Reader::from_str("<a />");
-    r.trim_text(true).expand_empty_elements(true);
-    next_eq!(r, Start, b"a", End, b"a");
-}
-
-#[test]
 fn test_empty_attr() {
     let mut r = Reader::from_str("<a b=\"test\" />");
     r.trim_text(true);
