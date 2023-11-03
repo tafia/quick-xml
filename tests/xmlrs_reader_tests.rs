@@ -197,36 +197,6 @@ fn bad_1() {
 }
 
 #[test]
-fn dashes_in_comments() {
-    test(
-        r#"<!-- comment -- --><hello/>"#,
-        r#"
-        |Error: ill-formed document: forbidden string `--` was found in a comment
-        "#,
-        true,
-    );
-
-    test(
-        r#"<!-- comment ---><hello/>"#,
-        r#"
-        |Error: ill-formed document: forbidden string `--` was found in a comment
-        "#,
-        true,
-    );
-
-    // Canary test for correct comments
-    test(
-        r#"<!-- comment --><hello/>"#,
-        r#"
-        |Comment( comment )
-        |EmptyElement(hello)
-        |EndDocument
-        "#,
-        true,
-    );
-}
-
-#[test]
 fn tabs_1() {
     test(
         "\t<a>\t<b/></a>",

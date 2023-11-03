@@ -72,23 +72,6 @@ fn test_attribute_equal() {
 }
 
 #[test]
-fn test_comment_starting_with_gt() {
-    let src = "<a /><!-->-->";
-    let mut r = Reader::from_str(src);
-    r.trim_text(true);
-    loop {
-        match r.read_event() {
-            Ok(Comment(e)) => {
-                assert_eq!(e.as_ref(), b">");
-                break;
-            }
-            Ok(Eof) => panic!("Expecting Comment"),
-            _ => (),
-        }
-    }
-}
-
-#[test]
 fn test_clone_reader() {
     let mut reader = Reader::from_str("<tag>text</tag>");
     reader.trim_text(true);

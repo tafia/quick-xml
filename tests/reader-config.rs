@@ -9,6 +9,227 @@ use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
 
+mod check_comments {
+    use super::*;
+
+    mod false_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn empty() {
+            let mut reader = Reader::from_str("<!----><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(""))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn normal() {
+            let mut reader = Reader::from_str("<!-- comment --><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(" comment "))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn dashes_inside() {
+            let mut reader = Reader::from_str("<!-- comment -- --><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(" comment -- "))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn three_dashes_in_the_end() {
+            let mut reader = Reader::from_str("<!-- comment ---><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(" comment -"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn comment_is_gt() {
+            let mut reader = Reader::from_str("<!-->--><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(">"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn comment_is_dash_gt() {
+            let mut reader = Reader::from_str("<!--->--><tag/>");
+            reader.check_comments(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped("->"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+    }
+
+    mod true_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// XML grammar allows `<!---->`. The simplified adapted part of full grammar
+        /// can be tried online at https://peggyjs.org/online:
+        ///
+        /// ```pegjs
+        /// comment = '<!--' $(char / ('-' char))* '-->'
+        /// char = [^-]i
+        /// ```
+        ///
+        /// The original grammar: https://www.w3.org/TR/xml11/#sec-comments
+        #[test]
+        fn empty() {
+            let mut reader = Reader::from_str("<!----><tag/>");
+            reader.check_comments(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(""))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn normal() {
+            let mut reader = Reader::from_str("<!-- comment --><tag/>");
+            reader.check_comments(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(" comment "))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn dashes_inside() {
+            let mut reader = Reader::from_str("<!-- comment -- --><tag/>");
+            reader.check_comments(true);
+
+            match reader.read_event() {
+                Err(Error::IllFormed(cause)) => {
+                    assert_eq!(cause, IllFormedError::DoubleHyphenInComment)
+                }
+                x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
+            }
+            // #513: We want to continue parsing after the error
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn three_dashes_in_the_end() {
+            let mut reader = Reader::from_str("<!-- comment ---><tag/>");
+            reader.check_comments(true);
+
+            match reader.read_event() {
+                Err(Error::IllFormed(cause)) => {
+                    assert_eq!(cause, IllFormedError::DoubleHyphenInComment)
+                }
+                x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
+            }
+            // #513: We want to continue parsing after the error
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn comment_is_gt() {
+            let mut reader = Reader::from_str("<!-->--><tag/>");
+            reader.check_comments(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped(">"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn comment_is_dash_gt() {
+            let mut reader = Reader::from_str("<!--->--><tag/>");
+            reader.check_comments(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Comment(BytesText::from_escaped("->"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Empty(BytesStart::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+    }
+}
+
 mod check_end_names {
     use super::*;
 
@@ -281,7 +502,7 @@ mod trim_text {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -341,7 +562,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -402,7 +623,7 @@ mod trim_text_end {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -464,7 +685,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::Comment(BytesText::new(" comment \t\r\n"))
+            Event::Comment(BytesText::from_escaped(" comment \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
