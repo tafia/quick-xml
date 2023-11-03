@@ -9,6 +9,123 @@ use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
 
+mod check_end_names {
+    use super::*;
+
+    mod false_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn matched_tags() {
+            let mut reader = Reader::from_str("<tag><tag></tag></tag>");
+            reader.check_end_names(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn mismatched_tags() {
+            let mut reader = Reader::from_str("<tag><tag></mismatched></tag>");
+            reader.check_end_names(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("mismatched"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+    }
+
+    mod true_ {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn matched_tags() {
+            let mut reader = Reader::from_str("<tag><tag></tag></tag>");
+            reader.check_end_names(false);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+
+        #[test]
+        fn mismatched_tags() {
+            let mut reader = Reader::from_str("<tag><tag></mismatched></tag>");
+            reader.check_end_names(true);
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            match reader.read_event() {
+                Err(Error::IllFormed(cause)) => assert_eq!(
+                    cause,
+                    IllFormedError::MismatchedEnd {
+                        expected: "tag".into(),
+                        found: "mismatched".into(),
+                    }
+                ),
+                x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
+            }
+            // #513: We want to continue parsing after the error
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
+    }
+}
+
 mod expand_empty_elements {
     use super::*;
     use pretty_assertions::assert_eq;
