@@ -65,6 +65,9 @@ impl std::error::Error for SyntaxError {}
 /// An error returned if parsed document is not [well-formed], for example,
 /// an opened tag is not closed before end of input.
 ///
+/// Those errors are not fatal: after encountering an error you can continue
+/// parsing the document.
+///
 /// [well-formed]: https://www.w3.org/TR/xml11/#dt-wellformed
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IllFormedError {

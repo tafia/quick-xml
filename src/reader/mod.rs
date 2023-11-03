@@ -205,6 +205,9 @@ macro_rules! read_event_impl {
             };
         };
         match event {
+            // #513: In case of ill-formed errors we already consume the wrong data
+            // and change the state. We can continue parsing if we wish
+            Err(Error::IllFormed(_)) => {}
             Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Exit,
             _ => {}
         }

@@ -12,6 +12,8 @@
 
 ### New Features
 
+- [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
+
 ### Bug Fixes
 
 ### Misc Changes
@@ -26,6 +28,7 @@
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
 
+[#513]: https://github.com/tafia/quick-xml/issues/513
 [#675]: https://github.com/tafia/quick-xml/pull/675
 
 
