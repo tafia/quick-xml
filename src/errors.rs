@@ -1,13 +1,128 @@
 //! Error management module
 
+use crate::encoding::Decoder;
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
+use crate::name::QName;
 use crate::utils::write_byte_string;
 use std::fmt;
 use std::io::Error as IoError;
 use std::str::Utf8Error;
 use std::string::FromUtf8Error;
 use std::sync::Arc;
+
+/// An error returned if parsed document does not correspond to the XML grammar,
+/// for example, a tag opened by `<` not closed with `>`. This error does not
+/// represent invalid XML constructs, for example, tags `<>` and `</>` a well-formed
+/// from syntax point-of-view.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum SyntaxError {
+    /// The parser started to parse `<!`, but the input ended before it can recognize
+    /// anything.
+    InvalidBangMarkup,
+    /// The parser started to parse processing instruction or XML declaration (`<?`),
+    /// but the input ended before the `?>` sequence was found.
+    UnclosedPIOrXmlDecl,
+    /// The parser started to parse comment (`<!--`) content, but the input ended
+    /// before the `-->` sequence was found.
+    UnclosedComment,
+    /// The parser started to parse DTD (`<!DOCTYPE`) content, but the input ended
+    /// before the closing `>` character was found.
+    UnclosedDoctype,
+    /// The parser started to parse `<![CDATA[` content, but the input ended
+    /// before the `]]>` sequence was found.
+    UnclosedCData,
+    /// The parser started to parse tag content, but the input ended
+    /// before the closing `>` character was found.
+    UnclosedTag,
+}
+
+impl fmt::Display for SyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidBangMarkup => f.write_str("unknown or missed symbol in markup"),
+            Self::UnclosedPIOrXmlDecl => {
+                f.write_str("processing instruction or xml declaration not closed: `?>` not found before end of input")
+            }
+            Self::UnclosedComment => {
+                f.write_str("comment not closed: `-->` not found before end of input")
+            }
+            Self::UnclosedDoctype => {
+                f.write_str("DOCTYPE not closed: `>` not found before end of input")
+            }
+            Self::UnclosedCData => {
+                f.write_str("CDATA not closed: `]]>` not found before end of input")
+            }
+            Self::UnclosedTag => f.write_str("tag not closed: `>` not found before end of input"),
+        }
+    }
+}
+
+impl std::error::Error for SyntaxError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// An error returned if parsed document is not [well-formed], for example,
+/// an opened tag is not closed before end of input.
+///
+/// [well-formed]: https://www.w3.org/TR/xml11/#dt-wellformed
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IllFormedError {
+    /// The end tag was not found during reading of a sub-tree of elements due to
+    /// encountering an EOF from the underlying reader. This error is returned from
+    /// [`Reader::read_to_end`].
+    ///
+    /// [`Reader::read_to_end`]: crate::reader::Reader::read_to_end
+    MissedEnd(String),
+    /// The specified end tag was encountered without corresponding open tag at the
+    /// same level of hierarchy
+    UnmatchedEnd(String),
+    /// The specified end tag does not match the start tag at that nesting level.
+    MismatchedEnd {
+        /// Name of open tag, that is expected to be closed
+        expected: String,
+        /// Name of actually closed tag
+        found: String,
+    },
+    /// A comment contains forbidden double-hyphen (`--`) sequence inside.
+    ///
+    /// According to the [specification], for compatibility, comments MUST NOT contain
+    /// double-hyphen (`--`) sequence, in particular, they cannot end by `--->`.
+    ///
+    /// The quick-xml by default does not check that, because this restriction is
+    /// mostly artificial, but you can enable it in the [configuration].
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-comments
+    /// [configuration]: crate::reader::Reader::check_comments
+    DoubleHyphenInComment,
+}
+
+impl fmt::Display for IllFormedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MissedEnd(tag) => write!(
+                f,
+                "start tag not closed: `</{}>` not found before end of input",
+                tag,
+            ),
+            Self::UnmatchedEnd(tag) => {
+                write!(f, "close tag `</{}>` does not match any open tag", tag)
+            }
+            Self::MismatchedEnd { expected, found } => write!(
+                f,
+                "expected `</{}>`, but `</{}>` was found",
+                expected, found,
+            ),
+            Self::DoubleHyphenInComment => {
+                write!(f, "forbidden string `--` was found in a comment")
+            }
+        }
+    }
+}
+
+impl std::error::Error for IllFormedError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// The error type used by this crate.
 #[derive(Clone, Debug)]
@@ -16,32 +131,33 @@ pub enum Error {
     ///
     /// Contains the reference-counted I/O error to make the error type `Clone`able.
     Io(Arc<IoError>),
+    /// The document does not corresponds to the XML grammar.
+    Syntax(SyntaxError),
+    /// The document is not [well-formed](https://www.w3.org/TR/xml11/#dt-wellformed).
+    IllFormed(IllFormedError),
     /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
     /// otherwise contains the UTF-8 decoding error
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// Unexpected End of File
-    UnexpectedEof(String),
-    /// End event mismatch
-    EndEventMismatch {
-        /// Expected end event
-        expected: String,
-        /// Found end event
-        found: String,
-    },
-    /// Unexpected token
-    UnexpectedToken(String),
-    /// Unexpected <!>
-    UnexpectedBang(u8),
-    /// Text not found, expected `Event::Text`
-    TextNotFound,
-    /// `Event::BytesDecl` must start with *version* attribute. Contains the attribute
-    /// that was found or `None` if an xml declaration doesn't contain attributes.
-    XmlDeclWithoutVersion(Option<String>),
-    /// Empty `Event::DocType`. `<!doctype foo>` is correct but `<!doctype > is not.
+    /// A `version` attribute was not found in an XML declaration or is not the
+    /// first attribute.
     ///
-    /// See <https://www.w3.org/TR/xml11/#NT-doctypedecl>
+    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
+    /// a `version` attribute and it MUST be the first attribute. This error indicates,
+    /// that the declaration does not contain attributes at all (if contains `None`)
+    /// or either `version` attribute is not present or not the first attribute in
+    /// the declaration. In the last case it contains the name of the found attribute.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
+    XmlDeclWithoutVersion(Option<String>),
+    /// A document type definition (DTD) does not contain a name of a root element.
+    ///
+    /// According to the [specification], document type definition (`<!doctype foo>`)
+    /// MUST contain a name which defines a document type. If that name is missed,
+    /// this error is returned.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
     EmptyDocType,
     /// Attribute parsing error
     InvalidAttr(AttrError),
@@ -67,11 +183,36 @@ pub enum Error {
     },
 }
 
+impl Error {
+    pub(crate) fn missed_end(name: QName, decoder: Decoder) -> Self {
+        match decoder.decode(name.as_ref()) {
+            Ok(name) => IllFormedError::MissedEnd(name.into()).into(),
+            Err(err) => err.into(),
+        }
+    }
+}
+
 impl From<IoError> for Error {
     /// Creates a new `Error::Io` from the given error
     #[inline]
     fn from(error: IoError) -> Error {
         Error::Io(Arc::new(error))
+    }
+}
+
+impl From<SyntaxError> for Error {
+    /// Creates a new `Error::Syntax` from the given error
+    #[inline]
+    fn from(error: SyntaxError) -> Self {
+        Self::Syntax(error)
+    }
+}
+
+impl From<IllFormedError> for Error {
+    /// Creates a new `Error::IllFormed` from the given error
+    #[inline]
+    fn from(error: IllFormedError) -> Self {
+        Self::IllFormed(error)
     }
 }
 
@@ -113,25 +254,20 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Io(e) => write!(f, "I/O error: {}", e),
+            Error::Syntax(e) => write!(f, "syntax error: {}", e),
+            Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::UnexpectedEof(e) => write!(f, "Unexpected EOF during reading {}", e),
-            Error::EndEventMismatch { expected, found } => {
-                write!(f, "Expecting </{}> found </{}>", expected, found)
+            Error::XmlDeclWithoutVersion(None) => {
+                write!(f, "an XML declaration does not contain `version` attribute")
             }
-            Error::UnexpectedToken(e) => write!(f, "Unexpected token '{}'", e),
-            Error::UnexpectedBang(b) => write!(
+            Error::XmlDeclWithoutVersion(Some(attr)) => {
+                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
+            }
+            Error::EmptyDocType => write!(
                 f,
-                "Only Comment (`--`), CDATA (`[CDATA[`) and DOCTYPE (`DOCTYPE`) nodes can start with a '!', but symbol `{}` found",
-                *b as char
+                "`<!DOCTYPE>` declaration does not contain a name of a document type"
             ),
-            Error::TextNotFound => write!(f, "Cannot read text, expecting Event::Text"),
-            Error::XmlDeclWithoutVersion(e) => write!(
-                f,
-                "XmlDecl must start with 'version' attribute, found {:?}",
-                e
-            ),
-            Error::EmptyDocType => write!(f, "DOCTYPE declaration must not be empty"),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {
@@ -154,6 +290,8 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(e) => Some(e),
+            Error::Syntax(e) => Some(e),
+            Error::IllFormed(e) => Some(e),
             Error::NonDecodable(Some(e)) => Some(e),
             Error::InvalidAttr(e) => Some(e),
             Error::EscapeError(e) => Some(e),
@@ -196,14 +334,6 @@ pub mod serialize {
         /// not expecting. This happens when you try to deserialize a primitive
         /// value (numbers, strings, booleans) from an XML element.
         UnexpectedStart(Vec<u8>),
-        /// Deserializer encounter an end tag with a specified name when it is
-        /// not expecting. Usually that should not be possible, because XML reader
-        /// is not able to produce such stream of events that lead to this error.
-        ///
-        /// If you get this error this likely indicates and error in the `quick_xml`.
-        /// Please open an issue at <https://github.com/tafia/quick-xml>, provide
-        /// your Rust code and XML input.
-        UnexpectedEnd(Vec<u8>),
         /// The [`Reader`] produced [`Event::Eof`] when it is not expecting,
         /// for example, after producing [`Event::Start`] but before corresponding
         /// [`Event::End`].
@@ -213,12 +343,6 @@ pub mod serialize {
         /// [`Event::Start`]: crate::events::Event::Start
         /// [`Event::End`]: crate::events::Event::End
         UnexpectedEof,
-        /// This error indicates that [`deserialize_struct`] was called, but there
-        /// is no any XML element in the input. That means that you try to deserialize
-        /// a struct not from an XML element.
-        ///
-        /// [`deserialize_struct`]: serde::de::Deserializer::deserialize_struct
-        ExpectedStart,
         /// An attempt to deserialize to a type, that is not supported by the XML
         /// store at current position, for example, attempt to deserialize `struct`
         /// from attribute or attempt to deserialize binary data.
@@ -252,13 +376,7 @@ pub mod serialize {
                     write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
-                DeError::UnexpectedEnd(e) => {
-                    f.write_str("Unexpected `Event::End(")?;
-                    write_byte_string(f, e)?;
-                    f.write_str(")`")
-                }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
-                DeError::ExpectedStart => write!(f, "Expecting `Event::Start`"),
                 DeError::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
                 #[cfg(feature = "overlapped-lists")]
                 DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),

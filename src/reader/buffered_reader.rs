@@ -316,7 +316,7 @@ impl<R: BufRead> Reader<R> {
     /// Manages nested cases where parent and child elements have the _literally_
     /// same name.
     ///
-    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// If a corresponding [`End`] event is not found, an error of type [`Error::IllFormed`]
     /// will be returned. In particularly, that error will be returned if you call
     /// this method without consuming the corresponding [`Start`] event first.
     ///

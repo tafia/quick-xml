@@ -16,6 +16,18 @@
 
 ### Misc Changes
 
+- [#675]: Minimum supported version of serde raised to 1.0.139
+- [#675]: Rework the `quick_xml::Error` type to provide more accurate information:
+  - `Error::EndEventMismatch` replaced by `IllFormedError::MismatchedEnd` in some cases
+  - `Error::EndEventMismatch` replaced by `IllFormedError::UnmatchedEnd` in some cases
+  - `Error::TextNotFound` was removed because not used
+  - `Error::UnexpectedBang` replaced by `SyntaxError`
+  - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
+  - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
+  - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
+
+[#675]: https://github.com/tafia/quick-xml/pull/675
+
 
 ## 0.31.0 -- 2023-10-22
 

@@ -8,6 +8,7 @@ use crate::{
     de::{str2bool, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
     encoding::Decoder,
     errors::serialize::DeError,
+    errors::Error,
     events::attributes::IterState,
     events::BytesStart,
     name::QName,
@@ -300,7 +301,7 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                DeEvent::Eof => Err(Error::missed_end(self.start.name(), decoder).into()),
             }
         }
     }
@@ -616,9 +617,9 @@ where
         if self.fixed_name {
             match self.map.de.next()? {
                 // Handles <field>UnitEnumVariant</field>
-                DeEvent::Start(_) => {
+                DeEvent::Start(e) => {
                     // skip <field>, read text after it and ensure that it is ended by </field>
-                    let text = self.map.de.read_text()?;
+                    let text = self.map.de.read_text(e.name())?;
                     if text.is_empty() {
                         // Map empty text (<field/>) to a special `$text` variant
                         visitor.visit_enum(SimpleTypeDeserializer::from_text(TEXT_KEY.into()))
@@ -669,8 +670,8 @@ where
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
-            DeEvent::End(e) => return Err(DeError::UnexpectedEnd(e.name().into_inner().to_vec())),
-            DeEvent::Eof => return Err(DeError::UnexpectedEof),
+            // SAFETY: we use that deserializer only when we peeked `Start` or `Text` event
+            _ => unreachable!(),
         };
         Ok((
             name,
@@ -927,12 +928,14 @@ where
                 DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
 
                 // Stop iteration after reaching a closing tag
-                DeEvent::End(e) if e.name() == self.map.start.name() => Ok(None),
-                // This is a unmatched closing tag, so the XML is invalid
-                DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+                // The matching tag name is guaranteed by the reader
+                DeEvent::End(e) => {
+                    debug_assert_eq!(self.map.start.name(), e.name());
+                    Ok(None)
+                }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                DeEvent::Eof => Err(Error::missed_end(self.map.start.name(), decoder).into()),
 
                 DeEvent::Text(_) => match self.map.de.next()? {
                     DeEvent::Text(e) => seed.deserialize(TextDeserializer(e)).map(Some),
@@ -1018,7 +1021,7 @@ where
     /// [`CData`]: crate::events::Event::CData
     #[inline]
     fn read_string(&mut self) -> Result<Cow<'de, str>, DeError> {
-        self.de.read_text()
+        self.de.read_text(self.start.name())
     }
 }
 

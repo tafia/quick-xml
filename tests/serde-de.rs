@@ -70,7 +70,7 @@ fn ignored_any() {
     let err = from_str::<IgnoredAny>("");
     match err {
         Err(DeError::UnexpectedEof) => {}
-        other => panic!("Expected `UnexpectedEof`, found {:?}", other),
+        x => panic!("Expected `Err(UnexpectedEof)`, but got `{:?}`", x),
     }
 
     from_str::<IgnoredAny>(r#"<empty/>"#).unwrap();
@@ -91,9 +91,9 @@ mod trivial {
             #[test]
             fn $name() {
                 match from_str::<$type>($value) {
-                    Err(DeError::UnexpectedEof) => (),
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -130,11 +130,9 @@ mod trivial {
             #[test]
             fn byte_buf() {
                 match from_str::<ByteBuf>($value) {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -144,11 +142,9 @@ mod trivial {
             #[test]
             fn bytes() {
                 match from_str::<Bytes>($value) {
-                    Err(DeError::Unsupported(msg)) => {
-                        assert_eq!(msg, "binary data content is not supported by XML format")
-                    }
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -157,9 +153,9 @@ mod trivial {
             #[test]
             fn unit() {
                 match from_str::<()>($value) {
-                    Err(DeError::UnexpectedEof) => (),
+                    Err(DeError::UnexpectedEof) => {}
                     x => panic!(
-                        r#"Expected `Err(DeError::UnexpectedEof)`, but got `{:?}`"#,
+                        r#"Expected `Err(UnexpectedEof)`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -170,7 +166,6 @@ mod trivial {
     /// Empty document should considered invalid no matter what type we try to deserialize
     mod empty_doc {
         use super::*;
-        use pretty_assertions::assert_eq;
 
         eof!("");
     }
@@ -178,7 +173,6 @@ mod trivial {
     /// Document that contains only comment should be handled as if it is empty
     mod only_comment {
         use super::*;
-        use pretty_assertions::assert_eq;
 
         eof!("<!--comment-->");
     }
@@ -199,7 +193,7 @@ mod trivial {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -208,7 +202,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -217,7 +211,7 @@ mod trivial {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -225,32 +219,42 @@ mod trivial {
 
                 #[test]
                 fn field() {
-                    let item: Field<$type> = from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
+                    let item: Field<$type> =
+                        from_str(&format!("<root><value>{}</value></root>", $value)).unwrap();
                     assert_eq!(item, Field { value: $expected });
 
-                    match from_str::<Field<$type>>(&format!("<root><value><nested>{}</nested></value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><nested>{}</nested></value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"nested"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("nested"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("nested"))`, but got `{:?}`"#,
                             x
                         ),
                     }
 
-                    match from_str::<Field<$type>>(&format!("<root><value>{}<something-else/></value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value>{}<something-else/></value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
 
-                    match from_str::<Field<$type>>(&format!("<root><value><something-else/>{}</value></root>", $value)) {
+                    match from_str::<Field<$type>>(&format!(
+                        "<root><value><something-else/>{}</value></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<something-else>`
                         Err(DeError::UnexpectedStart(tag)) => assert_eq!(tag, b"something-else"),
                         x => panic!(
-                            r#"Expected `Err(DeError::UnexpectedStart("something-else"))`, but got `{:?}`"#,
+                            r#"Expected `Err(UnexpectedStart("something-else"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -259,24 +263,30 @@ mod trivial {
                 /// Tests deserialization from top-level tag content: `<root>...content...</root>`
                 #[test]
                 fn text() {
-                    let item: Trivial<$type> = from_str(&format!("<root>{}</root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
                     // Unlike `naked` test, here we have a struct that is serialized to XML with
                     // an implicit field `$text` and some other field "something-else" which not interested
                     // for us in the Trivial structure. If you want the same behavior as for naked primitive,
                     // use `$value` field which would consume all data, unless a dedicated field would present
-                    let item: Trivial<$type> = from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root>{}<something-else/></root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    let item: Trivial<$type> = from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
+                    let item: Trivial<$type> =
+                        from_str(&format!("<root><something-else/>{}</root>", $value)).unwrap();
                     assert_eq!(item, Trivial { value: $expected });
 
-                    match from_str::<Trivial<$type>>(&format!("<root><nested>{}</nested></root>", $value)) {
+                    match from_str::<Trivial<$type>>(&format!(
+                        "<root><nested>{}</nested></root>",
+                        $value
+                    )) {
                         // Expected unexpected start element `<nested>`
                         Err(DeError::Custom(reason)) => assert_eq!(reason, "missing field `$text`"),
                         x => panic!(
-                            r#"Expected `Err(DeError::Custom("missing field `$text`"))`, but got `{:?}`"#,
+                            r#"Expected `Err(Custom("missing field `$text`"))`, but got `{:?}`"#,
                             x
                         ),
                     }
@@ -338,11 +348,11 @@ mod trivial {
         #[test]
         fn byte_buf() {
             match from_str::<Trivial<ByteBuf>>("<root>escaped&#x20;byte_buf</root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped byte_buf\", expected byte data")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped byte_buf\", expected byte data"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -352,11 +362,11 @@ mod trivial {
         #[test]
         fn bytes() {
             match from_str::<Trivial<Bytes>>("<root>escaped&#x20;byte_buf</root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped byte_buf\", expected borrowed bytes")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped byte_buf\", expected borrowed bytes"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -401,11 +411,11 @@ mod trivial {
         #[test]
         fn byte_buf() {
             match from_str::<Trivial<ByteBuf>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped&#x20;byte_buf\", expected byte data")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped&#x20;byte_buf\", expected byte data"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -415,11 +425,11 @@ mod trivial {
         #[test]
         fn bytes() {
             match from_str::<Trivial<Bytes>>("<root><![CDATA[escaped&#x20;byte_buf]]></root>") {
-                Err(DeError::Unsupported(msg)) => {
-                    assert_eq!(msg, "binary data content is not supported by XML format")
+                Err(DeError::Custom(msg)) => {
+                    assert_eq!(msg, "invalid type: string \"escaped&#x20;byte_buf\", expected borrowed bytes")
                 }
                 x => panic!(
-                    r#"Expected `Err(DeError::Unsupported("binary data content is not supported by XML format"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"escaped&#x20;byte_buf\", expected borrowed bytes"))`, but got `{:?}`"#,
                     x
                 ),
             }
@@ -537,15 +547,18 @@ mod tuple_struct {
 // seq tests are so big, so it in the separate file serde-de-seq.rs to speed-up compilation
 
 macro_rules! maplike_errors {
-    ($type:ty) => {
-        maplike_errors!($type, $type);
+    ($type:ty, $list:ty) => {
+        maplike_errors!($type, $type, $list);
     };
     (
         $attributes:ty,
-        $mixed:ty
+        $mixed:ty,
+        $list:ty
     ) => {
         mod non_closed {
             use super::*;
+            use pretty_assertions::assert_eq;
+            use quick_xml::errors::{Error, IllFormedError};
 
             /// For struct we expect that error about not closed tag appears
             /// earlier than error about missing fields
@@ -554,8 +567,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -564,8 +582,13 @@ macro_rules! maplike_errors {
                 let data = from_str::<$attributes>(r#"<root float="42" string="answer">"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -574,25 +597,63 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer</string>"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
+                }
+
+                // Reaches `DeEvent::Eof` in `MapValueSeqAccess::next_element_seed`
+                let data = from_str::<$list>(r#"<root><item>1</item><item>2</item>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
             #[test]
             fn elements_child() {
+                // Reaches `Deserializer::read_text` when text is not present
+                let data = from_str::<$mixed>(r#"<root float="42"><string>"#);
+
+                match data {
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
+                }
+
+                // Reaches `Deserializer::read_text` when text is present
                 let data = from_str::<$mixed>(r#"<root float="42"><string>answer"#);
 
                 match data {
-                    Err(DeError::UnexpectedEof) => (),
-                    _ => panic!("Expected `UnexpectedEof`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                    }
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
         }
 
         mod mismatched_end {
             use super::*;
-            use quick_xml::Error::EndEventMismatch;
+            use pretty_assertions::assert_eq;
+            use quick_xml::errors::{Error, IllFormedError};
 
             /// For struct we expect that error about mismatched tag appears
             /// earlier than error about missing fields
@@ -601,8 +662,17 @@ macro_rules! maplike_errors {
                 let data = from_str::<$mixed>(r#"<root></mismatched>"#);
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -614,8 +684,17 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -627,8 +706,17 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "root".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
 
@@ -640,8 +728,17 @@ macro_rules! maplike_errors {
                 );
 
                 match data {
-                    Err(DeError::InvalidXml(EndEventMismatch { .. })) => (),
-                    _ => panic!("Expected `InvalidXml(EndEventMismatch)`, found {:?}", data),
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                        cause,
+                        IllFormedError::MismatchedEnd {
+                            expected: "string".into(),
+                            found: "mismatched".into(),
+                        }
+                    ),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
             }
         }
@@ -697,7 +794,7 @@ mod map {
         );
     }
 
-    maplike_errors!(HashMap<(), ()>);
+    maplike_errors!(HashMap<(), ()>, HashMap<(), Vec<u32>>);
 }
 
 mod struct_ {
@@ -726,6 +823,12 @@ mod struct_ {
         #[serde(rename = "@float")]
         float: f64,
         string: String,
+    }
+
+    /// Type where one field represented by list type
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct List {
+        item: Vec<f64>,
     }
 
     #[test]
@@ -862,8 +965,14 @@ mod struct_ {
             match from_str::<Elements>(
                 "\nexcess text\t<root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => (),
-                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"excess text\", expected struct Elements",
+                ),
+                x => panic!(
+                    r#"Expected `Err(Custom("invalid type: string \"excess text\", expected struct Elements"))`, but got `{:?}`"#,
+                    x
+                ),
             };
         }
 
@@ -873,8 +982,14 @@ mod struct_ {
             match from_str::<Elements>(
                 "<![CDATA[excess cdata]]><root><float>42</float><string>answer</string></root>",
             ) {
-                Err(DeError::ExpectedStart) => (),
-                x => panic!("Expected Err(ExpectedStart), but got {:?}", x),
+                Err(DeError::Custom(reason)) => assert_eq!(
+                    reason,
+                    "invalid type: string \"excess cdata\", expected struct Elements",
+                ),
+                x => panic!(
+                    r#"Expected `Err(Custom("invalid type: string \"excess cdata\", expected struct Elements"))`, but got `{:?}`"#,
+                    x
+                ),
             };
         }
 
@@ -913,7 +1028,7 @@ mod struct_ {
         }
     }
 
-    maplike_errors!(Attributes, Mixed);
+    maplike_errors!(Attributes, Mixed, List);
 }
 
 mod nested_struct {
@@ -1069,7 +1184,7 @@ mod xml_schema_lists {
                 match err {
                     DeError::$kind(e) => assert_eq!(e, $err),
                     _ => panic!(
-                        "Expected `{}({})`, found `{:?}`",
+                        "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),
                         $err,
                         err
@@ -1118,7 +1233,7 @@ mod xml_schema_lists {
             "third 3".to_string(),
         ]);
         err!(byte_buf: ByteBuf = r#"<root list="first second  third&#x20;3"/>"#
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+            => Custom("invalid type: string \"first\", expected byte data"));
 
         list!(unit: () = r#"<root list="1 second  false"/>"# => vec![(), (), ()]);
     }
@@ -1169,7 +1284,7 @@ mod xml_schema_lists {
                 "3".to_string(),
             ]);
             err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"first\", expected byte data"));
 
             list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
         }
@@ -1208,7 +1323,7 @@ mod xml_schema_lists {
                 "third&#x20;3".to_string(),
             ]);
             err!(byte_buf: ByteBuf = "<root>first second  third&#x20;3</root>"
-                => Unsupported("byte arrays are not supported as `xs:list` items"));
+                => Custom("invalid type: string \"first\", expected byte data"));
 
             list!(unit: () = "<root>1 second  false</root>" => vec![(), (), ()]);
         }
@@ -1315,15 +1430,13 @@ mod borrow {
 
         #[test]
         fn top_level() {
-            match from_str::<&str>(
-                r#"<root>with escape sequence: &lt;</root>"#,
-            ) {
+            match from_str::<&str>(r#"<root>with escape sequence: &lt;</root>"#) {
                 Err(DeError::Custom(reason)) => assert_eq!(
                     reason,
                     "invalid type: string \"with escape sequence: <\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with escape sequence: <\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -1342,7 +1455,7 @@ mod borrow {
                     "invalid type: string \"with escape sequence: <\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with escape sequence: <\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with escape sequence: <\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -1356,7 +1469,7 @@ mod borrow {
                     "invalid type: string \"with \\\"escape\\\" sequences\", expected a borrowed string"
                 ),
                 e => panic!(
-                    "Expected `Err(Custom(invalid type: string \"with \"escape\" sequences\", expected a borrowed string))`, but found {:?}",
+                    r#"Expected `Err(Custom("invalid type: string \"with \"escape\" sequences\", expected a borrowed string"))`, but got `{:?}`"#,
                     e
                 ),
             }

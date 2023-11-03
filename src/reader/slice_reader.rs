@@ -9,7 +9,7 @@ use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_8};
 
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
@@ -84,7 +84,7 @@ impl<'a> Reader<&'a [u8]> {
     /// Manages nested cases where parent and child elements have the _literally_
     /// same name.
     ///
-    /// If corresponding [`End`] event will not be found, the [`Error::UnexpectedEof`]
+    /// If a corresponding [`End`] event is not found, an error of type [`Error::IllFormed`]
     /// will be returned. In particularly, that error will be returned if you call
     /// this method without consuming the corresponding [`Start`] event first.
     ///
@@ -318,9 +318,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
         // Note: Do not update position, so the error points to a sane place
         // rather than at the EOF.
-        Err(Error::UnexpectedEof("Element".to_string()))
-
-        // FIXME: Figure out why the other one works without UnexpectedEof
+        Err(Error::Syntax(SyntaxError::UnclosedTag))
     }
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {

@@ -216,7 +216,7 @@ mod tests {
                 match $data.serialize(ser).unwrap_err() {
                     DeError::$kind(e) => assert_eq!(e, $reason),
                     e => panic!(
-                        "Expected `{}({})`, found `{:?}`",
+                        "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),
                         $reason,
                         e

@@ -5,7 +5,7 @@ use encoding_rs::Encoding;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::reader::state::ReaderState;
 
@@ -347,10 +347,7 @@ macro_rules! read_to_end {
                     }
                     depth -= 1;
                 }
-                Ok(Event::Eof) => {
-                    let name = $self.decoder().decode($end.as_ref());
-                    return Err(Error::UnexpectedEof(format!("</{:?}>", name)));
-                }
+                Ok(Event::Eof) => return Err(Error::missed_end($end, $self.decoder())),
                 _ => (),
             }
         }
@@ -809,8 +806,7 @@ impl BangType {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
             Some(b'D') | Some(b'd') => Self::DocType,
-            Some(b) => return Err(Error::UnexpectedBang(b)),
-            None => return Err(Error::UnexpectedEof("Bang".to_string())),
+            _ => return Err(Error::Syntax(SyntaxError::InvalidBangMarkup)),
         })
     }
 
@@ -877,12 +873,11 @@ impl BangType {
     }
     #[inline]
     fn to_err(&self) -> Error {
-        let bang_str = match self {
-            Self::CData => "CData",
-            Self::Comment => "Comment",
-            Self::DocType => "DOCTYPE",
-        };
-        Error::UnexpectedEof(bang_str.to_string())
+        match self {
+            Self::CData => Error::Syntax(SyntaxError::UnclosedCData),
+            Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
+            Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
+        }
     }
 }
 
@@ -1053,13 +1048,13 @@ mod test {
 
             mod read_bang_element {
                 use super::*;
+                use crate::errors::{Error, SyntaxError};
+                use crate::reader::BangType;
+                use crate::utils::Bytes;
 
                 /// Checks that reading CDATA content works correctly
                 mod cdata {
                     use super::*;
-                    use crate::errors::Error;
-                    use crate::reader::BangType;
-                    use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
                     /// Checks that if input begins like CDATA element, but CDATA start sequence
@@ -1073,10 +1068,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1093,10 +1087,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1162,9 +1155,6 @@ mod test {
                 /// [specification]: https://www.w3.org/TR/xml11/#dt-comment
                 mod comment {
                     use super::*;
-                    use crate::errors::Error;
-                    use crate::reader::BangType;
-                    use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
                     #[$test]
@@ -1176,10 +1166,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1194,10 +1183,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1212,10 +1200,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1230,10 +1217,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1248,10 +1234,9 @@ mod test {
                         //                ^= 0
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                            x => assert!(
-                                false,
-                                r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            x => panic!(
+                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1301,9 +1286,6 @@ mod test {
 
                     mod uppercase {
                         use super::*;
-                        use crate::errors::Error;
-                        use crate::reader::BangType;
-                        use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
                         #[$test]
@@ -1314,10 +1296,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1332,10 +1313,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1368,10 +1348,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1381,9 +1360,6 @@ mod test {
 
                     mod lowercase {
                         use super::*;
-                        use crate::errors::Error;
-                        use crate::reader::BangType;
-                        use crate::utils::Bytes;
                         use pretty_assertions::assert_eq;
 
                         #[$test]
@@ -1394,10 +1370,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1412,10 +1387,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1448,10 +1422,9 @@ mod test {
                             //                ^= 0
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                                x => assert!(
-                                    false,
-                                    r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                x => panic!(
+                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1635,7 +1608,7 @@ mod test {
             }
 
             mod issue_344 {
-                use crate::errors::Error;
+                use crate::errors::{Error, SyntaxError};
                 use crate::reader::Reader;
 
                 #[$test]
@@ -1643,10 +1616,9 @@ mod test {
                     let mut reader = Reader::from_str("![]]>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::UnexpectedEof(s)) if s == "CData" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("CData")`, but result is: {:?}"#,
+                        Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                        x => panic!(
+                            "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
                             x
                         ),
                     }
@@ -1657,10 +1629,9 @@ mod test {
                     let mut reader = Reader::from_str("!- -->");
 
                     match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::UnexpectedEof(s)) if s == "Comment" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("Comment")`, but result is: {:?}"#,
+                        Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                        x => panic!(
+                            "Expected `Err(Syntax(UnclosedComment)`, but got `{:?}`",
                             x
                         ),
                     }
@@ -1671,10 +1642,9 @@ mod test {
                     let mut reader = Reader::from_str("!D>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                        x => panic!(
+                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                             x
                         ),
                     }
@@ -1685,10 +1655,9 @@ mod test {
                     let mut reader = Reader::from_str("!d>");
 
                     match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::UnexpectedEof(s)) if s == "DOCTYPE" => {}
-                        x => assert!(
-                            false,
-                            r#"Expected `UnexpectedEof("DOCTYPE")`, but result is: {:?}"#,
+                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                        x => panic!(
+                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
                             x
                         ),
                     }
@@ -1771,22 +1740,15 @@ mod test {
                     );
                 }
 
+                /// Lone closing tags are not allowed, so testing it together with start tag
                 #[$test]
-                $($async)? fn start() {
-                    let mut reader = Reader::from_str("<tag>");
+                $($async)? fn start_and_end() {
+                    let mut reader = Reader::from_str("<tag></tag>");
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
                         Event::Start(BytesStart::new("tag"))
                     );
-                }
-
-                #[$test]
-                $($async)? fn end() {
-                    let mut reader = Reader::from_str("</tag>");
-                    // Because we expect invalid XML, do not check that
-                    // the end name paired with the start name
-                    reader.check_end_names(false);
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),

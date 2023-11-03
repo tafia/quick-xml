@@ -4,6 +4,7 @@
 
 use std::sync::mpsc;
 
+use quick_xml::errors::{IllFormedError, SyntaxError};
 use quick_xml::events::{BytesDecl, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -144,14 +145,14 @@ mod issue514 {
         reader.check_end_names(true);
 
         match reader.read_event() {
-            Err(Error::EndEventMismatch { expected, found }) => {
-                assert_eq!(expected, "some-tag");
-                assert_eq!(found, "other-tag");
-            }
-            x => panic!(
-                r#"Expected `Err(EndEventMismatch("some-tag", "other-tag"))`, but found {:?}"#,
-                x
+            Err(Error::IllFormed(cause)) => assert_eq!(
+                cause,
+                IllFormedError::MismatchedEnd {
+                    expected: "some-tag".into(),
+                    found: "other-tag".into(),
+                }
             ),
+            x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
         }
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
     }
@@ -172,11 +173,8 @@ mod issue604 {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         match reader.read_event_into(&mut buf) {
-            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
-            x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
-                x
-            ),
+            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+            x => panic!("Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`", x),
         }
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
@@ -191,11 +189,8 @@ mod issue604 {
             Event::Decl(BytesDecl::new("1.0", None, None))
         );
         match reader.read_event_into(&mut buf) {
-            Err(Error::UnexpectedEof(reason)) => assert_eq!(reason, "Comment"),
-            x => panic!(
-                r#"Expected `Err(UnexpectedEof("Comment"))`, but found {:?}"#,
-                x
-            ),
+            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+            x => panic!("Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`", x),
         }
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }

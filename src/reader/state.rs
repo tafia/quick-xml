@@ -2,7 +2,7 @@
 use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result};
+use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -97,7 +97,7 @@ impl ReaderState {
                         .position(|p| buf[3 + p + 1] == b'-')
                     {
                         self.offset += len - p;
-                        return Err(Error::UnexpectedToken("--".to_string()));
+                        return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
@@ -147,13 +147,6 @@ impl ReaderState {
         };
 
         let decoder = self.decoder();
-        let mismatch_err = |expected: String, found: &[u8], offset: &mut usize| {
-            *offset -= buf.len();
-            Err(Error::EndEventMismatch {
-                expected,
-                found: decoder.decode(found).unwrap_or_default().into_owned(),
-            })
-        };
 
         // Get the index in self.opened_buffer of the name of the last opened tag
         match self.opened_starts.pop() {
@@ -165,16 +158,25 @@ impl ReaderState {
                         // #513: In order to allow error recovery we should drop content of the buffer
                         self.opened_buffer.truncate(start);
 
-                        return mismatch_err(expected, name, &mut self.offset);
+                        // Report error at start of the end tag at `<` character
+                        // +2 for `<` and `>`
+                        self.offset -= buf.len() + 2;
+                        return Err(Error::IllFormed(IllFormedError::MismatchedEnd {
+                            expected,
+                            found: decoder.decode(name).unwrap_or_default().into_owned(),
+                        }));
                     }
                 }
 
                 self.opened_buffer.truncate(start);
             }
             None => {
-                if self.check_end_names {
-                    return mismatch_err("".to_string(), &buf[1..], &mut self.offset);
-                }
+                // Report error at start of the end tag at `<` character
+                // +2 for `<` and `>`
+                self.offset -= buf.len() + 2;
+                return Err(Error::IllFormed(IllFormedError::UnmatchedEnd(
+                    decoder.decode(name).unwrap_or_default().into_owned(),
+                )));
             }
         }
 
@@ -203,7 +205,7 @@ impl ReaderState {
             }
         } else {
             self.offset -= len;
-            Err(Error::UnexpectedEof("XmlDecl".to_string()))
+            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }
 

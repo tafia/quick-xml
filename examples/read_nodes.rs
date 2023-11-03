@@ -2,6 +2,7 @@
 // Note: for this specific data set using serde feature would simplify
 //       this simple data is purely to make it easier to understand the code
 
+use quick_xml::events::attributes::AttrError;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
@@ -30,6 +31,26 @@ const XML: &str = r#"
 "#;
 
 #[derive(Debug)]
+enum AppError {
+    /// XML parsing error
+    Xml(quick_xml::Error),
+    /// The `Translation/Text` node is missed
+    NoText(String),
+}
+
+impl From<quick_xml::Error> for AppError {
+    fn from(error: quick_xml::Error) -> Self {
+        Self::Xml(error)
+    }
+}
+
+impl From<AttrError> for AppError {
+    fn from(error: AttrError) -> Self {
+        Self::Xml(quick_xml::Error::InvalidAttr(error))
+    }
+}
+
+#[derive(Debug)]
 struct Translation {
     tag: String,
     lang: String,
@@ -40,7 +61,7 @@ impl Translation {
     fn new_from_element(
         reader: &mut Reader<&[u8]>,
         element: BytesStart,
-    ) -> Result<Translation, quick_xml::Error> {
+    ) -> Result<Translation, AppError> {
         let mut tag = Cow::Borrowed("");
         let mut lang = Cow::Borrowed("");
 
@@ -68,16 +89,16 @@ impl Translation {
             } else {
                 dbg!("Expected Event::Start for Text, got: {:?}", &event);
                 let name_string = reader.decoder().decode(name.as_ref())?;
-                Err(quick_xml::Error::UnexpectedToken(name_string.into()))
+                Err(AppError::NoText(name_string.into()))
             }
         } else {
             let event_string = format!("{:?}", event);
-            Err(quick_xml::Error::UnexpectedToken(event_string))
+            Err(AppError::NoText(event_string))
         }
     }
 }
 
-fn main() -> Result<(), quick_xml::Error> {
+fn main() -> Result<(), AppError> {
     // In a real-world use case, Settings would likely be a struct
     // HashMap here is just to make the sample code short
     let mut settings: HashMap<String, String>;

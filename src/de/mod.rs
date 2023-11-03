@@ -509,8 +509,9 @@
 //!   /// Use unit variant, if you do not care of a content.
 //!   /// You can use tuple variant if you want to parse
 //!   /// textual content as an xs:list.
-//!   /// Struct variants are not supported and will return
-//!   /// Err(Unsupported)
+//!   /// Struct variants are will pass a string to the
+//!   /// struct enum variant visitor, which typically
+//!   /// returns Err(Custom)
 //!   #[serde(rename = "$text")]
 //!   Text(String),
 //! }
@@ -613,8 +614,9 @@
 //!   /// Use unit variant, if you do not care of a content.
 //!   /// You can use tuple variant if you want to parse
 //!   /// textual content as an xs:list.
-//!   /// Struct variants are not supported and will return
-//!   /// Err(Unsupported)
+//!   /// Struct variants are will pass a string to the
+//!   /// struct enum variant visitor, which typically
+//!   /// returns Err(Custom)
 //!   #[serde(rename = "$text")]
 //!   Text(String),
 //! }
@@ -1377,9 +1379,9 @@
 //! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
 //! |-------|-----------------------------------------|---------------------|---------------------|
 //! |Unit   |`<Unit/>`                                |`<field>Unit</field>`|`Unit`               |
-//! |Newtype|`<Newtype>42</Newtype>`                  |Err(Unsupported)     |Err(Unsupported)     |
-//! |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |Err(Unsupported)     |Err(Unsupported)     |
-//! |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|Err(Unsupported)     |Err(Unsupported)     |
+//! |Newtype|`<Newtype>42</Newtype>`                  |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//! |Tuple  |`<Tuple>42</Tuple><Tuple>answer</Tuple>` |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//! |Struct |`<Struct><q>42</q><a>answer</a></Struct>`|Err(Custom) [^0]     |Err(Custom) [^0]     |
 //!
 //! `$text` enum variant
 //! --------------------
@@ -1387,9 +1389,13 @@
 //! |Kind   |Top-level and in `$value` field          |In normal field      |In `$text` field     |
 //! |-------|-----------------------------------------|---------------------|---------------------|
 //! |Unit   |_(empty)_                                |`<field/>`           |_(empty)_            |
-//! |Newtype|`42`                                     |Err(Unsupported) [^1]|Err(Unsupported) [^2]|
-//! |Tuple  |`42 answer`                              |Err(Unsupported) [^3]|Err(Unsupported) [^4]|
-//! |Struct |Err(Unsupported)                         |Err(Unsupported)     |Err(Unsupported)     |
+//! |Newtype|`42`                                     |Err(Custom) [^0] [^1]|Err(Custom) [^0] [^2]|
+//! |Tuple  |`42 answer`                              |Err(Custom) [^0] [^3]|Err(Custom) [^0] [^4]|
+//! |Struct |Err(Custom) [^0]                         |Err(Custom) [^0]     |Err(Custom) [^0]     |
+//!
+//! [^0]: Error is returned by the deserialized type. In case of derived implementation a `Custom`
+//!       error will be returned, but custom deserialize implementation can successfully deserialize
+//!       value from a string which will be passed to it.
 //!
 //! [^1]: If this serialize as `<field>42</field>` then it will be ambiguity during deserialization,
 //!       because it clash with `Unit` representation in normal field.
@@ -1861,6 +1867,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Character represented as [strings](#method.deserialize_str).
+        #[inline]
         fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1880,6 +1887,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of owned strings the same as [non-owned](#method.deserialize_str).
+        #[inline]
         fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1887,15 +1895,17 @@ macro_rules! deserialize_primitives {
             self.deserialize_str(visitor)
         }
 
-        /// Returns [`DeError::Unsupported`]
-        fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, DeError>
+        /// Forwards deserialization to the [`deserialize_any`](#method.deserialize_any).
+        #[inline]
+        fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            Err(DeError::Unsupported("binary data content is not supported by XML format".into()))
+            self.deserialize_any(visitor)
         }
 
         /// Forwards deserialization to the [`deserialize_bytes`](#method.deserialize_bytes).
+        #[inline]
         fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1904,6 +1914,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of the named units the same as [unnamed units](#method.deserialize_unit).
+        #[inline]
         fn deserialize_unit_struct<V>(
             self,
             _name: &'static str,
@@ -1916,6 +1927,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of tuples the same as [sequences](#method.deserialize_seq).
+        #[inline]
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -1924,6 +1936,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Representation of named tuples the same as [unnamed tuples](#method.deserialize_tuple).
+        #[inline]
         fn deserialize_tuple_struct<V>(
             self,
             _name: &'static str,
@@ -1947,6 +1960,7 @@ macro_rules! deserialize_primitives {
         }
 
         /// Identifiers represented as [strings](#method.deserialize_str).
+        #[inline]
         fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
@@ -2619,7 +2633,7 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|----------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |if `allow_start == true`, result determined by the second table, otherwise emits [`UnexpectedStart("tag")`](DeError::UnexpectedStart)
-    /// |[`DeEvent::End`]  |`</any-tag>`               |Emits [`UnexpectedEnd("any-tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::End`]  |`</any-tag>`               |This is impossible situation, the method will panic if it happens
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     ///
@@ -2630,7 +2644,7 @@ where
     /// |[`DeEvent::Start`]|`<any-tag>...</any-tag>`   |Emits [`UnexpectedStart("any-tag")`](DeError::UnexpectedStart)
     /// |[`DeEvent::End`]  |`</tag>`                   |Returns an empty slice. The reader guarantee that tag will match the open one
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Returns event content unchanged, expects the `</tag>` after that
-    /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
+    /// |[`DeEvent::Eof`]  |                           |Emits [`InvalidXml(IllFormed(MissedEnd))`](DeError::InvalidXml)
     ///
     /// [`Text`]: Event::Text
     /// [`CData`]: Event::CData
@@ -2638,15 +2652,21 @@ where
         match self.next()? {
             DeEvent::Text(e) => Ok(e.text),
             // allow one nested level
-            DeEvent::Start(_) if allow_start => self.read_text(),
+            DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
     /// Consumes one [`DeEvent::Text`] event and ensures that it is followed by the
     /// [`DeEvent::End`] event.
-    fn read_text(&mut self) -> Result<Cow<'de, str>, DeError> {
+    ///
+    /// # Parameters
+    /// - `name`: name of a tag opened before reading text. The corresponding end tag
+    ///   should present in input just after the text
+    fn read_text(&mut self, name: QName) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => match self.next()? {
                 // The matching tag name is guaranteed by the reader
@@ -2654,14 +2674,14 @@ where
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
                 DeEvent::Text(_) => unreachable!(),
                 DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
-                DeEvent::Eof => Err(DeError::UnexpectedEof),
+                DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
             // The matching tag name is guaranteed by the reader
             DeEvent::End(_) => Ok("".into()),
             DeEvent::Start(s) => Err(DeError::UnexpectedStart(s.name().as_ref().to_owned())),
-            DeEvent::Eof => Err(DeError::UnexpectedEof),
+            DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
         }
     }
 
@@ -2816,8 +2836,16 @@ where
     {
         match self.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
-            DeEvent::Text(_) => Err(DeError::ExpectedStart),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
+            // Deserializer methods are only hints, if deserializer could not satisfy
+            // request, it should return the data that it has. It is responsibility
+            // of a Visitor to return an error if it does not understand the data
+            DeEvent::Text(e) => match e.text {
+                Cow::Borrowed(s) => visitor.visit_borrowed_str(s),
+                Cow::Owned(s) => visitor.visit_string(s),
+            },
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2836,7 +2864,7 @@ where
     /// |Event             |XML                        |Handling
     /// |------------------|---------------------------|-------------------------------------------
     /// |[`DeEvent::Start`]|`<tag>...</tag>`           |Calls `visitor.visit_unit()`, consumes all events up to and including corresponding `End` event
-    /// |[`DeEvent::End`]  |`</tag>`                   |Emits [`UnexpectedEnd("tag")`](DeError::UnexpectedEnd)
+    /// |[`DeEvent::End`]  |`</tag>`                   |This is impossible situation, the method will panic if it happens
     /// |[`DeEvent::Text`] |`text content` or `<![CDATA[cdata content]]>` (probably mixed)|Calls `visitor.visit_unit()`. The content is ignored
     /// |[`DeEvent::Eof`]  |                           |Emits [`UnexpectedEof`](DeError::UnexpectedEof)
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, DeError>
@@ -2849,7 +2877,9 @@ where
                 visitor.visit_unit()
             }
             DeEvent::Text(_) => visitor.visit_unit(),
-            DeEvent::End(e) => Err(DeError::UnexpectedEnd(e.name().as_ref().to_owned())),
+            // SAFETY: The reader is guaranteed that we don't have unmatched tags
+            // If we here, then out deserializer has a bug
+            DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -3029,7 +3059,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end_into(name, &mut self.buf) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
@@ -3061,7 +3090,6 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn read_to_end(&mut self, name: QName) -> Result<(), DeError> {
         match self.reader.read_to_end(name) {
-            Err(Error::UnexpectedEof(_)) => Err(DeError::UnexpectedEof),
             Err(e) => Err(e.into()),
             Ok(_) => Ok(()),
         }
@@ -3075,6 +3103,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::IllFormedError;
     use pretty_assertions::assert_eq;
 
     fn make_de<'de>(source: &'de str) -> Deserializer<'de, SliceReader<'de>> {
@@ -3539,7 +3568,7 @@ mod tests {
 
             match List::deserialize(&mut de) {
                 Err(DeError::TooManyEvents(count)) => assert_eq!(count.get(), 3),
-                e => panic!("Expected `Err(TooManyEvents(3))`, but found {:?}", e),
+                e => panic!("Expected `Err(TooManyEvents(3))`, but got `{:?}`", e),
             }
         }
 
@@ -3605,8 +3634,13 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Start(BytesStart::new("tag")));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => (),
-                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::MissedEnd("tag".into()))
+                }
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }
@@ -3619,8 +3653,13 @@ mod tests {
             assert_eq!(de.peek().unwrap(), &Text("".into()));
 
             match de.read_to_end(QName(b"tag")) {
-                Err(DeError::UnexpectedEof) => (),
-                x => panic!("Expected `Err(UnexpectedEof)`, but found {:?}", x),
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::MissedEnd("tag".into()))
+                }
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), Eof);
         }
@@ -3708,12 +3747,11 @@ mod tests {
     #[test]
     fn read_string() {
         match from_str::<String>(r#"</root>"#) {
-            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                assert_eq!(expected, "");
-                assert_eq!(found, "root");
+            Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                assert_eq!(cause, IllFormedError::UnmatchedEnd("root".into()));
             }
             x => panic!(
-                r#"Expected `Err(InvalidXml(EndEventMismatch("", "root")))`, but found {:?}"#,
+                "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
                 x
             ),
         }
@@ -3722,14 +3760,14 @@ mod tests {
         assert_eq!(s, "");
 
         match from_str::<String>(r#"<root></other>"#) {
-            Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                assert_eq!(expected, "root");
-                assert_eq!(found, "other");
-            }
-            x => panic!(
-                r#"Expected `Err(InvalidXml(EndEventMismatch("root", "other")))`, but found {:?}"#,
-                x
+            Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
+                cause,
+                IllFormedError::MismatchedEnd {
+                    expected: "root".into(),
+                    found: "other".into(),
+                }
             ),
+            x => panic!("Expected `Err(InvalidXml(IllFormed(_))`, but got `{:?}`", x),
         }
     }
 
@@ -4051,11 +4089,13 @@ mod tests {
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag2");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag2".into()));
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag2' }})`, but got {:?}", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4192,11 +4232,13 @@ mod tests {
         fn end() {
             let mut de = make_de("</tag>");
             match de.next() {
-                Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                    assert_eq!(expected, "");
-                    assert_eq!(found, "tag");
+                Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                    assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                 }
-                x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                x => panic!(
+                    "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                    x
+                ),
             }
             assert_eq!(de.next().unwrap(), DeEvent::Eof);
         }
@@ -4269,11 +4311,13 @@ mod tests {
                 // Text is trimmed from both sides
                 assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
                 match de.next() {
-                    Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                        assert_eq!(expected, "");
-                        assert_eq!(found, "tag");
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                     }
-                    x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4299,11 +4343,13 @@ mod tests {
                     // Text is trimmed from the start
                     assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4403,11 +4449,13 @@ mod tests {
                 let mut de = make_de("<![CDATA[ cdata ]]></tag>");
                 assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                 match de.next() {
-                    Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                        assert_eq!(expected, "");
-                        assert_eq!(found, "tag");
+                    Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                        assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                     }
-                    x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                    x => panic!(
+                        "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                        x
+                    ),
                 }
                 assert_eq!(de.next().unwrap(), DeEvent::Eof);
             }
@@ -4431,11 +4479,13 @@ mod tests {
                     // Text is trimmed from the end
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4479,11 +4529,13 @@ mod tests {
                     let mut de = make_de("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]></tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  cdata2 ".into()));
                     match de.next() {
-                        Err(DeError::InvalidXml(Error::EndEventMismatch { expected, found })) => {
-                            assert_eq!(expected, "");
-                            assert_eq!(found, "tag");
+                        Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
+                            assert_eq!(cause, IllFormedError::UnmatchedEnd("tag".into()));
                         }
-                        x => panic!("Expected `InvalidXml(EndEventMismatch {{ expected = '', found = 'tag' }})`, but got {:?}", x),
+                        x => panic!(
+                            "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
+                            x
+                        ),
                     }
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }

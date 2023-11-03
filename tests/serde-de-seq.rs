@@ -236,7 +236,7 @@ mod fixed_name {
                     assert_eq!(e, "invalid length 2, expected an array of length 3")
                 }
                 e => panic!(
-                    r#"Expected `Err(Custom("invalid length 2, expected an array of length 3"))`, but found {:?}"#,
+                    r#"Expected `Err(Custom("invalid length 2, expected an array of length 3"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -262,7 +262,7 @@ mod fixed_name {
             match data {
                 Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
                 e => panic!(
-                    r#"Expected `Err(Custom("duplicate field `item`"))`, but found {:?}"#,
+                    r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -286,7 +286,7 @@ mod fixed_name {
             match data {
                 Err(DeError::Custom(e)) => assert_eq!(e, "missing field `item`"),
                 e => panic!(
-                    r#"Expected `Err(Custom("missing field `item`"))`, but found {:?}"#,
+                    r#"Expected `Err(Custom("missing field `item`"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -352,7 +352,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -386,7 +386,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -460,7 +460,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -495,7 +495,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -569,7 +569,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -604,7 +604,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -663,7 +663,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -699,7 +699,7 @@ mod fixed_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1042,7 +1042,7 @@ mod fixed_name {
             match data {
                 Err(DeError::Custom(e)) => assert_eq!(e, "missing field `item`"),
                 e => panic!(
-                    r#"Expected `Err(Custom("missing field `item`"))`, but found {:?}"#,
+                    r#"Expected `Err(Custom("missing field `item`"))`, but got `{:?}`"#,
                     e
                 ),
             }
@@ -1124,7 +1124,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1165,7 +1165,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `outer`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1260,7 +1260,7 @@ mod fixed_name {
                         assert_eq!(e, "duplicate field `item`")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1303,7 +1303,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `outer`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1398,7 +1398,7 @@ mod fixed_name {
                         assert_eq!(e, "duplicate field `item`")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1441,7 +1441,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `outer`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1511,7 +1511,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `item`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `item`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `item`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -1553,7 +1553,7 @@ mod fixed_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `outer`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `outer`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `outer`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -2128,7 +2128,7 @@ mod variable_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -2174,7 +2174,7 @@ mod variable_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -2270,7 +2270,7 @@ mod variable_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -2316,7 +2316,7 @@ mod variable_name {
                         assert_eq!(e, "invalid length 1, expected an array of length 3")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                        r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -2435,7 +2435,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 2")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 2"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2472,7 +2472,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 3")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2512,7 +2512,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 2")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 2"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2552,7 +2552,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 3")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2667,7 +2667,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 2")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 2"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2704,7 +2704,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 3")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2744,7 +2744,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 2")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 2")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 2"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2784,7 +2784,7 @@ mod variable_name {
                                 assert_eq!(e, "invalid length 1, expected an array of length 3")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                                r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -2863,7 +2863,7 @@ mod variable_name {
                             assert_eq!(e, "invalid length 1, expected an array of length 3")
                         }
                         e => panic!(
-                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                             e
                         ),
                     }
@@ -3270,7 +3270,7 @@ mod variable_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -3316,7 +3316,7 @@ mod variable_name {
                         assert_eq!(e, "duplicate field `$value`")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -3410,7 +3410,7 @@ mod variable_name {
                 match data {
                     Err(DeError::Custom(e)) => assert_eq!(e, "duplicate field `$value`"),
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -3456,7 +3456,7 @@ mod variable_name {
                         assert_eq!(e, "duplicate field `$value`")
                     }
                     e => panic!(
-                        r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                        r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                         e
                     ),
                 }
@@ -3575,7 +3575,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `element`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `element`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3612,7 +3612,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `$value`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3652,7 +3652,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `element`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `element`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3692,7 +3692,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `$value`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3807,7 +3807,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `element`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `element`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3844,7 +3844,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `$value`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3884,7 +3884,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `element`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `element`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `element`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -3924,7 +3924,7 @@ mod variable_name {
                                 assert_eq!(e, "duplicate field `$value`")
                             }
                             e => panic!(
-                                r#"Expected Err(Custom("duplicate field `$value`")), got {:?}"#,
+                                r#"Expected `Err(Custom("duplicate field `$value`"))`, but got `{:?}`"#,
                                 e
                             ),
                         }
@@ -4003,7 +4003,7 @@ mod variable_name {
                             assert_eq!(e, "invalid length 1, expected an array of length 3")
                         }
                         e => panic!(
-                            r#"Expected Err(Custom("invalid length 1, expected an array of length 3")), got {:?}"#,
+                            r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
                             e
                         ),
                     }
