@@ -24,6 +24,59 @@ use memchr;
 #[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct Config {
+    /// Whether comments should be validated. If enabled, in case of invalid comment
+    /// [`Error::IllFormed(DoubleHyphenInComment)`] is returned from read methods.
+    ///
+    /// When set to `true`, every [`Comment`] event will be checked for not
+    /// containing `--`, which [is not allowed] in XML comments. Most of the time
+    /// we don't want comments at all so we don't really care about comment
+    /// correctness, thus the default value is `false` to improve performance.
+    ///
+    /// Default: `false`
+    ///
+    /// [`Error::IllFormed(DoubleHyphenInComment)`]: crate::errors::IllFormedError::DoubleHyphenInComment
+    /// [`Comment`]: crate::events::Event::Comment
+    /// [is not allowed]: https://www.w3.org/TR/xml11/#sec-comments
+    pub check_comments: bool,
+
+    /// Whether mismatched closing tag names should be detected. If enabled, in
+    /// case of mismatch the [`Error::IllFormed(MismatchedEnd)`] is returned from
+    /// read methods.
+    ///
+    /// Note, that start and end tags [should match literally][spec], they cannot
+    /// have different prefixes even if both prefixes resolve to the same namespace.
+    /// The XML
+    ///
+    /// ```xml
+    /// <outer xmlns="namespace" xmlns:p="namespace">
+    /// </p:outer>
+    /// ```
+    ///
+    /// is not valid, even though semantically the start tag is the same as the
+    /// end tag. The reason is that namespaces are an extension of the original
+    /// XML specification (without namespaces) and it should be backward-compatible.
+    ///
+    /// When set to `false`, it won't check if a closing tag matches the corresponding
+    /// opening tag. For example, `<mytag></different_tag>` will be permitted.
+    ///
+    /// If the XML is known to be sane (already processed, etc.) this saves extra time.
+    ///
+    /// Note that the emitted [`End`] event will not be modified if this is disabled,
+    /// ie. it will contain the data of the mismatched end tag.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event. However if [`expand_empty_elements`]
+    /// is also set, only one additional allocation will be performed that support
+    /// both these options.
+    ///
+    /// Default: `true`
+    ///
+    /// [`Error::IllFormed(MismatchedEnd)`]: crate::errors::IllFormedError::MismatchedEnd
+    /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
+    /// [`End`]: crate::events::Event::End
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
+    pub check_end_names: bool,
+
     /// Whether empty elements should be split into an `Open` and a `Close` event.
     ///
     /// When set to `true`, all [`Empty`] events produced by a self-closing tag
@@ -43,6 +96,22 @@ pub struct Config {
     /// [`End`]: crate::events::Event::End
     /// [`check_end_names`]: Self::check_end_names
     pub expand_empty_elements: bool,
+
+    /// Whether trailing whitespace after the markup name are trimmed in closing
+    /// tags `</a >`.
+    ///
+    /// If `true` the emitted [`End`] event is stripped of trailing whitespace
+    /// after the markup name.
+    ///
+    /// Note that if set to `false` and [`check_end_names`] is `true` the comparison
+    /// of markup names is going to fail erroneously if a closing tag contains
+    /// trailing whitespace.
+    ///
+    /// Default: `true`
+    ///
+    /// [`End`]: crate::events::Event::End
+    /// [`check_end_names`]: Self::check_end_names
+    pub trim_markup_names_in_closing_tags: bool,
 
     /// Whether whitespace before character data should be removed.
     ///
@@ -85,75 +154,6 @@ pub struct Config {
     /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
     /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
     pub trim_text_end: bool,
-
-    /// Whether trailing whitespace after the markup name are trimmed in closing
-    /// tags `</a >`.
-    ///
-    /// If `true` the emitted [`End`] event is stripped of trailing whitespace
-    /// after the markup name.
-    ///
-    /// Note that if set to `false` and [`check_end_names`] is `true` the comparison
-    /// of markup names is going to fail erroneously if a closing tag contains
-    /// trailing whitespace.
-    ///
-    /// Default: `true`
-    ///
-    /// [`End`]: crate::events::Event::End
-    /// [`check_end_names`]: Self::check_end_names
-    pub trim_markup_names_in_closing_tags: bool,
-
-    /// Whether mismatched closing tag names should be detected. If enabled, in
-    /// case of mismatch the [`Error::IllFormed(MismatchedEnd)`] is returned from
-    /// read methods.
-    ///
-    /// Note, that start and end tags [should match literally][spec], they cannot
-    /// have different prefixes even if both prefixes resolve to the same namespace.
-    /// The XML
-    ///
-    /// ```xml
-    /// <outer xmlns="namespace" xmlns:p="namespace">
-    /// </p:outer>
-    /// ```
-    ///
-    /// is not valid, even though semantically the start tag is the same as the
-    /// end tag. The reason is that namespaces are an extension of the original
-    /// XML specification (without namespaces) and it should be backward-compatible.
-    ///
-    /// When set to `false`, it won't check if a closing tag matches the corresponding
-    /// opening tag. For example, `<mytag></different_tag>` will be permitted.
-    ///
-    /// If the XML is known to be sane (already processed, etc.) this saves extra time.
-    ///
-    /// Note that the emitted [`End`] event will not be modified if this is disabled,
-    /// ie. it will contain the data of the mismatched end tag.
-    ///
-    /// Note, that setting this to `true` will lead to additional allocates that
-    /// needed to store tag name for an [`End`] event. However if [`expand_empty_elements`]
-    /// is also set, only one additional allocation will be performed that support
-    /// both these options.
-    ///
-    /// Default: `true`
-    ///
-    /// [`Error::IllFormed(MismatchedEnd)`]: crate::errors::IllFormedError::MismatchedEnd
-    /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
-    /// [`End`]: crate::events::Event::End
-    /// [`expand_empty_elements`]: Self::expand_empty_elements
-    pub check_end_names: bool,
-
-    /// Whether comments should be validated. If enabled, in case of invalid comment
-    /// [`Error::IllFormed(DoubleHyphenInComment)`] is returned from read methods.
-    ///
-    /// When set to `true`, every [`Comment`] event will be checked for not
-    /// containing `--`, which [is not allowed] in XML comments. Most of the time
-    /// we don't want comments at all so we don't really care about comment
-    /// correctness, thus the default value is `false` to improve performance.
-    ///
-    /// Default: `false`
-    ///
-    /// [`Error::IllFormed(DoubleHyphenInComment)`]: crate::errors::IllFormedError::DoubleHyphenInComment
-    /// [`Comment`]: crate::events::Event::Comment
-    /// [is not allowed]: https://www.w3.org/TR/xml11/#sec-comments
-    pub check_comments: bool,
 }
 
 impl Config {
@@ -182,12 +182,12 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            check_comments: false,
+            check_end_names: true,
             expand_empty_elements: false,
+            trim_markup_names_in_closing_tags: true,
             trim_text_start: false,
             trim_text_end: false,
-            trim_markup_names_in_closing_tags: true,
-            check_end_names: true,
-            check_comments: false,
         }
     }
 }
