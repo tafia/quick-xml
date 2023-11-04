@@ -20,7 +20,6 @@ where
     let config = reader.config_mut();
     config.expand_empty_elements = true;
     config.trim_text(true);
-    config.trim_text_end = true;
     loop {
         let event_result = reader.read_event_into(&mut buf);
         if let Ok(ref event) = event_result {

@@ -3,7 +3,7 @@
 use arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use quick_xml::events::{BytesCData, BytesText, Event};
-use quick_xml::reader::{NsReader, Reader};
+use quick_xml::reader::{Config, NsReader, Reader};
 use quick_xml::writer::Writer;
 use std::{hint::black_box, io::Cursor};
 
@@ -41,7 +41,7 @@ enum WriterFunc<'a> {
 #[derive(Debug, arbitrary::Arbitrary)]
 struct Driver<'a> {
     writer_funcs: Vec<WriterFunc<'a>>,
-    reader_config: Vec<bool>,
+    reader_config: Config,
 }
 
 fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
@@ -83,14 +83,7 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
     let xml = writer.into_inner().into_inner();
     // The str should be valid as we just generated it, unwrapping **should** be safe.
     let mut reader = Reader::from_str(std::str::from_utf8(&xml).unwrap());
-    let mut config_iter = driver.reader_config.iter();
-    let config = reader.config_mut();
-    config.check_comments = *config_iter.next().unwrap_or(&false);
-    config.check_end_names = *config_iter.next().unwrap_or(&false);
-    config.expand_empty_elements = *config_iter.next().unwrap_or(&false);
-    config.trim_markup_names_in_closing_tags = *config_iter.next().unwrap_or(&false);
-    config.trim_text(*config_iter.next().unwrap_or(&false));
-    config.trim_text_end = *config_iter.next().unwrap_or(&false);
+    *reader.config_mut() = driver.reader_config.clone();
 
     loop {
         let event = black_box(reader.read_event()?);
@@ -100,13 +93,7 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
     }
 
     let mut reader = NsReader::from_reader(&xml[..]);
-    let config = reader.config_mut();
-    config.check_comments = *config_iter.next().unwrap_or(&false);
-    config.check_end_names = *config_iter.next().unwrap_or(&false);
-    config.expand_empty_elements = *config_iter.next().unwrap_or(&false);
-    config.trim_markup_names_in_closing_tags = *config_iter.next().unwrap_or(&false);
-    config.trim_text(*config_iter.next().unwrap_or(&false));
-    config.trim_text_end = *config_iter.next().unwrap_or(&false);
+    *reader.config_mut() = driver.reader_config;
 
     loop {
         let event = black_box(reader.read_event()?);
