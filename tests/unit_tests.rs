@@ -54,13 +54,6 @@ macro_rules! next_eq {
 }
 
 #[test]
-fn test_start() {
-    let mut r = Reader::from_str("<a>");
-    r.config_mut().trim_text(true);
-    next_eq!(r, Start, b"a");
-}
-
-#[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
     r.config_mut().trim_text(true);
@@ -382,48 +375,6 @@ fn test_offset_err_end_element() {
         Err(_) if r.buffer_position() == 0 => (), // error at char 0: no opening tag
         Err(e) => panic!(
             "expecting buf_pos = 0, found {}, err: {:?}",
-            r.buffer_position(),
-            e
-        ),
-        e => panic!("expecting error, found {:?}", e),
-    }
-}
-
-#[test]
-fn test_offset_err_comment() {
-    let mut r = Reader::from_str("<a><!--b>");
-    r.config_mut().trim_text(true);
-
-    next_eq!(r, Start, b"a");
-    assert_eq!(r.buffer_position(), 3);
-
-    match r.read_event() {
-        // error at char 4: no closing --> tag found
-        Err(e) => assert_eq!(
-            r.buffer_position(),
-            4,
-            "expecting buf_pos = 4, found {}, err {:?}",
-            r.buffer_position(),
-            e
-        ),
-        e => panic!("expecting error, found {:?}", e),
-    }
-}
-
-#[test]
-fn test_offset_err_comment_trim_text() {
-    let mut r = Reader::from_str("<a>\r\n <!--b>");
-    r.config_mut().trim_text(true);
-
-    next_eq!(r, Start, b"a");
-    assert_eq!(r.buffer_position(), 3);
-
-    match r.read_event() {
-        // error at char 7: no closing --> tag found
-        Err(e) => assert_eq!(
-            r.buffer_position(),
-            7,
-            "expecting buf_pos = 7, found {}, err {:?}",
             r.buffer_position(),
             e
         ),

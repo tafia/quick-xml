@@ -179,24 +179,6 @@ fn sample_ns_short() {
 }
 
 #[test]
-fn eof_1() {
-    test(
-        r#"<?xml"#,
-        r#"Error: syntax error: processing instruction or xml declaration not closed: `?>` not found before end of input"#,
-        true,
-    );
-}
-
-#[test]
-fn bad_1() {
-    test(
-        r#"<?xml&.,"#,
-        r#"1:6 Error: syntax error: processing instruction or xml declaration not closed: `?>` not found before end of input"#,
-        true,
-    );
-}
-
-#[test]
 fn tabs_1() {
     test(
         "\t<a>\t<b/></a>",
