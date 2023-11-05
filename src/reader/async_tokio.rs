@@ -49,7 +49,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     ///        <tag2>Test 2</tag2>
     ///     </tag1>
     /// "#.as_bytes());
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -111,7 +111,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     ///         </inner>
     ///     </outer>
     /// "#.as_bytes());
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     /// let mut buf = Vec::new();
     ///
     /// let start = BytesStart::new("outer");
@@ -186,7 +186,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#.as_bytes());
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -257,7 +257,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///         </inner>
     ///     </outer>
     /// "#.as_bytes());
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     /// let mut buf = Vec::new();
     ///
     /// let ns = Namespace(b"namespace 1");
@@ -292,7 +292,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
         buf: &mut Vec<u8>,
     ) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
-        // match literally the start name. See `Reader::check_end_names` documentation
+        // match literally the start name. See `Config::check_end_names` documentation
         self.reader.read_to_end_into_async(end, buf).await
     }
 
@@ -321,7 +321,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#.as_bytes());
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();

@@ -13,7 +13,7 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Reader, Span, XmlSource};
+use crate::reader::{Config, Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -37,7 +37,17 @@ impl<R> NsReader<R> {
         Self::new(Reader::from_reader(reader))
     }
 
-    configure_methods!(reader);
+    /// Returns reference to the parser configuration
+    #[inline]
+    pub fn config(&self) -> &Config {
+        self.reader.config()
+    }
+
+    /// Returns mutable reference to the parser configuration
+    #[inline]
+    pub fn config_mut(&mut self) -> &mut Config {
+        self.reader.config_mut()
+    }
 }
 
 /// Private methods
@@ -253,7 +263,7 @@ impl<R> NsReader<R> {
     ///          xmlns='root namespace'
     ///          xmlns:p='other namespace'/>
     /// ");
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// match reader.read_event().unwrap() {
     ///     Event::Empty(e) => {
@@ -309,7 +319,7 @@ impl<R: BufRead> NsReader<R> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -367,7 +377,7 @@ impl<R: BufRead> NsReader<R> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut buf = Vec::new();
@@ -474,7 +484,7 @@ impl<R: BufRead> NsReader<R> {
     ///         </inner>
     ///     </outer>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     /// let mut buf = Vec::new();
     ///
     /// let ns = Namespace(b"namespace 1");
@@ -504,12 +514,12 @@ impl<R: BufRead> NsReader<R> {
     /// [`IllFormed`]: crate::errors::Error::IllFormed
     /// [`read_to_end()`]: Self::read_to_end
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
-    /// [`expand_empty_elements`]: Self::expand_empty_elements
+    /// [`expand_empty_elements`]: Config::expand_empty_elements
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     #[inline]
     pub fn read_to_end_into(&mut self, end: QName, buf: &mut Vec<u8>) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
-        // match literally the start name. See `Self::check_end_names` documentation
+        // match literally the start name. See `Config::check_end_names` documentation
         self.reader.read_to_end_into(end, buf)
     }
 }
@@ -555,7 +565,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut txt = Vec::new();
@@ -616,7 +626,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///        <y:tag2>Test 2</y:tag2>
     ///     </x:tag1>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut txt = Vec::new();
@@ -712,7 +722,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///         </inner>
     ///     </outer>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let ns = Namespace(b"namespace 1");
     /// let start = BytesStart::from_content(r#"outer xmlns="namespace 1""#, 5);
@@ -740,12 +750,12 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`End`]: Event::End
     /// [`IllFormed`]: crate::errors::Error::IllFormed
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
-    /// [`expand_empty_elements`]: Self::expand_empty_elements
+    /// [`expand_empty_elements`]: Config::expand_empty_elements
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     #[inline]
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         // According to the https://www.w3.org/TR/xml11/#dt-etag, end name should
-        // match literally the start name. See `Self::check_end_names` documentation
+        // match literally the start name. See `Config::check_end_names` documentation
         self.reader.read_to_end(end)
     }
 
@@ -786,7 +796,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///         <p>For example, elements not needed to be &quot;closed&quot;
     ///     </html>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let start = BytesStart::new("html");
     /// let end   = start.to_end().into_owned();
@@ -794,7 +804,7 @@ impl<'i> NsReader<&'i [u8]> {
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
     /// // ...and disable checking of end names because we expect HTML further...
-    /// reader.check_end_names(false);
+    /// reader.config_mut().check_end_names = false;
     ///
     /// // ...then, we could read text content until close tag.
     /// // This call will correctly handle nested <html> elements.
@@ -806,7 +816,7 @@ impl<'i> NsReader<&'i [u8]> {
     ///     "#));
     ///
     /// // Now we can enable checks again
-    /// reader.check_end_names(true);
+    /// reader.config_mut().check_end_names = true;
     ///
     /// // At the end we should get an Eof event, because we ate the whole XML
     /// assert_eq!(reader.read_event().unwrap(), Event::Eof);

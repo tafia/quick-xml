@@ -54,7 +54,7 @@ impl<'a> Reader<&'a [u8]> {
     ///        <tag2>Test 2</tag2>
     ///     </tag1>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let mut count = 0;
     /// let mut txt = Vec::new();
@@ -131,7 +131,7 @@ impl<'a> Reader<&'a [u8]> {
     ///         </inner>
     ///     </outer>
     /// "#);
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let start = BytesStart::new("outer");
     /// let end   = start.to_end().into_owned();
@@ -151,8 +151,8 @@ impl<'a> Reader<&'a [u8]> {
     /// [`Start`]: Event::Start
     /// [`End`]: Event::End
     /// [`BytesStart::to_end()`]: crate::events::BytesStart::to_end
-    /// [`expand_empty_elements`]: Self::expand_empty_elements
-    /// [`check_end_names`]: Self::check_end_names
+    /// [`expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    /// [`check_end_names`]: crate::reader::Config::check_end_names
     /// [the specification]: https://www.w3.org/TR/xml11/#dt-etag
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         Ok(read_to_end!(self, end, (), read_event_impl, {}))
@@ -195,7 +195,7 @@ impl<'a> Reader<&'a [u8]> {
     ///         <p>For example, elements not needed to be &quot;closed&quot;
     ///     </html>
     /// ");
-    /// reader.trim_text(true);
+    /// reader.config_mut().trim_text(true);
     ///
     /// let start = BytesStart::new("html");
     /// let end   = start.to_end().into_owned();
@@ -203,7 +203,7 @@ impl<'a> Reader<&'a [u8]> {
     /// // First, we read a start event...
     /// assert_eq!(reader.read_event().unwrap(), Event::Start(start));
     /// // ...and disable checking of end names because we expect HTML further...
-    /// reader.check_end_names(false);
+    /// reader.config_mut().check_end_names = false;
     ///
     /// // ...then, we could read text content until close tag.
     /// // This call will correctly handle nested <html> elements.
@@ -216,7 +216,7 @@ impl<'a> Reader<&'a [u8]> {
     /// assert!(matches!(text, Cow::Borrowed(_)));
     ///
     /// // Now we can enable checks again
-    /// reader.check_end_names(true);
+    /// reader.config_mut().check_end_names = true;
     ///
     /// // At the end we should get an Eof event, because we ate the whole XML
     /// assert_eq!(reader.read_event().unwrap(), Event::Eof);

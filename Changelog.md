@@ -10,7 +10,16 @@
 
 ## Unreleased
 
+The way to configure parser is changed. Now all configuration is contained in the
+`Config` struct and can be applied at once. When `serde-types` feature is enabled,
+configuration is serializable.
+
 ### New Features
+
+- [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
+- [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
+  configuration. Previous builder methods on `Reader` / `NsReader` was replaced by
+  direct access to fields of config using `reader.config_mut().<...>`.
 
 ### Bug Fixes
 
@@ -26,7 +35,9 @@
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
 
+[#513]: https://github.com/tafia/quick-xml/issues/513
 [#675]: https://github.com/tafia/quick-xml/pull/675
+[#677]: https://github.com/tafia/quick-xml/pull/677
 
 
 ## 0.31.0 -- 2023-10-22

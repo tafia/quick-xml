@@ -17,7 +17,7 @@ fn issue94() {
 <!B>
 </Run>"#;
     let mut reader = Reader::from_reader(&data[..]);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     loop {
         match reader.read_event() {
             Ok(Event::Eof) | Err(..) => break,
@@ -115,11 +115,11 @@ mod issue514 {
         assert_eq!(reader.read_event().unwrap(), Event::Start(outer_start));
         assert_eq!(reader.read_event().unwrap(), Event::Start(html_start));
 
-        reader.check_end_names(false);
+        reader.config_mut().check_end_names = false;
 
         assert_eq!(reader.read_text(html_end.name()).unwrap(), "...");
 
-        reader.check_end_names(true);
+        reader.config_mut().check_end_names = true;
 
         assert_eq!(reader.read_event().unwrap(), Event::End(outer_end));
         assert_eq!(reader.read_event().unwrap(), Event::Eof);
@@ -138,11 +138,11 @@ mod issue514 {
         assert_eq!(reader.read_event().unwrap(), Event::Start(outer_start));
         assert_eq!(reader.read_event().unwrap(), Event::Start(html_start));
 
-        reader.check_end_names(false);
+        reader.config_mut().check_end_names = false;
 
         assert_eq!(reader.read_text(html_end.name()).unwrap(), "...");
 
-        reader.check_end_names(true);
+        reader.config_mut().check_end_names = true;
 
         match reader.read_event() {
             Err(Error::IllFormed(cause)) => assert_eq!(

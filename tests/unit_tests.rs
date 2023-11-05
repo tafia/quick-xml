@@ -56,77 +56,63 @@ macro_rules! next_eq {
 #[test]
 fn test_start() {
     let mut r = Reader::from_str("<a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_with_ws() {
     let mut r = Reader::from_str("<a></a >");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_attr() {
     let mut r = Reader::from_str("<a b=\"test\"></a>");
-    r.trim_text(true);
-    next_eq!(r, Start, b"a", End, b"a");
-}
-
-#[test]
-fn test_empty() {
-    let mut r = Reader::from_str("<a />");
-    r.trim_text(true);
-    next_eq!(r, Empty, b"a");
-}
-
-#[test]
-fn test_empty_can_be_expanded() {
-    let mut r = Reader::from_str("<a />");
-    r.trim_text(true).expand_empty_elements(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_empty_attr() {
     let mut r = Reader::from_str("<a b=\"test\" />");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Empty, b"a");
 }
 
 #[test]
 fn test_start_end_comment() {
     let mut r = Reader::from_str("<b><a b=\"test\" c=\"test\"/> <a  /><!--t--></b>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"b", Empty, b"a", Empty, b"a", Comment, b"t", End, b"b");
 }
 
 #[test]
 fn test_start_txt_end() {
     let mut r = Reader::from_str("<a>test</a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
     let mut r = Reader::from_str("<!--test-->");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Comment, b"test");
 }
 
 #[test]
 fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     match r.read_event().unwrap() {
         Decl(ref e) => {
             match e.version() {
@@ -158,41 +144,30 @@ fn test_xml_decl() {
 }
 
 #[test]
-fn test_trim_test() {
-    let txt = "<a><b>  </b></a>";
-    let mut r = Reader::from_str(txt);
-    r.trim_text(true);
-    next_eq!(r, Start, b"a", Start, b"b", End, b"b", End, b"a");
-
-    let mut r = Reader::from_str(txt);
-    next_eq!(r, Start, b"a", Start, b"b", Text, b"  ", End, b"b", End, b"a");
-}
-
-#[test]
 fn test_cdata() {
     let mut r = Reader::from_str("<![CDATA[test]]>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
     let mut r = Reader::from_str("<![CDATA[test <> test]]>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
     let mut r = Reader::from_str("<a b=\"c\">");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", Start, b"b", Text, b"test", End, b"b", Empty, b"c", End, b"a");
 }
 
@@ -200,7 +175,7 @@ fn test_nested() {
 fn test_writer() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {
@@ -218,7 +193,7 @@ fn test_writer() -> Result<()> {
 fn test_writer_borrow() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         match reader.read_event()? {
@@ -236,7 +211,7 @@ fn test_writer_borrow() -> Result<()> {
 fn test_writer_indent() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
     let mut reader = Reader::from_str(txt);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     loop {
         match reader.read_event()? {
@@ -255,7 +230,7 @@ fn test_writer_indent() -> Result<()> {
 fn test_writer_indent_cdata() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent_cdata.xml");
     let mut reader = Reader::from_str(txt);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
     loop {
         match reader.read_event()? {
@@ -295,7 +270,7 @@ fn test_write_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     loop {
         let event = match reader.read_event()? {
@@ -401,7 +376,7 @@ fn test_new_xml_decl_empty() {
 #[test]
 fn test_offset_err_end_element() {
     let mut r = Reader::from_str("</a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
 
     match r.read_event() {
         Err(_) if r.buffer_position() == 0 => (), // error at char 0: no opening tag
@@ -417,7 +392,7 @@ fn test_offset_err_end_element() {
 #[test]
 fn test_offset_err_comment() {
     let mut r = Reader::from_str("<a><!--b>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
 
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
@@ -438,7 +413,7 @@ fn test_offset_err_comment() {
 #[test]
 fn test_offset_err_comment_trim_text() {
     let mut r = Reader::from_str("<a>\r\n <!--b>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
 
     next_eq!(r, Start, b"a");
     assert_eq!(r.buffer_position(), 3);
@@ -459,7 +434,7 @@ fn test_offset_err_comment_trim_text() {
 #[test]
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a");
     match r.read_event() {
         Ok(Text(e)) => {
@@ -570,7 +545,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
 #[test]
 fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -598,7 +573,7 @@ fn test_closing_bracket_in_single_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str(r#"<a attr=">" check="2"></a>"#);
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -626,7 +601,7 @@ fn test_closing_bracket_in_double_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr="'>'" check="'2'"></a>"#);
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -654,7 +629,7 @@ fn test_closing_bracket_in_double_quote_mixed() {
 #[test]
 fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr='">"' check='"2"'></a>"#);
-    r.trim_text(true);
+    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();

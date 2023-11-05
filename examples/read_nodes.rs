@@ -105,14 +105,16 @@ fn main() -> Result<(), AppError> {
     let mut translations: Vec<Translation> = Vec::new();
 
     let mut reader = Reader::from_str(XML);
-    reader.trim_text(true);
+    let config = reader.config_mut();
 
+    config.trim_text(true);
     // == Handling empty elements ==
     // To simply our processing code
     // we want the same events for empty elements, like:
     //   <DefaultSettings Language="es" Greeting="HELLO"/>
     //   <Text/>
-    reader.expand_empty_elements(true);
+    config.expand_empty_elements = true;
+
     let mut buf = Vec::new();
 
     loop {

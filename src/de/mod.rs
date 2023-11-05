@@ -2476,7 +2476,7 @@ where
     ///
     /// [`deserialize_seq`]: serde::Deserializer::deserialize_seq
     /// [DoS]: https://en.wikipedia.org/wiki/Denial-of-service_attack
-    /// [auto-expanding feature]: Reader::expand_empty_elements
+    /// [auto-expanding feature]: crate::reader::Config::expand_empty_elements
     #[cfg(feature = "overlapped-lists")]
     pub fn event_buffer_size(&mut self, limit: Option<NonZeroUsize>) -> &mut Self {
         self.limit = limit;
@@ -2761,7 +2761,8 @@ where
     /// and use specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
         let mut reader = Reader::from_str(source);
-        reader.expand_empty_elements(true);
+        let config = reader.config_mut();
+        config.expand_empty_elements = true;
 
         Self::new(
             SliceReader {
@@ -2803,7 +2804,8 @@ where
     /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
         let mut reader = Reader::from_reader(reader);
-        reader.expand_empty_elements(true);
+        let config = reader.config_mut();
+        config.expand_empty_elements = true;
 
         Self::new(
             IoReader {
@@ -3709,7 +3711,8 @@ mod tests {
             start_trimmer: StartTrimmer::default(),
         };
 
-        reader.reader.expand_empty_elements(true);
+        let config = reader.reader.config_mut();
+        config.expand_empty_elements = true;
 
         let mut events = Vec::new();
 

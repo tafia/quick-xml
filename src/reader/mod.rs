@@ -11,152 +11,188 @@ use crate::reader::state::ReaderState;
 
 use memchr;
 
-macro_rules! configure_methods {
-    ($($holder:ident)?) => {
-        /// Changes whether empty elements should be split into an `Open` and a `Close` event.
-        ///
-        /// When set to `true`, all [`Empty`] events produced by a self-closing tag like `<tag/>` are
-        /// expanded into a [`Start`] event followed by an [`End`] event. When set to `false` (the
-        /// default), those tags are represented by an [`Empty`] event instead.
-        ///
-        /// Note, that setting this to `true` will lead to additional allocates that
-        /// needed to store tag name for an [`End`] event. However if [`check_end_names`]
-        /// is also set, only one additional allocation will be performed that support
-        /// both these options.
-        ///
-        /// (`false` by default)
-        ///
-        /// [`Empty`]: Event::Empty
-        /// [`Start`]: Event::Start
-        /// [`End`]: Event::End
-        /// [`check_end_names`]: Self::check_end_names
-        pub fn expand_empty_elements(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.expand_empty_elements = val;
-            self
-        }
+/// A struct that holds a parser configuration.
+///
+/// Current parser configuration can be retrieved by calling [`Reader::config()`]
+/// and changed by changing properties of the object returned by a call to
+/// [`Reader::config_mut()`].
+///
+/// [`Reader::config()`]: crate::reader::Reader::config
+/// [`Reader::config_mut()`]: crate::reader::Reader::config_mut
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
+#[non_exhaustive]
+pub struct Config {
+    /// Whether comments should be validated. If enabled, in case of invalid comment
+    /// [`Error::IllFormed(DoubleHyphenInComment)`] is returned from read methods.
+    ///
+    /// When set to `true`, every [`Comment`] event will be checked for not
+    /// containing `--`, which [is not allowed] in XML comments. Most of the time
+    /// we don't want comments at all so we don't really care about comment
+    /// correctness, thus the default value is `false` to improve performance.
+    ///
+    /// Default: `false`
+    ///
+    /// [`Error::IllFormed(DoubleHyphenInComment)`]: crate::errors::IllFormedError::DoubleHyphenInComment
+    /// [`Comment`]: crate::events::Event::Comment
+    /// [is not allowed]: https://www.w3.org/TR/xml11/#sec-comments
+    pub check_comments: bool,
 
-        /// Changes whether whitespace before and after character data should be removed.
-        ///
-        /// When set to `true`, all [`Text`] events are trimmed.
-        /// If after that the event is empty it will not be pushed.
-        ///
-        /// Changing this option automatically changes the [`trim_text_end`] option.
-        ///
-        /// (`false` by default).
-        ///
-        /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-        ///
-        /// WARNING: With this option every text events will be trimmed which is
-        /// incorrect behavior when text events delimited by comments, processing
-        /// instructions or CDATA sections. To correctly trim data manually apply
-        /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
-        /// only to necessary events.
-        /// </div>
-        ///
-        /// [`Text`]: Event::Text
-        /// [`trim_text_end`]: Self::trim_text_end
-        /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
-        /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
-        pub fn trim_text(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.trim_text_start = val;
-            self $(.$holder)? .state.trim_text_end = val;
-            self
-        }
+    /// Whether mismatched closing tag names should be detected. If enabled, in
+    /// case of mismatch the [`Error::IllFormed(MismatchedEnd)`] is returned from
+    /// read methods.
+    ///
+    /// Note, that start and end tags [should match literally][spec], they cannot
+    /// have different prefixes even if both prefixes resolve to the same namespace.
+    /// The XML
+    ///
+    /// ```xml
+    /// <outer xmlns="namespace" xmlns:p="namespace">
+    /// </p:outer>
+    /// ```
+    ///
+    /// is not valid, even though semantically the start tag is the same as the
+    /// end tag. The reason is that namespaces are an extension of the original
+    /// XML specification (without namespaces) and it should be backward-compatible.
+    ///
+    /// When set to `false`, it won't check if a closing tag matches the corresponding
+    /// opening tag. For example, `<mytag></different_tag>` will be permitted.
+    ///
+    /// If the XML is known to be sane (already processed, etc.) this saves extra time.
+    ///
+    /// Note that the emitted [`End`] event will not be modified if this is disabled,
+    /// ie. it will contain the data of the mismatched end tag.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event. However if [`expand_empty_elements`]
+    /// is also set, only one additional allocation will be performed that support
+    /// both these options.
+    ///
+    /// Default: `true`
+    ///
+    /// [`Error::IllFormed(MismatchedEnd)`]: crate::errors::IllFormedError::MismatchedEnd
+    /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
+    /// [`End`]: crate::events::Event::End
+    /// [`expand_empty_elements`]: Self::expand_empty_elements
+    pub check_end_names: bool,
 
-        /// Changes whether whitespace after character data should be removed.
-        ///
-        /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
-        /// If after that the event is empty it will not be pushed.
-        ///
-        /// (`false` by default).
-        ///
-        /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
-        ///
-        /// WARNING: With this option every text events will be trimmed which is
-        /// incorrect behavior when text events delimited by comments, processing
-        /// instructions or CDATA sections. To correctly trim data manually apply
-        /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
-        /// only to necessary events.
-        /// </div>
-        ///
-        /// [`Text`]: Event::Text
-        /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
-        /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
-        pub fn trim_text_end(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.trim_text_end = val;
-            self
-        }
+    /// Whether empty elements should be split into an `Open` and a `Close` event.
+    ///
+    /// When set to `true`, all [`Empty`] events produced by a self-closing tag
+    /// like `<tag/>` are expanded into a [`Start`] event followed by an [`End`]
+    /// event. When set to `false` (the default), those tags are represented by
+    /// an [`Empty`] event instead.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event. However if [`check_end_names`]
+    /// is also set, only one additional allocation will be performed that support
+    /// both these options.
+    ///
+    /// Default: `false`
+    ///
+    /// [`Empty`]: crate::events::Event::Empty
+    /// [`Start`]: crate::events::Event::Start
+    /// [`End`]: crate::events::Event::End
+    /// [`check_end_names`]: Self::check_end_names
+    pub expand_empty_elements: bool,
 
-        /// Changes whether trailing whitespaces after the markup name are trimmed in closing tags
-        /// `</a >`.
-        ///
-        /// If true the emitted [`End`] event is stripped of trailing whitespace after the markup name.
-        ///
-        /// Note that if set to `false` and `check_end_names` is true the comparison of markup names is
-        /// going to fail erroneously if a closing tag contains trailing whitespaces.
-        ///
-        /// (`true` by default)
-        ///
-        /// [`End`]: Event::End
-        pub fn trim_markup_names_in_closing_tags(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.trim_markup_names_in_closing_tags = val;
-            self
-        }
+    /// Whether trailing whitespace after the markup name are trimmed in closing
+    /// tags `</a >`.
+    ///
+    /// If `true` the emitted [`End`] event is stripped of trailing whitespace
+    /// after the markup name.
+    ///
+    /// Note that if set to `false` and [`check_end_names`] is `true` the comparison
+    /// of markup names is going to fail erroneously if a closing tag contains
+    /// trailing whitespace.
+    ///
+    /// Default: `true`
+    ///
+    /// [`End`]: crate::events::Event::End
+    /// [`check_end_names`]: Self::check_end_names
+    pub trim_markup_names_in_closing_tags: bool,
 
-        /// Changes whether mismatched closing tag names should be detected.
-        ///
-        /// Note, that start and end tags [should match literally][spec], they cannot
-        /// have different prefixes even if both prefixes resolve to the same namespace.
-        /// The XML
-        ///
-        /// ```xml
-        /// <outer xmlns="namespace" xmlns:p="namespace">
-        /// </p:outer>
-        /// ```
-        ///
-        /// is not valid, even though semantically the start tag is the same as the
-        /// end tag. The reason is that namespaces are an extension of the original
-        /// XML specification (without namespaces) and it should be backward-compatible.
-        ///
-        /// When set to `false`, it won't check if a closing tag matches the corresponding opening tag.
-        /// For example, `<mytag></different_tag>` will be permitted.
-        ///
-        /// If the XML is known to be sane (already processed, etc.) this saves extra time.
-        ///
-        /// Note that the emitted [`End`] event will not be modified if this is disabled, ie. it will
-        /// contain the data of the mismatched end tag.
-        ///
-        /// Note, that setting this to `true` will lead to additional allocates that
-        /// needed to store tag name for an [`End`] event. However if [`expand_empty_elements`]
-        /// is also set, only one additional allocation will be performed that support
-        /// both these options.
-        ///
-        /// (`true` by default)
-        ///
-        /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
-        /// [`End`]: Event::End
-        /// [`expand_empty_elements`]: Self::expand_empty_elements
-        pub fn check_end_names(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.check_end_names = val;
-            self
-        }
+    /// Whether whitespace before character data should be removed.
+    ///
+    /// When set to `true`, leading whitespace is trimmed in [`Text`] events.
+    /// If after that the event is empty it will not be pushed.
+    ///
+    /// Default: `false`
+    ///
+    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    ///
+    /// WARNING: With this option every text events will be trimmed which is
+    /// incorrect behavior when text events delimited by comments, processing
+    /// instructions or CDATA sections. To correctly trim data manually apply
+    /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
+    /// only to necessary events.
+    /// </div>
+    ///
+    /// [`Text`]: crate::events::Event::Text
+    /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
+    /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    pub trim_text_start: bool,
 
-        /// Changes whether comments should be validated.
-        ///
-        /// When set to `true`, every [`Comment`] event will be checked for not containing `--`, which
-        /// is not allowed in XML comments. Most of the time we don't want comments at all so we don't
-        /// really care about comment correctness, thus the default value is `false` to improve
-        /// performance.
-        ///
-        /// (`false` by default)
-        ///
-        /// [`Comment`]: Event::Comment
-        pub fn check_comments(&mut self, val: bool) -> &mut Self {
-            self $(.$holder)? .state.check_comments = val;
-            self
-        }
-    };
+    /// Whether whitespace after character data should be removed.
+    ///
+    /// When set to `true`, trailing whitespace is trimmed in [`Text`] events.
+    /// If after that the event is empty it will not be pushed.
+    ///
+    /// Default: `false`
+    ///
+    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    ///
+    /// WARNING: With this option every text events will be trimmed which is
+    /// incorrect behavior when text events delimited by comments, processing
+    /// instructions or CDATA sections. To correctly trim data manually apply
+    /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
+    /// only to necessary events.
+    /// </div>
+    ///
+    /// [`Text`]: crate::events::Event::Text
+    /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
+    /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    pub trim_text_end: bool,
 }
+
+impl Config {
+    /// Set both [`trim_text_start`] and [`trim_text_end`] to the same value.
+    ///
+    /// <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+    ///
+    /// WARNING: With this option every text events will be trimmed which is
+    /// incorrect behavior when text events delimited by comments, processing
+    /// instructions or CDATA sections. To correctly trim data manually apply
+    /// [`BytesText::inplace_trim_start`] and [`BytesText::inplace_trim_end`]
+    /// only to necessary events.
+    /// </div>
+    ///
+    /// [`trim_text_start`]: Self::trim_text_start
+    /// [`trim_text_end`]: Self::trim_text_end
+    /// [`BytesText::inplace_trim_start`]: crate::events::BytesText::inplace_trim_start
+    /// [`BytesText::inplace_trim_end`]: crate::events::BytesText::inplace_trim_end
+    #[inline]
+    pub fn trim_text(&mut self, trim: bool) {
+        self.trim_text_start = trim;
+        self.trim_text_end = trim;
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            check_comments: false,
+            check_end_names: true,
+            expand_empty_elements: false,
+            trim_markup_names_in_closing_tags: true,
+            trim_text_start: false,
+            trim_text_end: false,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 macro_rules! read_event_impl {
     (
@@ -205,6 +241,9 @@ macro_rules! read_event_impl {
             };
         };
         match event {
+            // #513: In case of ill-formed errors we already consume the wrong data
+            // and change the state. We can continue parsing if we wish
+            Err(Error::IllFormed(_)) => {}
             Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Exit,
             _ => {}
         }
@@ -213,7 +252,7 @@ macro_rules! read_event_impl {
 }
 
 /// Read bytes up to `<` and skip it. If current byte (after skipping all space
-/// characters if [`ReaderState::trim_text_start`] is `true`) is already `<`, then
+/// characters if [`Config::trim_text_start`] is `true`) is already `<`, then
 /// returns the next event, otherwise stay at position just after the `<` symbol.
 ///
 /// Moves parser to the `OpenedTag` state.
@@ -230,7 +269,7 @@ macro_rules! read_until_open {
     ) => {{
         $self.state.state = ParseState::OpenedTag;
 
-        if $self.state.trim_text_start {
+        if $self.state.config.trim_text_start {
             $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
         }
 
@@ -369,7 +408,7 @@ pub type Span = Range<usize>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Possible reader states. The state transition diagram (`true` and `false` shows
-/// value of [`Reader::expand_empty_elements()`] option):
+/// value of [`Config::expand_empty_elements`] option):
 ///
 /// ```mermaid
 /// flowchart LR
@@ -406,7 +445,7 @@ enum ParseState {
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
     /// after which reader returned to the `ClosedTag` state.
     ///
-    /// [`expand_empty_elements`]: ReaderState::expand_empty_elements
+    /// [`expand_empty_elements`]: Config::expand_empty_elements
     Empty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
@@ -480,7 +519,7 @@ impl EncodingRef {
 ///                 <tag2>Test 2</tag2>
 ///              </tag1>"#;
 /// let mut reader = Reader::from_str(xml);
-/// reader.trim_text(true);
+/// reader.config_mut().trim_text(true);
 ///
 /// let mut count = 0;
 /// let mut txt = Vec::new();
@@ -534,7 +573,15 @@ impl<R> Reader<R> {
         }
     }
 
-    configure_methods!();
+    /// Returns reference to the parser configuration
+    pub fn config(&self) -> &Config {
+        &self.state.config
+    }
+
+    /// Returns mutable reference to the parser configuration
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.state.config
+    }
 }
 
 /// Getters

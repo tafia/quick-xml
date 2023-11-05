@@ -197,36 +197,6 @@ fn bad_1() {
 }
 
 #[test]
-fn dashes_in_comments() {
-    test(
-        r#"<!-- comment -- --><hello/>"#,
-        r#"
-        |Error: ill-formed document: forbidden string `--` was found in a comment
-        "#,
-        true,
-    );
-
-    test(
-        r#"<!-- comment ---><hello/>"#,
-        r#"
-        |Error: ill-formed document: forbidden string `--` was found in a comment
-        "#,
-        true,
-    );
-
-    // Canary test for correct comments
-    test(
-        r#"<!-- comment --><hello/>"#,
-        r#"
-        |Comment( comment )
-        |EmptyElement(hello)
-        |EndDocument
-        "#,
-        true,
-    );
-}
-
-#[test]
 fn tabs_1() {
     test(
         "\t<a>\t<b/></a>",
@@ -383,7 +353,9 @@ fn test(input: &str, output: &str, trim: bool) {
 #[track_caller]
 fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
     let mut reader = NsReader::from_reader(input);
-    reader.trim_text(trim).check_comments(true);
+    let config = reader.config_mut();
+    config.trim_text(trim);
+    config.check_comments = true;
 
     let mut spec_lines = SpecIter(output).enumerate();
 
