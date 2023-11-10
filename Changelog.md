@@ -40,6 +40,8 @@ configuration is serializable.
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
   - `Error::XmlDeclWithoutVersion` replaced by `IllFormedError::MissedVersion` (in [#684])
   - `Error::EmptyDocType` replaced by `IllFormedError::MissedDoctypeName` (in [#684])
+- [#684]: Changed positions reported for `SyntaxError`s: now they are always points
+  to the start of markup (i. e. to the `<` character) with error.
 
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622

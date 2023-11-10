@@ -121,7 +121,13 @@ impl ReaderState {
                     self.decoder(),
                 )))
             }
-            _ => Err(bang_type.to_err()),
+            _ => {
+                // <!....
+                //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+                //          so we move offset to it (+1 for `<`)
+                self.offset -= 1;
+                Err(bang_type.to_err())
+            }
         }
     }
 
@@ -179,8 +185,10 @@ impl ReaderState {
         Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
-    /// reads `BytesElement` starting with a `?`,
-    /// return `Decl` or `PI` event
+    /// `buf` contains data between `<` and `>` and the first byte is `?`.
+    /// `self.offset` already after the `>`
+    ///
+    /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
         let len = buf.len();
         if len > 2 && buf[len - 1] == b'?' {
@@ -200,7 +208,10 @@ impl ReaderState {
                 Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
             }
         } else {
-            self.offset -= len;
+            // <?....EOF
+            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+            //          so we move offset to it (+2 for `<`and `>`)
+            self.offset -= len + 2;
             Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }
