@@ -7,7 +7,7 @@ use std::path::Path;
 
 use memchr;
 
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
@@ -151,7 +151,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<&'b [u8]>> {
+        ) -> Result<&'b [u8]> {
             let mut state = ReadElementState::Elem;
             let mut read = 0;
 
@@ -187,9 +187,9 @@ macro_rules! impl_buffered_source {
             }
 
             if read == 0 {
-                Ok(None)
+                Err(Error::Syntax(SyntaxError::UnclosedTag))
             } else {
-                Ok(Some(&buf[start..]))
+                Ok(&buf[start..])
             }
         }
 

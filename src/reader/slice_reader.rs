@@ -299,18 +299,14 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(bang_type.to_err())
     }
 
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
-            return Ok(None);
-        }
-
+    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
         let mut state = ReadElementState::Elem;
 
         if let Some((bytes, i)) = state.change(self) {
             // Position now just after the `>` symbol
             *position += i;
             *self = &self[i..];
-            return Ok(Some(bytes));
+            return Ok(bytes);
         }
 
         // Note: Do not update position, so the error points to a sane place
