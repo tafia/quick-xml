@@ -111,7 +111,7 @@ macro_rules! impl_buffered_source {
                 match self $(.$reader)? .fill_buf() $(.$await)? {
                     // Note: Do not update position, so the error points to
                     // somewhere sane rather than at the EOF
-                    Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
+                    Ok(n) if n.is_empty() => break,
                     Ok(available) => {
                         // We only parse from start because we don't want to consider
                         // whatever is in the buffer before the bang element
@@ -122,7 +122,7 @@ macro_rules! impl_buffered_source {
                             read += used;
 
                             *position += read;
-                            break;
+                            return Ok((bang_type, &buf[start..]));
                         } else {
                             buf.extend_from_slice(available);
 
@@ -139,11 +139,7 @@ macro_rules! impl_buffered_source {
                 }
             }
 
-            if read == 0 {
-                Err(bang_type.to_err())
-            } else {
-                Ok((bang_type, &buf[start..]))
-            }
+            Err(bang_type.to_err())
         }
 
         #[inline]
@@ -168,7 +164,7 @@ macro_rules! impl_buffered_source {
 
                             // Position now just after the `>` symbol
                             *position += read;
-                            break;
+                            return Ok(&buf[start..]);
                         } else {
                             // The `>` symbol not yet found, continue reading
                             buf.extend_from_slice(available);
@@ -186,11 +182,7 @@ macro_rules! impl_buffered_source {
                 };
             }
 
-            if read == 0 {
-                Err(Error::Syntax(SyntaxError::UnclosedTag))
-            } else {
-                Ok(&buf[start..])
-            }
+            Err(Error::Syntax(SyntaxError::UnclosedTag))
         }
 
         $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
