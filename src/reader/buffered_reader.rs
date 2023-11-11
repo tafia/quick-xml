@@ -97,7 +97,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<(BangType, &'b [u8])>> {
+        ) -> Result<(BangType, &'b [u8])> {
             // Peeked one bang ('!') before being called, so it's guaranteed to
             // start with it.
             let start = buf.len();
@@ -140,9 +140,9 @@ macro_rules! impl_buffered_source {
             }
 
             if read == 0 {
-                Ok(None)
+                Err(bang_type.to_err())
             } else {
-                Ok(Some((bang_type, &buf[start..])))
+                Ok((bang_type, &buf[start..]))
             }
         }
 

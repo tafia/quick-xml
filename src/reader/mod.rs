@@ -328,8 +328,7 @@ macro_rules! read_until_close {
                 .read_bang_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => $self.state.emit_bang(bang_type, bytes),
+                Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
@@ -790,11 +789,7 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_bang_element(
-        &mut self,
-        buf: B,
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'r [u8])>>;
+    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<(BangType, &'r [u8])>;
 
     /// Read input until XML element is closed by approaching a `>` symbol.
     /// Returns a buffer that contains a data between `<` and `>` or
@@ -1154,13 +1149,13 @@ mod test {
                         let mut input = b"![CDATA[]]>other content".as_ref();
                         //                           ^= 11
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[]]")))
+                            (ty, Bytes(bytes)),
+                            (BangType::CData, Bytes(b"![CDATA[]]"))
                         );
                         assert_eq!(position, 11);
                     }
@@ -1175,13 +1170,13 @@ mod test {
                         let mut input = b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref();
                         //                                            ^= 28
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content]]")))
+                            (ty, Bytes(bytes)),
+                            (BangType::CData, Bytes(b"![CDATA[cdata]] ]>content]]"))
                         );
                         assert_eq!(position, 28);
                     }
@@ -1300,13 +1295,13 @@ mod test {
                         let mut input = b"!---->other content".as_ref();
                         //                      ^= 6
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::Comment, Bytes(b"!----")))
+                            (ty, Bytes(bytes)),
+                            (BangType::Comment, Bytes(b"!----"))
                         );
                         assert_eq!(position, 6);
                     }
@@ -1318,13 +1313,13 @@ mod test {
                         let mut input = b"!--->comment<--->other content".as_ref();
                         //                                 ^= 17
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::Comment, Bytes(b"!--->comment<---")))
+                            (ty, Bytes(bytes)),
+                            (BangType::Comment, Bytes(b"!--->comment<---"))
                         );
                         assert_eq!(position, 17);
                     }
@@ -1379,13 +1374,13 @@ mod test {
                             let mut input = b"!DOCTYPE>other content".as_ref();
                             //                         ^= 9
 
+                            let (ty, bytes) = $source(&mut input)
+                                .read_bang_element(buf, &mut position)
+                                $(.$await)?
+                                .unwrap();
                             assert_eq!(
-                                $source(&mut input)
-                                    .read_bang_element(buf, &mut position)
-                                    $(.$await)?
-                                    .unwrap()
-                                    .map(|(ty, data)| (ty, Bytes(data))),
-                                Some((BangType::DocType, Bytes(b"!DOCTYPE")))
+                                (ty, Bytes(bytes)),
+                                (BangType::DocType, Bytes(b"!DOCTYPE"))
                             );
                             assert_eq!(position, 9);
                         }
@@ -1453,13 +1448,13 @@ mod test {
                             let mut input = b"!doctype>other content".as_ref();
                             //                         ^= 9
 
+                            let (ty, bytes) = $source(&mut input)
+                                .read_bang_element(buf, &mut position)
+                                $(.$await)?
+                                .unwrap();
                             assert_eq!(
-                                $source(&mut input)
-                                    .read_bang_element(buf, &mut position)
-                                    $(.$await)?
-                                    .unwrap()
-                                    .map(|(ty, data)| (ty, Bytes(data))),
-                                Some((BangType::DocType, Bytes(b"!doctype")))
+                                (ty, Bytes(bytes)),
+                                (BangType::DocType, Bytes(b"!doctype"))
                             );
                             assert_eq!(position, 9);
                         }

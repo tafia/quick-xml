@@ -281,7 +281,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         &mut self,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<(BangType, &'a [u8])>> {
+    ) -> Result<(BangType, &'a [u8])> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         debug_assert_eq!(self[0], b'!');
@@ -291,7 +291,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         if let Some((bytes, i)) = bang_type.parse(&[], self) {
             *position += i;
             *self = &self[i..];
-            return Ok(Some((bang_type, bytes)));
+            return Ok((bang_type, bytes));
         }
 
         // Note: Do not update position, so the error points to
