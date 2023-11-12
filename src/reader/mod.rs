@@ -267,14 +267,13 @@ macro_rules! read_until_open {
         $read_event:ident
         $(, $await:ident)?
     ) => {{
-        $self.state.state = ParseState::OpenedTag;
-
         if $self.state.config.trim_text_start {
             $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if $reader.skip_one(b'<', &mut $self.state.offset) $(.$await)? ? {
+            $self.state.state = ParseState::OpenedTag;
             // Pass $buf to the next next iteration of parsing loop
             return Ok(Err($buf));
         }
@@ -283,8 +282,13 @@ macro_rules! read_until_open {
             .read_bytes_until(b'<', $buf, &mut $self.state.offset)
             $(.$await)?
         {
-            // Return Text event with `bytes` content
-            Ok((bytes, _found)) => $self.state.emit_text(bytes).map(Ok),
+            Ok((bytes, found)) => {
+                if found {
+                    $self.state.state = ParseState::OpenedTag;
+                }
+                // Return Text event with `bytes` content or Eof if bytes is empty
+                $self.state.emit_text(bytes).map(Ok)
+            }
             Err(e) => Err(e),
         }
     }};
@@ -355,7 +359,8 @@ macro_rules! read_until_close {
                 Ok(Some(bytes)) => $self.state.emit_start(bytes),
                 Err(e) => Err(e),
             },
-            Ok(None) => Ok(Event::Eof),
+            // `<` - syntax error, tag not closed
+            Ok(None) => Err(Error::Syntax(SyntaxError::UnclosedTag)),
             Err(e) => Err(e),
         }
     }};
