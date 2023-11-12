@@ -284,8 +284,7 @@ macro_rules! read_until_open {
             $(.$await)?
         {
             // Return Text event with `bytes` content
-            Ok(Some(bytes)) => $self.state.emit_text(bytes).map(Ok),
-            Ok(None) => Ok(Ok(Event::Eof)),
+            Ok((bytes, _found)) => $self.state.emit_text(bytes).map(Ok),
             Err(e) => Err(e),
         }
     }};
@@ -334,8 +333,8 @@ macro_rules! read_until_close {
                 .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.state.emit_end(bytes),
+                Ok((bytes, true)) => $self.state.emit_end(bytes),
+                Ok((_, false)) => Err(Error::Syntax(SyntaxError::UnclosedTag)),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
@@ -343,8 +342,8 @@ macro_rules! read_until_close {
                 .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.state.emit_question_mark(bytes),
+                Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
+                Ok((_, false)) => Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl)),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
@@ -741,8 +740,8 @@ trait XmlSource<'r, B> {
 
     /// Read input until `byte` is found or end of input is reached.
     ///
-    /// Returns a slice of data read up to `byte`, which does not include into result.
-    /// If input (`Self`) is exhausted, returns `None`.
+    /// Returns a slice of data read up to `byte` (exclusive),
+    /// and a flag noting whether `byte` was found in the input or not.
     ///
     /// # Example
     ///
@@ -753,7 +752,7 @@ trait XmlSource<'r, B> {
     ///
     /// assert_eq!(
     ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     Some(b"abc".as_ref())
+    ///     (b"abc".as_ref(), true)
     /// );
     /// assert_eq!(position, 4); // position after the symbol matched
     /// ```
@@ -770,7 +769,7 @@ trait XmlSource<'r, B> {
         byte: u8,
         buf: B,
         position: &mut usize,
-    ) -> Result<Option<&'r [u8]>>;
+    ) -> Result<(&'r [u8], bool)>;
 
     /// Read input until comment, CDATA or processing instruction is finished.
     ///
@@ -998,13 +997,13 @@ mod test {
                     let mut input = b"".as_ref();
                     //                ^= 0
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        None
+                        (Bytes(bytes), found),
+                        (Bytes(b""), false)
                     );
                     assert_eq!(position, 0);
                 }
@@ -1018,13 +1017,13 @@ mod test {
                     let mut input = b"abcdef".as_ref();
                     //                      ^= 6
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abcdef"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abcdef"), false)
                     );
                     assert_eq!(position, 6);
                 }
@@ -1039,13 +1038,13 @@ mod test {
                     let mut input = b"*abcdef".as_ref();
                     //                 ^= 1
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b""))
+                        (Bytes(bytes), found),
+                        (Bytes(b""), true)
                     );
                     assert_eq!(position, 1); // position after the symbol matched
                 }
@@ -1060,13 +1059,13 @@ mod test {
                     let mut input = b"abc*def".as_ref();
                     //                    ^= 4
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abc"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abc"), true)
                     );
                     assert_eq!(position, 4); // position after the symbol matched
                 }
@@ -1081,13 +1080,13 @@ mod test {
                     let mut input = b"abcdef*".as_ref();
                     //                       ^= 7
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abcdef"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abcdef"), true)
                     );
                     assert_eq!(position, 7); // position after the symbol matched
                 }

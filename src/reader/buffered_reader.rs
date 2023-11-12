@@ -54,7 +54,7 @@ macro_rules! impl_buffered_source {
             byte: u8,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<&'b [u8]>> {
+        ) -> Result<(&'b [u8], bool)> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
 
@@ -90,11 +90,7 @@ macro_rules! impl_buffered_source {
             }
             *position += read;
 
-            if read == 0 {
-                Ok(None)
-            } else {
-                Ok(Some(&buf[start..]))
-            }
+            Ok((&buf[start..], done))
         }
 
         $($async)? fn read_bang_element $(<$lf>)? (

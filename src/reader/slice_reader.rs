@@ -260,24 +260,21 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         byte: u8,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<&'a [u8]>> {
+    ) -> Result<(&'a [u8], bool)> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
-        if self.is_empty() {
-            return Ok(None);
-        }
 
-        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
+        if let Some(i) = memchr::memchr(byte, self) {
             *position += i + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
-            bytes
+            Ok((bytes, true))
         } else {
             *position += self.len();
             let bytes = &self[..];
             *self = &[];
-            bytes
-        }))
+            Ok((bytes, false))
+        }
     }
 
     fn read_bang_element(

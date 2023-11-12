@@ -49,12 +49,14 @@ pub(super) struct ReaderState {
 }
 
 impl ReaderState {
-    /// Trims whitespaces from `bytes`, if required, and returns a [`Text`] event.
+    /// Trims end whitespaces from `bytes`, if required, and returns a [`Text`]
+    /// event or an [`Eof`] event, if text after trimming is empty.
     ///
     /// # Parameters
     /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
     ///
     /// [`Text`]: Event::Text
+    /// [`Eof`]: Event::Eof
     pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
         let mut content = bytes;
 
@@ -67,7 +69,11 @@ impl ReaderState {
             content = &bytes[..len];
         }
 
-        Ok(Event::Text(BytesText::wrap(content, self.decoder())))
+        if content.is_empty() {
+            Ok(Event::Eof)
+        } else {
+            Ok(Event::Text(BytesText::wrap(content, self.decoder())))
+        }
     }
 
     /// reads `BytesElement` starting with a `!`,
