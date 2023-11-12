@@ -190,8 +190,13 @@ impl ReaderState {
     ///
     /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        debug_assert!(buf.len() > 0);
+        debug_assert_eq!(buf[0], b'?');
+
         let len = buf.len();
-        if len > 2 && buf[len - 1] == b'?' {
+        // We accept at least <??>
+        //                     ~~ - len = 2
+        if len > 1 && buf[len - 1] == b'?' {
             if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
                 let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
 
