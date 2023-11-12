@@ -197,8 +197,11 @@ impl ReaderState {
         // We accept at least <??>
         //                     ~~ - len = 2
         if len > 1 && buf[len - 1] == b'?' {
-            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
+            let content = &buf[1..len - 1];
+            let len = content.len();
+
+            if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
+                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -210,7 +213,7 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
+                Ok(Event::PI(BytesText::wrap(content, self.decoder())))
             }
         } else {
             // <?....EOF

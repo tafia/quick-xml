@@ -44,6 +44,7 @@ configuration is serializable.
   to the start of markup (i. e. to the `<` character) with error.
 - [#684]: Now `<??>` parsed as `Event::PI` with empty content instead of raising
   syntax error.
+- [#684]: Now `<?xml?>` parsed as `Event::Decl` instead of `Event::PI`.
 
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
