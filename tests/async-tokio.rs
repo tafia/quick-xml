@@ -31,7 +31,6 @@ async fn test_sample() {
 
 #[tokio::test]
 async fn test_cancel_future() {
-    use tokio::io::BufReader;
 
     // represents something like a TCP socket, that receives some XML data
     // every now and then
@@ -58,14 +57,12 @@ async fn test_cancel_future() {
     }
 
     let source = MockXmlSource {
-        next_message_ready: false,
+        next_message_ready: true,
     };
-    let reader = BufReader::new(source);
+    let reader = tokio::io::BufReader::new(source);
     let mut reader = Reader::from_reader(reader);
 
     for _ in 0..3 {
-        // some new message has arrived on the wire
-        reader.get_mut().get_mut().next_message_ready = true;
 
         for _ in 0..3 {
             let fut = async {
@@ -85,12 +82,18 @@ async fn test_cancel_future() {
                     .unwrap();
             };
 
-            // read the data. if it takes more than 1ms, assume we read all the
-            // data for now and cancel the future.
+            // read the data. if it takes more than 1ms, assume we have read all
+            // the data for now and cancel the future.
             let timeout_fut = tokio::time::timeout(Duration::from_millis(1), fut);
             if timeout_fut.await.is_err() {
                 break;
             }
         }
+
+        // ...do something to cause a new message to arrive, e.g. send a request
+        // to the server
+
+        // some new message has arrived on the wire
+        reader.get_mut().get_mut().next_message_ready = true;
     }
 }
