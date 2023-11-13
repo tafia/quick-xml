@@ -31,7 +31,6 @@ async fn test_sample() {
 
 #[tokio::test]
 async fn test_cancel_future() {
-
     // represents something like a TCP socket, that receives some XML data
     // every now and then
     struct MockXmlSource {
@@ -63,10 +62,8 @@ async fn test_cancel_future() {
     let mut reader = Reader::from_reader(reader);
 
     for _ in 0..3 {
-
         for _ in 0..3 {
             let fut = async {
-
                 // read start event
                 let mut buf = Vec::new();
                 let start_event = reader.read_event_into_async(&mut buf).await.unwrap();
