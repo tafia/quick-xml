@@ -238,7 +238,8 @@ where
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
 
-            let de = QNameDeserializer::from_attr(QName(&slice[key]), decoder)?;
+            let de =
+                QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
         } else {
             // try getting from events (<key>value</key>)

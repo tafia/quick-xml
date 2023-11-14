@@ -76,7 +76,11 @@ pub struct QNameDeserializer<'i, 'd> {
 
 impl<'i, 'd> QNameDeserializer<'i, 'd> {
     /// Creates deserializer from name of an attribute
-    pub fn from_attr(name: QName<'d>, decoder: Decoder) -> Result<Self, DeError> {
+    pub fn from_attr(
+        name: QName<'d>,
+        decoder: Decoder,
+        key_buf: &'d mut String,
+    ) -> Result<Self, DeError> {
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         let field = if name.as_namespace_binding().is_some() {
@@ -85,8 +89,12 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
             decode_name(name, decoder)?
         };
 
+        key_buf.clear();
+        key_buf.push('@');
+        key_buf.push_str(&field);
+
         Ok(Self {
-            name: CowRef::Owned(format!("@{field}")),
+            name: CowRef::Slice(key_buf),
         })
     }
 
