@@ -2376,6 +2376,9 @@ where
 
     #[cfg(not(feature = "overlapped-lists"))]
     peek: Option<DeEvent<'de>>,
+
+    /// Buffer to store attribute name as a field name exposed to serde consumers
+    key_buf: String,
 }
 
 impl<'de, R, E> Deserializer<'de, R, E>
@@ -2402,6 +2405,8 @@ where
 
             #[cfg(not(feature = "overlapped-lists"))]
             peek: None,
+
+            key_buf: String::new(),
         }
     }
 

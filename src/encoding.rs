@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
+use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
 #[cfg(feature = "encoding")]
 use crate::Error;
@@ -88,6 +88,17 @@ impl Decoder {
 
         decoded
     }
+
+    /// Like [`decode`][Self::decode] but using a pre-allocated buffer.
+    pub fn decode_into(&self, bytes: &[u8], buf: &mut String) -> Result<()> {
+        #[cfg(not(feature = "encoding"))]
+        buf.push_str(std::str::from_utf8(bytes)?);
+
+        #[cfg(feature = "encoding")]
+        decode_into(bytes, self.encoding, buf)?;
+
+        Ok(())
+    }
 }
 
 /// Decodes the provided bytes using the specified encoding.
@@ -98,6 +109,34 @@ pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b
     encoding
         .decode_without_bom_handling_and_without_replacement(bytes)
         .ok_or(Error::NonDecodable(None))
+}
+
+/// Like [`decode`] but using a pre-allocated buffer.
+#[cfg(feature = "encoding")]
+pub fn decode_into(bytes: &[u8], encoding: &'static Encoding, buf: &mut String) -> Result<()> {
+    if encoding == UTF_8 {
+        buf.push_str(std::str::from_utf8(bytes)?);
+        return Ok(());
+    }
+
+    let mut decoder = encoding.new_decoder_without_bom_handling();
+    buf.reserve(
+        decoder
+            .max_utf8_buffer_length_without_replacement(bytes.len())
+            // SAFETY: None can be returned only if required size will overflow usize,
+            // but in that case String::reserve also panics
+            .unwrap(),
+    );
+    let (result, read) = decoder.decode_to_string_without_replacement(bytes, buf, true);
+    match result {
+        DecoderResult::InputEmpty => {
+            debug_assert_eq!(read, bytes.len());
+            Ok(())
+        }
+        DecoderResult::Malformed(_, _) => Err(Error::NonDecodable(None)),
+        // SAFETY: We allocate enough space above
+        DecoderResult::OutputFull => unreachable!(),
+    }
 }
 
 /// Automatic encoding detection of XML files based using the
