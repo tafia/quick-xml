@@ -493,7 +493,7 @@ impl<'a> BytesDecl<'a> {
     /// Although according to the [grammar] standalone flag must appear after `"version"`
     /// and `"encoding"`, this method does not check that. The first occurrence of the
     /// attribute will be returned even if there are several. Also, method does not
-    /// restrict symbols that can forming the value, so the returned flag name may not
+    /// restrict symbols that can form the value, so the returned flag name may not
     /// correspond to the grammar.
     ///
     /// # Examples

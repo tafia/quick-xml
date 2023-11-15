@@ -20,6 +20,10 @@ configuration is serializable.
 - [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
   configuration. Previous builder methods on `Reader` / `NsReader` was replaced by
   direct access to fields of config using `reader.config_mut().<...>`.
+- [#379]: Improved compliance with the XML attribute value normalization process by
+  adding `Attribute::normalized_value()` and `Attribute::normalized_value_with()`,
+  which ought to be used in place of `Attribute::unescape_value()` and
+  `Attribute::unescape_value_with()`
 
 ### Bug Fixes
 
@@ -36,12 +40,13 @@ configuration is serializable.
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
+- [#379]: Added tests for attribute value normalization
 
+[#379]: https://github.com/tafia/quick-xml/pull/379
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
-
 
 ## 0.31.0 -- 2023-10-22
 
@@ -212,6 +217,10 @@ serde >= 1.0.181
 - [#565]: Correctly set minimum required version of tokio dependency to 1.10
 - [#565]: Fix compilation error when build with serde <1.0.139
 
+
+### New Tests
+
+- [#379]: Added tests for attribute value normalization
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
