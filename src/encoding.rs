@@ -123,6 +123,8 @@ pub fn decode_into(bytes: &[u8], encoding: &'static Encoding, buf: &mut String) 
     buf.reserve(
         decoder
             .max_utf8_buffer_length_without_replacement(bytes.len())
+            // SAFETY: None can be returned only if required size will overflow usize,
+            // but in that case String::reserve also panics
             .unwrap(),
     );
     let (result, read) = decoder.decode_to_string_without_replacement(bytes, buf, true);
@@ -132,6 +134,7 @@ pub fn decode_into(bytes: &[u8], encoding: &'static Encoding, buf: &mut String) 
             Ok(())
         }
         DecoderResult::Malformed(_, _) => Err(Error::NonDecodable(None)),
+        // SAFETY: We allocate enough space above
         DecoderResult::OutputFull => unreachable!(),
     }
 }
