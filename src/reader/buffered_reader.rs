@@ -7,7 +7,7 @@ use std::path::Path;
 
 use memchr;
 
-use crate::errors::{Error, Result};
+use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
@@ -54,7 +54,7 @@ macro_rules! impl_buffered_source {
             byte: u8,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<&'b [u8]>> {
+        ) -> Result<(&'b [u8], bool)> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
 
@@ -90,18 +90,14 @@ macro_rules! impl_buffered_source {
             }
             *position += read;
 
-            if read == 0 {
-                Ok(None)
-            } else {
-                Ok(Some(&buf[start..]))
-            }
+            Ok((&buf[start..], done))
         }
 
         $($async)? fn read_bang_element $(<$lf>)? (
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<(BangType, &'b [u8])>> {
+        ) -> Result<(BangType, &'b [u8])> {
             // Peeked one bang ('!') before being called, so it's guaranteed to
             // start with it.
             let start = buf.len();
@@ -115,7 +111,7 @@ macro_rules! impl_buffered_source {
                 match self $(.$reader)? .fill_buf() $(.$await)? {
                     // Note: Do not update position, so the error points to
                     // somewhere sane rather than at the EOF
-                    Ok(n) if n.is_empty() => return Err(bang_type.to_err()),
+                    Ok(n) if n.is_empty() => break,
                     Ok(available) => {
                         // We only parse from start because we don't want to consider
                         // whatever is in the buffer before the bang element
@@ -126,7 +122,7 @@ macro_rules! impl_buffered_source {
                             read += used;
 
                             *position += read;
-                            break;
+                            return Ok((bang_type, &buf[start..]));
                         } else {
                             buf.extend_from_slice(available);
 
@@ -143,11 +139,7 @@ macro_rules! impl_buffered_source {
                 }
             }
 
-            if read == 0 {
-                Ok(None)
-            } else {
-                Ok(Some((bang_type, &buf[start..])))
-            }
+            Err(bang_type.to_err())
         }
 
         #[inline]
@@ -155,7 +147,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<Option<&'b [u8]>> {
+        ) -> Result<&'b [u8]> {
             let mut state = ReadElementState::Elem;
             let mut read = 0;
 
@@ -172,7 +164,7 @@ macro_rules! impl_buffered_source {
 
                             // Position now just after the `>` symbol
                             *position += read;
-                            break;
+                            return Ok(&buf[start..]);
                         } else {
                             // The `>` symbol not yet found, continue reading
                             buf.extend_from_slice(available);
@@ -190,11 +182,7 @@ macro_rules! impl_buffered_source {
                 };
             }
 
-            if read == 0 {
-                Ok(None)
-            } else {
-                Ok(Some(&buf[start..]))
-            }
+            Err(Error::Syntax(SyntaxError::UnclosedTag))
         }
 
         $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {

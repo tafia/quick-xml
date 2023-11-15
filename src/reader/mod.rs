@@ -267,14 +267,13 @@ macro_rules! read_until_open {
         $read_event:ident
         $(, $await:ident)?
     ) => {{
-        $self.state.state = ParseState::OpenedTag;
-
         if $self.state.config.trim_text_start {
             $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
         if $reader.skip_one(b'<', &mut $self.state.offset) $(.$await)? ? {
+            $self.state.state = ParseState::OpenedTag;
             // Pass $buf to the next next iteration of parsing loop
             return Ok(Err($buf));
         }
@@ -283,9 +282,13 @@ macro_rules! read_until_open {
             .read_bytes_until(b'<', $buf, &mut $self.state.offset)
             $(.$await)?
         {
-            // Return Text event with `bytes` content
-            Ok(Some(bytes)) => $self.state.emit_text(bytes).map(Ok),
-            Ok(None) => Ok(Ok(Event::Eof)),
+            Ok((bytes, found)) => {
+                if found {
+                    $self.state.state = ParseState::OpenedTag;
+                }
+                // Return Text event with `bytes` content or Eof if bytes is empty
+                $self.state.emit_text(bytes).map(Ok)
+            }
             Err(e) => Err(e),
         }
     }};
@@ -325,8 +328,7 @@ macro_rules! read_until_close {
                 .read_bang_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some((bang_type, bytes))) => $self.state.emit_bang(bang_type, bytes),
+                Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
                 Err(e) => Err(e),
             },
             // `</` - closing tag
@@ -334,8 +336,8 @@ macro_rules! read_until_close {
                 .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.state.emit_end(bytes),
+                Ok((bytes, true)) => $self.state.emit_end(bytes),
+                Ok((_, false)) => Err(Error::Syntax(SyntaxError::UnclosedTag)),
                 Err(e) => Err(e),
             },
             // `<?` - processing instruction
@@ -343,8 +345,8 @@ macro_rules! read_until_close {
                 .read_bytes_until(b'>', $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.state.emit_question_mark(bytes),
+                Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
+                Ok((_, false)) => Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl)),
                 Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
@@ -352,11 +354,11 @@ macro_rules! read_until_close {
                 .read_element($buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(None) => Ok(Event::Eof),
-                Ok(Some(bytes)) => $self.state.emit_start(bytes),
+                Ok(bytes) => $self.state.emit_start(bytes),
                 Err(e) => Err(e),
             },
-            Ok(None) => Ok(Event::Eof),
+            // `<` - syntax error, tag not closed
+            Ok(None) => Err(Error::Syntax(SyntaxError::UnclosedTag)),
             Err(e) => Err(e),
         }
     }};
@@ -741,8 +743,8 @@ trait XmlSource<'r, B> {
 
     /// Read input until `byte` is found or end of input is reached.
     ///
-    /// Returns a slice of data read up to `byte`, which does not include into result.
-    /// If input (`Self`) is exhausted, returns `None`.
+    /// Returns a slice of data read up to `byte` (exclusive),
+    /// and a flag noting whether `byte` was found in the input or not.
     ///
     /// # Example
     ///
@@ -753,7 +755,7 @@ trait XmlSource<'r, B> {
     ///
     /// assert_eq!(
     ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     Some(b"abc".as_ref())
+    ///     (b"abc".as_ref(), true)
     /// );
     /// assert_eq!(position, 4); // position after the symbol matched
     /// ```
@@ -770,7 +772,7 @@ trait XmlSource<'r, B> {
         byte: u8,
         buf: B,
         position: &mut usize,
-    ) -> Result<Option<&'r [u8]>>;
+    ) -> Result<(&'r [u8], bool)>;
 
     /// Read input until comment, CDATA or processing instruction is finished.
     ///
@@ -787,15 +789,11 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_bang_element(
-        &mut self,
-        buf: B,
-        position: &mut usize,
-    ) -> Result<Option<(BangType, &'r [u8])>>;
+    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<(BangType, &'r [u8])>;
 
     /// Read input until XML element is closed by approaching a `>` symbol.
-    /// Returns `Some(buffer)` that contains a data between `<` and `>` or
-    /// `None` if end-of-input was reached and nothing was read.
+    /// Returns a buffer that contains a data between `<` and `>` or
+    /// [`SyntaxError::UnclosedTag`] if end-of-input was reached before reading `>`.
     ///
     /// Derived from `read_until`, but modified to handle XML attributes
     /// using a minimal state machine.
@@ -815,7 +813,7 @@ trait XmlSource<'r, B> {
     ///
     /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
     /// [events]: crate::events::Event
-    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<Option<&'r [u8]>>;
+    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<&'r [u8]>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
@@ -998,13 +996,13 @@ mod test {
                     let mut input = b"".as_ref();
                     //                ^= 0
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        None
+                        (Bytes(bytes), found),
+                        (Bytes(b""), false)
                     );
                     assert_eq!(position, 0);
                 }
@@ -1018,13 +1016,13 @@ mod test {
                     let mut input = b"abcdef".as_ref();
                     //                      ^= 6
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abcdef"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abcdef"), false)
                     );
                     assert_eq!(position, 6);
                 }
@@ -1039,13 +1037,13 @@ mod test {
                     let mut input = b"*abcdef".as_ref();
                     //                 ^= 1
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b""))
+                        (Bytes(bytes), found),
+                        (Bytes(b""), true)
                     );
                     assert_eq!(position, 1); // position after the symbol matched
                 }
@@ -1060,13 +1058,13 @@ mod test {
                     let mut input = b"abc*def".as_ref();
                     //                    ^= 4
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abc"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abc"), true)
                     );
                     assert_eq!(position, 4); // position after the symbol matched
                 }
@@ -1081,13 +1079,13 @@ mod test {
                     let mut input = b"abcdef*".as_ref();
                     //                       ^= 7
 
+                    let (bytes, found) = $source(&mut input)
+                        .read_bytes_until(b'*', buf, &mut position)
+                        $(.$await)?
+                        .unwrap();
                     assert_eq!(
-                        $source(&mut input)
-                            .read_bytes_until(b'*', buf, &mut position)
-                            $(.$await)?
-                            .unwrap()
-                            .map(Bytes),
-                        Some(Bytes(b"abcdef"))
+                        (Bytes(bytes), found),
+                        (Bytes(b"abcdef"), true)
                     );
                     assert_eq!(position, 7); // position after the symbol matched
                 }
@@ -1151,13 +1149,13 @@ mod test {
                         let mut input = b"![CDATA[]]>other content".as_ref();
                         //                           ^= 11
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[]]")))
+                            (ty, Bytes(bytes)),
+                            (BangType::CData, Bytes(b"![CDATA[]]"))
                         );
                         assert_eq!(position, 11);
                     }
@@ -1172,13 +1170,13 @@ mod test {
                         let mut input = b"![CDATA[cdata]] ]>content]]>other content]]>".as_ref();
                         //                                            ^= 28
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::CData, Bytes(b"![CDATA[cdata]] ]>content]]")))
+                            (ty, Bytes(bytes)),
+                            (BangType::CData, Bytes(b"![CDATA[cdata]] ]>content]]"))
                         );
                         assert_eq!(position, 28);
                     }
@@ -1297,13 +1295,13 @@ mod test {
                         let mut input = b"!---->other content".as_ref();
                         //                      ^= 6
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::Comment, Bytes(b"!----")))
+                            (ty, Bytes(bytes)),
+                            (BangType::Comment, Bytes(b"!----"))
                         );
                         assert_eq!(position, 6);
                     }
@@ -1315,13 +1313,13 @@ mod test {
                         let mut input = b"!--->comment<--->other content".as_ref();
                         //                                 ^= 17
 
+                        let (ty, bytes) = $source(&mut input)
+                            .read_bang_element(buf, &mut position)
+                            $(.$await)?
+                            .unwrap();
                         assert_eq!(
-                            $source(&mut input)
-                                .read_bang_element(buf, &mut position)
-                                $(.$await)?
-                                .unwrap()
-                                .map(|(ty, data)| (ty, Bytes(data))),
-                            Some((BangType::Comment, Bytes(b"!--->comment<---")))
+                            (ty, Bytes(bytes)),
+                            (BangType::Comment, Bytes(b"!--->comment<---"))
                         );
                         assert_eq!(position, 17);
                     }
@@ -1376,13 +1374,13 @@ mod test {
                             let mut input = b"!DOCTYPE>other content".as_ref();
                             //                         ^= 9
 
+                            let (ty, bytes) = $source(&mut input)
+                                .read_bang_element(buf, &mut position)
+                                $(.$await)?
+                                .unwrap();
                             assert_eq!(
-                                $source(&mut input)
-                                    .read_bang_element(buf, &mut position)
-                                    $(.$await)?
-                                    .unwrap()
-                                    .map(|(ty, data)| (ty, Bytes(data))),
-                                Some((BangType::DocType, Bytes(b"!DOCTYPE")))
+                                (ty, Bytes(bytes)),
+                                (BangType::DocType, Bytes(b"!DOCTYPE"))
                             );
                             assert_eq!(position, 9);
                         }
@@ -1450,13 +1448,13 @@ mod test {
                             let mut input = b"!doctype>other content".as_ref();
                             //                         ^= 9
 
+                            let (ty, bytes) = $source(&mut input)
+                                .read_bang_element(buf, &mut position)
+                                $(.$await)?
+                                .unwrap();
                             assert_eq!(
-                                $source(&mut input)
-                                    .read_bang_element(buf, &mut position)
-                                    $(.$await)?
-                                    .unwrap()
-                                    .map(|(ty, data)| (ty, Bytes(data))),
-                                Some((BangType::DocType, Bytes(b"!doctype")))
+                                (ty, Bytes(bytes)),
+                                (BangType::DocType, Bytes(b"!doctype"))
                             );
                             assert_eq!(position, 9);
                         }
@@ -1483,6 +1481,7 @@ mod test {
 
             mod read_element {
                 use super::*;
+                use crate::errors::{Error, SyntaxError};
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -1494,16 +1493,18 @@ mod test {
                     let mut input = b"".as_ref();
                     //                ^= 0
 
-                    assert_eq!(
-                        $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                        None
-                    );
+                    match $source(&mut input).read_element(buf, &mut position) $(.$await)? {
+                        Err(Error::Syntax(SyntaxError::UnclosedTag)) => {}
+                        x => panic!(
+                            "Expected `Err(Syntax(UnclosedTag))`, but got `{:?}`",
+                            x
+                        ),
+                    }
                     assert_eq!(position, 0);
                 }
 
                 mod open {
                     use super::*;
-                    use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
                     #[$test]
@@ -1514,8 +1515,8 @@ mod test {
                         //                 ^= 1
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b""))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"")
                         );
                         assert_eq!(position, 1);
                     }
@@ -1528,8 +1529,8 @@ mod test {
                         //                    ^= 4
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b"tag"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"tag")
                         );
                         assert_eq!(position, 4);
                     }
@@ -1542,8 +1543,8 @@ mod test {
                         //                  ^= 2
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b":"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b":")
                         );
                         assert_eq!(position, 2);
                     }
@@ -1556,8 +1557,8 @@ mod test {
                         //                     ^= 5
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b":tag"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b":tag")
                         );
                         assert_eq!(position, 5);
                     }
@@ -1570,8 +1571,8 @@ mod test {
                         //                                                        ^= 38
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#)
                         );
                         assert_eq!(position, 38);
                     }
@@ -1579,7 +1580,6 @@ mod test {
 
                 mod self_closed {
                     use super::*;
-                    use crate::utils::Bytes;
                     use pretty_assertions::assert_eq;
 
                     #[$test]
@@ -1590,8 +1590,8 @@ mod test {
                         //                  ^= 2
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b"/"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/")
                         );
                         assert_eq!(position, 2);
                     }
@@ -1604,8 +1604,8 @@ mod test {
                         //                     ^= 5
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b"tag/"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"tag/")
                         );
                         assert_eq!(position, 5);
                     }
@@ -1618,8 +1618,8 @@ mod test {
                         //                   ^= 3
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b":/"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b":/")
                         );
                         assert_eq!(position, 3);
                     }
@@ -1632,8 +1632,8 @@ mod test {
                         //                      ^= 6
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(b":tag/"))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b":tag/")
                         );
                         assert_eq!(position, 6);
                     }
@@ -1646,8 +1646,8 @@ mod test {
                         //                                                           ^= 41
 
                         assert_eq!(
-                            $source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap().map(Bytes),
-                            Some(Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#))
+                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#)
                         );
                         assert_eq!(position, 41);
                     }

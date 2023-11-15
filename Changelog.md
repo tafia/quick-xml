@@ -23,6 +23,8 @@ configuration is serializable.
 
 ### Bug Fixes
 
+- [#622]: Fix wrong disregarding of not closed markup, such as lone `<`.
+
 ### Misc Changes
 
 - [#675]: Minimum supported version of serde raised to 1.0.139
@@ -36,6 +38,7 @@ configuration is serializable.
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
 
 [#513]: https://github.com/tafia/quick-xml/issues/513
+[#622]: https://github.com/tafia/quick-xml/issues/622
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
 

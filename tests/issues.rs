@@ -4,11 +4,10 @@
 
 use std::sync::mpsc;
 
-use quick_xml::errors::{IllFormedError, SyntaxError};
+use quick_xml::errors::{Error, IllFormedError, SyntaxError};
 use quick_xml::events::{BytesDecl, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
-use quick_xml::Error;
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/94
 #[test]
@@ -229,5 +228,21 @@ mod issue604 {
             Event::Comment(BytesText::from_escaped("->"))
         );
         assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/622
+#[test]
+fn issue622() {
+    let mut reader = Reader::from_str("><");
+    reader.config_mut().trim_text(true);
+
+    assert_eq!(
+        reader.read_event().unwrap(),
+        Event::Text(BytesText::from_escaped(">"))
+    );
+    match reader.read_event() {
+        Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedTag),
+        x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
     }
 }

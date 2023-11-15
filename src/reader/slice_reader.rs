@@ -260,31 +260,28 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         byte: u8,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<&'a [u8]>> {
+    ) -> Result<(&'a [u8], bool)> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
-        if self.is_empty() {
-            return Ok(None);
-        }
 
-        Ok(Some(if let Some(i) = memchr::memchr(byte, self) {
+        if let Some(i) = memchr::memchr(byte, self) {
             *position += i + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
-            bytes
+            Ok((bytes, true))
         } else {
             *position += self.len();
             let bytes = &self[..];
             *self = &[];
-            bytes
-        }))
+            Ok((bytes, false))
+        }
     }
 
     fn read_bang_element(
         &mut self,
         _buf: (),
         position: &mut usize,
-    ) -> Result<Option<(BangType, &'a [u8])>> {
+    ) -> Result<(BangType, &'a [u8])> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         debug_assert_eq!(self[0], b'!');
@@ -294,7 +291,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         if let Some((bytes, i)) = bang_type.parse(&[], self) {
             *position += i;
             *self = &self[i..];
-            return Ok(Some((bang_type, bytes)));
+            return Ok((bang_type, bytes));
         }
 
         // Note: Do not update position, so the error points to
@@ -302,18 +299,14 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(bang_type.to_err())
     }
 
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<Option<&'a [u8]>> {
-        if self.is_empty() {
-            return Ok(None);
-        }
-
+    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
         let mut state = ReadElementState::Elem;
 
         if let Some((bytes, i)) = state.change(self) {
             // Position now just after the `>` symbol
             *position += i;
             *self = &self[i..];
-            return Ok(Some(bytes));
+            return Ok(bytes);
         }
 
         // Note: Do not update position, so the error points to a sane place
