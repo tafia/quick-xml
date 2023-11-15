@@ -81,17 +81,17 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
         decoder: Decoder,
         key_buf: &'d mut String,
     ) -> Result<Self, DeError> {
-        // https://github.com/tafia/quick-xml/issues/537
-        // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
-        let field = if name.as_namespace_binding().is_some() {
-            decoder.decode(name.into_inner())?
-        } else {
-            decode_name(name, decoder)?
-        };
-
         key_buf.clear();
         key_buf.push('@');
-        key_buf.push_str(&field);
+
+        // https://github.com/tafia/quick-xml/issues/537
+        // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
+        if name.as_namespace_binding().is_some() {
+            decoder.decode_into(name.into_inner(), key_buf)?;
+        } else {
+            let local = name.local_name();
+            decoder.decode_into(local.into_inner(), key_buf)?;
+        };
 
         Ok(Self {
             name: CowRef::Slice(key_buf),
