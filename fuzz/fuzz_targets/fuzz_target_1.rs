@@ -41,7 +41,6 @@ where
             }
             Ok(Event::Text(ref e))
             | Ok(Event::Comment(ref e))
-            | Ok(Event::PI(ref e))
             | Ok(Event::DocType(ref e)) => {
                 debug_format!(e);
                 if let Err(err) = e.unescape() {
@@ -55,6 +54,9 @@ where
                     debug_format!(err);
                     break;
                 }
+            }
+            Ok(Event::PI(ref e)) => {
+                debug_format!(e);
             }
             Ok(Event::Decl(ref e)) => {
                 debug_format!(e);

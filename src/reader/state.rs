@@ -3,7 +3,7 @@ use encoding_rs::UTF_8;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result, SyntaxError};
-use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 use crate::reader::{is_whitespace, name_len, BangType, Config, ParseState};
@@ -242,7 +242,7 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::wrap(content, self.decoder())))
+                Ok(Event::PI(BytesPI::wrap(content, name_len(content))))
             }
         } else {
             // <?....EOF

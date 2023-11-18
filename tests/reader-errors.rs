@@ -1,7 +1,7 @@
 //! Contains tests that produces errors during parsing XML.
 
 use quick_xml::errors::{Error, SyntaxError};
-use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::reader::{NsReader, Reader};
 
 macro_rules! ok {
@@ -391,8 +391,8 @@ mod syntax {
 
         // According to the grammar, processing instruction MUST contain a non-empty
         // target name, but we do not consider this as a _syntax_ error.
-        ok!(normal_empty("<??>")    => Event::PI(BytesText::new("")));
-        ok!(normal_xmlx("<?xmlx?>") => Event::PI(BytesText::new("xmlx")));
+        ok!(normal_empty("<??>")    => Event::PI(BytesPI::new("")));
+        ok!(normal_xmlx("<?xmlx?>") => Event::PI(BytesPI::new("xmlx")));
     }
 
     /// https://www.w3.org/TR/xml11/#NT-prolog

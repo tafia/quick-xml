@@ -6,7 +6,7 @@ use std::result::Result as StdResult;
 
 use crate::encoding::UTF8_BOM;
 use crate::errors::{Error, Result};
-use crate::events::{attributes::Attribute, BytesCData, BytesStart, BytesText, Event};
+use crate::events::{attributes::Attribute, BytesCData, BytesPI, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
@@ -551,10 +551,10 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write a processing instruction `<?...?>` inside the current element.
-    pub fn write_pi_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+    pub fn write_pi_content(self, pi: BytesPI) -> Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
-        self.writer.write_event(Event::PI(text))?;
+        self.writer.write_event(Event::PI(pi))?;
         self.writer
             .write_event(Event::End(self.start_tag.to_end()))?;
         Ok(self.writer)

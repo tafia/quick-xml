@@ -6,7 +6,7 @@
 //! Please keep tests sorted (exceptions are allowed if options are tightly related).
 
 use quick_xml::errors::{Error, IllFormedError};
-use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesCData, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
 
 mod check_comments {
@@ -520,7 +520,7 @@ mod trim_text {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -570,7 +570,7 @@ mod trim_text {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -641,7 +641,7 @@ mod trim_text_start {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -691,7 +691,7 @@ mod trim_text_start {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -762,7 +762,7 @@ mod trim_text_end {
 
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),
@@ -814,7 +814,7 @@ mod trim_text_end {
         );
         assert_eq!(
             reader.read_event().unwrap(),
-            Event::PI(BytesText::new("pi \t\r\n"))
+            Event::PI(BytesPI::new("pi \t\r\n"))
         );
         assert_eq!(
             reader.read_event().unwrap(),

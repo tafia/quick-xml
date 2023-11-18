@@ -4,7 +4,7 @@ use std::result::Result as StdResult;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::errors::{Error, Result};
-use crate::events::{BytesCData, BytesText, Event};
+use crate::events::{BytesCData, BytesPI, BytesText, Event};
 use crate::{ElementWriter, Writer};
 
 impl<W: AsyncWrite + Unpin> Writer<W> {
@@ -173,7 +173,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     ///
     /// ```
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::events::BytesText;
+    /// # use quick_xml::events::BytesPI;
     /// # use tokio::io::AsyncWriteExt;
     /// # #[tokio::main(flavor = "current_thread")] async fn main() {
     /// let mut buffer = Vec::new();
@@ -184,9 +184,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     ///     .create_element("paired")
     ///     .with_attribute(("attr1", "value1"))
     ///     .with_attribute(("attr2", "value2"))
-    ///     // NOTE: We cannot use BytesText::new here, because it escapes strings,
-    ///     // but processing instruction content should not be escaped
-    ///     .write_pi_content_async(BytesText::from_escaped(r#"xml-stylesheet href="style.css""#))
+    ///     .write_pi_content_async(BytesPI::new(r#"xml-stylesheet href="style.css""#))
     ///     .await
     ///     .expect("cannot write content");
     ///
@@ -199,7 +197,7 @@ impl<'a, W: AsyncWrite + Unpin> ElementWriter<'a, W> {
     /// </paired>"#
     /// );
     /// # }
-    pub async fn write_pi_content_async(self, text: BytesText<'_>) -> Result<&'a mut Writer<W>> {
+    pub async fn write_pi_content_async(self, text: BytesPI<'_>) -> Result<&'a mut Writer<W>> {
         self.writer
             .write_event_async(Event::Start(self.start_tag.borrow()))
             .await?;
@@ -363,7 +361,7 @@ mod tests {
 
     test!(
         pi,
-        Event::PI(BytesText::new("this is a processing instruction")),
+        Event::PI(BytesPI::new("this is a processing instruction")),
         r#"<?this is a processing instruction?>"#
     );
 
