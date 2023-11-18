@@ -71,6 +71,17 @@ impl std::error::Error for SyntaxError {}
 /// [well-formed]: https://www.w3.org/TR/xml11/#dt-wellformed
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IllFormedError {
+    /// A `version` attribute was not found in an XML declaration or is not the
+    /// first attribute.
+    ///
+    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
+    /// a `version` attribute and it MUST be the first attribute. This error indicates,
+    /// that the declaration does not contain attributes at all (if contains `None`)
+    /// or either `version` attribute is not present or not the first attribute in
+    /// the declaration. In the last case it contains the name of the found attribute.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
+    MissedVersion(Option<String>),
     /// The end tag was not found during reading of a sub-tree of elements due to
     /// encountering an EOF from the underlying reader. This error is returned from
     /// [`Reader::read_to_end`].
@@ -103,6 +114,12 @@ pub enum IllFormedError {
 impl fmt::Display for IllFormedError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::MissedVersion(None) => {
+                write!(f, "an XML declaration does not contain `version` attribute")
+            }
+            Self::MissedVersion(Some(attr)) => {
+                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
+            }
             Self::MissedEnd(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",
@@ -143,17 +160,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// A `version` attribute was not found in an XML declaration or is not the
-    /// first attribute.
-    ///
-    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
-    /// a `version` attribute and it MUST be the first attribute. This error indicates,
-    /// that the declaration does not contain attributes at all (if contains `None`)
-    /// or either `version` attribute is not present or not the first attribute in
-    /// the declaration. In the last case it contains the name of the found attribute.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
-    XmlDeclWithoutVersion(Option<String>),
     /// A document type definition (DTD) does not contain a name of a root element.
     ///
     /// According to the [specification], document type definition (`<!doctype foo>`)
@@ -261,12 +267,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::XmlDeclWithoutVersion(None) => {
-                write!(f, "an XML declaration does not contain `version` attribute")
-            }
-            Error::XmlDeclWithoutVersion(Some(attr)) => {
-                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
-            }
             Error::EmptyDocType => write!(
                 f,
                 "`<!DOCTYPE>` declaration does not contain a name of a document type"
