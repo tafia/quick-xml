@@ -6,7 +6,7 @@ use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{is_whitespace, BangType, Config, ParseState};
+use crate::reader::{is_whitespace, name_len, BangType, Config, ParseState};
 
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
@@ -258,31 +258,27 @@ impl ReaderState {
     /// # Parameters
     /// - `content`: Content of a tag between `<` and `>`
     pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
-        let len = content.len();
-        let name_end = content
-            .iter()
-            .position(|&b| is_whitespace(b))
-            .unwrap_or(len);
-        if let Some(&b'/') = content.last() {
+        if let Some(content) = content.strip_suffix(b"/") {
             // This is self-closed tag `<something/>`
-            let name_len = if name_end < len { name_end } else { len - 1 };
-            let event = BytesStart::wrap(&content[..len - 1], name_len);
+            let event = BytesStart::wrap(content, name_len(content));
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::Empty;
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&content[..name_len]);
+                self.opened_buffer.extend(event.name().as_ref());
                 Ok(Event::Start(event))
             } else {
                 Ok(Event::Empty(event))
             }
         } else {
+            let event = BytesStart::wrap(content, name_len(content));
+
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.extend(&content[..name_end]);
-            Ok(Event::Start(BytesStart::wrap(content, name_end)))
+            self.opened_buffer.extend(event.name().as_ref());
+            Ok(Event::Start(event))
         }
     }
 

@@ -996,6 +996,16 @@ pub(crate) const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 
+/// Calculates name from an element-like content. Name is the first word in `content`,
+/// where word boundaries is XML space characters.
+#[inline]
+pub(crate) fn name_len(content: &[u8]) -> usize {
+    content
+        .iter()
+        .position(|&b| is_whitespace(b))
+        .unwrap_or(content.len())
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
