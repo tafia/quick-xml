@@ -5,10 +5,7 @@ use encoding_rs::Encoding;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result, SyntaxError};
 use crate::reader::state::ReaderState;
-
-use memchr;
 
 /// A struct that holds a parser configuration.
 ///
@@ -536,98 +533,6 @@ impl<R> Reader<R> {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Possible elements started with `<!`
-#[derive(Debug, PartialEq)]
-enum BangType {
-    /// <![CDATA[...]]>
-    CData,
-    /// <!--...-->
-    Comment,
-    /// <!DOCTYPE...>
-    DocType,
-}
-impl BangType {
-    #[inline(always)]
-    fn new(byte: Option<u8>) -> Result<Self> {
-        Ok(match byte {
-            Some(b'[') => Self::CData,
-            Some(b'-') => Self::Comment,
-            Some(b'D') | Some(b'd') => Self::DocType,
-            _ => return Err(Error::Syntax(SyntaxError::InvalidBangMarkup)),
-        })
-    }
-
-    /// If element is finished, returns its content up to `>` symbol and
-    /// an index of this symbol, otherwise returns `None`
-    ///
-    /// # Parameters
-    /// - `buf`: buffer with data consumed on previous iterations
-    /// - `chunk`: data read on current iteration and not yet consumed from reader
-    #[inline(always)]
-    fn parse<'b>(&self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
-        for i in memchr::memchr_iter(b'>', chunk) {
-            match self {
-                // Need to read at least 6 symbols (`!---->`) for properly finished comment
-                // <!----> - XML comment
-                //  012345 - i
-                Self::Comment if buf.len() + i > 4 => {
-                    if chunk[..i].ends_with(b"--") {
-                        // We cannot strip last `--` from the buffer because we need it in case of
-                        // check_comments enabled option. XML standard requires that comment
-                        // will not end with `--->` sequence because this is a special case of
-                        // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `-|->` was splitted at |
-                    //        buf --/   \-- chunk
-                    if i == 1 && buf.ends_with(b"-") && chunk[0] == b'-' {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `--|>` was splitted at |
-                    //         buf --/   \-- chunk
-                    if i == 0 && buf.ends_with(b"--") {
-                        return Some((&[], i + 1)); // +1 for `>`
-                    }
-                }
-                Self::Comment => {}
-                Self::CData => {
-                    if chunk[..i].ends_with(b"]]") {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `]|]>` was splitted at |
-                    //        buf --/   \-- chunk
-                    if i == 1 && buf.ends_with(b"]") && chunk[0] == b']' {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `]]|>` was splitted at |
-                    //         buf --/   \-- chunk
-                    if i == 0 && buf.ends_with(b"]]") {
-                        return Some((&[], i + 1)); // +1 for `>`
-                    }
-                }
-                Self::DocType => {
-                    let content = &chunk[..i];
-                    let balance = memchr::memchr2_iter(b'<', b'>', content)
-                        .map(|p| if content[p] == b'<' { 1i32 } else { -1 })
-                        .sum::<i32>();
-                    if balance == 0 {
-                        return Some((content, i + 1)); // +1 for `>`
-                    }
-                }
-            }
-        }
-        None
-    }
-    #[inline]
-    fn to_err(&self) -> Error {
-        match self {
-            Self::CData => Error::Syntax(SyntaxError::UnclosedCData),
-            Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
-            Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
-        }
-    }
-}
 
 /// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
 #[inline]
