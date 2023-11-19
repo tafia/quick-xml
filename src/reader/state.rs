@@ -337,16 +337,16 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<!--"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b"-->"), "{:?}", Bytes(content));
 
-                let buf = &content[1..content.len() - 1];
-                let len = buf.len();
+                let len = content.len();
                 if self.config.check_comments {
                     // search if '--' not in comments
-                    let mut haystack = &buf[3..len - 2];
+                    // Skip `<!--` and `-->`
+                    let mut haystack = &content[4..len - 3];
                     let mut off = 0;
                     while let Some(p) = memchr::memchr(b'-', haystack) {
                         off += p + 1;
                         // if next byte after `-` is also `-`, return an error
-                        if buf[3 + off] == b'-' {
+                        if content[4 + off] == b'-' {
                             // Explanation of the magic:
                             //
                             // - `self.offset`` just after `>`,
@@ -354,21 +354,21 @@ impl ReaderState {
                             // - `p` is counted from byte after `<!--`
                             //
                             // <!-- con--tent -->:
-                            //  ~~~~~~~~~~~~~~~~ : - buf
+                            // ~~~~~~~~~~~~~~~~~~: - buf
                             //   : ===========   : - zone of search (possible values of `p`)
                             //   : |---p         : - p is counted from | (| is 0)
                             //   : :   :         ^ - self.offset
-                            //   ^ :   :           - self.offset - len
-                            //     ^   :           - self.offset - len + 2
-                            //         ^           - self.offset - len + 2 + p
-                            self.last_error_offset = self.offset - len + 2 + p;
+                            // ^ :     :           - self.offset - len
+                            //     ^   :           - self.offset - len + 4
+                            //         ^           - self.offset - len + 4 + p
+                            self.last_error_offset = self.offset - len + 4 + p;
                             return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
                         haystack = &haystack[p + 1..];
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
-                    &buf[3..len - 2],
+                    &content[4..len - 3],
                     self.decoder(),
                 )))
             }
@@ -381,10 +381,10 @@ impl ReaderState {
                 );
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
-                let buf = &content[1..content.len() - 1];
-                match buf[8..].iter().position(|&b| !is_whitespace(b)) {
+                let buf = &content[9..content.len() - 1];
+                match buf.iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
-                        &buf[8 + start..],
+                        &buf[start..],
                         self.decoder(),
                     ))),
                     None => {
