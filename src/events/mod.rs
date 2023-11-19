@@ -76,8 +76,12 @@ pub struct BytesStart<'a> {
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) fn wrap(content: &'a [u8], name_len: usize) -> Self {
-        BytesStart {
+    pub(crate) fn wrap(content: &'a [u8]) -> Self {
+        let name_len = content
+            .iter()
+            .position(|&b| is_whitespace(b))
+            .unwrap_or(content.len());
+        Self {
             buf: Cow::Borrowed(content),
             name_len,
         }

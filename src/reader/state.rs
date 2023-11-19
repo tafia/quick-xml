@@ -4,6 +4,7 @@ use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use crate::name::QName;
 use crate::parser::{FeedResult, Parser};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -333,10 +334,10 @@ impl ReaderState {
 
                 // Cut of `<?` and `?>` from start and end
                 let content = &content[2..content.len() - 2];
-                let len = content.len();
+                let event = BytesStart::wrap(content);
 
-                if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                    let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
+                if event.name() == QName(b"xml") {
+                    let event = BytesDecl::from_start(event);
 
                     // Try getting encoding from the declaration event
                     #[cfg(feature = "encoding")]
@@ -355,20 +356,12 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b"/>"), "{:?}", Bytes(content));
 
-                let content = &content[1..content.len() - 1];
-                let len = content.len();
-                let name_end = content
-                    .iter()
-                    .position(|&b| is_whitespace(b))
-                    .unwrap_or(len);
-                // This is self-closed tag `<something/>`
-                let name_len = if name_end < len { name_end } else { len - 1 };
-                let event = BytesStart::wrap(&content[..len - 1], name_len);
+                let event = BytesStart::wrap(&content[1..content.len() - 2]);
 
                 if self.config.expand_empty_elements {
                     self.pending = true;
                     self.opened_starts.push(self.opened_buffer.len());
-                    self.opened_buffer.extend(&content[..name_len]);
+                    self.opened_buffer.extend(event.name().as_ref());
                     Ok(Event::Start(event))
                 } else {
                     Ok(Event::Empty(event))
@@ -378,18 +371,14 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
-                let content = &content[1..content.len() - 1];
-                let len = content.len();
-                let name_end = content
-                    .iter()
-                    .position(|&b| is_whitespace(b))
-                    .unwrap_or(len);
+                let event = BytesStart::wrap(&content[1..content.len() - 1]);
+
                 // #514: Always store names event when .check_end_names == false,
                 // because checks can be temporary disabled and when they would be
                 // enabled, we should have that information
                 self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&content[..name_end]);
-                Ok(Event::Start(BytesStart::wrap(content, name_end)))
+                self.opened_buffer.extend(event.name().as_ref());
+                Ok(Event::Start(event))
             }
             FeedResult::EmitEndTag(_) => {
                 debug_assert!(content.starts_with(b"</"), "{:?}", Bytes(content));
