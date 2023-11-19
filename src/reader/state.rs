@@ -381,8 +381,12 @@ impl ReaderState {
                 );
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
+                // Skip `<!DOCTYPE` and `>`
                 let buf = &content[9..content.len() - 1];
                 match buf.iter().position(|&b| !is_whitespace(b)) {
+                    // Found the first non-space symbol after `<!DOCTYPE`
+                    // Actually, parser will guarantee, that after `<!DOCTYPE`
+                    // at least one is_whitespace() symbol
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         &buf[start..],
                         self.decoder(),
