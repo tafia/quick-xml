@@ -89,11 +89,16 @@ impl ReaderState {
                 debug_assert!(buf.ends_with(b"--"));
                 if self.config.check_comments {
                     // search if '--' not in comments
-                    if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
-                        .position(|p| buf[3 + p + 1] == b'-')
-                    {
-                        self.offset += len - p;
-                        return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
+                    let mut haystack = &buf[3..len - 2];
+                    let mut off = 0;
+                    while let Some(p) = memchr::memchr(b'-', haystack) {
+                        off += p + 1;
+                        // if next byte after `-` is also `-`, return an error
+                        if buf[3 + off] == b'-' {
+                            self.offset -= len - 2 - p;
+                            return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
+                        }
+                        haystack = &haystack[p + 1..];
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(

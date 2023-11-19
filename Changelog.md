@@ -26,6 +26,7 @@ configuration is serializable.
 ### Bug Fixes
 
 - [#622]: Fix wrong disregarding of not closed markup, such as lone `<`.
+- [#684]: Fix incorrect position reported for `Error::IllFormed(DoubleHyphenInComment)`.
 
 ### Misc Changes
 
