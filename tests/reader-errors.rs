@@ -13,9 +13,11 @@ macro_rules! ok {
             #[test]
             fn borrowed() {
                 let mut reader = Reader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(reader.read_event().unwrap(), $event);
 
                 let mut reader = NsReader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(reader.read_resolved_event().unwrap().1, $event);
             }
 
@@ -23,9 +25,11 @@ macro_rules! ok {
             fn buffered() {
                 let mut buf = Vec::new();
                 let mut reader = Reader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(reader.read_event_into(&mut buf).unwrap(), $event);
 
                 let mut reader = NsReader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(reader.read_resolved_event_into(&mut buf).unwrap().1, $event);
             }
 
@@ -34,12 +38,14 @@ macro_rules! ok {
             async fn async_tokio() {
                 let mut buf = Vec::new();
                 let mut reader = Reader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(
                     reader.read_event_into_async(&mut buf).await.unwrap(),
                     $event
                 );
 
                 let mut reader = NsReader::from_str($xml);
+                reader.config_mut().enable_all_checks(true);
                 assert_eq!(
                     reader
                         .read_resolved_event_into_async(&mut buf)
@@ -324,4 +330,317 @@ mod syntax {
         ok!(normal4("<?xml\r?>") => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\r", 3))));
         ok!(normal5("<?xml\n?>") => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
     }
+}
+
+mod ill_formed {
+    use super::*;
+    use quick_xml::errors::IllFormedError;
+
+    macro_rules! err {
+        ($test:ident($xml:literal) => $pos:literal : $cause:expr) => {
+            mod $test {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_event() {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event().expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_resolved_event() {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event()
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_event_into(&mut buf) {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event_into(&mut buf).expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_resolved_event_into(&mut buf) {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into(&mut buf)
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_event_into_async(&mut buf).await {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event_into_async(&mut buf).await.expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    match reader.read_resolved_event_into_async(&mut buf).await {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into_async(&mut buf)
+                            .await
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+            }
+        };
+    }
+
+    /// Performs 3 reads, the first and third ones should be successful
+    macro_rules! err2 {
+        ($test:ident($xml:literal) => $pos:literal : $cause:expr) => {
+            mod $test {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                #[test]
+                fn borrowed() {
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader.read_event().expect("first .read_event()");
+                    match reader.read_event() {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event().expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader.read_event().expect("first .read_resolved_event()");
+                    match reader.read_resolved_event() {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event()
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader
+                        .read_event_into(&mut buf)
+                        .expect("first .read_event_into()");
+                    match reader.read_event_into(&mut buf) {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event_into(&mut buf).expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader
+                        .read_resolved_event_into(&mut buf)
+                        .expect("first .read_resolved_event_into()");
+                    match reader.read_resolved_event_into(&mut buf) {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into(&mut buf)
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader
+                        .read_event_into_async(&mut buf)
+                        .await
+                        .expect("first .read_event_into_async()");
+                    match reader.read_event_into_async(&mut buf).await {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader.read_event_into_async(&mut buf).await.expect(
+                            "parsing should be possible to continue after `Error::IllFormed`"
+                        ),
+                        Event::Empty(BytesStart::new("x"))
+                    );
+
+                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                    reader.config_mut().enable_all_checks(true);
+                    reader
+                        .read_resolved_event_into_async(&mut buf)
+                        .await
+                        .expect("first .read_resolved_event_into_async()");
+                    match reader.read_resolved_event_into_async(&mut buf).await {
+                        Err(Error::IllFormed(cause)) => {
+                            assert_eq!(cause, $cause);
+                            assert_eq!(reader.buffer_position(), $pos);
+                        }
+                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    }
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into_async(&mut buf)
+                            .await
+                            .expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            )
+                            .1,
+                        Event::Empty(BytesStart::new("x"))
+                    );
+                }
+            }
+        };
+    }
+
+    // IllFormedError::MissedVersion is generated lazily when you call `BytesDecl::version()`
+
+    err!(missed_doctype_name1("<!DOCTYPE>") => 9: IllFormedError::MissedDoctypeName);
+    //                                  ^= 9
+    err!(missed_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissedDoctypeName);
+    //                                         ^= 13
+    ok!(missed_doctype_name3("<!DOCTYPE \t\r\nx>") => Event::DocType(BytesText::new("x")));
+
+    err!(unmatched_end1("</>") => 0: IllFormedError::UnmatchedEnd("".to_string()));
+    err!(unmatched_end2("</end>") => 0: IllFormedError::UnmatchedEnd("end".to_string()));
+    err!(unmatched_end3("</end >") => 0: IllFormedError::UnmatchedEnd("end".to_string()));
+
+    ok!(mismatched_end1("<start></start>") => Event::Start(BytesStart::new("start")));
+    err2!(mismatched_end2("<start></>") => 7: IllFormedError::MismatchedEnd {
+        //                        ^= 7
+        expected: "start".to_string(),
+        found: "".to_string(),
+    });
+    err2!(mismatched_end3("<start></end>") => 7: IllFormedError::MismatchedEnd {
+        //                        ^= 7
+        expected: "start".to_string(),
+        found: "end".to_string(),
+    });
+    err2!(mismatched_end4("<start></end >") => 7: IllFormedError::MismatchedEnd {
+        //                        ^= 7
+        expected: "start".to_string(),
+        found: "end".to_string(),
+    });
+
+    ok!(double_hyphen_in_comment1("<!---->") => Event::Comment(BytesText::new("")));
+    err!(double_hyphen_in_comment2("<!----->") => 4: IllFormedError::DoubleHyphenInComment);
+    //                                  ^= 4
+    err!(double_hyphen_in_comment3("<!-- --->") => 5: IllFormedError::DoubleHyphenInComment);
+    //                                   ^= 5
+    err!(double_hyphen_in_comment4("<!-- -- -->") => 5: IllFormedError::DoubleHyphenInComment);
+    //                                   ^= 5
 }
