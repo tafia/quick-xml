@@ -137,39 +137,6 @@ impl ReaderState {
         Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
-    /// Converts content of a tag to a `Start` or an `Empty` event
-    ///
-    /// # Parameters
-    /// - `content`: Content of a tag between `<` and `>`
-    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
-        let len = content.len();
-        let name_end = content
-            .iter()
-            .position(|&b| is_whitespace(b))
-            .unwrap_or(len);
-        if let Some(&b'/') = content.last() {
-            // This is self-closed tag `<something/>`
-            let name_len = if name_end < len { name_end } else { len - 1 };
-            let event = BytesStart::wrap(&content[..len - 1], name_len);
-
-            if self.config.expand_empty_elements {
-                self.pending = true;
-                self.opened_starts.push(self.opened_buffer.len());
-                self.opened_buffer.extend(&content[..name_len]);
-                Ok(Event::Start(event))
-            } else {
-                Ok(Event::Empty(event))
-            }
-        } else {
-            // #514: Always store names event when .check_end_names == false,
-            // because checks can be temporary disabled and when they would be
-            // enabled, we should have that information
-            self.opened_starts.push(self.opened_buffer.len());
-            self.opened_buffer.extend(&content[..name_end]);
-            Ok(Event::Start(BytesStart::wrap(content, name_end)))
-        }
-    }
-
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
     ///
     /// If [`encoding`] feature is enabled, the used encoding may change after
@@ -388,13 +355,41 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b"/>"), "{:?}", Bytes(content));
 
-                self.emit_start(&content[1..content.len() - 1])
+                let content = &content[1..content.len() - 1];
+                let len = content.len();
+                let name_end = content
+                    .iter()
+                    .position(|&b| is_whitespace(b))
+                    .unwrap_or(len);
+                // This is self-closed tag `<something/>`
+                let name_len = if name_end < len { name_end } else { len - 1 };
+                let event = BytesStart::wrap(&content[..len - 1], name_len);
+
+                if self.config.expand_empty_elements {
+                    self.pending = true;
+                    self.opened_starts.push(self.opened_buffer.len());
+                    self.opened_buffer.extend(&content[..name_len]);
+                    Ok(Event::Start(event))
+                } else {
+                    Ok(Event::Empty(event))
+                }
             }
             FeedResult::EmitStartTag(_) => {
                 debug_assert!(content.starts_with(b"<"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
-                self.emit_start(&content[1..content.len() - 1])
+                let content = &content[1..content.len() - 1];
+                let len = content.len();
+                let name_end = content
+                    .iter()
+                    .position(|&b| is_whitespace(b))
+                    .unwrap_or(len);
+                // #514: Always store names event when .check_end_names == false,
+                // because checks can be temporary disabled and when they would be
+                // enabled, we should have that information
+                self.opened_starts.push(self.opened_buffer.len());
+                self.opened_buffer.extend(&content[..name_end]);
+                Ok(Event::Start(BytesStart::wrap(content, name_end)))
             }
             FeedResult::EmitEndTag(_) => {
                 debug_assert!(content.starts_with(b"</"), "{:?}", Bytes(content));
