@@ -177,6 +177,15 @@ impl Config {
         self.trim_text_start = trim;
         self.trim_text_end = trim;
     }
+
+    /// Turn on or off all checks for well-formedness. Currently it is that settings:
+    /// - [`check_comments`](Self::check_comments)
+    /// - [`check_end_names`](Self::check_end_names)
+    #[inline]
+    pub fn enable_all_checks(&mut self, enable: bool) {
+        self.check_comments = enable;
+        self.check_end_names = enable;
+    }
 }
 
 impl Default for Config {

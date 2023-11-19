@@ -20,6 +20,8 @@ configuration is serializable.
 - [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
   configuration. Previous builder methods on `Reader` / `NsReader` was replaced by
   direct access to fields of config using `reader.config_mut().<...>`.
+- #[#684]: Added a method `Config::enable_all_checks` to turn on or off all
+  well-formedness checks.
 
 ### Bug Fixes
 
@@ -41,6 +43,7 @@ configuration is serializable.
 [#622]: https://github.com/tafia/quick-xml/issues/622
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
+[#684]: https://github.com/tafia/quick-xml/pull/684
 
 
 ## 0.31.0 -- 2023-10-22
