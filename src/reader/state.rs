@@ -2,7 +2,7 @@
 use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::errors::{Error, IllFormedError, Result};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use crate::parser::{FeedResult, Parser};
 #[cfg(feature = "encoding")]
@@ -364,39 +364,24 @@ impl ReaderState {
                 debug_assert!(content.starts_with(b"<?"), "{:?}", Bytes(content));
                 debug_assert!(content.ends_with(b"?>"), "{:?}", Bytes(content));
 
-                let buf = &content[1..content.len() - 1];
-                debug_assert!(buf.len() > 0);
-                debug_assert_eq!(buf[0], b'?');
+                // Cut of `<?` and `?>` from start and end
+                let content = &content[2..content.len() - 2];
+                let len = content.len();
 
-                let len = buf.len();
-                // We accept at least <??>
-                //                     ~~ - len = 2
-                if len > 1 && buf[len - 1] == b'?' {
-                    // Cut of `?` and `?` from start and end
-                    let content = &buf[1..len - 1];
-                    let len = content.len();
+                if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
+                    let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
 
-                    if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                        let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
-
-                        // Try getting encoding from the declaration event
-                        #[cfg(feature = "encoding")]
-                        if self.encoding.can_be_refined() {
-                            if let Some(encoding) = event.encoder() {
-                                self.encoding = EncodingRef::XmlDetected(encoding);
-                            }
+                    // Try getting encoding from the declaration event
+                    #[cfg(feature = "encoding")]
+                    if self.encoding.can_be_refined() {
+                        if let Some(encoding) = event.encoder() {
+                            self.encoding = EncodingRef::XmlDetected(encoding);
                         }
-
-                        Ok(Event::Decl(event))
-                    } else {
-                        Ok(Event::PI(BytesText::wrap(content, self.decoder())))
                     }
+
+                    Ok(Event::Decl(event))
                 } else {
-                    // <?....EOF
-                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                    //          so we move offset to it (-2 for `<` and `>`)
-                    self.last_error_offset = self.offset - len - 2;
-                    Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+                    Ok(Event::PI(BytesText::wrap(content, self.decoder())))
                 }
             }
             FeedResult::EmitEmptyTag(_) => {
