@@ -1,8 +1,8 @@
 //! Cases that was found by fuzzing
 
+use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
-use quick_xml::Error;
 
 #[test]
 fn fuzz_53() {
@@ -56,7 +56,7 @@ fn fuzz_empty_doctype() {
     let mut buf = Vec::new();
     assert!(matches!(
         reader.read_event_into(&mut buf).unwrap_err(),
-        Error::EmptyDocType
+        Error::IllFormed(IllFormedError::MissedDoctypeName)
     ));
     assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
 }

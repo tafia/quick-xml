@@ -82,6 +82,14 @@ pub enum IllFormedError {
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
     MissedVersion(Option<String>),
+    /// A document type definition (DTD) does not contain a name of a root element.
+    ///
+    /// According to the [specification], document type definition (`<!DOCTYPE foo>`)
+    /// MUST contain a name which defines a document type (`foo`). If that name
+    /// is missed, this error is returned.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
+    MissedDoctypeName,
     /// The end tag was not found during reading of a sub-tree of elements due to
     /// encountering an EOF from the underlying reader. This error is returned from
     /// [`Reader::read_to_end`].
@@ -120,6 +128,10 @@ impl fmt::Display for IllFormedError {
             Self::MissedVersion(Some(attr)) => {
                 write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
             }
+            Self::MissedDoctypeName => write!(
+                f,
+                "`<!DOCTYPE>` declaration does not contain a name of a document type"
+            ),
             Self::MissedEnd(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",
@@ -160,14 +172,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// A document type definition (DTD) does not contain a name of a root element.
-    ///
-    /// According to the [specification], document type definition (`<!doctype foo>`)
-    /// MUST contain a name which defines a document type. If that name is missed,
-    /// this error is returned.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
-    EmptyDocType,
     /// Attribute parsing error
     InvalidAttr(AttrError),
     /// Escape error
@@ -267,10 +271,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::EmptyDocType => write!(
-                f,
-                "`<!DOCTYPE>` declaration does not contain a name of a document type"
-            ),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {

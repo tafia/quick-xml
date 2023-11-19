@@ -39,6 +39,7 @@ configuration is serializable.
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
   - `Error::XmlDeclWithoutVersion` replaced by `IllFormedError::MissedVersion` (in [#684])
+  - `Error::EmptyDocType` replaced by `IllFormedError::MissedDoctypeName` (in [#684])
 
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622

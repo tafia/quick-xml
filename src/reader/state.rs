@@ -114,7 +114,7 @@ impl ReaderState {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or(len - 8);
                 if start + 8 >= len {
-                    return Err(Error::EmptyDocType);
+                    return Err(Error::IllFormed(IllFormedError::MissedDoctypeName));
                 }
                 Ok(Event::DocType(BytesText::wrap(
                     &buf[8 + start..],
