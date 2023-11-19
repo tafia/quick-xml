@@ -338,49 +338,39 @@ impl ReaderState {
                 debug_assert!(content.ends_with(b"-->"), "{:?}", Bytes(content));
 
                 let buf = &content[1..content.len() - 1];
-
                 let len = buf.len();
-                if buf.starts_with(b"!--") {
-                    debug_assert!(buf.ends_with(b"--"));
-                    if self.config.check_comments {
-                        // search if '--' not in comments
-                        let mut haystack = &buf[3..len - 2];
-                        let mut off = 0;
-                        while let Some(p) = memchr::memchr(b'-', haystack) {
-                            off += p + 1;
-                            // if next byte after `-` is also `-`, return an error
-                            if buf[3 + off] == b'-' {
-                                // Explanation of the magic:
-                                //
-                                // - `self.offset`` just after `>`,
-                                // - `buf` contains `!-- con--tent --`
-                                // - `p` is counted from byte after `<!--`
-                                //
-                                // <!-- con--tent -->:
-                                //  ~~~~~~~~~~~~~~~~ : - buf
-                                //   : ===========   : - zone of search (possible values of `p`)
-                                //   : |---p         : - p is counted from | (| is 0)
-                                //   : :   :         ^ - self.offset
-                                //   ^ :   :           - self.offset - len
-                                //     ^   :           - self.offset - len + 2
-                                //         ^           - self.offset - len + 2 + p
-                                self.last_error_offset = self.offset - len + 2 + p;
-                                return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
-                            }
-                            haystack = &haystack[p + 1..];
+                if self.config.check_comments {
+                    // search if '--' not in comments
+                    let mut haystack = &buf[3..len - 2];
+                    let mut off = 0;
+                    while let Some(p) = memchr::memchr(b'-', haystack) {
+                        off += p + 1;
+                        // if next byte after `-` is also `-`, return an error
+                        if buf[3 + off] == b'-' {
+                            // Explanation of the magic:
+                            //
+                            // - `self.offset`` just after `>`,
+                            // - `buf` contains `!-- con--tent --`
+                            // - `p` is counted from byte after `<!--`
+                            //
+                            // <!-- con--tent -->:
+                            //  ~~~~~~~~~~~~~~~~ : - buf
+                            //   : ===========   : - zone of search (possible values of `p`)
+                            //   : |---p         : - p is counted from | (| is 0)
+                            //   : :   :         ^ - self.offset
+                            //   ^ :   :           - self.offset - len
+                            //     ^   :           - self.offset - len + 2
+                            //         ^           - self.offset - len + 2 + p
+                            self.last_error_offset = self.offset - len + 2 + p;
+                            return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
+                        haystack = &haystack[p + 1..];
                     }
-                    Ok(Event::Comment(BytesText::wrap(
-                        &buf[3..len - 2],
-                        self.decoder(),
-                    )))
-                } else {
-                    // <!....>
-                    //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
-                    // ^------- We report error at that position, so we need to subtract 2 and buf len
-                    self.last_error_offset = self.offset - len - 2;
-                    Err(Error::Syntax(SyntaxError::UnclosedComment))
                 }
+                Ok(Event::Comment(BytesText::wrap(
+                    &buf[3..len - 2],
+                    self.decoder(),
+                )))
             }
             FeedResult::EmitDoctype(_) => {
                 debug_assert!(content.len() > 9, "{:?}", Bytes(content));
@@ -392,30 +382,18 @@ impl ReaderState {
                 debug_assert!(content.ends_with(b">"), "{:?}", Bytes(content));
 
                 let buf = &content[1..content.len() - 1];
-                let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
-                    string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
-                };
-
-                if uncased_starts_with(buf, b"!DOCTYPE") {
-                    match buf[8..].iter().position(|&b| !is_whitespace(b)) {
-                        Some(start) => Ok(Event::DocType(BytesText::wrap(
-                            &buf[8 + start..],
-                            self.decoder(),
-                        ))),
-                        None => {
-                            // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
-                            // We want report error at place where name is expected - this is just
-                            // before `>`
-                            self.last_error_offset = self.offset - 1;
-                            return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
-                        }
+                match buf[8..].iter().position(|&b| !is_whitespace(b)) {
+                    Some(start) => Ok(Event::DocType(BytesText::wrap(
+                        &buf[8 + start..],
+                        self.decoder(),
+                    ))),
+                    None => {
+                        // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
+                        // We want report error at place where name is expected - this is just
+                        // before `>`
+                        self.last_error_offset = self.offset - 1;
+                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
                     }
-                } else {
-                    // <!....>
-                    //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
-                    // ^------- We report error at that position, so we need to subtract 2 and buf len
-                    self.last_error_offset = self.offset - len - 2;
-                    Err(Error::Syntax(SyntaxError::UnclosedDoctype))
                 }
             }
             FeedResult::EmitPI(_) => {
