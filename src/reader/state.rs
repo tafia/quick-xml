@@ -119,6 +119,10 @@ impl ReaderState {
                     .position(|b| !is_whitespace(*b))
                     .unwrap_or(len - 8);
                 if start + 8 >= len {
+                    // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
+                    // We want report error at place where name is expected - this is just
+                    // before `>`
+                    self.offset -= 1;
                     return Err(Error::IllFormed(IllFormedError::MissedDoctypeName));
                 }
                 Ok(Event::DocType(BytesText::wrap(
