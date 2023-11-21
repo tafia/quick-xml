@@ -114,21 +114,19 @@ impl ReaderState {
                 )))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
-                let start = buf[8..]
-                    .iter()
-                    .position(|b| !is_whitespace(*b))
-                    .unwrap_or(len - 8);
-                if start + 8 >= len {
-                    // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
-                    // We want report error at place where name is expected - this is just
-                    // before `>`
-                    self.offset -= 1;
-                    return Err(Error::IllFormed(IllFormedError::MissedDoctypeName));
+                match buf[8..].iter().position(|&b| !is_whitespace(b)) {
+                    Some(start) => Ok(Event::DocType(BytesText::wrap(
+                        &buf[8 + start..],
+                        self.decoder(),
+                    ))),
+                    None => {
+                        // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
+                        // We want report error at place where name is expected - this is just
+                        // before `>`
+                        self.offset -= 1;
+                        return Err(Error::IllFormed(IllFormedError::MissedDoctypeName));
+                    }
                 }
-                Ok(Event::DocType(BytesText::wrap(
-                    &buf[8 + start..],
-                    self.decoder(),
-                )))
             }
             _ => {
                 // <!....
