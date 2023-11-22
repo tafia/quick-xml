@@ -27,21 +27,21 @@ configuration is serializable.
 
 - [#622]: Fix wrong disregarding of not closed markup, such as lone `<`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(DoubleHyphenInComment)`.
-- [#684]: Fix incorrect position reported for `Error::IllFormed(MissedDoctypeName)`.
+- [#684]: Fix incorrect position reported for `Error::IllFormed(MissingDoctypeName)`.
 
 ### Misc Changes
 
 - [#675]: Minimum supported version of serde raised to 1.0.139
 - [#675]: Rework the `quick_xml::Error` type to provide more accurate information:
-  - `Error::EndEventMismatch` replaced by `IllFormedError::MismatchedEnd` in some cases
-  - `Error::EndEventMismatch` replaced by `IllFormedError::UnmatchedEnd` in some cases
+  - `Error::EndEventMismatch` replaced by `IllFormedError::MismatchedEndTag` in some cases
+  - `Error::EndEventMismatch` replaced by `IllFormedError::UnmatchedEndTag` in some cases
   - `Error::TextNotFound` was removed because not used
   - `Error::UnexpectedBang` replaced by `SyntaxError`
   - `Error::UnexpectedEof` replaced by `SyntaxError` in some cases
   - `Error::UnexpectedEof` replaced by `IllFormedError` in some cases
   - `Error::UnexpectedToken` replaced by `IllFormedError::DoubleHyphenInComment`
-  - `Error::XmlDeclWithoutVersion` replaced by `IllFormedError::MissedVersion` (in [#684])
-  - `Error::EmptyDocType` replaced by `IllFormedError::MissedDoctypeName` (in [#684])
+  - `Error::XmlDeclWithoutVersion` replaced by `IllFormedError::MissingDeclVersion` (in [#684])
+  - `Error::EmptyDocType` replaced by `IllFormedError::MissingDoctypeName` (in [#684])
 - [#684]: Changed positions reported for `SyntaxError`s: now they are always points
   to the start of markup (i. e. to the `<` character) with error.
 - [#684]: Now `<??>` parsed as `Event::PI` with empty content instead of raising

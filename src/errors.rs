@@ -81,7 +81,7 @@ pub enum IllFormedError {
     /// the declaration. In the last case it contains the name of the found attribute.
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
-    MissedVersion(Option<String>),
+    MissingDeclVersion(Option<String>),
     /// A document type definition (DTD) does not contain a name of a root element.
     ///
     /// According to the [specification], document type definition (`<!DOCTYPE foo>`)
@@ -89,18 +89,18 @@ pub enum IllFormedError {
     /// is missed, this error is returned.
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
-    MissedDoctypeName,
+    MissingDoctypeName,
     /// The end tag was not found during reading of a sub-tree of elements due to
     /// encountering an EOF from the underlying reader. This error is returned from
     /// [`Reader::read_to_end`].
     ///
     /// [`Reader::read_to_end`]: crate::reader::Reader::read_to_end
-    MissedEnd(String),
+    MissingEndTag(String),
     /// The specified end tag was encountered without corresponding open tag at the
     /// same level of hierarchy
-    UnmatchedEnd(String),
+    UnmatchedEndTag(String),
     /// The specified end tag does not match the start tag at that nesting level.
-    MismatchedEnd {
+    MismatchedEndTag {
         /// Name of open tag, that is expected to be closed
         expected: String,
         /// Name of actually closed tag
@@ -122,25 +122,25 @@ pub enum IllFormedError {
 impl fmt::Display for IllFormedError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::MissedVersion(None) => {
+            Self::MissingDeclVersion(None) => {
                 write!(f, "an XML declaration does not contain `version` attribute")
             }
-            Self::MissedVersion(Some(attr)) => {
+            Self::MissingDeclVersion(Some(attr)) => {
                 write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
             }
-            Self::MissedDoctypeName => write!(
+            Self::MissingDoctypeName => write!(
                 f,
                 "`<!DOCTYPE>` declaration does not contain a name of a document type"
             ),
-            Self::MissedEnd(tag) => write!(
+            Self::MissingEndTag(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",
                 tag,
             ),
-            Self::UnmatchedEnd(tag) => {
+            Self::UnmatchedEndTag(tag) => {
                 write!(f, "close tag `</{}>` does not match any open tag", tag)
             }
-            Self::MismatchedEnd { expected, found } => write!(
+            Self::MismatchedEndTag { expected, found } => write!(
                 f,
                 "expected `</{}>`, but `</{}>` was found",
                 expected, found,
@@ -199,7 +199,7 @@ pub enum Error {
 impl Error {
     pub(crate) fn missed_end(name: QName, decoder: Decoder) -> Self {
         match decoder.decode(name.as_ref()) {
-            Ok(name) => IllFormedError::MissedEnd(name.into()).into(),
+            Ok(name) => IllFormedError::MissingEndTag(name.into()).into(),
             Err(err) => err.into(),
         }
     }

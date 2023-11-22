@@ -124,7 +124,7 @@ impl ReaderState {
                         // We want report error at place where name is expected - this is just
                         // before `>`
                         self.offset -= 1;
-                        return Err(Error::IllFormed(IllFormedError::MissedDoctypeName));
+                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
                     }
                 }
             }
@@ -170,7 +170,7 @@ impl ReaderState {
                         // Report error at start of the end tag at `<` character
                         // +2 for `<` and `>`
                         self.offset -= buf.len() + 2;
-                        return Err(Error::IllFormed(IllFormedError::MismatchedEnd {
+                        return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
                         }));
@@ -183,7 +183,7 @@ impl ReaderState {
                 // Report error at start of the end tag at `<` character
                 // +2 for `<` and `>`
                 self.offset -= buf.len() + 2;
-                return Err(Error::IllFormed(IllFormedError::UnmatchedEnd(
+                return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
             }

@@ -190,7 +190,7 @@ mod syntax {
         err!(unclosed7("<\n") => SyntaxError::UnclosedTag);
 
         /// Closed tags can be tested only in pair with open tags, because otherwise
-        /// `IllFormedError::UnmatchedEnd` will be raised
+        /// `IllFormedError::UnmatchedEndTag` will be raised
         mod normal {
             use super::*;
             use pretty_assertions::assert_eq;
@@ -607,30 +607,30 @@ mod ill_formed {
         };
     }
 
-    // IllFormedError::MissedVersion is generated lazily when you call `BytesDecl::version()`
+    // IllFormedError::MissingDeclVersion is generated lazily when you call `BytesDecl::version()`
 
-    err!(missed_doctype_name1("<!DOCTYPE>") => 9: IllFormedError::MissedDoctypeName);
+    err!(missing_doctype_name1("<!DOCTYPE>") => 9: IllFormedError::MissingDoctypeName);
     //                                  ^= 9
-    err!(missed_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissedDoctypeName);
+    err!(missing_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissingDoctypeName);
     //                                         ^= 13
-    ok!(missed_doctype_name3("<!DOCTYPE \t\r\nx>") => Event::DocType(BytesText::new("x")));
+    ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => Event::DocType(BytesText::new("x")));
 
-    err!(unmatched_end1("</>") => 0: IllFormedError::UnmatchedEnd("".to_string()));
-    err!(unmatched_end2("</end>") => 0: IllFormedError::UnmatchedEnd("end".to_string()));
-    err!(unmatched_end3("</end >") => 0: IllFormedError::UnmatchedEnd("end".to_string()));
+    err!(unmatched_end_tag1("</>") => 0: IllFormedError::UnmatchedEndTag("".to_string()));
+    err!(unmatched_end_tag2("</end>") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
+    err!(unmatched_end_tag3("</end >") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
 
-    ok!(mismatched_end1("<start></start>") => Event::Start(BytesStart::new("start")));
-    err2!(mismatched_end2("<start></>") => 7: IllFormedError::MismatchedEnd {
+    ok!(mismatched_end_tag1("<start></start>") => Event::Start(BytesStart::new("start")));
+    err2!(mismatched_end_tag2("<start></>") => 7: IllFormedError::MismatchedEndTag {
         //                        ^= 7
         expected: "start".to_string(),
         found: "".to_string(),
     });
-    err2!(mismatched_end3("<start></end>") => 7: IllFormedError::MismatchedEnd {
+    err2!(mismatched_end_tag3("<start></end>") => 7: IllFormedError::MismatchedEndTag {
         //                        ^= 7
         expected: "start".to_string(),
         found: "end".to_string(),
     });
-    err2!(mismatched_end4("<start></end >") => 7: IllFormedError::MismatchedEnd {
+    err2!(mismatched_end_tag4("<start></end >") => 7: IllFormedError::MismatchedEndTag {
         //                        ^= 7
         expected: "start".to_string(),
         found: "end".to_string(),

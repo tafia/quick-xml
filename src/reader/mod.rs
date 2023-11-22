@@ -40,7 +40,7 @@ pub struct Config {
     pub check_comments: bool,
 
     /// Whether mismatched closing tag names should be detected. If enabled, in
-    /// case of mismatch the [`Error::IllFormed(MismatchedEnd)`] is returned from
+    /// case of mismatch the [`Error::IllFormed(MismatchedEndTag)`] is returned from
     /// read methods.
     ///
     /// Note, that start and end tags [should match literally][spec], they cannot
@@ -71,7 +71,7 @@ pub struct Config {
     ///
     /// Default: `true`
     ///
-    /// [`Error::IllFormed(MismatchedEnd)`]: crate::errors::IllFormedError::MismatchedEnd
+    /// [`Error::IllFormed(MismatchedEndTag)`]: crate::errors::IllFormedError::MismatchedEndTag
     /// [spec]: https://www.w3.org/TR/xml11/#dt-etag
     /// [`End`]: crate::events::Event::End
     /// [`expand_empty_elements`]: Self::expand_empty_elements

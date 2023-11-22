@@ -391,7 +391,7 @@ impl<'a> BytesDecl<'a> {
     /// In case of multiple attributes value of the first one is returned.
     ///
     /// If version is missed in the declaration, or the first thing is not a version,
-    /// [`IllFormedError::MissedVersion`] will be returned.
+    /// [`IllFormedError::MissingDeclVersion`] will be returned.
     ///
     /// # Examples
     ///
@@ -410,21 +410,21 @@ impl<'a> BytesDecl<'a> {
     /// // <?xml encoding='utf-8'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
     /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissedVersion(Some(key)))) => assert_eq!(key, "encoding"),
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml encoding='utf-8' version='1.1'?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
     /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissedVersion(Some(key)))) => assert_eq!(key, "encoding"),
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
     ///     _ => assert!(false),
     /// }
     ///
     /// // <?xml?>
     /// let decl = BytesDecl::from_start(BytesStart::from_content("", 0));
     /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissedVersion(None))) => {},
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))) => {},
     ///     _ => assert!(false),
     /// }
     /// ```
@@ -437,12 +437,14 @@ impl<'a> BytesDecl<'a> {
             // first attribute was not "version"
             Some(Ok(a)) => {
                 let found = from_utf8(a.key.as_ref())?.to_string();
-                Err(Error::IllFormed(IllFormedError::MissedVersion(Some(found))))
+                Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(
+                    found,
+                ))))
             }
             // error parsing attributes
             Some(Err(e)) => Err(e.into()),
             // no attributes
-            None => Err(Error::IllFormed(IllFormedError::MissedVersion(None))),
+            None => Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))),
         }
     }
 

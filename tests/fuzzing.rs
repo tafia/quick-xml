@@ -56,7 +56,7 @@ fn fuzz_empty_doctype() {
     let mut buf = Vec::new();
     assert!(matches!(
         reader.read_event_into(&mut buf).unwrap_err(),
-        Error::IllFormed(IllFormedError::MissedDoctypeName)
+        Error::IllFormed(IllFormedError::MissingDoctypeName)
     ));
     assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
 }
