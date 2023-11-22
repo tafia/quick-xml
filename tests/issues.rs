@@ -146,7 +146,7 @@ mod issue514 {
         match reader.read_event() {
             Err(Error::IllFormed(cause)) => assert_eq!(
                 cause,
-                IllFormedError::MismatchedEnd {
+                IllFormedError::MismatchedEndTag {
                     expected: "some-tag".into(),
                     found: "other-tag".into(),
                 }

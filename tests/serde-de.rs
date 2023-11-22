@@ -568,7 +568,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("root".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -583,7 +583,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("root".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -598,7 +598,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("root".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -611,7 +611,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("root".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("root".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -627,7 +627,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("string".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -640,7 +640,7 @@ macro_rules! maplike_errors {
 
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
-                        assert_eq!(cause, IllFormedError::MissedEnd("string".into()))
+                        assert_eq!(cause, IllFormedError::MissingEndTag("string".into()))
                     }
                     x => panic!(
                         "Expected `Err(InvalidXml(IllFormed(_)))`, but got `{:?}`",
@@ -664,7 +664,7 @@ macro_rules! maplike_errors {
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
                         cause,
-                        IllFormedError::MismatchedEnd {
+                        IllFormedError::MismatchedEndTag {
                             expected: "root".into(),
                             found: "mismatched".into(),
                         }
@@ -686,7 +686,7 @@ macro_rules! maplike_errors {
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
                         cause,
-                        IllFormedError::MismatchedEnd {
+                        IllFormedError::MismatchedEndTag {
                             expected: "root".into(),
                             found: "mismatched".into(),
                         }
@@ -708,7 +708,7 @@ macro_rules! maplike_errors {
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
                         cause,
-                        IllFormedError::MismatchedEnd {
+                        IllFormedError::MismatchedEndTag {
                             expected: "root".into(),
                             found: "mismatched".into(),
                         }
@@ -730,7 +730,7 @@ macro_rules! maplike_errors {
                 match data {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => assert_eq!(
                         cause,
-                        IllFormedError::MismatchedEnd {
+                        IllFormedError::MismatchedEndTag {
                             expected: "string".into(),
                             found: "mismatched".into(),
                         }

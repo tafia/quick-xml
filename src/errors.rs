@@ -71,17 +71,36 @@ impl std::error::Error for SyntaxError {}
 /// [well-formed]: https://www.w3.org/TR/xml11/#dt-wellformed
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IllFormedError {
+    /// A `version` attribute was not found in an XML declaration or is not the
+    /// first attribute.
+    ///
+    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
+    /// a `version` attribute and it MUST be the first attribute. This error indicates,
+    /// that the declaration does not contain attributes at all (if contains `None`)
+    /// or either `version` attribute is not present or not the first attribute in
+    /// the declaration. In the last case it contains the name of the found attribute.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
+    MissingDeclVersion(Option<String>),
+    /// A document type definition (DTD) does not contain a name of a root element.
+    ///
+    /// According to the [specification], document type definition (`<!DOCTYPE foo>`)
+    /// MUST contain a name which defines a document type (`foo`). If that name
+    /// is missed, this error is returned.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
+    MissingDoctypeName,
     /// The end tag was not found during reading of a sub-tree of elements due to
     /// encountering an EOF from the underlying reader. This error is returned from
     /// [`Reader::read_to_end`].
     ///
     /// [`Reader::read_to_end`]: crate::reader::Reader::read_to_end
-    MissedEnd(String),
+    MissingEndTag(String),
     /// The specified end tag was encountered without corresponding open tag at the
     /// same level of hierarchy
-    UnmatchedEnd(String),
+    UnmatchedEndTag(String),
     /// The specified end tag does not match the start tag at that nesting level.
-    MismatchedEnd {
+    MismatchedEndTag {
         /// Name of open tag, that is expected to be closed
         expected: String,
         /// Name of actually closed tag
@@ -103,15 +122,25 @@ pub enum IllFormedError {
 impl fmt::Display for IllFormedError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::MissedEnd(tag) => write!(
+            Self::MissingDeclVersion(None) => {
+                write!(f, "an XML declaration does not contain `version` attribute")
+            }
+            Self::MissingDeclVersion(Some(attr)) => {
+                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
+            }
+            Self::MissingDoctypeName => write!(
+                f,
+                "`<!DOCTYPE>` declaration does not contain a name of a document type"
+            ),
+            Self::MissingEndTag(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",
                 tag,
             ),
-            Self::UnmatchedEnd(tag) => {
+            Self::UnmatchedEndTag(tag) => {
                 write!(f, "close tag `</{}>` does not match any open tag", tag)
             }
-            Self::MismatchedEnd { expected, found } => write!(
+            Self::MismatchedEndTag { expected, found } => write!(
                 f,
                 "expected `</{}>`, but `</{}>` was found",
                 expected, found,
@@ -143,25 +172,6 @@ pub enum Error {
     ///
     /// [`encoding`]: index.html#encoding
     NonDecodable(Option<Utf8Error>),
-    /// A `version` attribute was not found in an XML declaration or is not the
-    /// first attribute.
-    ///
-    /// According to the [specification], the XML declaration (`<?xml ?>`) MUST contain
-    /// a `version` attribute and it MUST be the first attribute. This error indicates,
-    /// that the declaration does not contain attributes at all (if contains `None`)
-    /// or either `version` attribute is not present or not the first attribute in
-    /// the declaration. In the last case it contains the name of the found attribute.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#sec-prolog-dtd
-    XmlDeclWithoutVersion(Option<String>),
-    /// A document type definition (DTD) does not contain a name of a root element.
-    ///
-    /// According to the [specification], document type definition (`<!doctype foo>`)
-    /// MUST contain a name which defines a document type. If that name is missed,
-    /// this error is returned.
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#NT-doctypedecl
-    EmptyDocType,
     /// Attribute parsing error
     InvalidAttr(AttrError),
     /// Escape error
@@ -189,7 +199,7 @@ pub enum Error {
 impl Error {
     pub(crate) fn missed_end(name: QName, decoder: Decoder) -> Self {
         match decoder.decode(name.as_ref()) {
-            Ok(name) => IllFormedError::MissedEnd(name.into()).into(),
+            Ok(name) => IllFormedError::MissingEndTag(name.into()).into(),
             Err(err) => err.into(),
         }
     }
@@ -261,16 +271,6 @@ impl fmt::Display for Error {
             Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::XmlDeclWithoutVersion(None) => {
-                write!(f, "an XML declaration does not contain `version` attribute")
-            }
-            Error::XmlDeclWithoutVersion(Some(attr)) => {
-                write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
-            }
-            Error::EmptyDocType => write!(
-                f,
-                "`<!DOCTYPE>` declaration does not contain a name of a document type"
-            ),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Error::EscapeError(e) => write!(f, "{}", e),
             Error::UnknownPrefix(prefix) => {

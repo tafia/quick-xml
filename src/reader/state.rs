@@ -89,11 +89,16 @@ impl ReaderState {
                 debug_assert!(buf.ends_with(b"--"));
                 if self.config.check_comments {
                     // search if '--' not in comments
-                    if let Some(p) = memchr::memchr_iter(b'-', &buf[3..len - 2])
-                        .position(|p| buf[3 + p + 1] == b'-')
-                    {
-                        self.offset += len - p;
-                        return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
+                    let mut haystack = &buf[3..len - 2];
+                    let mut off = 0;
+                    while let Some(p) = memchr::memchr(b'-', haystack) {
+                        off += p + 1;
+                        // if next byte after `-` is also `-`, return an error
+                        if buf[3 + off] == b'-' {
+                            self.offset -= len - 2 - p;
+                            return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
+                        }
+                        haystack = &haystack[p + 1..];
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
@@ -109,19 +114,27 @@ impl ReaderState {
                 )))
             }
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
-                let start = buf[8..]
-                    .iter()
-                    .position(|b| !is_whitespace(*b))
-                    .unwrap_or(len - 8);
-                if start + 8 >= len {
-                    return Err(Error::EmptyDocType);
+                match buf[8..].iter().position(|&b| !is_whitespace(b)) {
+                    Some(start) => Ok(Event::DocType(BytesText::wrap(
+                        &buf[8 + start..],
+                        self.decoder(),
+                    ))),
+                    None => {
+                        // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
+                        // We want report error at place where name is expected - this is just
+                        // before `>`
+                        self.offset -= 1;
+                        return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
+                    }
                 }
-                Ok(Event::DocType(BytesText::wrap(
-                    &buf[8 + start..],
-                    self.decoder(),
-                )))
             }
-            _ => Err(bang_type.to_err()),
+            _ => {
+                // <!....
+                //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+                //          so we move offset to it (+1 for `<`)
+                self.offset -= 1;
+                Err(bang_type.to_err())
+            }
         }
     }
 
@@ -157,7 +170,7 @@ impl ReaderState {
                         // Report error at start of the end tag at `<` character
                         // +2 for `<` and `>`
                         self.offset -= buf.len() + 2;
-                        return Err(Error::IllFormed(IllFormedError::MismatchedEnd {
+                        return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
                         }));
@@ -170,7 +183,7 @@ impl ReaderState {
                 // Report error at start of the end tag at `<` character
                 // +2 for `<` and `>`
                 self.offset -= buf.len() + 2;
-                return Err(Error::IllFormed(IllFormedError::UnmatchedEnd(
+                return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
             }
@@ -179,13 +192,23 @@ impl ReaderState {
         Ok(Event::End(BytesEnd::wrap(name.into())))
     }
 
-    /// reads `BytesElement` starting with a `?`,
-    /// return `Decl` or `PI` event
+    /// `buf` contains data between `<` and `>` and the first byte is `?`.
+    /// `self.offset` already after the `>`
+    ///
+    /// Returns `Decl` or `PI` event
     pub fn emit_question_mark<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        debug_assert!(buf.len() > 0);
+        debug_assert_eq!(buf[0], b'?');
+
         let len = buf.len();
-        if len > 2 && buf[len - 1] == b'?' {
-            if len > 5 && &buf[1..4] == b"xml" && is_whitespace(buf[4]) {
-                let event = BytesDecl::from_start(BytesStart::wrap(&buf[1..len - 1], 3));
+        // We accept at least <??>
+        //                     ~~ - len = 2
+        if len > 1 && buf[len - 1] == b'?' {
+            let content = &buf[1..len - 1];
+            let len = content.len();
+
+            if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
+                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -197,10 +220,13 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesText::wrap(&buf[1..len - 1], self.decoder())))
+                Ok(Event::PI(BytesText::wrap(content, self.decoder())))
             }
         } else {
-            self.offset -= len;
+            // <?....EOF
+            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+            //          so we move offset to it (+2 for `<`and `>`)
+            self.offset -= len + 2;
             Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }

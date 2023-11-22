@@ -330,7 +330,7 @@ mod check_end_names {
             match reader.read_event() {
                 Err(Error::IllFormed(cause)) => assert_eq!(
                     cause,
-                    IllFormedError::MismatchedEnd {
+                    IllFormedError::MismatchedEndTag {
                         expected: "tag".into(),
                         found: "mismatched".into(),
                     }
@@ -421,7 +421,7 @@ mod trim_markup_names_in_closing_tags {
             match reader.read_event() {
                 Err(Error::IllFormed(cause)) => assert_eq!(
                     cause,
-                    IllFormedError::MismatchedEnd {
+                    IllFormedError::MismatchedEndTag {
                         expected: "root".into(),
                         found: "root \t\r\n".into(),
                     }
