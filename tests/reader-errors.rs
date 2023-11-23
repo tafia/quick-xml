@@ -425,7 +425,8 @@ mod ill_formed {
 
                     #[test]
                     fn borrowed() {
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let xml = concat!($xml, "<x/>");
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -440,12 +441,18 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[test]
                     fn buffered() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -460,13 +467,19 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[cfg(feature = "async-tokio")]
                     #[tokio::test]
                     async fn async_tokio() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -481,6 +494,11 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
                 }
 
@@ -490,7 +508,8 @@ mod ill_formed {
 
                     #[test]
                     fn borrowed() {
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let xml = concat!($xml, "<x/>");
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -508,12 +527,18 @@ mod ill_formed {
                                 .1,
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[test]
                     fn buffered() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -531,13 +556,19 @@ mod ill_formed {
                                 .1,
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[cfg(feature = "async-tokio")]
                     #[tokio::test]
                     async fn async_tokio() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
@@ -555,6 +586,11 @@ mod ill_formed {
                                 )
                                 .1,
                             Event::Empty(BytesStart::new("x"))
+                        );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
                         );
                     }
                 }
@@ -574,7 +610,8 @@ mod ill_formed {
 
                     #[test]
                     fn borrowed() {
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let xml = concat!($xml, "<x/>");
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader.read_event().expect("first .read_event()");
                         match reader.read_event() {
@@ -590,12 +627,18 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[test]
                     fn buffered() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader
                             .read_event_into(&mut buf)
@@ -613,13 +656,19 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[cfg(feature = "async-tokio")]
                     #[tokio::test]
                     async fn async_tokio() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = Reader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader
                             .read_event_into_async(&mut buf)
@@ -638,6 +687,11 @@ mod ill_formed {
                             ),
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
                 }
 
@@ -647,7 +701,8 @@ mod ill_formed {
 
                     #[test]
                     fn borrowed() {
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let xml = concat!($xml, "<x/>");
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader.read_event().expect("first .read_resolved_event()");
                         match reader.read_resolved_event() {
@@ -666,12 +721,18 @@ mod ill_formed {
                                 .1,
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[test]
                     fn buffered() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader
                             .read_resolved_event_into(&mut buf)
@@ -692,13 +753,19 @@ mod ill_formed {
                                 .1,
                             Event::Empty(BytesStart::new("x"))
                         );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
+                        );
                     }
 
                     #[cfg(feature = "async-tokio")]
                     #[tokio::test]
                     async fn async_tokio() {
+                        let xml = concat!($xml, "<x/>");
                         let mut buf = Vec::new();
-                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
                         reader
                             .read_resolved_event_into_async(&mut buf)
@@ -720,6 +787,11 @@ mod ill_formed {
                                 )
                                 .1,
                             Event::Empty(BytesStart::new("x"))
+                        );
+                        assert_eq!(
+                            reader.buffer_position(),
+                            xml.len(),
+                            ".buffer_position() is incorrect in the end"
                         );
                     }
                 }
