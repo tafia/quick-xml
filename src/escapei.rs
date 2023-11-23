@@ -4,8 +4,17 @@ use memchr::memchr2_iter;
 use std::borrow::Cow;
 use std::ops::Range;
 
+use jetscii::bytes;
+use memchr;
+use once_cell::sync::Lazy;
+
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+
+
+static XML_ESCAPE_BYTES: Lazy<jetscii::BytesConst> =
+    Lazy::new(|| bytes!(b'<', b'>', b'&', b'\'', b'"'));
+static XML_PARTIAL_ESCAPE_BYTES: Lazy<jetscii::BytesConst> = Lazy::new(|| bytes!(b'<', b'>', b'&'));
 
 /// Error for XML escape / unescape.
 #[derive(Clone, Debug)]
@@ -72,7 +81,8 @@ impl std::error::Error for EscapeError {}
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
 pub fn escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
+    // _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
+    simd_escape(raw, &XML_ESCAPE_BYTES)
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
@@ -89,8 +99,10 @@ pub fn escape(raw: &str) -> Cow<str> {
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
 pub fn partial_escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
+    // _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
+    simd_escape(raw, &XML_PARTIAL_ESCAPE_BYTES)
 }
+
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
@@ -121,7 +133,47 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
             b'\r' => escaped.extend_from_slice(b"&#13;"),
             b' ' => escaped.extend_from_slice(b"&#32;"),
             _ => unreachable!(
-                "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"
+                "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"),
+        }
+        pos = new_pos + 1;
+    }
+
+    if let Some(mut escaped) = escaped {
+        if let Some(raw) = bytes.get(pos..) {
+            escaped.extend_from_slice(raw);
+        }
+        // SAFETY: we operate on UTF-8 input and search for an one byte chars only,
+        // so all slices that was put to the `escaped` is a valid UTF-8 encoded strings
+        // TODO: Can be replaced with `unsafe { String::from_utf8_unchecked() }`
+        // if unsafe code will be allowed
+        Cow::Owned(String::from_utf8(escaped).unwrap())
+    } else {
+        Cow::Borrowed(raw)
+    }
+}
+
+/// Escapes a `&[u8]` and replaces all xml special characters (<, >, &, ', ") with their
+/// corresponding xml escaped value.
+pub fn simd_escape<'a>(raw: &'a str, escape_matcher: &jetscii::BytesConst) -> Cow<'a, str> {
+    let bytes = raw.as_bytes();
+    let mut escaped = None;
+    let mut pos = 0;
+    while let Some(i) = escape_matcher.find(&bytes[pos..]) {
+        if escaped.is_none() {
+            escaped = Some(Vec::with_capacity(raw.len()));
+        }
+        let escaped = escaped.as_mut().expect("initialized");
+        let new_pos = pos + i;
+        escaped.extend_from_slice(&bytes[pos..new_pos]);
+        match bytes[new_pos] {
+            b'<' => escaped.extend_from_slice(b"&lt;"),
+            b'>' => escaped.extend_from_slice(b"&gt;"),
+            b'\'' => escaped.extend_from_slice(b"&apos;"),
+            b'&' => escaped.extend_from_slice(b"&amp;"),
+            b'"' => escaped.extend_from_slice(b"&quot;"),
+            c @ _ => unreachable!(
+                "Found {} but only '<', '>', ', '&' and '\"' are escaped",
+                c as char
             ),
         }
         pos = new_pos + 1;
