@@ -610,9 +610,9 @@ mod ill_formed {
     // IllFormedError::MissingDeclVersion is generated lazily when you call `BytesDecl::version()`
 
     err!(missing_doctype_name1("<!DOCTYPE>") => 9: IllFormedError::MissingDoctypeName);
-    //                                  ^= 9
+    //                                   ^= 9
     err!(missing_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissingDoctypeName);
-    //                                         ^= 13
+    //                                          ^= 13
     ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => Event::DocType(BytesText::new("x")));
 
     err!(unmatched_end_tag1("</>") => 0: IllFormedError::UnmatchedEndTag("".to_string()));
@@ -621,17 +621,17 @@ mod ill_formed {
 
     ok!(mismatched_end_tag1("<start></start>") => Event::Start(BytesStart::new("start")));
     err2!(mismatched_end_tag2("<start></>") => 7: IllFormedError::MismatchedEndTag {
-        //                        ^= 7
+        //                            ^= 7
         expected: "start".to_string(),
         found: "".to_string(),
     });
     err2!(mismatched_end_tag3("<start></end>") => 7: IllFormedError::MismatchedEndTag {
-        //                        ^= 7
+        //                            ^= 7
         expected: "start".to_string(),
         found: "end".to_string(),
     });
     err2!(mismatched_end_tag4("<start></end >") => 7: IllFormedError::MismatchedEndTag {
-        //                        ^= 7
+        //                            ^= 7
         expected: "start".to_string(),
         found: "end".to_string(),
     });
