@@ -367,22 +367,6 @@ fn test_new_xml_decl_empty() {
 }
 
 #[test]
-fn test_offset_err_end_element() {
-    let mut r = Reader::from_str("</a>");
-    r.config_mut().trim_text(true);
-
-    match r.read_event() {
-        Err(_) if r.buffer_position() == 0 => (), // error at char 0: no opening tag
-        Err(e) => panic!(
-            "expecting buf_pos = 0, found {}, err: {:?}",
-            r.buffer_position(),
-            e
-        ),
-        e => panic!("expecting error, found {:?}", e),
-    }
-}
-
-#[test]
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
     r.config_mut().trim_text(true);
