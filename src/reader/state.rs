@@ -17,6 +17,11 @@ use memchr;
 pub(super) struct ReaderState {
     /// Number of bytes read from the source of data since the reader was created
     pub offset: usize,
+    /// A snapshot of an `offset` of the last error returned. It can be less than
+    /// `offset`, because some errors conveniently report at earlier position,
+    /// and changing `offset` is not possible, because `Error::IllFormed` errors
+    /// are recoverable.
+    pub last_error_offset: usize,
     /// Defines how to process next byte
     pub state: ParseState,
     /// User-defined settings that affect parsing
@@ -95,7 +100,7 @@ impl ReaderState {
                         off += p + 1;
                         // if next byte after `-` is also `-`, return an error
                         if buf[3 + off] == b'-' {
-                            self.offset -= len - 2 - p;
+                            self.last_error_offset = self.offset - len + 2 + p;
                             return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
                         haystack = &haystack[p + 1..];
@@ -123,7 +128,7 @@ impl ReaderState {
                         // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
                         // We want report error at place where name is expected - this is just
                         // before `>`
-                        self.offset -= 1;
+                        self.last_error_offset = self.offset - 1;
                         return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
                     }
                 }
@@ -132,7 +137,7 @@ impl ReaderState {
                 // <!....>
                 //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
                 // ^------- We report error at that position, so we need to subtract 2 and buf len
-                self.offset -= len + 2;
+                self.last_error_offset = self.offset - len - 2;
                 Err(bang_type.to_err())
             }
         }
@@ -168,8 +173,8 @@ impl ReaderState {
                         self.opened_buffer.truncate(start);
 
                         // Report error at start of the end tag at `<` character
-                        // +2 for `<` and `>`
-                        self.offset -= buf.len() + 2;
+                        // -2 for `<` and `>`
+                        self.last_error_offset = self.offset - buf.len() - 2;
                         return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
@@ -181,8 +186,8 @@ impl ReaderState {
             }
             None => {
                 // Report error at start of the end tag at `<` character
-                // +2 for `<` and `>`
-                self.offset -= buf.len() + 2;
+                // -2 for `<` and `>`
+                self.last_error_offset = self.offset - buf.len() - 2;
                 return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
@@ -225,8 +230,8 @@ impl ReaderState {
         } else {
             // <?....EOF
             //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-            //          so we move offset to it (+2 for `<`and `>`)
-            self.offset -= len + 2;
+            //          so we move offset to it (-2 for `<` and `>`)
+            self.last_error_offset = self.offset - len - 2;
             Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }
@@ -294,6 +299,7 @@ impl Default for ReaderState {
     fn default() -> Self {
         Self {
             offset: 0,
+            last_error_offset: 0,
             state: ParseState::Init,
             config: Config::default(),
             opened_buffer: Vec::new(),

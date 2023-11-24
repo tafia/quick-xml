@@ -14,6 +14,10 @@ The way to configure parser is changed. Now all configuration is contained in th
 `Config` struct and can be applied at once. When `serde-types` feature is enabled,
 configuration is serializable.
 
+The method of reporting positions of errors has changed - use `error_position()`
+to get an offset of the error position. For `SyntaxError`s the range
+`error_position()..buffer_position()` also will represent a span of error.
+
 ### New Features
 
 - [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
@@ -46,11 +50,14 @@ configuration is serializable.
   - `Error::XmlDeclWithoutVersion` replaced by `IllFormedError::MissingDeclVersion` (in [#684])
   - `Error::EmptyDocType` replaced by `IllFormedError::MissingDoctypeName` (in [#684])
 - [#684]: Changed positions reported for `SyntaxError`s: now they are always points
-  to the start of markup (i. e. to the `<` character) with error.
+  to the start of markup (i. e. to the `<` character) with error. Use `error_position()`
+  for that.
 - [#684]: Now `<??>` parsed as `Event::PI` with empty content instead of raising
   syntax error.
 - [#684]: Now `<?xml?>` parsed as `Event::Decl` instead of `Event::PI`.
 - [#362]: Now default quote level is `QuoteLevel::Partial` when using serde serializer.
+- [#689]: `buffer_position()` now always report the position the parser last seen.
+  To get an error position use `error_position()`.
 
 [#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
@@ -58,6 +65,7 @@ configuration is serializable.
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
 [#684]: https://github.com/tafia/quick-xml/pull/684
+[#689]: https://github.com/tafia/quick-xml/pull/689
 
 
 ## 0.31.0 -- 2023-10-22

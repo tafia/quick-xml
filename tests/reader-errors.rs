@@ -84,7 +84,7 @@ mod syntax {
     use super::*;
 
     macro_rules! err {
-        ($test:ident($xml:literal) => $cause:expr) => {
+        ($test:ident($xml:literal) => $pos:expr, $cause:expr) => {
             mod $test {
                 use super::*;
 
@@ -97,8 +97,8 @@ mod syntax {
                         let mut reader = Reader::from_str($xml);
                         match reader.read_event() {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -116,8 +116,8 @@ mod syntax {
                         let mut reader = Reader::from_str($xml);
                         match reader.read_event_into(&mut buf) {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -136,8 +136,8 @@ mod syntax {
                         let mut reader = Reader::from_str($xml);
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -160,8 +160,8 @@ mod syntax {
                         let mut reader = NsReader::from_str($xml);
                         match reader.read_resolved_event() {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -180,8 +180,8 @@ mod syntax {
                         let mut reader = NsReader::from_str($xml);
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -201,8 +201,8 @@ mod syntax {
                         let mut reader = NsReader::from_str($xml);
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::Syntax(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, 0),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, 0, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -217,6 +217,9 @@ mod syntax {
                     }
                 }
             }
+        };
+        ($test:ident($xml:literal) => $cause:expr) => {
+            err!($test($xml) => $xml.len(), $cause);
         };
     }
 
@@ -279,10 +282,11 @@ mod syntax {
         }
     }
 
-    err!(unclosed_bang1("<!")   => SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang2("<!>")  => SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang3("<!a")  => SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang4("<!a>") => SyntaxError::InvalidBangMarkup);
+    // Incorrect after-bang symbol is detected early, so buffer_position() stay at `!`
+    err!(unclosed_bang1("<!")   => 1, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang2("<!>")  => 1, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang3("<!a")  => 1, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang4("<!a>") => 1, SyntaxError::InvalidBangMarkup);
 
     /// https://www.w3.org/TR/xml11/#NT-Comment
     mod comment {
@@ -430,8 +434,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -456,8 +460,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -483,8 +487,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -513,8 +517,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -542,8 +546,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -572,8 +576,8 @@ mod ill_formed {
                         reader.config_mut().enable_all_checks(true);
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -616,8 +620,8 @@ mod ill_formed {
                         reader.read_event().expect("first .read_event()");
                         match reader.read_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -645,8 +649,8 @@ mod ill_formed {
                             .expect("first .read_event_into()");
                         match reader.read_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -676,8 +680,8 @@ mod ill_formed {
                             .expect("first .read_event_into_async()");
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -707,8 +711,8 @@ mod ill_formed {
                         reader.read_event().expect("first .read_resolved_event()");
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -739,8 +743,8 @@ mod ill_formed {
                             .expect("first .read_resolved_event_into()");
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -773,8 +777,8 @@ mod ill_formed {
                             .expect("first .read_resolved_event_into_async()");
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
-                                (cause, reader.buffer_position()),
-                                ($cause, $pos),
+                                (cause, reader.error_position(), reader.buffer_position()),
+                                ($cause, $pos, $xml.len()),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
