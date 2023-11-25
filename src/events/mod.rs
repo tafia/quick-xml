@@ -46,7 +46,7 @@ use std::str::from_utf8;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result};
-use crate::escape::{escape, partial_escape, unescape_with};
+use crate::escape::{escape, minimal_escape, partial_escape, unescape_with};
 use crate::name::{LocalName, QName};
 use crate::reader::is_whitespace;
 use crate::utils::write_cow_string;
@@ -905,6 +905,30 @@ impl<'a> BytesCData<'a> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match partial_escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML. This method escapes only those characters that
+    /// must be escaped according to the [specification].
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `&`       | `&amp;`
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#syntax
+    pub fn minimal_escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
+        Ok(BytesText::wrap(
+            match minimal_escape(&decoded) {
                 // Because result is borrowed, no replacements was done and we can use original content
                 Cow::Borrowed(_) => self.content,
                 Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),

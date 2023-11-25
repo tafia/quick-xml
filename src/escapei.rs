@@ -71,6 +71,16 @@ impl std::error::Error for EscapeError {}
 /// | `&`       | `&amp;`
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `>`       | `&gt;`
+/// | `&`       | `&amp;`
+/// | `'`       | `&apos;`
+/// | `"`       | `&quot;`
 pub fn escape(raw: &str) -> Cow<str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
 }
@@ -88,8 +98,33 @@ pub fn escape(raw: &str) -> Cow<str> {
 /// | `<`       | `&lt;`
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `>`       | `&gt;`
+/// | `&`       | `&amp;`
 pub fn partial_escape(raw: &str) -> Cow<str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
+}
+
+/// XML standard [requires] that only `<` and `&` was escaped in text content or
+/// attribute value. All other characters not necessary to be escaped, although
+/// for compatibility with SGML they also should be escaped. Practically, escaping
+/// only those characters is enough.
+///
+/// This function performs following replacements:
+///
+/// | Character | Replacement
+/// |-----------|------------
+/// | `<`       | `&lt;`
+/// | `&`       | `&amp;`
+///
+/// [requires]: https://www.w3.org/TR/xml11/#syntax
+pub fn minimal_escape(raw: &str) -> Cow<str> {
+    _escape(raw, |ch| matches!(ch, b'<' | b'&'))
 }
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
@@ -1788,6 +1823,7 @@ fn test_escape() {
     assert_eq!(unchanged, Cow::Borrowed("test"));
     assert!(matches!(unchanged, Cow::Borrowed(_)));
 
+    assert_eq!(escape("<&\"'>"), "&lt;&amp;&quot;&apos;&gt;");
     assert_eq!(escape("<test>"), "&lt;test&gt;");
     assert_eq!(escape("\"a\"bc"), "&quot;a&quot;bc");
     assert_eq!(escape("\"a\"b&c"), "&quot;a&quot;b&amp;c");
@@ -1806,11 +1842,25 @@ fn test_partial_escape() {
     assert_eq!(unchanged, Cow::Borrowed("test"));
     assert!(matches!(unchanged, Cow::Borrowed(_)));
 
+    assert_eq!(partial_escape("<&\"'>"), "&lt;&amp;\"'&gt;");
     assert_eq!(partial_escape("<test>"), "&lt;test&gt;");
     assert_eq!(partial_escape("\"a\"bc"), "\"a\"bc");
     assert_eq!(partial_escape("\"a\"b&c"), "\"a\"b&amp;c");
     assert_eq!(
         partial_escape("prefix_\"a\"b&<>c"),
         "prefix_\"a\"b&amp;&lt;&gt;c"
+    );
+}
+
+#[test]
+fn test_minimal_escape() {
+    assert_eq!(minimal_escape("test"), Cow::Borrowed("test"));
+    assert_eq!(minimal_escape("<&\"'>"), "&lt;&amp;\"'>");
+    assert_eq!(minimal_escape("<test>"), "&lt;test>");
+    assert_eq!(minimal_escape("\"a\"bc"), "\"a\"bc");
+    assert_eq!(minimal_escape("\"a\"b&c"), "\"a\"b&amp;c");
+    assert_eq!(
+        minimal_escape("prefix_\"a\"b&<>c"),
+        "prefix_\"a\"b&amp;&lt;>c"
     );
 }
