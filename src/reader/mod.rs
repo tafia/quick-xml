@@ -449,7 +449,7 @@ pub type Span = Range<usize>;
 ///   Empty     -- End                   --> ClosedTag
 ///   _ -. Eof .-> Exit
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
     /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next
@@ -490,7 +490,7 @@ enum ParseState {
 ///   BomDetected -- "encoding=..." --> XmlDetected
 /// ```
 #[cfg(feature = "encoding")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum EncodingRef {
     /// Encoding was implicitly assumed to have a specified value. It can be refined
     /// using BOM or by the XML declaration event (`<?xml encoding=... ?>`)

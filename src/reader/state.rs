@@ -13,7 +13,7 @@ use memchr;
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct ReaderState {
     /// Number of bytes read from the source of data since the reader was created
     pub offset: usize,
