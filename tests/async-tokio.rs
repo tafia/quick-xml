@@ -95,8 +95,11 @@ async fn test_cancel_future() {
             let result = timeout_fut.await;
 
             match result {
-                Ok(msg) => {/* do something with msg */},
-                Err(_) => {return;} // timed out
+                Ok(_msg) => { /* do something with msg */ }
+                Err(_) => {
+                    // timed out
+                    return;
+                }
             };
         }
     }
@@ -111,5 +114,5 @@ async fn test_cancel_future() {
     reader.get_mut().get_mut().next_message_ready = true;
 
     // try to read a message again
-    let message = read_message(&mut reader).await;
+    let _ = read_message(&mut reader).await;
 }
