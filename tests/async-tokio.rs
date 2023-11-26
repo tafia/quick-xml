@@ -61,8 +61,14 @@ async fn test_cancel_future() {
     let reader = tokio::io::BufReader::new(source);
     let mut reader = Reader::from_reader(reader);
 
-    for _ in 0..3 {
-        for _ in 0..3 {
+    // async function to read the next message from the reader
+    // this function continually reads from the reader, until a read
+    // times out, at which it returns
+    async fn read_message<T>(reader: &mut Reader<T>)
+    where
+        T: tokio::io::AsyncBufRead + Unpin,
+    {
+        loop {
             let fut = async {
                 // read start event
                 let mut buf = Vec::new();
@@ -77,20 +83,33 @@ async fn test_cancel_future() {
                     .read_to_end_into_async(start_event.name(), &mut buf)
                     .await
                     .unwrap();
+
+                // we have read a complete message. if this wasn't a test,
+                // we would have stored it and returned it here
+                "a message!".to_string()
             };
 
-            // read the data. if it takes more than 1ms, assume we have read all
+            // read the data. if it takes more than 100ms, assume we have read all
             // the data for now and cancel the future.
-            let timeout_fut = tokio::time::timeout(Duration::from_millis(1), fut);
-            if timeout_fut.await.is_err() {
-                break;
-            }
+            let timeout_fut = tokio::time::timeout(Duration::from_millis(100), fut);
+            let result = timeout_fut.await;
+
+            match result {
+                Ok(msg) => {/* do something with msg */},
+                Err(_) => {return;} // timed out
+            };
         }
-
-        // ...do something to cause a new message to arrive, e.g. send a request
-        // to the server
-
-        // some new message has arrived on the wire
-        reader.get_mut().get_mut().next_message_ready = true;
     }
+
+    // try to read a message
+    let _ = read_message(&mut reader).await;
+
+    // ...do something to cause a new message to arrive, e.g. send a request
+    // to the server
+
+    // some new message has arrived on the wire
+    reader.get_mut().get_mut().next_message_ready = true;
+
+    // try to read a message again
+    let message = read_message(&mut reader).await;
 }
