@@ -8,52 +8,73 @@ macro_rules! ok {
     ($test:ident($xml:literal) => $event:expr) => {
         mod $test {
             use super::*;
-            use pretty_assertions::assert_eq;
 
-            #[test]
-            fn borrowed() {
-                let mut reader = Reader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(reader.read_event().unwrap(), $event);
+            mod reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
 
-                let mut reader = NsReader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(reader.read_resolved_event().unwrap().1, $event);
+                #[test]
+                fn borrowed() {
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(reader.read_event().unwrap(), $event);
+                }
+
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(reader.read_event_into(&mut buf).unwrap(), $event);
+                }
+
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = Reader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        reader.read_event_into_async(&mut buf).await.unwrap(),
+                        $event
+                    );
+                }
             }
 
-            #[test]
-            fn buffered() {
-                let mut buf = Vec::new();
-                let mut reader = Reader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(reader.read_event_into(&mut buf).unwrap(), $event);
+            mod ns_reader {
+                use super::*;
+                use pretty_assertions::assert_eq;
 
-                let mut reader = NsReader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(reader.read_resolved_event_into(&mut buf).unwrap().1, $event);
-            }
+                #[test]
+                fn borrowed() {
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(reader.read_resolved_event().unwrap().1, $event);
+                }
 
-            #[cfg(feature = "async-tokio")]
-            #[tokio::test]
-            async fn async_tokio() {
-                let mut buf = Vec::new();
-                let mut reader = Reader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(
-                    reader.read_event_into_async(&mut buf).await.unwrap(),
-                    $event
-                );
+                #[test]
+                fn buffered() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(reader.read_resolved_event_into(&mut buf).unwrap().1, $event);
+                }
 
-                let mut reader = NsReader::from_str($xml);
-                reader.config_mut().enable_all_checks(true);
-                assert_eq!(
-                    reader
-                        .read_resolved_event_into_async(&mut buf)
-                        .await
-                        .unwrap()
-                        .1,
-                    $event
-                );
+                #[cfg(feature = "async-tokio")]
+                #[tokio::test]
+                async fn async_tokio() {
+                    let mut buf = Vec::new();
+                    let mut reader = NsReader::from_str($xml);
+                    reader.config_mut().enable_all_checks(true);
+                    assert_eq!(
+                        reader
+                            .read_resolved_event_into_async(&mut buf)
+                            .await
+                            .unwrap()
+                            .1,
+                        $event
+                    );
+                }
             }
         }
     };
@@ -66,113 +87,134 @@ mod syntax {
         ($test:ident($xml:literal) => $cause:expr) => {
             mod $test {
                 use super::*;
-                use pretty_assertions::assert_eq;
 
-                #[test]
-                fn borrowed() {
-                    let mut reader = Reader::from_str($xml);
-                    match reader.read_event() {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader
-                            .read_event()
-                            .expect("parser should return `Event::Eof` after error"),
-                        Event::Eof
-                    );
+                mod reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str($xml);
-                    match reader.read_resolved_event() {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = Reader::from_str($xml);
+                        match reader.read_event() {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_event()
+                                .expect("parser should return `Event::Eof` after error"),
+                            Event::Eof
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event()
-                            .expect("parser should return `Event::Eof` after error")
-                            .1,
-                        Event::Eof
-                    );
+
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str($xml);
+                        match reader.read_event_into(&mut buf) {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_event_into(&mut buf)
+                                .expect("parser should return `Event::Eof` after error"),
+                            Event::Eof
+                        );
+                    }
+
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str($xml);
+                        match reader.read_event_into_async(&mut buf).await {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_event_into_async(&mut buf)
+                                .await
+                                .expect("parser should return `Event::Eof` after error"),
+                            Event::Eof
+                        );
+                    }
                 }
 
-                #[test]
-                fn buffered() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str($xml);
-                    match reader.read_event_into(&mut buf) {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader
-                            .read_event_into(&mut buf)
-                            .expect("parser should return `Event::Eof` after error"),
-                        Event::Eof
-                    );
+                mod ns_reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str($xml);
-                    match reader.read_resolved_event_into(&mut buf) {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = NsReader::from_str($xml);
+                        match reader.read_resolved_event() {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event()
+                                .expect("parser should return `Event::Eof` after error")
+                                .1,
+                            Event::Eof
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event_into(&mut buf)
-                            .expect("parser should return `Event::Eof` after error")
-                            .1,
-                        Event::Eof
-                    );
-                }
 
-                #[cfg(feature = "async-tokio")]
-                #[tokio::test]
-                async fn async_tokio() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str($xml);
-                    match reader.read_event_into_async(&mut buf).await {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str($xml);
+                        match reader.read_resolved_event_into(&mut buf) {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into(&mut buf)
+                                .expect("parser should return `Event::Eof` after error")
+                                .1,
+                            Event::Eof
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_event_into_async(&mut buf)
-                            .await
-                            .expect("parser should return `Event::Eof` after error"),
-                        Event::Eof
-                    );
 
-                    let mut reader = NsReader::from_str($xml);
-                    match reader.read_resolved_event_into_async(&mut buf).await {
-                        Err(Error::Syntax(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, 0),
-                        ),
-                        x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str($xml);
+                        match reader.read_resolved_event_into_async(&mut buf).await {
+                            Err(Error::Syntax(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, 0),
+                            ),
+                            x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into_async(&mut buf)
+                                .await
+                                .expect("parser should return `Event::Eof` after error")
+                                .1,
+                            Event::Eof
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event_into_async(&mut buf)
-                            .await
-                            .expect("parser should return `Event::Eof` after error")
-                            .1,
-                        Event::Eof
-                    );
                 }
             }
         };
@@ -340,124 +382,145 @@ mod ill_formed {
         ($test:ident($xml:literal) => $pos:literal : $cause:expr) => {
             mod $test {
                 use super::*;
-                use pretty_assertions::assert_eq;
 
-                #[test]
-                fn borrowed() {
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_event() {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader.read_event().expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                mod reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_resolved_event() {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event()
-                            .expect(
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_event() {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event().expect(
                                 "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
+
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_event_into(&mut buf) {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event_into(&mut buf).expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
+
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_event_into_async(&mut buf).await {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event_into_async(&mut buf).await.expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
                 }
 
-                #[test]
-                fn buffered() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_event_into(&mut buf) {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader.read_event_into(&mut buf).expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                mod ns_reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_resolved_event_into(&mut buf) {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_resolved_event() {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event()
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event_into(&mut buf)
-                            .expect(
-                                "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
-                }
 
-                #[cfg(feature = "async-tokio")]
-                #[tokio::test]
-                async fn async_tokio() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_event_into_async(&mut buf).await {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_resolved_event_into(&mut buf) {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into(&mut buf)
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
                     }
-                    assert_eq!(
-                        reader.read_event_into_async(&mut buf).await.expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    match reader.read_resolved_event_into_async(&mut buf).await {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        match reader.read_resolved_event_into_async(&mut buf).await {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into_async(&mut buf)
+                                .await
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
                     }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event_into_async(&mut buf)
-                            .await
-                            .expect(
-                                "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
                 }
             }
         };
@@ -468,140 +531,161 @@ mod ill_formed {
         ($test:ident($xml:literal) => $pos:literal : $cause:expr) => {
             mod $test {
                 use super::*;
-                use pretty_assertions::assert_eq;
 
-                #[test]
-                fn borrowed() {
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader.read_event().expect("first .read_event()");
-                    match reader.read_event() {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader.read_event().expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                mod reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader.read_event().expect("first .read_resolved_event()");
-                    match reader.read_resolved_event() {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader
-                            .read_resolved_event()
-                            .expect(
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        reader.read_event().expect("first .read_event()");
+                        match reader.read_event() {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event().expect(
                                 "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
+
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        reader
+                            .read_event_into(&mut buf)
+                            .expect("first .read_event_into()");
+                        match reader.read_event_into(&mut buf) {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event_into(&mut buf).expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
+
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = Reader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        reader
+                            .read_event_into_async(&mut buf)
+                            .await
+                            .expect("first .read_event_into_async()");
+                        match reader.read_event_into_async(&mut buf).await {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader.read_event_into_async(&mut buf).await.expect(
+                                "parsing should be possible to continue after `Error::IllFormed`"
+                            ),
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
                 }
 
-                #[test]
-                fn buffered() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader
-                        .read_event_into(&mut buf)
-                        .expect("first .read_event_into()");
-                    match reader.read_event_into(&mut buf) {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
-                        reader.read_event_into(&mut buf).expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                mod ns_reader {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader
-                        .read_resolved_event_into(&mut buf)
-                        .expect("first .read_resolved_event_into()");
-                    match reader.read_resolved_event_into(&mut buf) {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                    #[test]
+                    fn borrowed() {
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
+                        reader.read_event().expect("first .read_resolved_event()");
+                        match reader.read_resolved_event() {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event()
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
                     }
-                    assert_eq!(
+
+                    #[test]
+                    fn buffered() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
                         reader
                             .read_resolved_event_into(&mut buf)
-                            .expect(
-                                "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
-                }
-
-                #[cfg(feature = "async-tokio")]
-                #[tokio::test]
-                async fn async_tokio() {
-                    let mut buf = Vec::new();
-                    let mut reader = Reader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader
-                        .read_event_into_async(&mut buf)
-                        .await
-                        .expect("first .read_event_into_async()");
-                    match reader.read_event_into_async(&mut buf).await {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                            .expect("first .read_resolved_event_into()");
+                        match reader.read_resolved_event_into(&mut buf) {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into(&mut buf)
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
                     }
-                    assert_eq!(
-                        reader.read_event_into_async(&mut buf).await.expect(
-                            "parsing should be possible to continue after `Error::IllFormed`"
-                        ),
-                        Event::Empty(BytesStart::new("x"))
-                    );
 
-                    let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
-                    reader.config_mut().enable_all_checks(true);
-                    reader
-                        .read_resolved_event_into_async(&mut buf)
-                        .await
-                        .expect("first .read_resolved_event_into_async()");
-                    match reader.read_resolved_event_into_async(&mut buf).await {
-                        Err(Error::IllFormed(cause)) => assert_eq!(
-                            (cause, reader.buffer_position()),
-                            ($cause, $pos),
-                        ),
-                        x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
-                    }
-                    assert_eq!(
+                    #[cfg(feature = "async-tokio")]
+                    #[tokio::test]
+                    async fn async_tokio() {
+                        let mut buf = Vec::new();
+                        let mut reader = NsReader::from_str(concat!($xml, "<x/>"));
+                        reader.config_mut().enable_all_checks(true);
                         reader
                             .read_resolved_event_into_async(&mut buf)
                             .await
-                            .expect(
-                                "parsing should be possible to continue after `Error::IllFormed`"
-                            )
-                            .1,
-                        Event::Empty(BytesStart::new("x"))
-                    );
+                            .expect("first .read_resolved_event_into_async()");
+                        match reader.read_resolved_event_into_async(&mut buf).await {
+                            Err(Error::IllFormed(cause)) => assert_eq!(
+                                (cause, reader.buffer_position()),
+                                ($cause, $pos),
+                            ),
+                            x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
+                        }
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into_async(&mut buf)
+                                .await
+                                .expect(
+                                    "parsing should be possible to continue after `Error::IllFormed`"
+                                )
+                                .1,
+                            Event::Empty(BytesStart::new("x"))
+                        );
+                    }
                 }
             }
         };
