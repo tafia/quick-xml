@@ -230,6 +230,7 @@ mod syntax {
         err!(unclosed5("<\t") => SyntaxError::UnclosedTag);
         err!(unclosed6("<\r") => SyntaxError::UnclosedTag);
         err!(unclosed7("<\n") => SyntaxError::UnclosedTag);
+        err!(unclosed8("< \t\r\nx") => SyntaxError::UnclosedTag);
 
         /// Closed tags can be tested only in pair with open tags, because otherwise
         /// `IllFormedError::UnmatchedEndTag` will be raised
@@ -278,20 +279,25 @@ mod syntax {
         }
     }
 
-    err!(unclosed_bang1("<!")  => SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang2("<!>") => SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang1("<!")   => SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang2("<!>")  => SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang3("<!a")  => SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang4("<!a>") => SyntaxError::InvalidBangMarkup);
 
     /// https://www.w3.org/TR/xml11/#NT-Comment
     mod comment {
         use super::*;
 
-        err!(unclosed1("<!-")    => SyntaxError::UnclosedComment);
-        err!(unclosed2("<!--")   => SyntaxError::UnclosedComment);
-        err!(unclosed3("<!->")   => SyntaxError::UnclosedComment);
-        err!(unclosed4("<!---")  => SyntaxError::UnclosedComment);
-        err!(unclosed5("<!-->")  => SyntaxError::UnclosedComment);
-        err!(unclosed6("<!----") => SyntaxError::UnclosedComment);
-        err!(unclosed7("<!--->") => SyntaxError::UnclosedComment);
+        err!(unclosed01("<!-")    => SyntaxError::UnclosedComment);
+        err!(unclosed02("<!--")   => SyntaxError::UnclosedComment);
+        err!(unclosed03("<!->")   => SyntaxError::UnclosedComment);
+        err!(unclosed04("<!-a")   => SyntaxError::UnclosedComment);
+        err!(unclosed05("<!---")  => SyntaxError::UnclosedComment);
+        err!(unclosed06("<!-->")  => SyntaxError::UnclosedComment);
+        err!(unclosed07("<!--b")  => SyntaxError::UnclosedComment);
+        err!(unclosed08("<!----") => SyntaxError::UnclosedComment);
+        err!(unclosed09("<!--->") => SyntaxError::UnclosedComment);
+        err!(unclosed10("<!---c") => SyntaxError::UnclosedComment);
 
         ok!(normal("<!---->") => Event::Comment(BytesText::new("")));
     }
@@ -300,15 +306,31 @@ mod syntax {
     mod cdata {
         use super::*;
 
-        err!(unclosed1("<![")         => SyntaxError::UnclosedCData);
-        err!(unclosed2("<![C")        => SyntaxError::UnclosedCData);
-        err!(unclosed3("<![CD")       => SyntaxError::UnclosedCData);
-        err!(unclosed4("<![CDA")      => SyntaxError::UnclosedCData);
-        err!(unclosed5("<![CDAT")     => SyntaxError::UnclosedCData);
-        err!(unclosed6("<![CDATA")    => SyntaxError::UnclosedCData);
-        err!(unclosed7("<![CDATA[")   => SyntaxError::UnclosedCData);
-        err!(unclosed8("<![CDATA[]")  => SyntaxError::UnclosedCData);
-        err!(unclosed9("<![CDATA[]]") => SyntaxError::UnclosedCData);
+        err!(unclosed01("<![")         => SyntaxError::UnclosedCData);
+        err!(unclosed02("<![C")        => SyntaxError::UnclosedCData);
+        err!(unclosed03("<![a")        => SyntaxError::UnclosedCData);
+        err!(unclosed04("<![>")        => SyntaxError::UnclosedCData);
+        err!(unclosed05("<![CD")       => SyntaxError::UnclosedCData);
+        err!(unclosed06("<![Cb")       => SyntaxError::UnclosedCData);
+        err!(unclosed07("<![C>")       => SyntaxError::UnclosedCData);
+        err!(unclosed08("<![CDA")      => SyntaxError::UnclosedCData);
+        err!(unclosed09("<![CDc")      => SyntaxError::UnclosedCData);
+        err!(unclosed10("<![CD>")      => SyntaxError::UnclosedCData);
+        err!(unclosed11("<![CDAT")     => SyntaxError::UnclosedCData);
+        err!(unclosed12("<![CDAd")     => SyntaxError::UnclosedCData);
+        err!(unclosed13("<![CDA>")     => SyntaxError::UnclosedCData);
+        err!(unclosed14("<![CDATA")    => SyntaxError::UnclosedCData);
+        err!(unclosed15("<![CDATe")    => SyntaxError::UnclosedCData);
+        err!(unclosed16("<![CDAT>")    => SyntaxError::UnclosedCData);
+        err!(unclosed17("<![CDATA[")   => SyntaxError::UnclosedCData);
+        err!(unclosed18("<![CDATAf")   => SyntaxError::UnclosedCData);
+        err!(unclosed19("<![CDATA>")   => SyntaxError::UnclosedCData);
+        err!(unclosed20("<![CDATA[]")  => SyntaxError::UnclosedCData);
+        err!(unclosed21("<![CDATA[g")  => SyntaxError::UnclosedCData);
+        err!(unclosed22("<![CDATA[>")  => SyntaxError::UnclosedCData);
+        err!(unclosed23("<![CDATA[]]") => SyntaxError::UnclosedCData);
+        err!(unclosed24("<![CDATA[]h") => SyntaxError::UnclosedCData);
+        err!(unclosed25("<![CDATA[]>") => SyntaxError::UnclosedCData);
 
         ok!(normal("<![CDATA[]]>") => Event::CData(BytesCData::new("")));
     }
@@ -319,15 +341,29 @@ mod syntax {
     mod doctype {
         use super::*;
 
-        err!(unclosed1("<!D")         => SyntaxError::UnclosedDoctype);
-        err!(unclosed2("<!DO")        => SyntaxError::UnclosedDoctype);
-        err!(unclosed3("<!DOC")       => SyntaxError::UnclosedDoctype);
-        err!(unclosed4("<!DOCT")      => SyntaxError::UnclosedDoctype);
-        err!(unclosed5("<!DOCTY")     => SyntaxError::UnclosedDoctype);
-        err!(unclosed6("<!DOCTYP")    => SyntaxError::UnclosedDoctype);
-        err!(unclosed7("<!DOCTYPE")   => SyntaxError::UnclosedDoctype);
-        err!(unclosed8("<!DOCTYPE ")  => SyntaxError::UnclosedDoctype);
-        err!(unclosed9("<!DOCTYPE e") => SyntaxError::UnclosedDoctype);
+        err!(unclosed01("<!D")         => SyntaxError::UnclosedDoctype);
+        err!(unclosed02("<!DO")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed03("<!Da")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed04("<!D>")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed05("<!DOC")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed06("<!DOb")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed07("<!DO>")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed08("<!DOCT")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed09("<!DOCc")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed10("<!DOC>")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed11("<!DOCTY")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed12("<!DOCTd")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed13("<!DOCT>")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed14("<!DOCTYP")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed15("<!DOCTYe")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed16("<!DOCTY>")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed17("<!DOCTYPE")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed18("<!DOCTYPf")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed19("<!DOCTYP>")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed20("<!DOCTYPE ")  => SyntaxError::UnclosedDoctype);
+        err!(unclosed21("<!DOCTYPEg")  => SyntaxError::UnclosedDoctype);
+        // <!DOCTYPE> results in IllFormed(MissingDoctypeName), checked below
+        err!(unclosed22("<!DOCTYPE e") => SyntaxError::UnclosedDoctype);
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and an element name, but we do not consider this as a _syntax_ error.
