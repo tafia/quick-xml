@@ -129,10 +129,10 @@ impl ReaderState {
                 }
             }
             _ => {
-                // <!....
-                //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                //          so we move offset to it (+1 for `<`)
-                self.offset -= 1;
+                // <!....>
+                //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
+                // ^------- We report error at that position, so we need to subtract 2 and buf len
+                self.offset -= len + 2;
                 Err(bang_type.to_err())
             }
         }
