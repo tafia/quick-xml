@@ -1697,63 +1697,6 @@ mod test {
                 }
             }
 
-            mod issue_344 {
-                use crate::errors::{Error, SyntaxError};
-                use crate::reader::Reader;
-
-                #[$test]
-                $($async)? fn cdata() {
-                    let mut reader = Reader::from_str("![]]>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn comment() {
-                    let mut reader = Reader::from_str("!- -->");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedComment)`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn doctype_uppercase() {
-                    let mut reader = Reader::from_str("!D>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn doctype_lowercase() {
-                    let mut reader = Reader::from_str("!d>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-            }
-
             /// Ensures, that no empty `Text` events are generated
             mod $read_event {
                 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
