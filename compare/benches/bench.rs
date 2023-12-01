@@ -54,7 +54,27 @@ fn low_level_comparison(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(data.len() as u64));
         group.bench_with_input(
-            BenchmarkId::new("quick_xml", filename),
+            BenchmarkId::new("quick_xml:borrowed", filename),
+            *data,
+            |b, input| {
+                b.iter(|| {
+                    let mut reader = Reader::from_str(input);
+                    reader.config_mut().check_end_names = false;
+                    let mut count = criterion::black_box(0);
+                    loop {
+                        match reader.read_event() {
+                            Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
+                            Ok(Event::Eof) => break,
+                            _ => (),
+                        }
+                    }
+                    assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("quick_xml:buffered", filename),
             *data,
             |b, input| {
                 b.iter(|| {
