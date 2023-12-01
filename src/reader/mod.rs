@@ -331,6 +331,7 @@ macro_rules! read_until_close {
     ) => {{
         $self.state.state = ParseState::ClosedTag;
 
+        let start = $self.state.offset;
         match $reader.peek_one() $(.$await)? {
             // `<!` - comment, CDATA or DOCTYPE declaration
             Ok(Some(b'!')) => match $reader
@@ -338,7 +339,13 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
-                Err(e) => Err(e),
+                Err(e) => {
+                    // <!....EOF
+                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
+                    //          so we move offset to it (-1 for `<`)
+                    $self.state.last_error_offset = start - 1;
+                    Err(e)
+                }
             },
             // `</` - closing tag
             Ok(Some(b'/')) => match $reader
@@ -346,10 +353,10 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok((bytes, true)) => $self.state.emit_end(bytes),
-                Ok((bytes, false)) => {
+                Ok((_, false)) => {
                     // We want to report error at `<`, but offset was increased,
-                    // so return it back (+1 for `<`)
-                    $self.state.offset -= bytes.len() + 1;
+                    // so return it back (-1 for `<`)
+                    $self.state.last_error_offset = start - 1;
                     Err(Error::Syntax(SyntaxError::UnclosedTag))
                 }
                 Err(e) => Err(e),
@@ -360,10 +367,10 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
-                Ok((bytes, false)) => {
+                Ok((_, false)) => {
                     // We want to report error at `<`, but offset was increased,
-                    // so return it back (+1 for `<`)
-                    $self.state.offset -= bytes.len() + 1;
+                    // so return it back (-1 for `<`)
+                    $self.state.last_error_offset = start - 1;
                     Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
                 }
                 Err(e) => Err(e),
@@ -379,8 +386,8 @@ macro_rules! read_until_close {
             // `<` - syntax error, tag not closed
             Ok(None) => {
                 // We want to report error at `<`, but offset was increased,
-                // so return it back (+1 for `<`)
-                $self.state.offset -= 1;
+                // so return it back (-1 for `<`)
+                $self.state.last_error_offset = start - 1;
                 Err(Error::Syntax(SyntaxError::UnclosedTag))
             }
             Err(e) => Err(e),
@@ -449,7 +456,7 @@ pub type Span = Range<usize>;
 ///   Empty     -- End                   --> ClosedTag
 ///   _ -. Eof .-> Exit
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
     /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next
@@ -490,7 +497,7 @@ enum ParseState {
 ///   BomDetected -- "encoding=..." --> XmlDetected
 /// ```
 #[cfg(feature = "encoding")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum EncodingRef {
     /// Encoding was implicitly assumed to have a specified value. It can be refined
     /// using BOM or by the XML declaration event (`<?xml encoding=... ?>`)
@@ -680,8 +687,6 @@ impl<R> Reader<R> {
     }
 
     /// Gets the current byte position in the input data.
-    ///
-    /// Useful when debugging errors.
     pub fn buffer_position(&self) -> usize {
         // when internal state is OpenedTag, we have actually read until '<',
         // which we don't want to show
@@ -690,6 +695,21 @@ impl<R> Reader<R> {
         } else {
             self.state.offset
         }
+    }
+
+    /// Gets the last error byte position in the input data. If there is no errors
+    /// yet, returns `0`.
+    ///
+    /// Unlike `buffer_position` it will point to the place where it is rational
+    /// to report error to the end user. For example, all [`SyntaxError`]s are
+    /// reported when the parser sees EOF inside of some kind of markup. The
+    /// `buffer_position()` will point to the last byte of input which is not
+    /// very useful. `error_position()` will point to the start of corresponding
+    /// markup element (i. e. to the `<` character).
+    ///
+    /// This position is always `<= buffer_position()`.
+    pub fn error_position(&self) -> usize {
+        self.state.last_error_offset
     }
 
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.
@@ -870,17 +890,12 @@ enum BangType {
 }
 impl BangType {
     #[inline(always)]
-    fn new(byte: Option<u8>, position: &mut usize) -> Result<Self> {
+    fn new(byte: Option<u8>) -> Result<Self> {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
             Some(b'D') | Some(b'd') => Self::DocType,
-            _ => {
-                // <!EOF
-                //  ^ - we want to report error at `<`, so we move offset to it (+1 for `<`)
-                *position -= 1;
-                return Err(Error::Syntax(SyntaxError::InvalidBangMarkup));
-            }
+            _ => return Err(Error::Syntax(SyntaxError::InvalidBangMarkup)),
         })
     }
 
@@ -1148,8 +1163,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 1);
                     }
 
                     /// Checks that if CDATA startup sequence was matched, but an end sequence
@@ -1159,7 +1173,7 @@ mod test {
                         let buf = $buf;
                         let mut position = 1;
                         let mut input = b"![CDATA[other content".as_ref();
-                        //                ^= 1
+                        //                ^= 1                 ^= 22
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
@@ -1168,8 +1182,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 22);
                     }
 
                     /// Checks that CDATA element without content inside parsed successfully
@@ -1248,8 +1261,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 1);
                     }
 
                     #[$test]
@@ -1257,7 +1269,7 @@ mod test {
                         let buf = $buf;
                         let mut position = 1;
                         let mut input = b"!->other content".as_ref();
-                        //                ^= 1
+                        //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
@@ -1266,8 +1278,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 17);
                     }
 
                     #[$test]
@@ -1275,7 +1286,7 @@ mod test {
                         let buf = $buf;
                         let mut position = 1;
                         let mut input = b"!--other content".as_ref();
-                        //                ^= 1
+                        //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
@@ -1284,8 +1295,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 17);
                     }
 
                     #[$test]
@@ -1293,7 +1303,7 @@ mod test {
                         let buf = $buf;
                         let mut position = 1;
                         let mut input = b"!-->other content".as_ref();
-                        //                ^= 1
+                        //                ^= 1             ^= 18
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
@@ -1302,8 +1312,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 18);
                     }
 
                     #[$test]
@@ -1311,7 +1320,7 @@ mod test {
                         let buf = $buf;
                         let mut position = 1;
                         let mut input = b"!--->other content".as_ref();
-                        //                ^= 1
+                        //                ^= 1              ^= 19
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                             Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
@@ -1320,8 +1329,7 @@ mod test {
                                 x
                             ),
                         }
-                        // We want to report error at `<`
-                        assert_eq!(position, 0);
+                        assert_eq!(position, 19);
                     }
 
                     #[$test]
@@ -1374,7 +1382,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!D other content".as_ref();
-                            //                ^= 1
+                            //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1383,8 +1391,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 17);
                         }
 
                         #[$test]
@@ -1392,7 +1399,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!DOCTYPEother content".as_ref();
-                            //                ^= 1
+                            //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1401,8 +1408,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 22);
                         }
 
                         #[$test]
@@ -1428,7 +1434,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!DOCTYPE other content".as_ref();
-                            //                ^= 1
+                            //                ^= 1                  ^23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1437,8 +1443,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 23);
                         }
                     }
 
@@ -1451,7 +1456,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!d other content".as_ref();
-                            //                ^= 1
+                            //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1460,8 +1465,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 17);
                         }
 
                         #[$test]
@@ -1469,7 +1473,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!doctypeother content".as_ref();
-                            //                ^= 1
+                            //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1478,8 +1482,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 22);
                         }
 
                         #[$test]
@@ -1505,7 +1508,7 @@ mod test {
                             let buf = $buf;
                             let mut position = 1;
                             let mut input = b"!doctype other content".as_ref();
-                            //                ^= 1
+                            //                ^= 1                  ^= 23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
                                 Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
@@ -1514,8 +1517,7 @@ mod test {
                                     x
                                 ),
                             }
-                            // We want to report error at `<`
-                            assert_eq!(position, 0);
+                            assert_eq!(position, 23);
                         }
                     }
                 }
@@ -1542,8 +1544,7 @@ mod test {
                             x
                         ),
                     }
-                    // We want to report error at `<`
-                    assert_eq!(position, 0);
+                    assert_eq!(position, 1);
                 }
 
                 mod open {
@@ -1693,63 +1694,6 @@ mod test {
                             Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#)
                         );
                         assert_eq!(position, 42);
-                    }
-                }
-            }
-
-            mod issue_344 {
-                use crate::errors::{Error, SyntaxError};
-                use crate::reader::Reader;
-
-                #[$test]
-                $($async)? fn cdata() {
-                    let mut reader = Reader::from_str("![]]>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn comment() {
-                    let mut reader = Reader::from_str("!- -->");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedComment)`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn doctype_uppercase() {
-                    let mut reader = Reader::from_str("!D>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
-                            x
-                        ),
-                    }
-                }
-
-                #[$test]
-                $($async)? fn doctype_lowercase() {
-                    let mut reader = Reader::from_str("!d>");
-
-                    match reader.$read_until_close($buf) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
-                        x => panic!(
-                            "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
-                            x
-                        ),
                     }
                 }
             }

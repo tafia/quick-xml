@@ -105,7 +105,7 @@ macro_rules! impl_buffered_source {
             buf.push(b'!');
             self $(.$reader)? .consume(1);
 
-            let bang_type = BangType::new(self.peek_one() $(.$await)? ?, position)?;
+            let bang_type = BangType::new(self.peek_one() $(.$await)? ?)?;
 
             loop {
                 match self $(.$reader)? .fill_buf() $(.$await)? {
@@ -139,10 +139,7 @@ macro_rules! impl_buffered_source {
                 }
             }
 
-            // <!....EOF
-            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-            //          so we move offset to it (+1 for `<`)
-            *position -= 1;
+            *position += read;
             Err(bang_type.to_err())
         }
 
@@ -186,10 +183,7 @@ macro_rules! impl_buffered_source {
                 };
             }
 
-            // <.....EOF
-            //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-            //          so we move offset to it (+1 for `<`)
-            *position -= 1;
+            *position += read;
             Err(Error::Syntax(SyntaxError::UnclosedTag))
         }
 

@@ -286,7 +286,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         // start with it.
         debug_assert_eq!(self[0], b'!');
 
-        let bang_type = BangType::new(self[1..].first().copied(), position)?;
+        let bang_type = BangType::new(self[1..].first().copied())?;
 
         if let Some((bytes, i)) = bang_type.parse(&[], self) {
             *position += i;
@@ -294,10 +294,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             return Ok((bang_type, bytes));
         }
 
-        // <!....EOF
-        //  ^^^^^ - `self` does not contains `<`, but we want to report error at `<`,
-        //          so we move offset to it (+1 for `<`)
-        *position -= 1;
+        *position += self.len();
         Err(bang_type.to_err())
     }
 
@@ -311,10 +308,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             return Ok(bytes);
         }
 
-        // <.....EOF
-        //  ^^^^^ - `self` does not contains `<`, but we want to report error at `<`,
-        //          so we move offset to it (+1 for `<`)
-        *position -= 1;
+        *position += self.len();
         Err(Error::Syntax(SyntaxError::UnclosedTag))
     }
 

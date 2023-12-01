@@ -13,10 +13,15 @@ use memchr;
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct ReaderState {
     /// Number of bytes read from the source of data since the reader was created
     pub offset: usize,
+    /// A snapshot of an `offset` of the last error returned. It can be less than
+    /// `offset`, because some errors conveniently report at earlier position,
+    /// and changing `offset` is not possible, because `Error::IllFormed` errors
+    /// are recoverable.
+    pub last_error_offset: usize,
     /// Defines how to process next byte
     pub state: ParseState,
     /// User-defined settings that affect parsing
@@ -95,13 +100,29 @@ impl ReaderState {
                         off += p + 1;
                         // if next byte after `-` is also `-`, return an error
                         if buf[3 + off] == b'-' {
-                            self.offset -= len - 2 - p;
+                            // Explanation of the magic:
+                            //
+                            // - `self.offset`` just after `>`,
+                            // - `buf` contains `!-- con--tent --`
+                            // - `p` is counted from byte after `<!--`
+                            //
+                            // <!-- con--tent -->:
+                            //  ~~~~~~~~~~~~~~~~ : - buf
+                            //   : ===========   : - zone of search (possible values of `p`)
+                            //   : |---p         : - p is counted from | (| is 0)
+                            //   : :   :         ^ - self.offset
+                            //   ^ :   :           - self.offset - len
+                            //     ^   :           - self.offset - len + 2
+                            //         ^           - self.offset - len + 2 + p
+                            self.last_error_offset = self.offset - len + 2 + p;
                             return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
+                        // Continue search after single `-` (+1 to skip it)
                         haystack = &haystack[p + 1..];
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
+                    // Cut of `!--` and `--` from start and end
                     &buf[3..len - 2],
                     self.decoder(),
                 )))
@@ -109,6 +130,7 @@ impl ReaderState {
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
                 debug_assert!(buf.ends_with(b"]]"));
                 Ok(Event::CData(BytesCData::wrap(
+                    // Cut of `![CDATA[` and `]]` from start and end
                     &buf[8..len - 2],
                     self.decoder(),
                 )))
@@ -116,6 +138,7 @@ impl ReaderState {
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
+                        // Cut of `!DOCTYPE` and any number of spaces from start
                         &buf[8 + start..],
                         self.decoder(),
                     ))),
@@ -123,16 +146,16 @@ impl ReaderState {
                         // Because we here, we at least read `<!DOCTYPE>` and offset after `>`.
                         // We want report error at place where name is expected - this is just
                         // before `>`
-                        self.offset -= 1;
+                        self.last_error_offset = self.offset - 1;
                         return Err(Error::IllFormed(IllFormedError::MissingDoctypeName));
                     }
                 }
             }
             _ => {
-                // <!....
-                //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                //          so we move offset to it (+1 for `<`)
-                self.offset -= 1;
+                // <!....>
+                //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
+                // ^------- We report error at that position, so we need to subtract 2 and buf len
+                self.last_error_offset = self.offset - len - 2;
                 Err(bang_type.to_err())
             }
         }
@@ -168,8 +191,8 @@ impl ReaderState {
                         self.opened_buffer.truncate(start);
 
                         // Report error at start of the end tag at `<` character
-                        // +2 for `<` and `>`
-                        self.offset -= buf.len() + 2;
+                        // -2 for `<` and `>`
+                        self.last_error_offset = self.offset - buf.len() - 2;
                         return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
@@ -181,8 +204,8 @@ impl ReaderState {
             }
             None => {
                 // Report error at start of the end tag at `<` character
-                // +2 for `<` and `>`
-                self.offset -= buf.len() + 2;
+                // -2 for `<` and `>`
+                self.last_error_offset = self.offset - buf.len() - 2;
                 return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
@@ -204,6 +227,7 @@ impl ReaderState {
         // We accept at least <??>
         //                     ~~ - len = 2
         if len > 1 && buf[len - 1] == b'?' {
+            // Cut of `?` and `?` from start and end
             let content = &buf[1..len - 1];
             let len = content.len();
 
@@ -225,8 +249,8 @@ impl ReaderState {
         } else {
             // <?....EOF
             //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-            //          so we move offset to it (+2 for `<`and `>`)
-            self.offset -= len + 2;
+            //          so we move offset to it (-2 for `<` and `>`)
+            self.last_error_offset = self.offset - len - 2;
             Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }
@@ -294,6 +318,7 @@ impl Default for ReaderState {
     fn default() -> Self {
         Self {
             offset: 0,
+            last_error_offset: 0,
             state: ParseState::Init,
             config: Config::default(),
             opened_buffer: Vec::new(),

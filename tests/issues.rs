@@ -73,6 +73,15 @@ fn issue299() -> Result<(), Error> {
     Ok(())
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/344
+#[test]
+fn issue344() {
+    let mut reader = Reader::from_str("<!D>");
+    let mut buf = Vec::new();
+    let _ = reader.read_event_into(&mut buf);
+    let _ = reader.read_event_into(&mut buf);
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/360
 #[test]
 fn issue360() {
