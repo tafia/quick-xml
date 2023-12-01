@@ -100,13 +100,29 @@ impl ReaderState {
                         off += p + 1;
                         // if next byte after `-` is also `-`, return an error
                         if buf[3 + off] == b'-' {
+                            // Explanation of the magic:
+                            //
+                            // - `self.offset`` just after `>`,
+                            // - `buf` contains `!-- con--tent --`
+                            // - `p` is counted from byte after `<!--`
+                            //
+                            // <!-- con--tent -->:
+                            //  ~~~~~~~~~~~~~~~~ : - buf
+                            //   : ===========   : - zone of search (possible values of `p`)
+                            //   : |---p         : - p is counted from | (| is 0)
+                            //   : :   :         ^ - self.offset
+                            //   ^ :   :           - self.offset - len
+                            //     ^   :           - self.offset - len + 2
+                            //         ^           - self.offset - len + 2 + p
                             self.last_error_offset = self.offset - len + 2 + p;
                             return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
+                        // Continue search after single `-` (+1 to skip it)
                         haystack = &haystack[p + 1..];
                     }
                 }
                 Ok(Event::Comment(BytesText::wrap(
+                    // Cut of `!--` and `--` from start and end
                     &buf[3..len - 2],
                     self.decoder(),
                 )))
@@ -114,6 +130,7 @@ impl ReaderState {
             BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
                 debug_assert!(buf.ends_with(b"]]"));
                 Ok(Event::CData(BytesCData::wrap(
+                    // Cut of `![CDATA[` and `]]` from start and end
                     &buf[8..len - 2],
                     self.decoder(),
                 )))
@@ -121,6 +138,7 @@ impl ReaderState {
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
+                        // Cut of `!DOCTYPE` and any number of spaces from start
                         &buf[8 + start..],
                         self.decoder(),
                     ))),
@@ -209,6 +227,7 @@ impl ReaderState {
         // We accept at least <??>
         //                     ~~ - len = 2
         if len > 1 && buf[len - 1] == b'?' {
+            // Cut of `?` and `?` from start and end
             let content = &buf[1..len - 1];
             let len = content.len();
 
