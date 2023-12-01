@@ -58,12 +58,12 @@ fn low_level_comparison(c: &mut Criterion) {
             *data,
             |b, input| {
                 b.iter(|| {
-                    let mut r = Reader::from_reader(input.as_bytes());
-                    r.config_mut().check_end_names = false;
+                    let mut reader = Reader::from_reader(input.as_bytes());
+                    reader.config_mut().check_end_names = false;
                     let mut count = criterion::black_box(0);
                     let mut buf = Vec::new();
                     loop {
-                        match r.read_event_into(&mut buf) {
+                        match reader.read_event_into(&mut buf) {
                             Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                             Ok(Event::Eof) => break,
                             _ => (),
@@ -79,8 +79,8 @@ fn low_level_comparison(c: &mut Criterion) {
             BenchmarkId::new("maybe_xml", filename),
             *data,
             |b, input| {
-                use maybe_xml::Lexer;
                 use maybe_xml::token::Ty;
+                use maybe_xml::Lexer;
 
                 b.iter(|| {
                     let lexer = Lexer::from_slice(input.as_bytes());
@@ -272,7 +272,8 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> = criterion::black_box(quick_xml::de::from_str(input).unwrap());
+                let rss: Rss<Enclosure> =
+                    criterion::black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
@@ -307,7 +308,8 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> = criterion::black_box(serde_xml_rs::from_str(input).unwrap());
+                let rss: Rss<Enclosure> =
+                    criterion::black_box(serde_xml_rs::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
