@@ -100,13 +100,13 @@ fn low_level_comparison(c: &mut Criterion) {
             *data,
             |b, input| {
                 use maybe_xml::token::Ty;
-                use maybe_xml::Lexer;
+                use maybe_xml::Reader;
 
                 b.iter(|| {
-                    let lexer = Lexer::from_slice(input.as_bytes());
+                    let reader = Reader::from_str(input);
 
                     let mut count = criterion::black_box(0);
-                    for token in lexer.into_iter() {
+                    for token in reader.into_iter() {
                         match token.ty() {
                             Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
                             _ => (),
