@@ -54,16 +54,36 @@ fn low_level_comparison(c: &mut Criterion) {
 
         group.throughput(Throughput::Bytes(data.len() as u64));
         group.bench_with_input(
-            BenchmarkId::new("quick_xml", filename),
+            BenchmarkId::new("quick_xml:borrowed", filename),
             *data,
             |b, input| {
                 b.iter(|| {
-                    let mut r = Reader::from_reader(input.as_bytes());
-                    r.config_mut().check_end_names = false;
+                    let mut reader = Reader::from_str(input);
+                    reader.config_mut().check_end_names = false;
+                    let mut count = criterion::black_box(0);
+                    loop {
+                        match reader.read_event() {
+                            Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
+                            Ok(Event::Eof) => break,
+                            _ => (),
+                        }
+                    }
+                    assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("quick_xml:buffered", filename),
+            *data,
+            |b, input| {
+                b.iter(|| {
+                    let mut reader = Reader::from_reader(input.as_bytes());
+                    reader.config_mut().check_end_names = false;
                     let mut count = criterion::black_box(0);
                     let mut buf = Vec::new();
                     loop {
-                        match r.read_event_into(&mut buf) {
+                        match reader.read_event_into(&mut buf) {
                             Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
                             Ok(Event::Eof) => break,
                             _ => (),
@@ -79,14 +99,14 @@ fn low_level_comparison(c: &mut Criterion) {
             BenchmarkId::new("maybe_xml", filename),
             *data,
             |b, input| {
-                use maybe_xml::Lexer;
                 use maybe_xml::token::Ty;
+                use maybe_xml::Reader;
 
                 b.iter(|| {
-                    let lexer = Lexer::from_slice(input.as_bytes());
+                    let reader = Reader::from_str(input);
 
                     let mut count = criterion::black_box(0);
-                    for token in lexer.into_iter() {
+                    for token in reader.into_iter() {
                         match token.ty() {
                             Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
                             _ => (),
@@ -272,7 +292,8 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> = criterion::black_box(quick_xml::de::from_str(input).unwrap());
+                let rss: Rss<Enclosure> =
+                    criterion::black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
@@ -307,7 +328,8 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> = criterion::black_box(serde_xml_rs::from_str(input).unwrap());
+                let rss: Rss<Enclosure> =
+                    criterion::black_box(serde_xml_rs::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
