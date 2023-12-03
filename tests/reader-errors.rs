@@ -708,7 +708,9 @@ mod ill_formed {
                         let xml = concat!($xml, "<x/>");
                         let mut reader = NsReader::from_str(xml);
                         reader.config_mut().enable_all_checks(true);
-                        reader.read_event().expect("first .read_resolved_event()");
+                        reader
+                            .read_resolved_event()
+                            .expect("first .read_resolved_event()");
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
