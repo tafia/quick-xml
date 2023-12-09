@@ -47,6 +47,9 @@ tokio-test = "0.4"
 [lib]
 bench = false
 
+[profile.bench]
+lto = true
+
 [[bench]]
 name = "microbenches"
 harness = false

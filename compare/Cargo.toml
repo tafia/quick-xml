@@ -36,3 +36,6 @@ harness = false
 [[bench]]
 name = "serde"
 harness = false
+
+[profile.bench]
+lto = true
