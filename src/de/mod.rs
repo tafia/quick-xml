@@ -19,6 +19,7 @@
 //!   - [Optional attributes and elements](#optional-attributes-and-elements)
 //!   - [Choices (`xs:choice` XML Schema type)](#choices-xschoice-xml-schema-type)
 //!   - [Sequences (`xs:all` and `xs:sequence` XML Schema types)](#sequences-xsall-and-xssequence-xml-schema-types)
+//! - [Generate Rust types from XML](#generate-rust-types-from-xml)
 //! - [Composition Rules](#composition-rules)
 //! - [Enum Representations](#enum-representations)
 //!   - [Normal enum variant](#normal-enum-variant)
@@ -1309,6 +1310,15 @@
 //! </tr>
 //! </tbody>
 //! </table>
+//!
+//!
+//! Generate Rust types from XML
+//! ============================
+//!
+//! To speed up the creation of Rust types that represent a given XML file you can
+//! use the [xml_schema_generator](https://github.com/Thomblin/xml_schema_generator).
+//! It provides a standalone binary and a Rust library that parses one or more XML files
+//! and generates a collection of structs that are compatible with quick_xml::de.
 //!
 //!
 //!
