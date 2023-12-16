@@ -76,8 +76,12 @@ pub struct BytesStart<'a> {
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) fn wrap(content: &'a [u8], name_len: usize) -> Self {
-        BytesStart {
+    pub(crate) fn wrap(content: &'a [u8]) -> Self {
+        let name_len = content
+            .iter()
+            .position(|&b| is_whitespace(b))
+            .unwrap_or(content.len());
+        Self {
             buf: Cow::Borrowed(content),
             name_len,
         }
@@ -1076,7 +1080,7 @@ fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
 /// Returns a byte slice with leading XML whitespace bytes removed.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
+pub(crate) const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
     // Note: A pattern matching based approach (instead of indexing) allows
     // making the function const.
     while let [first, rest @ ..] = bytes {
@@ -1092,7 +1096,7 @@ const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
 /// Returns a byte slice with trailing XML whitespace bytes removed.
 ///
 /// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
+pub(crate) const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
     // Note: A pattern matching based approach (instead of indexing) allows
     // making the function const.
     while let [rest @ .., last] = bytes {

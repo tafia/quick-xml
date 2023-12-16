@@ -64,6 +64,7 @@ pub mod escape {
 }
 pub mod events;
 pub mod name;
+pub mod parser;
 pub mod reader;
 #[cfg(feature = "serialize")]
 pub mod se;

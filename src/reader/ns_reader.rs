@@ -13,7 +13,7 @@ use std::path::Path;
 use crate::errors::Result;
 use crate::events::Event;
 use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
-use crate::reader::{Config, Reader, Span, XmlSource};
+use crate::reader::{Config, Reader, Span};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
@@ -25,7 +25,7 @@ pub struct NsReader<R> {
     ns_resolver: NamespaceResolver,
     /// We cannot pop data from the namespace stack until returned `Empty` or `End`
     /// event will be processed by the user, so we only mark that we should that
-    /// in the next [`Self::read_event_impl()`] call.
+    /// in the next [`Self::read_event()`] call.
     pending_pop: bool,
 }
 
@@ -61,15 +61,6 @@ impl<R> NsReader<R> {
         }
     }
 
-    fn read_event_impl<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        self.pop();
-        let event = self.reader.read_event_impl(buf);
-        self.process_event(event)
-    }
-
     pub(super) fn pop(&mut self) {
         if self.pending_pop {
             self.ns_resolver.pop();
@@ -85,13 +76,13 @@ impl<R> NsReader<R> {
             }
             Ok(Event::Empty(e)) => {
                 self.ns_resolver.push(&e)?;
-                // notify next `read_event_impl()` invocation that it needs to pop this
+                // notify next `read_event*()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
                 Ok(Event::Empty(e))
             }
             Ok(Event::End(e)) => {
-                // notify next `read_event_impl()` invocation that it needs to pop this
+                // notify next `read_event*()` invocation that it needs to pop this
                 // namespace scope
                 self.pending_pop = true;
                 Ok(Event::End(e))
@@ -351,7 +342,9 @@ impl<R: BufRead> NsReader<R> {
     /// [`read_resolved_event_into()`]: Self::read_resolved_event_into
     #[inline]
     pub fn read_event_into<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
-        self.read_event_impl(buf)
+        self.pop();
+        let event = self.reader.read_event_into(buf);
+        self.process_event(event)
     }
 
     /// Reads the next event into given buffer and resolves its namespace (if applicable).
@@ -415,7 +408,9 @@ impl<R: BufRead> NsReader<R> {
         &mut self,
         buf: &'b mut Vec<u8>,
     ) -> Result<(ResolveResult, Event<'b>)> {
-        let event = self.read_event_impl(buf);
+        self.pop();
+        let event = self.reader.read_event_into(buf);
+        let event = self.process_event(event);
         self.resolve_event(event)
     }
 
@@ -595,7 +590,9 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`read_resolved_event()`]: Self::read_resolved_event
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'i>> {
-        self.read_event_impl(())
+        self.pop();
+        let event = self.reader.read_event();
+        self.process_event(event)
     }
 
     /// Reads the next event, borrow its content from the input buffer, and resolves
@@ -659,7 +656,9 @@ impl<'i> NsReader<&'i [u8]> {
     /// [`read_event()`]: Self::read_event
     #[inline]
     pub fn read_resolved_event(&mut self) -> Result<(ResolveResult, Event<'i>)> {
-        let event = self.read_event_impl(());
+        self.pop();
+        let event = self.reader.read_event();
+        let event = self.process_event(event);
         self.resolve_event(event)
     }
 

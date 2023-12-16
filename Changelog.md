@@ -29,6 +29,8 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#362]: Added `escape::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `BytesCData::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `Serializer::set_quote_level()` which allow to set desired level of escaping.
+- [#690]: Added a low-level hight-performant XML parser in `quick_xml::parser` module.
+  For advanced use.
 
 ### Bug Fixes
 

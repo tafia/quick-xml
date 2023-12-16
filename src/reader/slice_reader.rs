@@ -7,14 +7,13 @@ use std::borrow::Cow;
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
-use encoding_rs::{Encoding, UTF_8};
+use encoding_rs::{UTF_16BE, UTF_16LE, UTF_8};
 
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, Result};
+use crate::events::{BytesText, Event};
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
-
-use memchr;
+use crate::parser::FeedResult;
+use crate::reader::{Reader, Span};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -71,7 +70,74 @@ impl<'a> Reader<&'a [u8]> {
     /// ```
     #[inline]
     pub fn read_event(&mut self) -> Result<Event<'a>> {
-        self.read_event_impl(())
+        dbg!(self.state.parser);
+        if let Some(end) = self.state.pending_end() {
+            return Ok(end);
+        }
+        loop {
+            if self.reader.is_empty() {
+                return Ok(Event::Eof);
+            }
+            let result = dbg!(self.state.parser.feed(self.reader))?;
+            return match result {
+                FeedResult::NeedData => {
+                    let offset = self.reader.len();
+                    if let Err(error) = self.state.parser.finish() {
+                        // We need return Event::Eof after error
+                        self.consume(offset);
+                        Err(Error::Syntax(error))
+                    } else {
+                        match self.make_text(offset) {
+                            Some(event) => Ok(event),
+                            None => continue,
+                        }
+                    }
+                }
+
+                FeedResult::EncodingUtf8Like(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_8);
+                    }
+                    continue;
+                }
+                FeedResult::EncodingUtf16BeLike(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_16BE);
+                    }
+                    continue;
+                }
+                FeedResult::EncodingUtf16LeLike(offset) => {
+                    self.consume(offset);
+                    #[cfg(feature = "encoding")]
+                    if self.state.encoding.can_be_refined() {
+                        self.state.encoding = EncodingRef::BomDetected(UTF_16LE);
+                    }
+                    continue;
+                }
+
+                FeedResult::EmitText(offset) => match self.make_text(offset) {
+                    Some(event) => Ok(event),
+                    None => continue,
+                },
+                FeedResult::EmitComment(offset)
+                | FeedResult::EmitCData(offset)
+                | FeedResult::EmitDoctype(offset)
+                | FeedResult::EmitPI(offset)
+                | FeedResult::EmitEmptyTag(offset)
+                | FeedResult::EmitStartTag(offset)
+                | FeedResult::EmitEndTag(offset) => {
+                    let (content, source) = self.reader.split_at(offset);
+                    self.reader = source;
+
+                    self.state.offset += offset;
+                    self.state.make_event(result, content)
+                }
+            };
+        }
     }
 
     /// Reads until end element is found. This function is supposed to be called
@@ -157,6 +223,11 @@ impl<'a> Reader<&'a [u8]> {
     pub fn read_to_end(&mut self, end: QName) -> Result<Span> {
         Ok(read_to_end!(self, end, (), read_event_impl, {}))
     }
+    /// Tranpoline for a `read_to_end!` macro
+    #[inline]
+    fn read_event_impl(&mut self, _: ()) -> Result<Event<'a>> {
+        self.read_event()
+    }
 
     /// Reads content between start and end tags, including any markup. This
     /// function is supposed to be called after you already read a [`Start`] event.
@@ -231,129 +302,42 @@ impl<'a> Reader<&'a [u8]> {
 
         self.decoder().decode(&buffer[0..span.len()])
     }
+
+    #[inline]
+    fn consume(&mut self, count: usize) {
+        self.reader = &self.reader[count..];
+        self.state.offset += count;
+    }
+    /// Returns [`Event::Text`] with the content of reader up to `offset` or
+    /// `None` if no event should be generated because of trimming and getting
+    /// empty text.
+    ///
+    /// Consumes data up to `offset`.
+    fn make_text(&mut self, offset: usize) -> Option<Event<'a>> {
+        let (content, source) = self.reader.split_at(offset);
+        self.reader = source;
+        self.state.offset += offset;
+
+        let mut event = BytesText::wrap(content, self.decoder());
+        if self.state.config.trim_text_start && event.inplace_trim_start() {
+            return None;
+        }
+        if self.state.config.trim_text_end && event.inplace_trim_end() {
+            return None;
+        }
+        Some(Event::Text(event))
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Implementation of `XmlSource` for `&[u8]` reader using a `Self` as buffer
-/// that will be borrowed by events. This implementation provides a zero-copy deserialization
-impl<'a> XmlSource<'a, ()> for &'a [u8] {
-    #[cfg(not(feature = "encoding"))]
-    fn remove_utf8_bom(&mut self) -> Result<()> {
-        if self.starts_with(crate::encoding::UTF8_BOM) {
-            *self = &self[crate::encoding::UTF8_BOM.len()..];
-        }
-        Ok(())
-    }
-
-    #[cfg(feature = "encoding")]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
-        if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
-            *self = &self[bom_len..];
-            return Ok(Some(enc));
-        }
-        Ok(None)
-    }
-
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<(&'a [u8], bool)> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        if let Some(i) = memchr::memchr(byte, self) {
-            *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            Ok((bytes, true))
-        } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
-            Ok((bytes, false))
-        }
-    }
-
-    fn read_bang_element(
-        &mut self,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<(BangType, &'a [u8])> {
-        // Peeked one bang ('!') before being called, so it's guaranteed to
-        // start with it.
-        debug_assert_eq!(self[0], b'!');
-
-        let bang_type = BangType::new(self[1..].first().copied())?;
-
-        if let Some((bytes, i)) = bang_type.parse(&[], self) {
-            *position += i;
-            *self = &self[i..];
-            return Ok((bang_type, bytes));
-        }
-
-        *position += self.len();
-        Err(bang_type.to_err())
-    }
-
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
-        let mut state = ReadElementState::Elem;
-
-        if let Some((bytes, i)) = state.change(self) {
-            // Position now just after the `>` symbol
-            *position += i;
-            *self = &self[i..];
-            return Ok(bytes);
-        }
-
-        *position += self.len();
-        Err(Error::Syntax(SyntaxError::UnclosedTag))
-    }
-
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
-        let whitespaces = self
-            .iter()
-            .position(|b| !is_whitespace(*b))
-            .unwrap_or(self.len());
-        *position += whitespaces;
-        *self = &self[whitespaces..];
-        Ok(())
-    }
-
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
-            *position += 1;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn peek_one(&mut self) -> Result<Option<u8>> {
-        Ok(self.first().copied())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::reader::test::check;
-    use crate::reader::XmlSource;
-
-    /// Default buffer constructor just pass the byte array from the test
-    fn identity<T>(input: T) -> T {
-        input
-    }
 
     check!(
         #[test]
         read_event_impl,
-        read_until_close,
-        identity,
         ()
     );
 
