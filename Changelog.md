@@ -67,6 +67,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#677]: https://github.com/tafia/quick-xml/pull/677
 [#684]: https://github.com/tafia/quick-xml/pull/684
 [#689]: https://github.com/tafia/quick-xml/pull/689
+[#704]: https://github.com/tafia/quick-xml/pull/704
 
 
 ## 0.31.0 -- 2023-10-22
