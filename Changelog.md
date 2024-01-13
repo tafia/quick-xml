@@ -29,6 +29,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#362]: Added `escape::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `BytesCData::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `Serializer::set_quote_level()` which allow to set desired level of escaping.
+- [#705]: Added `NsReader::prefixes()` to list all the prefixes currently declared.
 
 ### Bug Fixes
 
@@ -68,6 +69,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#684]: https://github.com/tafia/quick-xml/pull/684
 [#689]: https://github.com/tafia/quick-xml/pull/689
 [#704]: https://github.com/tafia/quick-xml/pull/704
+[#705]: https://github.com/tafia/quick-xml/pull/705
 
 
 ## 0.31.0 -- 2023-10-22

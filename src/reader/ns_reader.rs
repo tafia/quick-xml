@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::errors::Result;
 use crate::events::Event;
-use crate::name::{LocalName, NamespaceResolver, QName, ResolveResult};
+use crate::name::{LocalName, NamespaceResolver, PrefixIter, QName, ResolveResult};
 use crate::reader::{Config, Reader, Span, XmlSource};
 
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
@@ -47,6 +47,90 @@ impl<R> NsReader<R> {
     #[inline]
     pub fn config_mut(&mut self) -> &mut Config {
         self.reader.config_mut()
+    }
+
+    /// Returns all the prefixes currently declared except the default `xml` and `xmlns` namespaces.
+    ///
+    /// # Examples
+    ///
+    /// This example shows what results the returned iterator would return after
+    /// reading each event of a simple XML.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::name::{Namespace, PrefixDeclaration};
+    /// use quick_xml::NsReader;
+    ///
+    /// let src = "<root>
+    ///   <a xmlns=\"a1\" xmlns:a=\"a2\">
+    ///     <b xmlns=\"b1\" xmlns:b=\"b2\">
+    ///       <c/>
+    ///     </b>
+    ///     <d/>
+    ///   </a>
+    /// </root>";
+    /// let mut reader = NsReader::from_str(src);
+    /// reader.config_mut().trim_text(true);
+    /// // No prefixes at the beginning
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <root>
+    /// // No prefixes declared on root
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <a>
+    /// // Two prefixes declared on "a"
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <b>
+    /// // The default prefix got overridden and new "b" prefix
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <c/>
+    /// // Still the same
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </b>
+    /// // Still the same
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <d/>
+    /// // </b> got closed so back to the prefixes declared on <a>
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </a>
+    /// // Still the same
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </root>
+    /// // <a> got closed
+    /// assert_eq!(reader.prefixes().collect::<Vec<_>>(), vec![]);
+    /// # quick_xml::Result::Ok(())
+    /// ```
+    #[inline]
+    pub fn prefixes(&self) -> PrefixIter {
+        self.ns_resolver.iter()
     }
 }
 

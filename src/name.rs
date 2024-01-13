@@ -617,6 +617,65 @@ impl NamespaceResolver {
             None => ResolveResult::Unbound,
         }
     }
+
+    #[inline]
+    pub fn iter(&self) -> PrefixIter {
+        PrefixIter {
+            resolver: self,
+            // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:
+            bindings_cursor: 2,
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Iterator on the current declared prefixes.
+///
+/// See [`NsReader::prefixes`](crate::NsReader::prefixes) for documentation.
+#[derive(Debug, Clone)]
+pub struct PrefixIter<'a> {
+    resolver: &'a NamespaceResolver,
+    bindings_cursor: usize,
+}
+
+impl<'a> Iterator for PrefixIter<'a> {
+    type Item = (PrefixDeclaration<'a>, Namespace<'a>);
+
+    fn next(&mut self) -> Option<(PrefixDeclaration<'a>, Namespace<'a>)> {
+        while let Some(namespace_entry) = self.resolver.bindings.get(self.bindings_cursor) {
+            self.bindings_cursor += 1; // We increment for next read
+
+            // We check if the key has not been overridden by having a look
+            // at the namespaces declared after in the array
+            let prefix = namespace_entry.prefix(&self.resolver.buffer);
+            if self.resolver.bindings[self.bindings_cursor..]
+                .iter()
+                .any(|ne| prefix == ne.prefix(&self.resolver.buffer))
+            {
+                continue; // Overridden
+            }
+            let namespace = if let ResolveResult::Bound(namespace) =
+                namespace_entry.namespace(&self.resolver.buffer)
+            {
+                namespace
+            } else {
+                continue; // We don't return unbound namespaces
+            };
+            let prefix = if let Some(Prefix(prefix)) = prefix {
+                PrefixDeclaration::Named(prefix)
+            } else {
+                PrefixDeclaration::Default
+            };
+            return Some((prefix, namespace));
+        }
+        None // We have exhausted the array
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // Real count could be less if some namespaces was overridden
+        (0, Some(self.resolver.bindings.len() - self.bindings_cursor))
+    }
 }
 
 #[cfg(test)]
