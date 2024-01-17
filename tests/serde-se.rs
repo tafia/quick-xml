@@ -45,7 +45,7 @@ struct Empty {}
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct EmptyWithAttribute {
     #[serde(rename = "@attr")]
-    attr: f64
+    attr: f64,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -77,7 +77,7 @@ enum ExternallyTagged {
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
-        attr: f64
+        attr: f64,
     },
 }
 
@@ -121,7 +121,7 @@ enum InternallyTagged {
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
-        attr: f64
+        attr: f64,
     },
 }
 
@@ -165,7 +165,7 @@ enum AdjacentlyTagged {
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
-        attr: f64
+        attr: f64,
     },
 }
 
@@ -209,7 +209,7 @@ enum Untagged {
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
-        attr: f64
+        attr: f64,
     },
 }
 
@@ -1731,7 +1731,7 @@ mod without_root {
             }
         }
     }
-    
+
     mod expand_empty {
         use super::*;
         use pretty_assertions::assert_eq;
