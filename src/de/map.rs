@@ -789,7 +789,7 @@ fn not_in(
     start: &BytesStart,
     decoder: Decoder,
 ) -> Result<bool, DeError> {
-    let tag = decoder.decode(start.name().into_inner())?;
+    let tag = decoder.decode(start.local_name().into_inner())?;
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }
