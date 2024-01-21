@@ -43,6 +43,12 @@ struct Nested {
 struct Empty {}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
+struct EmptyWithAttribute {
+    #[serde(rename = "@attr")]
+    attr: f64,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Text {
     #[serde(rename = "$text")]
     float: f64,
@@ -69,6 +75,10 @@ enum ExternallyTagged {
         string: &'static str,
     },
     Empty {},
+    EmptyWithAttribute {
+        #[serde(rename = "@attr")]
+        attr: f64,
+    },
 }
 
 /// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
@@ -109,6 +119,10 @@ enum InternallyTagged {
         string: &'static str,
     },
     Empty {},
+    EmptyWithAttribute {
+        #[serde(rename = "@attr")]
+        attr: f64,
+    },
 }
 
 /// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
@@ -149,6 +163,10 @@ enum AdjacentlyTagged {
         string: &'static str,
     },
     Empty {},
+    EmptyWithAttribute {
+        #[serde(rename = "@attr")]
+        attr: f64,
+    },
 }
 
 /// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
@@ -189,6 +207,10 @@ enum Untagged {
         string: &'static str,
     },
     Empty {},
+    EmptyWithAttribute {
+        #[serde(rename = "@attr")]
+        attr: f64,
+    },
 }
 
 /// Having both `#[serde(flatten)]` and `'static` fields in one struct leads to
@@ -356,6 +378,9 @@ mod without_root {
     serialize_as!(empty_struct:
         Empty {}
         => "<Empty/>");
+    serialize_as!(empty_attr_struct:
+        EmptyWithAttribute {attr: 42.0}
+        => "<EmptyWithAttribute attr=\"42\"/>");
     serialize_as!(text:
         Text {
             float: 42.0,
@@ -1703,6 +1728,98 @@ mod without_root {
                             42\n  \
                             <string>answer</string>\n\
                         </Untagged>");
+            }
+        }
+    }
+
+    mod expand_empty {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        macro_rules! serialize_as {
+            ($name:ident: $data:expr => $expected:literal) => {
+                #[test]
+                fn $name() {
+                    let mut buffer = String::new();
+                    let mut ser = Serializer::new(&mut buffer);
+                    ser.expand_empty_elements(true);
+                    ser.indent(' ', 2);
+
+                    $data.serialize(ser).unwrap();
+                    assert_eq!(buffer, $expected);
+                }
+            };
+        }
+
+        serialize_as!(option_none: Option::<Unit>::None => "");
+        serialize_as!(option_some: Some(Unit) => "<Unit></Unit>");
+
+        serialize_as!(unit_struct: Unit => "<Unit></Unit>");
+
+        serialize_as!(empty_struct:
+            Empty {}
+            => "<Empty></Empty>");
+        mod enum_ {
+            use super::*;
+
+            mod externally_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(unit:
+                    ExternallyTagged::Unit
+                    => "<Unit></Unit>");
+                serialize_as!(empty_struct:
+                    ExternallyTagged::Empty {}
+                    => "<Empty></Empty>");
+                serialize_as!(empty_attr_struct:
+                    ExternallyTagged::EmptyWithAttribute { attr: 42.0 }
+                    => "<EmptyWithAttribute attr=\"42\"></EmptyWithAttribute>");
+            }
+
+            mod adjacently_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(empty_struct:
+                    AdjacentlyTagged::Empty {}
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>Empty</tag>\n  \
+                            <content></content>\n\
+                        </AdjacentlyTagged>");
+                serialize_as!(empty_attr_struct:
+                    AdjacentlyTagged::EmptyWithAttribute { attr: 42.0 }
+                    => "<AdjacentlyTagged>\n  \
+                            <tag>EmptyWithAttribute</tag>\n  \
+                            <content attr=\"42\"></content>\n\
+                        </AdjacentlyTagged>");
+            }
+
+            mod untagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+                serialize_as!(empty_struct:
+                    Untagged::Empty {}
+                    => "<Untagged></Untagged>");
+                serialize_as!(empty_attr_struct:
+                    Untagged::EmptyWithAttribute { attr: 42.0 }
+                    => "<Untagged attr=\"42\"></Untagged>");
+            }
+
+            mod internally_tagged {
+                use super::*;
+                use pretty_assertions::assert_eq;
+
+                serialize_as!(empty_struct:
+                    InternallyTagged::Empty {}
+                    => "<InternallyTagged>\n  \
+                            <tag>Empty</tag>\n\
+                        </InternallyTagged>");
+                serialize_as!(empty_attr_struct:
+                    InternallyTagged::EmptyWithAttribute { attr: 42.0 }
+                    => "<InternallyTagged attr=\"42\">\n  \
+                            <tag>EmptyWithAttribute</tag>\n\
+                        </InternallyTagged>");
             }
         }
     }

@@ -35,6 +35,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#622]: Fix wrong disregarding of not closed markup, such as lone `<`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(DoubleHyphenInComment)`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(MissingDoctypeName)`.
+- [#704]: Fix empty tags with attributes not being expanded when `expand_empty_elements` is set to true.
 
 ### Misc Changes
 
@@ -66,6 +67,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#677]: https://github.com/tafia/quick-xml/pull/677
 [#684]: https://github.com/tafia/quick-xml/pull/684
 [#689]: https://github.com/tafia/quick-xml/pull/689
+[#704]: https://github.com/tafia/quick-xml/pull/704
 
 
 ## 0.31.0 -- 2023-10-22

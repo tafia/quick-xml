@@ -467,7 +467,13 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
         self.ser.ser.indent.decrease();
 
         if self.children.is_empty() {
-            self.ser.ser.writer.write_str("/>")?;
+            if self.ser.ser.expand_empty_elements {
+                self.ser.ser.writer.write_str("></")?;
+                self.ser.ser.writer.write_str(self.ser.key.0)?;
+                self.ser.ser.writer.write_char('>')?;
+            } else {
+                self.ser.ser.writer.write_str("/>")?;
+            }
         } else {
             self.ser.ser.writer.write_char('>')?;
             self.ser.ser.writer.write_str(&self.children)?;
