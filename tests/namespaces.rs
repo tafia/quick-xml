@@ -2,7 +2,7 @@ use pretty_assertions::assert_eq;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
 use quick_xml::name::ResolveResult::*;
-use quick_xml::name::{Namespace, QName};
+use quick_xml::name::{Namespace, PrefixDeclaration, QName};
 use quick_xml::reader::NsReader;
 use std::borrow::Cow;
 
@@ -19,6 +19,19 @@ fn namespace() {
             e
         ),
     }
+    let it1 = r.prefixes();
+    let it2 = it1.clone();
+    assert_eq!(it1.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it1.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
+
+    assert_eq!(it2.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it2.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
 
     // <b>
     match r.read_resolved_event() {
@@ -28,11 +41,25 @@ fn namespace() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
+
     // "in namespace!"
     match r.read_resolved_event() {
         Ok((ns, Text(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting text content with no namespace, got {:?}", e),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
+
     // </b>
     match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
@@ -41,12 +68,24 @@ fn namespace() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
 
     // </a>
     match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"myns"), Namespace(b"www1"))]
+    );
 }
 
 #[test]
@@ -62,6 +101,9 @@ fn default_namespace() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(0)));
+    assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
     // <b>
     match r.read_resolved_event() {
@@ -71,6 +113,13 @@ fn default_namespace() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+    );
+
     // </b>
     match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
@@ -79,6 +128,12 @@ fn default_namespace() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+    );
 
     // </a> very important: a should not be in any namespace. The default namespace only applies to
     // the sub-document it is defined on.
@@ -86,6 +141,9 @@ fn default_namespace() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting outer end element with no namespace, got {:?}", e),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(0)));
+    assert_eq!(it.collect::<Vec<_>>(), vec![]);
 }
 
 #[test]
@@ -101,6 +159,12 @@ fn default_namespace_reset() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+    );
 
     // <b>
     match r.read_resolved_event() {
@@ -110,11 +174,18 @@ fn default_namespace_reset() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(2)));
+    assert_eq!(it.collect::<Vec<_>>(), vec![]);
+
     // </b>
     match r.read_resolved_event() {
         Ok((ns, End(_))) => assert_eq!(ns, Unbound),
         e => panic!("expecting inner end element with no namespace, got {:?}", e),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(2)));
+    assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
     // </a>
     match r.read_resolved_event() {
@@ -124,6 +195,12 @@ fn default_namespace_reset() {
             e
         ),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+    );
 }
 
 /// Single empty element with qualified attributes.
@@ -163,6 +240,13 @@ fn attributes_empty_ns() {
         ))
     );
     assert_eq!(attrs.next(), None);
+
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Named(b"r"), Namespace(b"urn:example:r"))]
+    );
 }
 
 /// Single empty element with qualified attributes.
@@ -204,6 +288,13 @@ fn attributes_empty_ns_expanded() {
             ))
         );
         assert_eq!(attrs.next(), None);
+
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Named(b"r"), Namespace(b"urn:example:r"))]
+        );
     }
 
     match r.read_resolved_event() {
@@ -228,6 +319,13 @@ fn default_ns_shadowing_empty() {
             }
             e => panic!("Expected Start event (<outer>), got {:?}", e),
         }
+
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+        );
     }
 
     // <inner att1='a' xmlns='urn:example:i' />
@@ -257,6 +355,13 @@ fn default_ns_shadowing_empty() {
             Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
         );
         assert_eq!(attrs.next(), None);
+
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(2)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:i")),]
+        );
     }
 
     // </outer>
@@ -267,6 +372,12 @@ fn default_ns_shadowing_empty() {
         }
         e => panic!("Expected End event (<outer>), got {:?}", e),
     }
+    let it = r.prefixes();
+    assert_eq!(it.size_hint(), (0, Some(1)));
+    assert_eq!(
+        it.collect::<Vec<_>>(),
+        vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+    );
 }
 
 #[test]
