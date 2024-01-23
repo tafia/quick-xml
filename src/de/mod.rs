@@ -2015,7 +2015,7 @@ use std::io::BufRead;
 use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
@@ -2032,7 +2032,24 @@ pub(crate) const VALUE_KEY: &str = "$value";
 /// [`PI`]: Event::PI
 #[derive(Debug, PartialEq, Eq)]
 pub struct Text<'a> {
+    /// Untrimmed text after concatenating content of all
+    /// [`Text`] and [`CData`] events
     text: Cow<'a, str>,
+    /// A range into `text` which contains data after trimming
+    content: Range<usize>,
+}
+
+impl<'a> Text<'a> {
+    fn new(text: Cow<'a, str>) -> Self {
+        let start = text.find(|c| !char::is_whitespace(c)).unwrap_or(0);
+        let end = text
+            .rfind(|c| !char::is_whitespace(c))
+            .unwrap_or(text.len().saturating_sub(1));
+        Self {
+            text,
+            content: start..end,
+        }
+    }
 }
 
 impl<'a> Deref for Text<'a> {
@@ -2047,9 +2064,7 @@ impl<'a> Deref for Text<'a> {
 impl<'a> From<&'a str> for Text<'a> {
     #[inline]
     fn from(text: &'a str) -> Self {
-        Self {
-            text: Cow::Borrowed(text),
-        }
+        Self::new(Cow::Borrowed(text))
     }
 }
 
@@ -2190,7 +2205,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 _ => break,
             }
         }
-        Ok(DeEvent::Text(Text { text: result }))
+        Ok(DeEvent::Text(Text::new(result)))
     }
 
     /// Read one text event, panics if current event is not a text event
