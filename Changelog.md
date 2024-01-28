@@ -19,6 +19,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 `error_position()..buffer_position()` also will represent a span of error.
 
 ### New Features
+* [#629]: Added a default case to `impl_deserialize_for_internally_tagged_enum` macro so that it can handle every attribute that does not match existing cases within an enum variant.
 
 - [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
 - [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
