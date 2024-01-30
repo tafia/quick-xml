@@ -1,9 +1,10 @@
 //! Manage xml character escapes
 
-use memchr::memchr2_iter;
+use memchr::{memchr2_iter, memchr3_iter};
 use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::utils::MergeIter;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
@@ -82,7 +83,14 @@ impl std::error::Error for EscapeError {}
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
 pub fn escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
+    let bytes = raw.as_bytes();
+    _escape(
+        raw,
+        MergeIter::new(
+            memchr3_iter(b'<', b'>', b'&', bytes),
+            memchr2_iter(b'\'', b'"', bytes),
+        ),
+    )
 }
 
 /// Escapes an `&str` and replaces xml special characters (`<`, `>`, `&`)
@@ -107,7 +115,7 @@ pub fn escape(raw: &str) -> Cow<str> {
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
 pub fn partial_escape(raw: &str) -> Cow<str> {
-    _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
+    _escape(raw, memchr3_iter(b'<', b'>', b'&', raw.as_bytes()))
 }
 
 /// XML standard [requires] that only `<` and `&` was escaped in text content or
@@ -129,48 +137,48 @@ pub fn minimal_escape(raw: &str) -> Cow<str> {
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
+pub(crate) fn _escape<It>(raw: &str, escapes: It) -> Cow<str>
+where
+    It: Iterator<Item = usize>,
+{
     let bytes = raw.as_bytes();
     let mut escaped = None;
-    let mut iter = bytes.iter();
-    let mut pos = 0;
-    while let Some(i) = iter.position(|&b| escape_chars(b)) {
-        if escaped.is_none() {
-            escaped = Some(Vec::with_capacity(raw.len()));
-        }
-        let escaped = escaped.as_mut().expect("initialized");
-        let new_pos = pos + i;
-        escaped.extend_from_slice(&bytes[pos..new_pos]);
-        match bytes[new_pos] {
-            b'<' => escaped.extend_from_slice(b"&lt;"),
-            b'>' => escaped.extend_from_slice(b"&gt;"),
-            b'\'' => escaped.extend_from_slice(b"&apos;"),
-            b'&' => escaped.extend_from_slice(b"&amp;"),
-            b'"' => escaped.extend_from_slice(b"&quot;"),
+    let mut last_pos = 0;
+    for i in escapes {
+        // If we have an escape, the escaped string will be at least some larger than the raw string,
+        // reserve a little more space, so we might not resize at all if only a few escapes are found.
+        let escaped = escaped.get_or_insert_with(|| String::with_capacity(raw.len() + 64));
+        let byte = bytes[i];
+        // SAFETY: the escapes iterator should only return indexes of bytes we know how to escape.
+        //   if one of those bytes are found, it _must_ be a complete character, so `i` must be a
+        //   character boundary.
+        //   last_pos will only be either 0 or i+1, and all supported chars are one byte long,
+        //   last_pos will also always be at a char boundary
+        escaped.push_str(&raw[last_pos..i]);
+        match byte {
+            b'<' => escaped.push_str("&lt;"),
+            b'>' => escaped.push_str("&gt;"),
+            b'\'' => escaped.push_str("&apos;"),
+            b'&' => escaped.push_str("&amp;"),
+            b'"' => escaped.push_str("&quot;"),
 
             // This set of escapes handles characters that should be escaped
             // in elements of xs:lists, because those characters works as
             // delimiters of list elements
-            b'\t' => escaped.extend_from_slice(b"&#9;"),
-            b'\n' => escaped.extend_from_slice(b"&#10;"),
-            b'\r' => escaped.extend_from_slice(b"&#13;"),
-            b' ' => escaped.extend_from_slice(b"&#32;"),
+            b'\t' => escaped.push_str("&#9;"),
+            b'\n' => escaped.push_str("&#10;"),
+            b'\r' => escaped.push_str("&#13;"),
+            b' ' => escaped.push_str("&#32;"),
             _ => unreachable!(
                 "Only '<', '>','\', '&', '\"', '\\t', '\\r', '\\n', and ' ' are escaped"
             ),
         }
-        pos = new_pos + 1;
+        last_pos = i + 1;
     }
 
     if let Some(mut escaped) = escaped {
-        if let Some(raw) = bytes.get(pos..) {
-            escaped.extend_from_slice(raw);
-        }
-        // SAFETY: we operate on UTF-8 input and search for an one byte chars only,
-        // so all slices that was put to the `escaped` is a valid UTF-8 encoded strings
-        // TODO: Can be replaced with `unsafe { String::from_utf8_unchecked() }`
-        // if unsafe code will be allowed
-        Cow::Owned(String::from_utf8(escaped).unwrap())
+        escaped.push_str(&raw[last_pos..]);
+        Cow::Owned(escaped)
     } else {
         Cow::Borrowed(raw)
     }
@@ -210,17 +218,14 @@ where
         match iter.next() {
             Some(end) if bytes[end] == b';' => {
                 // append valid data
-                if unescaped.is_none() {
-                    unescaped = Some(String::with_capacity(raw.len()));
-                }
-                let unescaped = unescaped.as_mut().expect("initialized");
+                let unescaped = unescaped.get_or_insert_with(|| String::with_capacity(raw.len()));
                 unescaped.push_str(&raw[last_end..start]);
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
                 if let Some(entity) = pat.strip_prefix('#') {
                     let codepoint = parse_number(entity, start..end)?;
-                    unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
+                    unescaped.push(codepoint);
                 } else if let Some(value) = named_entity(pat) {
                     unescaped.push_str(value);
                 } else if let Some(value) = resolve_entity(pat) {

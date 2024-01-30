@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, Cow};
 use std::fmt::{self, Debug, Formatter};
+use std::iter::Peekable;
 use std::ops::Deref;
 
 #[cfg(feature = "serialize")]
@@ -33,6 +34,63 @@ pub fn write_byte_string(f: &mut Formatter, byte_string: &[u8]) -> fmt::Result {
     }
     write!(f, "\"")?;
     Ok(())
+}
+
+/// An iterator that merges two sorted iterators into one sorted iterator
+pub(crate) struct MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+{
+    it1: Peekable<It1>,
+    it2: Peekable<It2>,
+}
+
+impl<It1, It2> MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+{
+    pub fn new(it1: It1, it2: It2) -> Self {
+        Self {
+            it1: it1.peekable(),
+            it2: it2.peekable(),
+        }
+    }
+}
+
+impl<It1, It2> Iterator for MergeIter<It1, It2>
+where
+    It1: Iterator,
+    It2: Iterator<Item = It1::Item>,
+    It1::Item: PartialOrd,
+{
+    type Item = It1::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.it1.peek(), self.it2.peek()) {
+            (None, _) => self.it2.next(),
+            (_, None) => self.it1.next(),
+            (Some(a), Some(b)) => {
+                if a < b {
+                    self.it1.next()
+                } else {
+                    self.it2.next()
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (min1, max1) = self.it1.size_hint();
+        let (min2, max2) = self.it2.size_hint();
+        let min = min1.saturating_add(min2);
+        let max = match (max1, max2) {
+            (Some(max1), Some(max2)) => max1.checked_add(max2),
+            _ => None,
+        };
+        (min, max)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -226,5 +284,37 @@ mod tests {
             67, 108, 97, 115, 115, 32, 73, 82, 73, 61, 34, 35, 66, 34,
         ]);
         assert_eq!(format!("{:?}", bytes), r##""Class IRI=\"#B\"""##);
+    }
+
+    #[test]
+    fn merge_empty() {
+        let iter = MergeIter::new(vec![].into_iter(), vec![].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![]);
+    }
+
+    #[test]
+    fn merge_single_empty() {
+        let iter = MergeIter::new(vec![1].into_iter(), vec![].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1]);
+        let iter = MergeIter::new(vec![].into_iter(), vec![1].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1]);
+    }
+
+    #[test]
+    fn merge_whole_side_before() {
+        let iter = MergeIter::new(vec![1, 2, 3].into_iter(), vec![4, 5, 6].into_iter());
+        assert_eq!(iter.collect::<Vec<usize>>(), vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn merge_interleave() {
+        let iter = MergeIter::new(
+            vec![1, 2, 8, 20].into_iter(),
+            vec![3, 4, 22, 23].into_iter(),
+        );
+        assert_eq!(
+            iter.collect::<Vec<usize>>(),
+            vec![1, 2, 3, 4, 8, 20, 22, 23]
+        );
     }
 }
