@@ -1,5 +1,6 @@
 //! Contains high-level interface for an events-based XML emitter.
 
+use std::borrow::Cow;
 use std::io::Write;
 use std::result::Result as StdResult;
 
@@ -143,13 +144,13 @@ impl<W> Writer<W> {
     /// # }
     /// ```
     #[must_use]
-    pub fn create_element<'a, N>(&'a mut self, name: &'a N) -> ElementWriter<W>
+    pub fn create_element<'a, N>(&'a mut self, name: N) -> ElementWriter<W>
     where
-        N: 'a + AsRef<str> + ?Sized,
+        N: Into<Cow<'a, str>>,
     {
         ElementWriter {
             writer: self,
-            start_tag: BytesStart::new(name.as_ref()),
+            start_tag: BytesStart::new(name),
         }
     }
 }
