@@ -263,12 +263,14 @@ impl<W: Write> Writer<W> {
     /// [`Text`]: Event::Text
     /// [`Start`]: Event::Start
     /// [`new_with_indent`]: Self::new_with_indent
-    pub fn write_indent(&mut self) -> Result<()> {
+    pub fn write_indent(&mut self) -> Result<usize> {
+        let mut n = 0;
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n")?;
             self.writer.write_all(i.current())?;
+            n += i.current().len() + 1;
         }
-        Ok(())
+        Ok(n)
     }
 
     /// Write an arbitrary serializable type
