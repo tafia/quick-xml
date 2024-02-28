@@ -20,6 +20,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 
 ### New Features
 
+- [#721]: Report bytes from `Writer::write_event`
 - [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
 - [#677]: Added methods `config()` and `config_mut()` to inspect and change the parser
   configuration. Previous builder methods on `Reader` / `NsReader` was replaced by
