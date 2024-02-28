@@ -62,6 +62,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#689]: `buffer_position()` now always report the position the parser last seen.
   To get an error position use `error_position()`.
 
+[#721]: https://github.com/tafia/quick-xml/pull/721
 [#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
