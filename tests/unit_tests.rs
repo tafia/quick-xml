@@ -588,3 +588,55 @@ fn test_closing_bracket_in_single_quote_mixed() {
     }
     next_eq!(r, End, b"a");
 }
+
+#[test]
+fn write_event_reports_bytes_written() {
+    // Example from docs: https://docs.rs/quick-xml/latest/quick_xml/writer/struct.Writer.html
+    let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut n = 0;
+    loop {
+        match reader.read_event() {
+            Ok(Start(e)) if e.name().as_ref() == b"this_tag" => {
+
+                // crates a new element ... alternatively we could reuse `e` by calling
+                // `e.into_owned()`
+                let mut elem = BytesStart::new("my_elem");
+
+                // collect existing attributes
+                elem.extend_attributes(e.attributes().map(|attr| attr.unwrap()));
+
+                // copy existing attributes, adds a new my-key="some value" attribute
+                elem.push_attribute(("my-key", "some value"));
+
+                // writes the event to the writer
+                n += match writer.write_event(Start(elem)) {
+                    Ok(b) => b,
+                    Err(_) => panic!("Unexpected error in sample code")
+                }
+            },
+            Ok(End(e)) if e.name().as_ref() == b"this_tag" => {
+                n += match writer.write_event(End(BytesEnd::new("my_elem"))) {
+                    Ok(b) => b,
+                    Err(_) => panic!("Unexpected error in sample code")
+                }
+            },
+            Ok(Eof) => break,
+            // we can either move or borrow the event to write, depending on your use-case
+            Ok(e) => { 
+                n += match  writer.write_event(e) {
+                    Ok(b) => b,
+                    Err(_) => panic!("Unexpected error in sample code")
+                }
+            },
+            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+        }
+    }
+
+    let result = writer.into_inner().into_inner();
+    let expected = r#"<my_elem k1="v1" k2="v2" my-key="some value"><child>text</child></my_elem>"#;
+    assert_eq!(result, expected.as_bytes());
+    assert_eq!(n, expected.len());
+}
