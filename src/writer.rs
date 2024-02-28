@@ -246,10 +246,10 @@ impl<W: Write> Writer<W> {
                 n += i.current().len();
             }
         }
-        self.write(before)?;
-        self.write(value)?;
-        self.write(after)?;
-        Ok(before.len() + value.len() + after.len() + n)
+        n += self.write(before)?;
+        n += self.write(value)?;
+        n += self.write(after)?;
+        Ok(n)
     }
 
     /// Manually write a newline and indentation at the proper level.
