@@ -84,8 +84,8 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
                     }
                 }
             }
-        };
-    };
+        }
+    }
     let xml = writer.into_inner().into_inner();
     // The str should be valid as we just generated it, unwrapping **should** be safe.
     let mut reader = Reader::from_str(std::str::from_utf8(&xml).unwrap());
