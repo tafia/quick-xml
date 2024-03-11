@@ -243,7 +243,7 @@ impl<W: Write> Writer<W> {
             if i.should_line_break {
                 self.writer.write_all(b"\n")?;
                 self.writer.write_all(i.current())?;
-                n += i.current().len();
+                n += i.current().len() + 1;
             }
         }
         n += self.write(before)?;
