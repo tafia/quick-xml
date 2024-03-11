@@ -600,7 +600,6 @@ fn write_event_reports_bytes_written() {
     loop {
         match reader.read_event() {
             Ok(Start(e)) if e.name().as_ref() == b"this_tag" => {
-
                 // crates a new element ... alternatively we could reuse `e` by calling
                 // `e.into_owned()`
                 let mut elem = BytesStart::new("my_elem");
@@ -614,23 +613,23 @@ fn write_event_reports_bytes_written() {
                 // writes the event to the writer
                 n += match writer.write_event(Start(elem)) {
                     Ok(b) => b,
-                    Err(_) => panic!("Unexpected error in sample code")
+                    Err(_) => panic!("Unexpected error in sample code"),
                 }
-            },
+            }
             Ok(End(e)) if e.name().as_ref() == b"this_tag" => {
                 n += match writer.write_event(End(BytesEnd::new("my_elem"))) {
                     Ok(b) => b,
-                    Err(_) => panic!("Unexpected error in sample code")
+                    Err(_) => panic!("Unexpected error in sample code"),
                 }
-            },
+            }
             Ok(Eof) => break,
             // we can either move or borrow the event to write, depending on your use-case
-            Ok(e) => { 
-                n += match  writer.write_event(e) {
+            Ok(e) => {
+                n += match writer.write_event(e) {
                     Ok(b) => b,
-                    Err(_) => panic!("Unexpected error in sample code")
+                    Err(_) => panic!("Unexpected error in sample code"),
                 }
-            },
+            }
             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
         }
     }

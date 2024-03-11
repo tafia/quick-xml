@@ -53,13 +53,13 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
         match writer_func {
             WriteEvent(event) => {
                 writer.write_event(event)?;
-            },
-            WriteBom => { 
+            }
+            WriteBom => {
                 writer.write_bom()?;
-            },
-            WriteIndent => { 
+            }
+            WriteIndent => {
                 writer.write_indent()?;
-            },
+            }
             CreateElement {
                 name,
                 func,
