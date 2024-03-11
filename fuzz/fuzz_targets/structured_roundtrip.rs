@@ -51,9 +51,15 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
         // TODO: Handle error cases.
         use WriterFunc::*;
         match writer_func {
-            WriteEvent(event) => writer.write_event(event)?,
-            WriteBom => writer.write_bom()?,
-            WriteIndent => writer.write_indent()?,
+            WriteEvent(event) => {
+                writer.write_event(event)?;
+            },
+            WriteBom => { 
+                writer.write_bom()?;
+            },
+            WriteIndent => { 
+                writer.write_indent()?;
+            },
             CreateElement {
                 name,
                 func,
@@ -78,8 +84,8 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
                     }
                 }
             }
-        }
-    }
+        };
+    };
     let xml = writer.into_inner().into_inner();
     // The str should be valid as we just generated it, unwrapping **should** be safe.
     let mut reader = Reader::from_str(std::str::from_utf8(&xml).unwrap());
