@@ -242,13 +242,8 @@ impl<'a> BytesStart<'a> {
     where
         A: Into<Attribute<'b>>,
     {
-        let a = attr.into();
-        let bytes = self.buf.to_mut();
-        bytes.push(b' ');
-        bytes.extend_from_slice(a.key.as_ref());
-        bytes.extend_from_slice(b"=\"");
-        bytes.extend_from_slice(a.value.as_ref());
-        bytes.push(b'"');
+        self.buf.to_mut().push(b' ');
+        self.push_attr(attr.into());
     }
 
     /// Remove all attributes from the ByteStart
@@ -286,6 +281,26 @@ impl<'a> BytesStart<'a> {
             }
         }
         Ok(None)
+    }
+
+    /// Adds an attribute to this element.
+    pub(crate) fn push_attr<'b>(&mut self, attr: Attribute<'b>) {
+        let bytes = self.buf.to_mut();
+        bytes.extend_from_slice(attr.key.as_ref());
+        bytes.extend_from_slice(b"=\"");
+        // FIXME: need to escape attribute content
+        bytes.extend_from_slice(attr.value.as_ref());
+        bytes.push(b'"');
+    }
+
+    /// Adds new line in existing element
+    pub(crate) fn push_newline(&mut self) {
+        self.buf.to_mut().push(b'\n');
+    }
+
+    /// Adds indentation bytes in existing element
+    pub(crate) fn push_indent(&mut self, indent: &[u8]) {
+        self.buf.to_mut().extend_from_slice(indent);
     }
 }
 

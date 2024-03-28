@@ -151,6 +151,8 @@ impl<W> Writer<W> {
         ElementWriter {
             writer: self,
             start_tag: BytesStart::new(name),
+            state: AttributeIndent::NoneAttributesWritten,
+            spaces: Vec::new(),
         }
     }
 }
@@ -336,11 +338,48 @@ impl<W: Write> Writer<W> {
     }
 }
 
+/// Track indent inside elements state
+///
+/// ```mermaid
+/// stateDiagram-v2
+///     [*] --> NoneAttributesWritten
+///     NoneAttributesWritten --> Spaces : .with_attribute()
+///     NoneAttributesWritten --> WriteConfigured : .new_line()
+///
+///     Spaces --> Spaces : .with_attribute()
+///     Spaces --> WriteSpaces : .new_line()
+///
+///     WriteSpaces --> Spaces : .with_attribute()
+///     WriteSpaces --> WriteSpaces : .new_line()
+///
+///     Configured --> Configured : .with_attribute()
+///     Configured --> WriteConfigured : .new_line()
+///
+///     WriteConfigured --> Configured : .with_attribute()
+///     WriteConfigured --> WriteConfigured : .new_line()
+/// ```
+#[derive(Debug)]
+enum AttributeIndent {
+    /// Initial state. `ElementWriter` was just created and no attributes written yet
+    NoneAttributesWritten,
+    /// Write specified count of spaces to indent before writing attribute in `with_attribute()`
+    WriteSpaces(usize),
+    /// Keep space indent that should be used if `new_line()` would be called
+    Spaces(usize),
+    /// Write specified count of indent characters before writing attribute in `with_attribute()`
+    WriteConfigured(usize),
+    /// Keep indent that should be used if `new_line()` would be called
+    Configured(usize),
+}
+
 /// A struct to write an element. Contains methods to add attributes and inner
 /// elements to the element
 pub struct ElementWriter<'a, W> {
     writer: &'a mut Writer<W>,
     start_tag: BytesStart<'a>,
+    state: AttributeIndent,
+    /// Contains spaces used to write space indents of attributes
+    spaces: Vec<u8>,
 }
 
 impl<'a, W> ElementWriter<'a, W> {
@@ -349,7 +388,7 @@ impl<'a, W> ElementWriter<'a, W> {
     where
         I: Into<Attribute<'b>>,
     {
-        self.start_tag.push_attribute(attr);
+        self.write_attr(attr.into());
         self
     }
 
@@ -361,8 +400,132 @@ impl<'a, W> ElementWriter<'a, W> {
         I: IntoIterator,
         I::Item: Into<Attribute<'b>>,
     {
-        self.start_tag.extend_attributes(attributes);
+        let mut iter = attributes.into_iter();
+        if let Some(attr) = iter.next() {
+            self.write_attr(attr.into());
+            self.start_tag.extend_attributes(iter);
+        }
         self
+    }
+
+    /// Push a new line inside an element between attributes. Note, that this
+    /// method does nothing if [`Writer`] was created without indentation support.
+    ///
+    /// # Examples
+    ///
+    /// The following code
+    ///
+    /// ```
+    /// # use quick_xml::writer::Writer;
+    /// let mut buffer = Vec::new();
+    /// let mut writer = Writer::new_with_indent(&mut buffer, b' ', 2);
+    /// writer
+    ///   .create_element("element")
+    ///     //.new_line() (1)
+    ///     .with_attribute(("first", "1"))
+    ///     .with_attribute(("second", "2"))
+    ///     .new_line()
+    ///     .with_attributes([
+    ///         ("third", "3"),
+    ///         ("fourth", "4"),
+    ///     ])
+    ///     //.new_line() (2)
+    ///     .write_empty();
+    /// ```
+    /// will produce the following XMLs:
+    /// ```xml
+    /// <!-- result of the code above. Spaces always is used -->
+    /// <element first="1" second="2"
+    ///          third="3" fourth="4"/>
+    ///
+    /// <!-- if uncomment only (1) - indent depends on indentation
+    ///      settings - 2 spaces here -->
+    /// <element
+    ///   first="1" second="2"
+    ///   third="3" fourth="4"/>
+    ///
+    /// <!-- if uncomment only (2). Spaces always is used  -->
+    /// <element first="1" second="2"
+    ///          third="3" fourth="4"
+    /// />
+    /// ```
+    pub fn new_line(mut self) -> Self {
+        if let Some(i) = self.writer.indent.as_mut() {
+            match self.state {
+                // .new_line() called just after .create_element().
+                // Use element indent to additionally indent attributes
+                AttributeIndent::NoneAttributesWritten => {
+                    self.state = AttributeIndent::WriteConfigured(i.indent_size)
+                }
+
+                AttributeIndent::WriteSpaces(_) => {}
+                // .new_line() called when .with_attribute() was called at least once.
+                // The spaces should be used to indent
+                // Plan saved indent
+                AttributeIndent::Spaces(indent) => {
+                    self.state = AttributeIndent::WriteSpaces(indent)
+                }
+
+                AttributeIndent::WriteConfigured(_) => {}
+                // .new_line() called when .with_attribute() was called at least once.
+                // The configured indent characters should be used to indent
+                // Plan saved indent
+                AttributeIndent::Configured(indent) => {
+                    self.state = AttributeIndent::WriteConfigured(indent)
+                }
+            }
+            self.start_tag.push_newline();
+        };
+        self
+    }
+
+    /// Writes attribute and maintain indentation state
+    fn write_attr<'b>(&mut self, attr: Attribute<'b>) {
+        if let Some(i) = self.writer.indent.as_mut() {
+            // Save the indent that we should use next time when .new_line() be called
+            self.state = match self.state {
+                // Neither .new_line() or .with_attribute() yet called
+                // If newline inside attributes will be requested, we should indent them
+                // by the length of tag name and +1 for `<` and +1 for one space
+                AttributeIndent::NoneAttributesWritten => {
+                    self.start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(self.start_tag.name().as_ref().len() + 2)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteSpaces(indent) => {
+                    if self.spaces.len() < indent {
+                        self.spaces.resize(indent, b' ');
+                    }
+                    self.start_tag.push_indent(&self.spaces[..indent]);
+                    self.start_tag.push_attr(attr.into());
+                    AttributeIndent::Spaces(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Spaces(indent) => {
+                    self.start_tag.push_attribute(attr);
+                    AttributeIndent::Spaces(indent)
+                }
+
+                // Indent was requested by previous call to .new_line(), write it
+                // New line was already written
+                AttributeIndent::WriteConfigured(indent) => {
+                    self.start_tag.push_indent(i.additional(indent));
+                    self.start_tag.push_attr(attr.into());
+                    AttributeIndent::Configured(indent)
+                }
+                // .new_line() was not called, but .with_attribute() was.
+                // use the previously calculated indent
+                AttributeIndent::Configured(indent) => {
+                    self.start_tag.push_attribute(attr);
+                    AttributeIndent::Configured(indent)
+                }
+            };
+        } else {
+            self.start_tag.push_attribute(attr);
+        }
     }
 }
 
@@ -459,10 +622,7 @@ impl Indentation {
     /// Increase indentation by one level
     pub fn grow(&mut self) {
         self.current_indent_len += self.indent_size;
-        if self.current_indent_len > self.indents.len() {
-            self.indents
-                .resize(self.current_indent_len, self.indent_char);
-        }
+        self.ensure(self.current_indent_len);
     }
 
     /// Decrease indentation by one level. Do nothing, if level already zero
@@ -473,6 +633,19 @@ impl Indentation {
     /// Returns indent string for current level
     pub fn current(&self) -> &[u8] {
         &self.indents[..self.current_indent_len]
+    }
+
+    /// Returns indent with current indent plus additional indent
+    pub fn additional(&mut self, additional_indent: usize) -> &[u8] {
+        let new_len = self.current_indent_len + additional_indent;
+        self.ensure(new_len);
+        &self.indents[..new_len]
+    }
+
+    fn ensure(&mut self, new_len: usize) {
+        if self.indents.len() < new_len {
+            self.indents.resize(new_len, self.indent_char);
+        }
     }
 }
 
@@ -781,5 +954,252 @@ mod indentation {
     </inner>
 </outer>"#
         );
+    }
+
+    mod in_attributes {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn newline_first() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .with_attribute(("first", "1"))
+                .with_attribute(("second", "2"))
+                .new_line()
+                .with_attribute(("third", "3"))
+                .with_attribute(("fourth", "4"))
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                "<element\
+                    \n_first=\"1\" second=\"2\"\
+                    \n_third=\"3\" fourth=\"4\"/>"
+            );
+        }
+
+        #[test]
+        fn newline_inside() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .with_attribute(("first", "1"))
+                .with_attribute(("second", "2"))
+                .new_line()
+                .with_attribute(("third", "3"))
+                .with_attribute(("fourth", "4"))
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                "<element first=\"1\" second=\"2\"\
+                \n         third=\"3\" fourth=\"4\"/>"
+            );
+        }
+
+        #[test]
+        fn newline_last() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .with_attribute(("first", "1"))
+                .with_attribute(("second", "2"))
+                .new_line()
+                .with_attribute(("third", "3"))
+                .with_attribute(("fourth", "4"))
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            writer
+                .create_element("element")
+                .with_attribute(("first", "1"))
+                .with_attribute(("second", "2"))
+                .new_line()
+                .with_attribute(("third", "3"))
+                .with_attribute(("fourth", "4"))
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                "<element\
+                    \n_first=\"1\" second=\"2\"\
+                    \n_third=\"3\" fourth=\"4\"\
+                \n/>\
+                \n<element first=\"1\" second=\"2\"\
+                \n         third=\"3\" fourth=\"4\"\
+                \n/>"
+            );
+        }
+
+        #[test]
+        fn newline_twice() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            writer
+                .create_element("element")
+                .with_attribute(("first", "1"))
+                .new_line()
+                .new_line()
+                .with_attribute(("second", "2"))
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                r#"<element
+
+/>
+<element first="1"
+
+         second="2"/>"#
+            );
+        }
+
+        #[test]
+        fn without_indent() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new(&mut buffer);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            writer
+                .create_element("element")
+                .with_attribute(("first", "1"))
+                .new_line()
+                .new_line()
+                .with_attribute(("second", "2"))
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                r#"<element/><element first="1" second="2"/>"#
+            );
+        }
+
+        #[test]
+        fn long_element_name() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b't', 1);
+
+            writer
+                .create_element(String::from("x").repeat(128).as_str())
+                .with_attribute(("first", "1"))
+                .new_line()
+                .with_attribute(("second", "2"))
+                .write_empty()
+                .expect("Problem with indentation reference");
+        }
+    }
+
+    mod in_attributes_multi {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn newline_first() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .with_attributes([("first", "1"), ("second", "2")])
+                .new_line()
+                .with_attributes([("third", "3"), ("fourth", "4")])
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                "<element\
+                    \n_first=\"1\" second=\"2\"\
+                    \n_third=\"3\" fourth=\"4\"/>"
+            );
+        }
+
+        #[test]
+        fn newline_inside() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .with_attributes([("first", "1"), ("second", "2")])
+                .new_line()
+                .with_attributes([("third", "3"), ("fourth", "4")])
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                r#"<element first="1" second="2"
+         third="3" fourth="4"/>"#
+            );
+        }
+
+        #[test]
+        fn newline_last() {
+            let mut buffer = Vec::new();
+            let mut writer = Writer::new_with_indent(&mut buffer, b'_', 1);
+
+            writer
+                .create_element("element")
+                .new_line()
+                .with_attributes([("first", "1"), ("second", "2")])
+                .new_line()
+                .with_attributes([("third", "3"), ("fourth", "4")])
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            writer
+                .create_element("element")
+                .with_attributes([("first", "1"), ("second", "2")])
+                .new_line()
+                .with_attributes([("third", "3"), ("fourth", "4")])
+                .new_line()
+                .write_empty()
+                .expect("write tag failed");
+
+            assert_eq!(
+                std::str::from_utf8(&buffer).unwrap(),
+                "<element\
+                    \n_first=\"1\" second=\"2\"\
+                    \n_third=\"3\" fourth=\"4\"\
+                \n/>\
+                \n<element first=\"1\" second=\"2\"\
+                \n         third=\"3\" fourth=\"4\"\
+                \n/>"
+            );
+        }
     }
 }

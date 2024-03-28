@@ -33,6 +33,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#629]: Added a default case to `impl_deserialize_for_internally_tagged_enum` macro so that
   it can handle every attribute that does not match existing cases within an enum variant.
 - [#722]: Allow to pass owned strings to `Writer::create_element`. This is breaking change!
+- [#275]: Added `ElementWriter::new_line()` which enables pretty printing elements with multiple attributes.
 
 ### Bug Fixes
 
@@ -67,6 +68,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#738]: Add an example of how to deserialize XML elements into Rust enums using an
   intermediate custom deserializer.
 
+[#275]: https://github.com/tafia/quick-xml/issues/275
 [#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
