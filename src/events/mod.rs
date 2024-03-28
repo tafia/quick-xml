@@ -251,13 +251,13 @@ impl<'a> BytesStart<'a> {
         bytes.push(b'"');
     }
 
-    /// Adds new line in attribute
+    /// Adds new line in existing element
     pub fn push_newline(&mut self) {
         let bytes = self.buf.to_mut();
         bytes.push(b'\n');
     }
 
-    /// Adds indent inside an existing attribute.
+    /// Adds indent inside an existing element.
     pub fn push_indent(&mut self, indent: &[u8]) {
         let bytes = self.buf.to_mut();
         bytes.extend_from_slice(indent);
