@@ -364,8 +364,8 @@ impl<'a, W> ElementWriter<'a, W> {
         self
     }
 
-    /// Push a new line inside an attribute.
-    pub fn attribute_new_line(mut self, indentation: usize) -> Self  {
+    /// Push a new line inside an element.
+    pub fn element_new_line(mut self, indentation: usize) -> Self  {
         if let Some(ref i) = self.writer.indent {
             self.start_tag.push_newline();
             let current_indent = i.current();
@@ -806,7 +806,7 @@ fn element_writer_newline() {
     .create_element("element")
     .with_attribute(("first", "1"))
     .with_attribute(("second", "2"))
-    .attribute_new_line(4)
+    .element_new_line(4)
     .with_attribute(("third", "3"))
     .write_empty().expect("write tag failed");
 
