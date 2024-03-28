@@ -363,6 +363,21 @@ impl<'a, W> ElementWriter<'a, W> {
         self.start_tag.extend_attributes(attributes);
         self
     }
+
+    /// Push a new line inside an attribute.
+    pub fn attribute_new_line(mut self, indentation: usize) -> Self  {
+        if let Some(ref i) = self.writer.indent {
+            self.start_tag.push_newline();
+            println!("{:?}",&i.current());
+            let current_indent = i.current();
+            let mut indent = vec![i.indent_char; indentation-1];
+            indent.extend(current_indent);
+            self.start_tag.push_indent(&indent);
+        } else {
+            self.start_tag.push_newline();
+        }
+        self
+    }
 }
 
 impl<'a, W: Write> ElementWriter<'a, W> {
@@ -781,4 +796,24 @@ mod indentation {
 </outer>"#
         );
     }
+}
+
+#[test]
+fn element_writer_newline() {
+    let mut buffer = Vec::new();
+    let mut writer = Writer::new_with_indent(&mut buffer, b' ', 4);
+
+    writer
+    .create_element("element")
+    .with_attribute(("first", "1"))
+    .with_attribute(("second", "2"))
+    .attribute_new_line(4)
+    .with_attribute(("third", "3"))
+    .write_empty().expect("write tag failed");
+
+    assert_eq!(
+        std::str::from_utf8(&buffer).unwrap(),
+        r#"<element first="1" second="2"
+    third="3"/>"#
+    );
 }
