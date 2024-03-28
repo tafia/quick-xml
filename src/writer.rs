@@ -369,7 +369,7 @@ impl<'a, W> ElementWriter<'a, W> {
         if let Some(ref i) = self.writer.indent {
             self.start_tag.push_newline();
             let current_indent = i.current();
-            let mut indent = vec![i.indent_char; indentation-1];
+            let mut indent = vec![i.indent_char; indentation];
             indent.extend(current_indent);
             self.start_tag.push_indent(&indent);
         } else {
@@ -813,6 +813,6 @@ fn element_writer_newline() {
     assert_eq!(
         std::str::from_utf8(&buffer).unwrap(),
         r#"<element first="1" second="2"
-    third="3"/>"#
+     third="3"/>"#
     );
 }
