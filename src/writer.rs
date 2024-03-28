@@ -368,7 +368,6 @@ impl<'a, W> ElementWriter<'a, W> {
     pub fn attribute_new_line(mut self, indentation: usize) -> Self  {
         if let Some(ref i) = self.writer.indent {
             self.start_tag.push_newline();
-            println!("{:?}",&i.current());
             let current_indent = i.current();
             let mut indent = vec![i.indent_char; indentation-1];
             indent.extend(current_indent);
