@@ -231,7 +231,11 @@ macro_rules! impl_buffered_source {
     };
 }
 
-// Make it public for use in async implementations
+// Make it public for use in async implementations.
+// New rustc reports
+// > warning: the item `impl_buffered_source` is imported redundantly
+// so make it public only when async feature is enabled
+#[cfg(feature = "async-tokio")]
 pub(super) use impl_buffered_source;
 
 /// Implementation of `XmlSource` for any `BufRead` reader using a user-given
