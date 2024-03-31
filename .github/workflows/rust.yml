@@ -6,21 +6,21 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Check fmt
       run: cargo fmt -- --check
 
   msrv:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@1.56.0
     - run: cargo check
 
   minimal-versions:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install tools
       run: cargo install cargo-hack cargo-minimal-versions
     - name: Install nightly rust
@@ -46,7 +46,7 @@ jobs:
       RUSTFLAGS: -C instrument-coverage
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install coverage reporter (llvm-tools-preview)
       if: runner.os == 'Linux'
       run: rustup component add llvm-tools-preview
@@ -96,7 +96,7 @@ jobs:
               -o ./coverage.lcov
     - name: Upload coverage to codecov.io
       if: runner.os == 'Linux'
-      uses: codecov/codecov-action@v2
+      uses: codecov/codecov-action@v4
       with:
         files: ./coverage.lcov
         flags: unittests
