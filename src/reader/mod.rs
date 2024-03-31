@@ -9,8 +9,6 @@ use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::reader::state::ReaderState;
 
-use memchr;
-
 /// A struct that holds a parser configuration.
 ///
 /// Current parser configuration can be retrieved by calling [`Reader::config()`]

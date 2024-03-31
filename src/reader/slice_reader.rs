@@ -14,8 +14,6 @@ use crate::events::Event;
 use crate::name::QName;
 use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
 
-use memchr;
-
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
 /// itself can be used to borrow from.

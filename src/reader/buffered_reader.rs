@@ -5,8 +5,6 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use memchr;
-
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
