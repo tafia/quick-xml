@@ -96,7 +96,7 @@ jobs:
               -o ./coverage.lcov
     - name: Upload coverage to codecov.io
       if: runner.os == 'Linux'
-      uses: codecov/codecov-action@v2
+      uses: codecov/codecov-action@v4
       with:
         files: ./coverage.lcov
         flags: unittests
