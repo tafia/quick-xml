@@ -8,7 +8,6 @@ use crate::events::attributes::Attribute;
 use crate::events::BytesStart;
 use crate::utils::write_byte_string;
 use memchr::memchr;
-use std::convert::TryFrom;
 use std::fmt::{self, Debug, Formatter};
 
 /// A [qualified name] of an element or an attribute, including an optional

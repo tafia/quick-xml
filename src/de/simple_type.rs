@@ -11,7 +11,7 @@ use crate::utils::CowRef;
 use memchr::memchr;
 use serde::de::value::UnitDeserializer;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
-use serde::{self, serde_if_integer128};
+use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 

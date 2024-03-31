@@ -8,8 +8,6 @@ use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Even
 use crate::reader::EncodingRef;
 use crate::reader::{is_whitespace, BangType, Config, ParseState};
 
-use memchr;
-
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
 /// get back produced [`Event`]s.

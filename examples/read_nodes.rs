@@ -30,6 +30,8 @@ const XML: &str = r#"
   </Localization>
 "#;
 
+// Enum variants is not read in example, so suppress the warning
+#[allow(dead_code)]
 #[derive(Debug)]
 enum AppError {
     /// XML parsing error

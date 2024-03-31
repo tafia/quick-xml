@@ -308,7 +308,6 @@ pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
     use super::*;
-    use crate::utils::write_byte_string;
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
