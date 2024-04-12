@@ -23,7 +23,7 @@ macro_rules! deserialize_num {
 /// The method will borrow if encoding is UTF-8 compatible and `name` contains
 /// only UTF-8 compatible characters (usually only ASCII characters).
 #[inline]
-fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, DeError> {
+pub(super) fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, DeError> {
     let local = name.local_name();
     Ok(decoder.decode(local.into_inner())?)
 }
