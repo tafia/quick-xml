@@ -60,6 +60,8 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#362]: Now default quote level is `QuoteLevel::Partial` when using serde serializer.
 - [#689]: `buffer_position()` now always report the position the parser last seen.
   To get an error position use `error_position()`.
+- [#738]: Add an example of how to deserialize XML elements into Rust enums using an
+  intermediate custom deserializer.
 
 [#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
@@ -70,6 +72,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#689]: https://github.com/tafia/quick-xml/pull/689
 [#704]: https://github.com/tafia/quick-xml/pull/704
 [#705]: https://github.com/tafia/quick-xml/pull/705
+[#738]: https://github.com/tafia/quick-xml/pull/738
 
 
 ## 0.31.0 -- 2023-10-22
