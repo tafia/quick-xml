@@ -111,13 +111,12 @@ async-tokio = ["tokio"]
 ## [#158]: https://github.com/tafia/quick-xml/issues/158
 encoding = ["encoding_rs"]
 
-## Enables support for recognizing all [HTML 5 entities] in [`unescape`] and
-## [`unescape_with`] functions. The full list of entities also can be found in
+## Enables support for recognizing all [HTML 5 entities] in [`unescape`]
+## function. The full list of entities also can be found in
 ## <https://html.spec.whatwg.org/entities.json>.
 ##
 ## [HTML 5 entities]: https://dev.w3.org/html5/html-author/charref
 ## [`unescape`]: crate::escape::unescape
-## [`unescape_with`]: crate::escape::unescape_with
 escape-html = []
 
 ## This feature is for the Serde deserializer that enables support for deserializing

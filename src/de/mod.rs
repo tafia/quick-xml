@@ -1997,7 +1997,7 @@ mod text;
 mod var;
 
 pub use crate::errors::serialize::DeError;
-pub use resolver::{EntityResolver, NoEntityResolver};
+pub use resolver::{EntityResolver, PredefinedEntityResolver};
 
 use crate::{
     de::map::ElementMapAccess,
@@ -2125,7 +2125,7 @@ impl<'a> PayloadEvent<'a> {
 /// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
 /// [`PayloadEvent::Text`] events, that followed by any event except
 /// [`PayloadEvent::Text`] or [`PayloadEvent::CData`], are trimmed from the end.
-struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = NoEntityResolver> {
+struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = PredefinedEntityResolver> {
     /// A source of low-level XML events
     reader: R,
     /// Intermediate event, that could be returned by the next call to `next()`.
@@ -2356,7 +2356,7 @@ where
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A structure that deserializes XML into Rust values.
-pub struct Deserializer<'de, R, E: EntityResolver = NoEntityResolver>
+pub struct Deserializer<'de, R, E: EntityResolver = PredefinedEntityResolver>
 where
     R: XmlRead<'de>,
 {
@@ -2799,7 +2799,7 @@ impl<'de> Deserializer<'de, SliceReader<'de>> {
     /// Deserializer created with this method will not resolve custom entities.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'de str) -> Self {
-        Self::from_str_with_resolver(source, NoEntityResolver)
+        Self::from_str_with_resolver(source, PredefinedEntityResolver)
     }
 }
 
@@ -2837,7 +2837,7 @@ where
     ///
     /// Deserializer created with this method will not resolve custom entities.
     pub fn from_reader(reader: R) -> Self {
-        Self::with_resolver(reader, NoEntityResolver)
+        Self::with_resolver(reader, PredefinedEntityResolver)
     }
 }
 

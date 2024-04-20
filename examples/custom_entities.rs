@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 
+use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 use regex::bytes::Regex;
@@ -59,8 +60,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Event::Text(ref e)) => {
                 println!(
                     "text value: {}",
-                    e.unescape_with(|ent| custom_entities.get(ent).map(|s| s.as_str()))
-                        .unwrap()
+                    e.unescape_with(|ent| match custom_entities.get(ent) {
+                        Some(s) => Some(s.as_str()),
+                        None => resolve_predefined_entity(ent),
+                    })
+                    .unwrap()
                 );
             }
             Ok(Event::Eof) => break,
