@@ -242,3 +242,8 @@ path = "tests/async-tokio.rs"
 name = "read_nodes_serde"
 required-features = ["serialize"]
 path = "examples/read_nodes_serde.rs"
+
+[[example]]
+name = "flattened_enum"
+required-features = ["serialize"]
+path = "examples/flattened_enum.rs"
