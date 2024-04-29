@@ -60,7 +60,7 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
                 attributes,
             } => {
                 let element_writer = writer
-                    .create_element(&name)
+                    .create_element(name)
                     .with_attributes(attributes.into_iter().copied());
                 use ElementWriterFunc::*;
                 match func {
