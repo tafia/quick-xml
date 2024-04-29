@@ -30,6 +30,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#362]: Added `BytesCData::minimal_escape()` which escapes only `&` and `<`.
 - [#362]: Added `Serializer::set_quote_level()` which allow to set desired level of escaping.
 - [#705]: Added `NsReader::prefixes()` to list all the prefixes currently declared.
+- [#629]: Added a default case to `impl_deserialize_for_internally_tagged_enum` macro so that it can handle every attribute that does not match existing cases within an enum variant.
 
 ### Bug Fixes
 
@@ -66,6 +67,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#362]: https://github.com/tafia/quick-xml/issues/362
 [#513]: https://github.com/tafia/quick-xml/issues/513
 [#622]: https://github.com/tafia/quick-xml/issues/622
+[#629]: https://github.com/tafia/quick-xml/issues/629
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
 [#684]: https://github.com/tafia/quick-xml/pull/684

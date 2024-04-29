@@ -44,6 +44,54 @@ macro_rules! deserialize_variant {
     });
 }
 
+/// Helper macro that generates different match expressions depending on the presence
+/// of default variant
+#[macro_export]
+#[doc(hidden)]
+macro_rules! deserialize_match {
+    // Only default variant
+    (
+        $tag:ident, $de:ident, $enum:ty,
+        (_ => $($default_variant:tt)+ )
+        $(,)?
+    ) => (
+        Ok($crate::deserialize_variant!( $de, $enum, $($default_variant)+ ))
+    );
+
+    // With default variant
+    (
+        $tag:ident, $de:ident, $enum:ty,
+        $(
+            ($variant_tag:literal => $($variant:tt)+ )
+        ),*
+        , (_ => $($default_variant:tt)+ )
+        $(,)?
+    ) => (
+        match $tag.as_ref() {
+            $(
+                $variant_tag => Ok($crate::deserialize_variant!( $de, $enum, $($variant)+ )),
+            )*
+            _ => Ok($crate::deserialize_variant!( $de, $enum, $($default_variant)+ )),
+        }
+    );
+
+    // Without default variant
+    (
+        $tag:ident, $de:ident, $enum:ty,
+        $(
+            ($variant_tag:literal => $($variant:tt)+ )
+        ),*
+        $(,)?
+    ) => (
+        match $tag.as_ref() {
+            $(
+                $variant_tag => Ok($crate::deserialize_variant!( $de, $enum, $($variant)+ )),
+            )*
+            _ => Err(A::Error::unknown_field(&$tag, &[$($variant_tag),+])),
+        }
+    );
+}
+
 /// A helper to implement [`Deserialize`] for [internally tagged] enums which
 /// does not use [`Deserializer::deserialize_any`] that produces wrong results
 /// with XML because of [serde#1183].
@@ -118,6 +166,62 @@ macro_rules! deserialize_variant {
 /// );
 /// ```
 ///
+/// You don't necessarily have to provide all the enumeration variants and can use
+/// `_` to put every undefined tag into an enumeration variant.
+/// This default variant (`_ => ...`) must be the last one to appear in the macro,
+/// like `_ => Other` in the example below:
+///
+/// ```
+/// # use pretty_assertions::assert_eq;
+/// use quick_xml::de::from_str;
+/// use quick_xml::impl_deserialize_for_internally_tagged_enum;
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// struct Root {
+///     one: InternallyTaggedEnum,
+///     two: InternallyTaggedEnum,
+///     three: InternallyTaggedEnum,
+/// }
+///
+/// #[derive(Debug, PartialEq)]
+/// enum InternallyTaggedEnum {
+///     NewType(Newtype),
+///     Other,
+/// }
+///
+/// #[derive(Deserialize, Debug, PartialEq)]
+/// struct Newtype {
+///     #[serde(rename = "@attribute")]
+///     attribute: u64,
+/// }
+///
+/// // The macro needs the type of the enum, the tag name,
+/// // and information about all the variants
+/// impl_deserialize_for_internally_tagged_enum!{
+///     InternallyTaggedEnum, "@tag",
+///     ("NewType" => NewType(Newtype)),
+///     (_ => Other),
+/// }
+///
+/// assert_eq!(
+///     from_str::<Root>(r#"
+///         <root>
+///             <one tag="NewType" attribute="42" />
+///             <two tag="Something" ignoredAttribute="something" />
+///             <three tag="SomethingElse">
+///                 <ignoredToo />
+///             </three>
+///         </root>
+///     "#).unwrap(),
+///     Root {
+///         one: InternallyTaggedEnum::NewType(Newtype { attribute: 42 }),
+///         two: InternallyTaggedEnum::Other,
+///         three: InternallyTaggedEnum::Other,
+///     },
+/// );
+/// ```
+///
 /// [internally tagged]: https://serde.rs/enum-representations.html#internally-tagged
 /// [serde#1183]: https://github.com/serde-rs/serde/issues/1183
 #[macro_export(local_inner_macros)]
@@ -125,9 +229,7 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
     (
         $enum:ty,
         $tag:literal,
-        $(
-            ($variant_tag:literal => $($variant:tt)+ )
-        ),* $(,)?
+        $($cases:tt)*
     ) => {
         impl<'de> serde::de::Deserialize<'de> for $enum {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -178,12 +280,7 @@ macro_rules! impl_deserialize_for_internally_tagged_enum {
                         }?;
 
                         let de = serde::de::value::MapAccessDeserializer::new(map);
-                        match tag.as_ref() {
-                            $(
-                                $variant_tag => Ok(deserialize_variant!( de, $enum, $($variant)+ )),
-                            )*
-                            _ => Err(A::Error::unknown_field(&tag, &[$($variant_tag),+])),
-                        }
+                        $crate::deserialize_match!( tag, de, $enum, $($cases)* )
                     }
                 }
                 // Tell the deserializer to deserialize the data as a map,
