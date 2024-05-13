@@ -40,6 +40,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#684]: Fix incorrect position reported for `Error::IllFormed(DoubleHyphenInComment)`.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(MissingDoctypeName)`.
 - [#704]: Fix empty tags with attributes not being expanded when `expand_empty_elements` is set to true.
+- [#683]: Use local tag name when check tag name against possible names for field.
 
 ### Misc Changes
 
@@ -72,6 +73,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#629]: https://github.com/tafia/quick-xml/issues/629
 [#675]: https://github.com/tafia/quick-xml/pull/675
 [#677]: https://github.com/tafia/quick-xml/pull/677
+[#683]: https://github.com/tafia/quick-xml/issues/683
 [#684]: https://github.com/tafia/quick-xml/pull/684
 [#689]: https://github.com/tafia/quick-xml/pull/689
 [#704]: https://github.com/tafia/quick-xml/pull/704

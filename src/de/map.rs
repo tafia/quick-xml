@@ -789,7 +789,7 @@ fn not_in(
     start: &BytesStart,
     decoder: Decoder,
 ) -> Result<bool, DeError> {
-    let tag = decoder.decode(start.name().into_inner())?;
+    let tag = decoder.decode(start.local_name().into_inner())?;
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }
@@ -1181,6 +1181,8 @@ where
 
 #[test]
 fn test_not_in() {
+    use pretty_assertions::assert_eq;
+
     let tag = BytesStart::new("tag");
 
     assert_eq!(not_in(&[], &tag, Decoder::utf8()).unwrap(), true);
@@ -1191,5 +1193,19 @@ fn test_not_in() {
     assert_eq!(
         not_in(&["some", "tag", "included"], &tag, Decoder::utf8()).unwrap(),
         false
+    );
+
+    let tag_ns = BytesStart::new("ns1:tag");
+    assert_eq!(
+        not_in(&["no", "such", "tags"], &tag_ns, Decoder::utf8()).unwrap(),
+        true
+    );
+    assert_eq!(
+        not_in(&["some", "tag", "included"], &tag_ns, Decoder::utf8()).unwrap(),
+        false
+    );
+    assert_eq!(
+        not_in(&["some", "namespace", "ns1:tag"], &tag_ns, Decoder::utf8()).unwrap(),
+        true
     );
 }

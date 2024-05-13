@@ -462,3 +462,35 @@ fn issue580() {
         }
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/683.
+#[test]
+fn issue683() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum ScheduleLocation {
+        #[serde(rename = "DT")]
+        Destination,
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    #[allow(non_snake_case)]
+    struct Schedule {
+        cancelReason: Option<u32>,
+        #[serde(rename = "$value")]
+        locations: Vec<ScheduleLocation>,
+    }
+    let xml = r#"
+        <schedule xmlns:ns2="http://www.thalesgroup.com/rtti/PushPort/Schedules/v3">
+            <ns2:DT/>
+            <ns2:cancelReason>918</ns2:cancelReason>
+        </schedule>"#;
+    let result = quick_xml::de::from_str::<Schedule>(xml);
+    dbg!(&result);
+    assert_eq!(
+        result.unwrap(),
+        Schedule {
+            cancelReason: Some(918),
+            locations: vec![ScheduleLocation::Destination],
+        }
+    );
+}
