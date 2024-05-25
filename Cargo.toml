@@ -186,9 +186,6 @@ serialize = ["serde"] # "dep:" prefix only avalible from Rust 1.60
 [package.metadata.docs.rs]
 # document all features
 all-features = true
-# defines the configuration attribute `docs_rs` to enable feature requirements
-# See https://stackoverflow.com/questions/61417452
-rustdoc-args = ["--cfg", "docs_rs"]
 
 # Tests, benchmarks and examples doesn't included in package on crates.io,
 # so we need to specify a path, otherwise `cargo package` complains
