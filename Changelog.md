@@ -35,6 +35,10 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#722]: Allow to pass owned strings to `Writer::create_element`. This is breaking change!
 - [#275]: Added `ElementWriter::new_line()` which enables pretty printing elements with multiple attributes.
 - [#743]: Add `Deserializer::get_ref()` to get XML Reader from serde Deserializer
+- [#734]: Add helper functions to resolve predefined XML and HTML5 entities:
+  - `quick_xml::escape::resolve_predefined_entity`
+  - `quick_xml::escape::resolve_xml_entity`
+  - `quick_xml::escape::resolve_html5_entity`
 
 ### Bug Fixes
 
@@ -83,6 +87,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#704]: https://github.com/tafia/quick-xml/pull/704
 [#705]: https://github.com/tafia/quick-xml/pull/705
 [#722]: https://github.com/tafia/quick-xml/pull/722
+[#734]: https://github.com/tafia/quick-xml/pull/734
 [#738]: https://github.com/tafia/quick-xml/pull/738
 [#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748

@@ -221,7 +221,7 @@ where
                 if let Some(entity) = pat.strip_prefix('#') {
                     let codepoint = parse_number(entity, start..end)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
-                } else if let Some(value) = named_entity(pat) {
+                } else if let Some(value) = resolve_predefined_entity(pat) {
                     unescaped.push_str(value);
                 } else if let Some(value) = resolve_entity(pat) {
                     unescaped.push_str(value);
@@ -248,10 +248,45 @@ where
     }
 }
 
-#[cfg(not(feature = "escape-html"))]
-fn named_entity(name: &str) -> Option<&str> {
+/// Resolves predefined XML entities or all HTML5 entities depending on the feature
+/// [`escape-html`](https://docs.rs/quick-xml/latest/quick_xml/#escape-html).
+///
+/// Behaves like [`resolve_xml_entity`] if feature is not enabled and as
+/// [`resolve_html5_entity`] if enabled.
+#[inline]
+pub fn resolve_predefined_entity(entity: &str) -> Option<&'static str> {
+    #[cfg(not(feature = "escape-html"))]
+    {
+        resolve_xml_entity(entity)
+    }
+
+    #[cfg(feature = "escape-html")]
+    {
+        resolve_html5_entity(entity)
+    }
+}
+
+/// Resolves predefined XML entities. If specified entity is not a predefined XML
+/// entity, `None` is returned.
+///
+/// The complete list of predefined entities are defined in the [specification].
+///
+/// ```
+/// # use quick_xml::escape::resolve_xml_entity;
+/// # use pretty_assertions::assert_eq;
+/// assert_eq!(resolve_xml_entity("lt"), Some("<"));
+/// assert_eq!(resolve_xml_entity("gt"), Some(">"));
+/// assert_eq!(resolve_xml_entity("amp"), Some("&"));
+/// assert_eq!(resolve_xml_entity("apos"), Some("'"));
+/// assert_eq!(resolve_xml_entity("quot"), Some("\""));
+///
+/// assert_eq!(resolve_xml_entity("foo"), None);
+/// ```
+///
+/// [specification]: https://www.w3.org/TR/xml11/#sec-predefined-ent
+pub fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
     // match over strings are not allowed in const functions
-    let s = match name.as_bytes() {
+    let s = match entity.as_bytes() {
         b"lt" => "<",
         b"gt" => ">",
         b"amp" => "&",
@@ -261,12 +296,13 @@ fn named_entity(name: &str) -> Option<&str> {
     };
     Some(s)
 }
-#[cfg(feature = "escape-html")]
-fn named_entity(name: &str) -> Option<&str> {
+
+/// Resolves all HTML5 entities. For complete list see <https://dev.w3.org/html5/html-author/charref>.
+pub fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
     //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json
-    let s = match name.as_bytes() {
+    let s = match entity.as_bytes() {
         b"Tab" => "\u{09}",
         b"NewLine" => "\u{0A}",
         b"excl" => "\u{21}",
