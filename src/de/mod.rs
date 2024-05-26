@@ -2026,11 +2026,14 @@ pub(crate) const VALUE_KEY: &str = "$value";
 /// events. _Consequent_ means that events should follow each other or be
 /// delimited only by (any count of) [`Comment`] or [`PI`] events.
 ///
+/// Internally text is stored in `Cow<str>`. Cloning of text is cheap while it
+/// is borrowed and makes copies of data when it is owned.
+///
 /// [`Text`]: Event::Text
 /// [`CData`]: Event::CData
 /// [`Comment`]: Event::Comment
 /// [`PI`]: Event::PI
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Text<'a> {
     text: Cow<'a, str>,
 }
@@ -2056,7 +2059,7 @@ impl<'a> From<&'a str> for Text<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Simplified event which contains only these variants that used by deserializer
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeEvent<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
@@ -2088,7 +2091,7 @@ pub enum DeEvent<'a> {
 ///
 /// [`Text`]: Event::Text
 /// [`CData`]: Event::CData
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PayloadEvent<'a> {
     /// Start tag (with attributes) `<tag attr="value">`.
     Start(BytesStart<'a>),
