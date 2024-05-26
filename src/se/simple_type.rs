@@ -4,7 +4,7 @@
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
 use crate::errors::serialize::DeError;
-use crate::escapei::_escape;
+use crate::escape::_escape;
 use crate::se::{Indent, QuoteLevel};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
