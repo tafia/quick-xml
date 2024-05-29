@@ -4,7 +4,7 @@
 [![Crate](https://img.shields.io/crates/v/quick-xml.svg)](https://crates.io/crates/quick-xml)
 [![docs.rs](https://docs.rs/quick-xml/badge.svg)](https://docs.rs/quick-xml)
 [![codecov](https://img.shields.io/codecov/c/github/tafia/quick-xml)](https://codecov.io/gh/tafia/quick-xml)
-[![MSRV](https://img.shields.io/badge/rustc-1.52.0+-ab6000.svg)](https://blog.rust-lang.org/2021/05/06/Rust-1.52.0.html)
+[![MSRV](https://img.shields.io/badge/rustc-1.56.0+-ab6000.svg)](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
 
 High performance xml pull reader/writer.
 
