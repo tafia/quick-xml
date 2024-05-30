@@ -34,6 +34,7 @@ to get an offset of the error position. For `SyntaxError`s the range
   it can handle every attribute that does not match existing cases within an enum variant.
 - [#722]: Allow to pass owned strings to `Writer::create_element`. This is breaking change!
 - [#275]: Added `ElementWriter::new_line()` which enables pretty printing elements with multiple attributes.
+- [#743]: Add `Deserializer::get_ref()` to get XML Reader from serde Deserializer
 
 ### Bug Fixes
 
@@ -83,6 +84,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#705]: https://github.com/tafia/quick-xml/pull/705
 [#722]: https://github.com/tafia/quick-xml/pull/722
 [#738]: https://github.com/tafia/quick-xml/pull/738
+[#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748
 [`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
 [`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
