@@ -18,6 +18,9 @@ The method of reporting positions of errors has changed - use `error_position()`
 to get an offset of the error position. For `SyntaxError`s the range
 `error_position()..buffer_position()` also will represent a span of error.
 
+The way of resolve entities with `unescape_with` are changed. Those methods no longer
+resolve predefined entities.
+
 ### New Features
 
 - [#513]: Allow to continue parsing after getting new `Error::IllFormed`.
@@ -35,6 +38,10 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#722]: Allow to pass owned strings to `Writer::create_element`. This is breaking change!
 - [#275]: Added `ElementWriter::new_line()` which enables pretty printing elements with multiple attributes.
 - [#743]: Add `Deserializer::get_ref()` to get XML Reader from serde Deserializer
+- [#734]: Add helper functions to resolve predefined XML and HTML5 entities:
+  - `quick_xml::escape::resolve_predefined_entity`
+  - `quick_xml::escape::resolve_xml_entity`
+  - `quick_xml::escape::resolve_html5_entity`
 
 ### Bug Fixes
 
@@ -69,6 +76,10 @@ to get an offset of the error position. For `SyntaxError`s the range
 - [#738]: Add an example of how to deserialize XML elements into Rust enums using an
   intermediate custom deserializer.
 - [#748]: Implement `Clone` for [`DeEvent`], [`PayloadEvent`] and [`Text`].
+- [#734]: Rename `NoEntityResolver` to `PredefinedEntityResolver`.
+- [#734]: No longer resolve predefined entities (`lt`, `gt`, `apos`, `quot`, `amp`)
+  in `unescape_with` family of methods. You should do that by yourself using the methods
+  listed above.
 
 [#275]: https://github.com/tafia/quick-xml/issues/275
 [#362]: https://github.com/tafia/quick-xml/issues/362
@@ -83,6 +94,7 @@ to get an offset of the error position. For `SyntaxError`s the range
 [#704]: https://github.com/tafia/quick-xml/pull/704
 [#705]: https://github.com/tafia/quick-xml/pull/705
 [#722]: https://github.com/tafia/quick-xml/pull/722
+[#734]: https://github.com/tafia/quick-xml/pull/734
 [#738]: https://github.com/tafia/quick-xml/pull/738
 [#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748

@@ -46,7 +46,9 @@ use std::str::from_utf8;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, IllFormedError, Result};
-use crate::escape::{escape, minimal_escape, partial_escape, unescape_with};
+use crate::escape::{
+    escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
+};
 use crate::name::{LocalName, QName};
 use crate::reader::is_whitespace;
 use crate::utils::write_cow_string;
@@ -748,7 +750,7 @@ impl<'a> BytesText<'a> {
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
     pub fn unescape(&self) -> Result<Cow<'a, str>> {
-        self.unescape_with(|_| None)
+        self.unescape_with(resolve_predefined_entity)
     }
 
     /// Decodes then unescapes the content of the event with custom entities.

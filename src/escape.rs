@@ -184,7 +184,7 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
 /// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
 pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
-    unescape_with(raw, |_| None)
+    unescape_with(raw, resolve_predefined_entity)
 }
 
 /// Unescape an `&str` and replaces all xml escaped characters (`&...;`) into
@@ -192,8 +192,40 @@ pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
 ///
 /// If feature [`escape-html`] is enabled, then recognizes all [HTML5 escapes].
 ///
+/// Predefined entities will be resolved _after_ trying to resolve with `resolve_entity`,
+/// which allows you to override default behavior which required in some XML dialects.
+///
+/// Character references (`&#hh;`) cannot be overridden, they are resolved before
+/// calling `resolve_entity`.
+///
+/// Note, that entities will not be resolved recursively. In order to satisfy the
+/// XML [requirements] you should unescape nested entities by yourself.
+///
+/// # Example
+///
+/// ```
+/// use quick_xml::escape::resolve_xml_entity;
+/// # use quick_xml::escape::unescape_with;
+/// # use pretty_assertions::assert_eq;
+/// let override_named_entities = |entity: &str| match entity {
+///     // Override standard entities
+///     "lt" => Some("FOO"),
+///     "gt" => Some("BAR"),
+///     // Resolve custom entities
+///     "baz" => Some("&lt;"),
+///     // Delegate other entities to the default implementation
+///     _ => resolve_xml_entity(entity),
+/// };
+///
+/// assert_eq!(
+///     unescape_with("&amp;&lt;test&gt;&baz;", override_named_entities).unwrap(),
+///     "&FOOtestBAR&lt;"
+/// );
+/// ```
+///
 /// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
+/// [requirements]: https://www.w3.org/TR/xml11/#intern-replacement
 pub fn unescape_with<'input, 'entity, F>(
     raw: &'input str,
     mut resolve_entity: F,
@@ -221,8 +253,6 @@ where
                 if let Some(entity) = pat.strip_prefix('#') {
                     let codepoint = parse_number(entity, start..end)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
-                } else if let Some(value) = named_entity(pat) {
-                    unescaped.push_str(value);
                 } else if let Some(value) = resolve_entity(pat) {
                     unescaped.push_str(value);
                 } else {
@@ -248,10 +278,45 @@ where
     }
 }
 
-#[cfg(not(feature = "escape-html"))]
-fn named_entity(name: &str) -> Option<&str> {
+/// Resolves predefined XML entities or all HTML5 entities depending on the feature
+/// [`escape-html`](https://docs.rs/quick-xml/latest/quick_xml/#escape-html).
+///
+/// Behaves like [`resolve_xml_entity`] if feature is not enabled and as
+/// [`resolve_html5_entity`] if enabled.
+#[inline]
+pub fn resolve_predefined_entity(entity: &str) -> Option<&'static str> {
+    #[cfg(not(feature = "escape-html"))]
+    {
+        resolve_xml_entity(entity)
+    }
+
+    #[cfg(feature = "escape-html")]
+    {
+        resolve_html5_entity(entity)
+    }
+}
+
+/// Resolves predefined XML entities. If specified entity is not a predefined XML
+/// entity, `None` is returned.
+///
+/// The complete list of predefined entities are defined in the [specification].
+///
+/// ```
+/// # use quick_xml::escape::resolve_xml_entity;
+/// # use pretty_assertions::assert_eq;
+/// assert_eq!(resolve_xml_entity("lt"), Some("<"));
+/// assert_eq!(resolve_xml_entity("gt"), Some(">"));
+/// assert_eq!(resolve_xml_entity("amp"), Some("&"));
+/// assert_eq!(resolve_xml_entity("apos"), Some("'"));
+/// assert_eq!(resolve_xml_entity("quot"), Some("\""));
+///
+/// assert_eq!(resolve_xml_entity("foo"), None);
+/// ```
+///
+/// [specification]: https://www.w3.org/TR/xml11/#sec-predefined-ent
+pub fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
     // match over strings are not allowed in const functions
-    let s = match name.as_bytes() {
+    let s = match entity.as_bytes() {
         b"lt" => "<",
         b"gt" => ">",
         b"amp" => "&",
@@ -261,12 +326,13 @@ fn named_entity(name: &str) -> Option<&str> {
     };
     Some(s)
 }
-#[cfg(feature = "escape-html")]
-fn named_entity(name: &str) -> Option<&str> {
+
+/// Resolves all HTML5 entities. For complete list see <https://dev.w3.org/html5/html-author/charref>.
+pub fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
     //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json
-    let s = match name.as_bytes() {
+    let s = match entity.as_bytes() {
         b"Tab" => "\u{09}",
         b"NewLine" => "\u{0A}",
         b"excl" => "\u{21}",
@@ -1804,10 +1870,7 @@ fn test_unescape_with() {
     assert_eq!(unchanged, Cow::Borrowed("test"));
     assert!(matches!(unchanged, Cow::Borrowed(_)));
 
-    assert_eq!(
-        unescape_with("&lt;test&gt;", custom_entities).unwrap(),
-        "<test>"
-    );
+    assert!(unescape_with("&lt;", custom_entities).is_err());
     assert_eq!(unescape_with("&#x30;", custom_entities).unwrap(), "0");
     assert_eq!(unescape_with("&#48;", custom_entities).unwrap(), "0");
     assert_eq!(unescape_with("&foo;", custom_entities).unwrap(), "BAR");

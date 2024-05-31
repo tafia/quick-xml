@@ -3,7 +3,7 @@
 //! Provides an iterator over attributes key/value pairs
 
 use crate::errors::Result as XmlResult;
-use crate::escape::{escape, unescape_with};
+use crate::escape::{escape, resolve_predefined_entity, unescape_with};
 use crate::name::QName;
 use crate::reader::{is_whitespace, Reader};
 use crate::utils::{write_byte_string, write_cow_string, Bytes};
@@ -85,7 +85,7 @@ impl<'a> Attribute<'a> {
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
     pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<'a, str>> {
-        self.decode_and_unescape_value_with(reader, |_| None)
+        self.decode_and_unescape_value_with(reader, resolve_predefined_entity)
     }
 
     /// Decodes then unescapes the value with custom entities.
