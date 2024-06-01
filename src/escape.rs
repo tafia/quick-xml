@@ -10,8 +10,6 @@ use pretty_assertions::assert_eq;
 /// Error for XML escape / unescape.
 #[derive(Clone, Debug)]
 pub enum EscapeError {
-    /// Entity with Null character
-    EntityWithNull(Range<usize>),
     /// Unrecognized escape symbol
     UnrecognizedSymbol(Range<usize>, String),
     /// Cannot find `;` after `&`
@@ -31,11 +29,6 @@ pub enum EscapeError {
 impl std::fmt::Display for EscapeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            EscapeError::EntityWithNull(e) => write!(
-                f,
-                "Error while escaping character at range {:?}: Null character entity not allowed",
-                e
-            ),
             EscapeError::UnrecognizedSymbol(rge, res) => write!(
                 f,
                 "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
@@ -251,7 +244,7 @@ where
                 // search for character correctness
                 let pat = &raw[start + 1..end];
                 if let Some(entity) = pat.strip_prefix('#') {
-                    let codepoint = parse_number(entity, start..end)?;
+                    let codepoint = parse_number(entity)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
                 } else if let Some(value) = resolve_entity(pat) {
                     unescaped.push_str(value);
@@ -1792,15 +1785,12 @@ pub fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     Some(s)
 }
 
-fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
+fn parse_number(bytes: &str) -> Result<char, EscapeError> {
     let code = if let Some(hex_digits) = bytes.strip_prefix('x') {
         parse_hexadecimal(hex_digits)
     } else {
         parse_decimal(bytes)
     }?;
-    if code == 0 {
-        return Err(EscapeError::EntityWithNull(range));
-    }
     match std::char::from_u32(code) {
         Some(c) => Ok(c),
         None => Err(EscapeError::InvalidCodepoint(code)),

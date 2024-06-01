@@ -80,6 +80,7 @@ resolve predefined entities.
 - [#734]: No longer resolve predefined entities (`lt`, `gt`, `apos`, `quot`, `amp`)
   in `unescape_with` family of methods. You should do that by yourself using the methods
   listed above.
+- [#750]: Remove `EscapeError::EntityWithNull` and allow `&#0;` character reference.
 
 [#275]: https://github.com/tafia/quick-xml/issues/275
 [#362]: https://github.com/tafia/quick-xml/issues/362
@@ -98,6 +99,7 @@ resolve predefined entities.
 [#738]: https://github.com/tafia/quick-xml/pull/738
 [#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748
+[#750]: https://github.com/tafia/quick-xml/pull/750
 [`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
 [`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
 [`Text`]: https://docs.rs/quick-xml/latest/quick_xml/de/struct.Text.html
