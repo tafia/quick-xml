@@ -37,11 +37,12 @@ resolve predefined entities.
   it can handle every attribute that does not match existing cases within an enum variant.
 - [#722]: Allow to pass owned strings to `Writer::create_element`. This is breaking change!
 - [#275]: Added `ElementWriter::new_line()` which enables pretty printing elements with multiple attributes.
-- [#743]: Add `Deserializer::get_ref()` to get XML Reader from serde Deserializer
-- [#734]: Add helper functions to resolve predefined XML and HTML5 entities:
+- [#743]: Added `Deserializer::get_ref()` to get XML Reader from serde Deserializer
+- [#734]: Added helper functions to resolve predefined XML and HTML5 entities:
   - `quick_xml::escape::resolve_predefined_entity`
   - `quick_xml::escape::resolve_xml_entity`
   - `quick_xml::escape::resolve_html5_entity`
+- [#753]: Added parser for processing instructions: `quick_xml::reader::PiParser`.
 
 ### Bug Fixes
 
@@ -50,6 +51,7 @@ resolve predefined entities.
 - [#684]: Fix incorrect position reported for `Error::IllFormed(MissingDoctypeName)`.
 - [#704]: Fix empty tags with attributes not being expanded when `expand_empty_elements` is set to true.
 - [#683]: Use local tag name when check tag name against possible names for field.
+- [#753]: Correctly determine end of processing instructions and XML declaration.
 
 ### Misc Changes
 
@@ -98,6 +100,7 @@ resolve predefined entities.
 [#738]: https://github.com/tafia/quick-xml/pull/738
 [#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748
+[#753]: https://github.com/tafia/quick-xml/pull/753
 [`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
 [`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
 [`Text`]: https://docs.rs/quick-xml/latest/quick_xml/de/struct.Text.html
