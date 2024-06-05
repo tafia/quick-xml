@@ -361,7 +361,7 @@ macro_rules! read_until_close {
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
+                .read_pi($buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
@@ -428,10 +428,12 @@ macro_rules! read_to_end {
 mod async_tokio;
 mod buffered_reader;
 mod ns_reader;
+mod pi;
 mod slice_reader;
 mod state;
 
 pub use ns_reader::NsReader;
+pub use pi::PiParser;
 
 /// Range of input in bytes, that corresponds to some piece of XML
 pub type Span = Range<usize>;
@@ -816,12 +818,29 @@ trait XmlSource<'r, B> {
         position: &mut usize,
     ) -> Result<(&'r [u8], bool)>;
 
-    /// Read input until comment, CDATA or processing instruction is finished.
+    /// Read input until processing instruction is finished.
+    ///
+    /// This method expect that `<?` already was read.
+    ///
+    /// Returns a slice of data read up to end of processing instruction (`>`),
+    /// which does not include into result (`?` at the end included).
+    ///
+    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
+    fn read_pi(&mut self, buf: B, position: &mut usize) -> Result<(&'r [u8], bool)>;
+
+    /// Read input until comment or CDATA is finished.
     ///
     /// This method expect that `<` already was read.
     ///
-    /// Returns a slice of data read up to end of comment, CDATA or processing
-    /// instruction (`>`), which does not include into result.
+    /// Returns a slice of data read up to end of comment or CDATA (`>`),
+    /// which does not include into result.
     ///
     /// If input (`Self`) is exhausted and nothing was read, returns `None`.
     ///

@@ -91,6 +91,49 @@ macro_rules! impl_buffered_source {
             Ok((&buf[start..], done))
         }
 
+        $($async)? fn read_pi $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> Result<(&'b [u8], bool)> {
+            let mut parser = super::PiParser::default();
+
+            let mut read = 0;
+            let mut done = false;
+            let start = buf.len();
+            while !done {
+                let used = {
+                    let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                        Ok(n) if n.is_empty() => break,
+                        Ok(n) => n,
+                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                        Err(e) => {
+                            *position += read;
+                            return Err(Error::Io(e.into()));
+                        }
+                    };
+
+                    match parser.feed(available) {
+                        Some(i) => {
+                            // We does not include `>` in data
+                            buf.extend_from_slice(&available[..i - 1]);
+                            done = true;
+                            i
+                        }
+                        None => {
+                            buf.extend_from_slice(available);
+                            available.len()
+                        }
+                    }
+                };
+                self $(.$reader)? .consume(used);
+                read += used;
+            }
+            *position += read;
+
+            Ok((&buf[start..], done))
+        }
+
         $($async)? fn read_bang_element $(<$lf>)? (
             &mut self,
             buf: &'b mut Vec<u8>,
