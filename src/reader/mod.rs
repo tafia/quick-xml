@@ -1764,11 +1764,11 @@ mod test {
 
                 #[$test]
                 $($async)? fn processing_instruction() {
-                    let mut reader = Reader::from_str("<?xml-stylesheet?>");
+                    let mut reader = Reader::from_str("<?xml-stylesheet '? >\" ?>");
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::PI(BytesText::from_escaped("xml-stylesheet"))
+                        Event::PI(BytesText::from_escaped("xml-stylesheet '? >\" "))
                     );
                 }
 
