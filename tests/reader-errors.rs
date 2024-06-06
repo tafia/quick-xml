@@ -219,7 +219,7 @@ mod syntax {
             }
         };
         ($test:ident($xml:literal) => $cause:expr) => {
-            err!($test($xml) => $xml.len(), $cause);
+            err!($test($xml) => $xml.len() as u64, $cause);
         };
     }
 
@@ -435,7 +435,7 @@ mod ill_formed {
                         match reader.read_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -447,7 +447,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -461,7 +461,7 @@ mod ill_formed {
                         match reader.read_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -473,7 +473,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -488,7 +488,7 @@ mod ill_formed {
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -500,7 +500,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -518,7 +518,7 @@ mod ill_formed {
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -533,7 +533,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -547,7 +547,7 @@ mod ill_formed {
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -562,7 +562,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -577,7 +577,7 @@ mod ill_formed {
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -593,7 +593,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -621,7 +621,7 @@ mod ill_formed {
                         match reader.read_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -633,7 +633,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -650,7 +650,7 @@ mod ill_formed {
                         match reader.read_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -662,7 +662,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -681,7 +681,7 @@ mod ill_formed {
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -693,7 +693,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -714,7 +714,7 @@ mod ill_formed {
                         match reader.read_resolved_event() {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -729,7 +729,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -746,7 +746,7 @@ mod ill_formed {
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -761,7 +761,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }
@@ -780,7 +780,7 @@ mod ill_formed {
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::IllFormed(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, $pos, $xml.len()),
+                                ($cause, $pos, $xml.len() as u64),
                             ),
                             x => panic!("Expected `Err(IllFormed(_))`, but got {:?}", x),
                         }
@@ -796,7 +796,7 @@ mod ill_formed {
                         );
                         assert_eq!(
                             reader.buffer_position(),
-                            xml.len(),
+                            xml.len() as u64,
                             ".buffer_position() is incorrect in the end"
                         );
                     }

@@ -15,12 +15,12 @@ use crate::utils::{is_whitespace, name_len};
 #[derive(Clone, Debug)]
 pub(super) struct ReaderState {
     /// Number of bytes read from the source of data since the reader was created
-    pub offset: usize,
+    pub offset: u64,
     /// A snapshot of an `offset` of the last error returned. It can be less than
     /// `offset`, because some errors conveniently report at earlier position,
     /// and changing `offset` is not possible, because `Error::IllFormed` errors
     /// are recoverable.
-    pub last_error_offset: usize,
+    pub last_error_offset: u64,
     /// Defines how to process next byte
     pub state: ParseState,
     /// User-defined settings that affect parsing
@@ -115,7 +115,7 @@ impl ReaderState {
                             //   ^ :   :           - self.offset - len
                             //     ^   :           - self.offset - len + 2
                             //         ^           - self.offset - len + 2 + p
-                            self.last_error_offset = self.offset - len + 2 + p;
+                            self.last_error_offset = self.offset - len as u64 + 2 + p as u64;
                             return Err(Error::IllFormed(IllFormedError::DoubleHyphenInComment));
                         }
                         // Continue search after single `-` (+1 to skip it)
@@ -156,7 +156,7 @@ impl ReaderState {
                 // <!....>
                 //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
                 // ^------- We report error at that position, so we need to subtract 2 and buf len
-                self.last_error_offset = self.offset - len - 2;
+                self.last_error_offset = self.offset - len as u64 - 2;
                 Err(bang_type.to_err())
             }
         }
@@ -201,7 +201,7 @@ impl ReaderState {
 
                         // Report error at start of the end tag at `<` character
                         // -2 for `<` and `>`
-                        self.last_error_offset = self.offset - buf.len() - 2;
+                        self.last_error_offset = self.offset - buf.len() as u64 - 2;
                         return Err(Error::IllFormed(IllFormedError::MismatchedEndTag {
                             expected,
                             found: decoder.decode(name).unwrap_or_default().into_owned(),
@@ -214,7 +214,7 @@ impl ReaderState {
             None => {
                 // Report error at start of the end tag at `<` character
                 // -2 for `<` and `>`
-                self.last_error_offset = self.offset - buf.len() - 2;
+                self.last_error_offset = self.offset - buf.len() as u64 - 2;
                 return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
                     decoder.decode(name).unwrap_or_default().into_owned(),
                 )));
@@ -259,7 +259,7 @@ impl ReaderState {
             // <?....EOF
             //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
             //          so we move offset to it (-2 for `<` and `>`)
-            self.last_error_offset = self.offset - len - 2;
+            self.last_error_offset = self.offset - len as u64 - 2;
             Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
     }

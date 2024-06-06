@@ -229,7 +229,10 @@ impl<'a> Reader<&'a [u8]> {
         let buffer = self.reader;
         let span = self.read_to_end(end)?;
 
-        self.decoder().decode(&buffer[0..span.len()])
+        let len = span.end - span.start;
+        // SAFETY: `span` can only contain indexes up to usize::MAX because it
+        // was created from offsets from a single &[u8] slice
+        self.decoder().decode(&buffer[0..len as usize])
     }
 }
 
@@ -258,7 +261,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_text(&mut self, _buf: (), position: &mut usize) -> ReadTextResult<'a, ()> {
+    fn read_text(&mut self, _buf: (), position: &mut u64) -> ReadTextResult<'a, ()> {
         match memchr::memchr(b'<', self) {
             Some(0) => {
                 *position += 1;
@@ -266,13 +269,13 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
                 ReadTextResult::Markup(())
             }
             Some(i) => {
-                *position += i + 1;
+                *position += i as u64 + 1;
                 let bytes = &self[..i];
                 *self = &self[i + 1..];
                 ReadTextResult::UpToMarkup(bytes)
             }
             None => {
-                *position += self.len();
+                *position += self.len() as u64;
                 let bytes = &self[..];
                 *self = &[];
                 ReadTextResult::UpToEof(bytes)
@@ -285,18 +288,18 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         &mut self,
         byte: u8,
         _buf: (),
-        position: &mut usize,
+        position: &mut u64,
     ) -> io::Result<(&'a [u8], bool)> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
 
         if let Some(i) = memchr::memchr(byte, self) {
-            *position += i + 1;
+            *position += i as u64 + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
             Ok((bytes, true))
         } else {
-            *position += self.len();
+            *position += self.len() as u64;
             let bytes = &self[..];
             *self = &[];
             Ok((bytes, false))
@@ -304,28 +307,24 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_with<P>(&mut self, mut parser: P, _buf: (), position: &mut usize) -> Result<&'a [u8]>
+    fn read_with<P>(&mut self, mut parser: P, _buf: (), position: &mut u64) -> Result<&'a [u8]>
     where
         P: Parser,
     {
         if let Some(i) = parser.feed(self) {
             // +1 for `>` which we do not include
-            *position += i + 1;
+            *position += i as u64 + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
             return Ok(bytes);
         }
 
-        *position += self.len();
+        *position += self.len() as u64;
         Err(Error::Syntax(P::eof_error()))
     }
 
     #[inline]
-    fn read_bang_element(
-        &mut self,
-        _buf: (),
-        position: &mut usize,
-    ) -> Result<(BangType, &'a [u8])> {
+    fn read_bang_element(&mut self, _buf: (), position: &mut u64) -> Result<(BangType, &'a [u8])> {
         // Peeked one bang ('!') before being called, so it's guaranteed to
         // start with it.
         debug_assert_eq!(self[0], b'!');
@@ -333,22 +332,22 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         let bang_type = BangType::new(self[1..].first().copied())?;
 
         if let Some((bytes, i)) = bang_type.parse(&[], self) {
-            *position += i;
+            *position += i as u64;
             *self = &self[i..];
             return Ok((bang_type, bytes));
         }
 
-        *position += self.len();
+        *position += self.len() as u64;
         Err(bang_type.to_err())
     }
 
     #[inline]
-    fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()> {
+    fn skip_whitespace(&mut self, position: &mut u64) -> io::Result<()> {
         let whitespaces = self
             .iter()
             .position(|b| !is_whitespace(*b))
             .unwrap_or(self.len());
-        *position += whitespaces;
+        *position += whitespaces as u64;
         *self = &self[whitespaces..];
         Ok(())
     }

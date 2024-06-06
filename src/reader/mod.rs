@@ -416,7 +416,7 @@ pub use ns_reader::NsReader;
 pub use pi::PiParser;
 
 /// Range of input in bytes, that corresponds to some piece of XML
-pub type Span = Range<usize>;
+pub type Span = Range<u64>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -619,7 +619,8 @@ impl<R> Reader<R> {
     /// let mut buf = Vec::new();
     ///
     /// fn into_line_and_column(reader: Reader<Cursor<&[u8]>>) -> (usize, usize) {
-    ///     let end_pos = reader.buffer_position();
+    ///     // We known that size cannot exceed usize::MAX because we created parser from single &[u8]
+    ///     let end_pos = reader.buffer_position() as usize;
     ///     let mut cursor = reader.into_inner();
     ///     let s = String::from_utf8(cursor.into_inner()[0..end_pos].to_owned())
     ///         .expect("can't make a string");
@@ -667,7 +668,7 @@ impl<R> Reader<R> {
     }
 
     /// Gets the current byte position in the input data.
-    pub const fn buffer_position(&self) -> usize {
+    pub const fn buffer_position(&self) -> u64 {
         // when internal state is InsideMarkup, we have actually read until '<',
         // which we don't want to show
         if let ParseState::InsideMarkup = self.state.state {
@@ -688,7 +689,7 @@ impl<R> Reader<R> {
     /// markup element (i. e. to the `<` character).
     ///
     /// This position is always `<= buffer_position()`.
-    pub const fn error_position(&self) -> usize {
+    pub const fn error_position(&self) -> u64 {
         self.state.last_error_offset
     }
 
@@ -813,7 +814,7 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_text(&mut self, buf: B, position: &mut usize) -> ReadTextResult<'r, B>;
+    fn read_text(&mut self, buf: B, position: &mut u64) -> ReadTextResult<'r, B>;
 
     /// Read input until `byte` is found or end of input is reached.
     ///
@@ -845,7 +846,7 @@ trait XmlSource<'r, B> {
         &mut self,
         byte: u8,
         buf: B,
-        position: &mut usize,
+        position: &mut u64,
     ) -> io::Result<(&'r [u8], bool)>;
 
     /// Read input until processing instruction is finished.
@@ -867,7 +868,7 @@ trait XmlSource<'r, B> {
     /// reader which provides bytes fed into the parser.
     ///
     /// [events]: crate::events::Event
-    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut usize) -> Result<&'r [u8]>
+    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut u64) -> Result<&'r [u8]>
     where
         P: Parser;
 
@@ -886,14 +887,14 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<(BangType, &'r [u8])>;
+    fn read_bang_element(&mut self, buf: B, position: &mut u64) -> Result<(BangType, &'r [u8])>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
     ///
     /// # Parameters
     /// - `position`: Will be increased by amount of bytes consumed
-    fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()>;
+    fn skip_whitespace(&mut self, position: &mut u64) -> io::Result<()>;
 
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return `None`.
