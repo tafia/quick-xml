@@ -112,22 +112,19 @@ macro_rules! impl_buffered_source {
                         }
                     };
 
-                    match parser.feed(available) {
-                        Some(i) => {
-                            buf.extend_from_slice(&available[..i]);
+                    if let Some(i) = parser.feed(available) {
+                        buf.extend_from_slice(&available[..i]);
 
-                            // +1 for `>` which we do not include
-                            self $(.$reader)? .consume(i + 1);
-                            read += i + 1;
+                        // +1 for `>` which we do not include
+                        self $(.$reader)? .consume(i + 1);
+                        read += i + 1;
 
-                            *position += read;
-                            return Ok(&buf[start..]);
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            available.len()
-                        }
+                        *position += read;
+                        return Ok(&buf[start..]);
                     }
+
+                    buf.extend_from_slice(available);
+                    available.len()
                 };
                 self $(.$reader)? .consume(used);
                 read += used;
