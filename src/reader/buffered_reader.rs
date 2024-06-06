@@ -195,34 +195,33 @@ macro_rules! impl_buffered_source {
 
             let start = buf.len();
             loop {
-                match self $(.$reader)? .fill_buf() $(.$await)? {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) if n.is_empty() => break,
-                    Ok(available) => {
-                        if let Some(used) = parser.feed(available) {
-                            buf.extend_from_slice(&available[..used]);
-
-                            // +1 for `>` which we do not include
-                            self $(.$reader)? .consume(used + 1);
-                            read += used + 1;
-
-                            // Position now just after the `>` symbol
-                            *position += read;
-                            return Ok(&buf[start..]);
-                        } else {
-                            // The `>` symbol not yet found, continue reading
-                            buf.extend_from_slice(available);
-
-                            let used = available.len();
-                            self $(.$reader)? .consume(used);
-                            read += used;
-                        }
-                    }
+                    Ok(n) => n,
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
                         return Err(Error::Io(e.into()));
                     }
                 };
+
+                if let Some(used) = parser.feed(available) {
+                            buf.extend_from_slice(&available[..used]);
+
+                            // +1 for `>` which we do not include
+                            self $(.$reader)? .consume(used + 1);
+                            read += used + 1;
+
+                    // Position now just after the `>` symbol
+                    *position += read;
+                    return Ok(&buf[start..]);
+                }
+
+                // The `>` symbol not yet found, continue reading
+                buf.extend_from_slice(available);
+                let used = available.len();
+                self $(.$reader)? .consume(used);
+                read += used;
             }
 
             *position += read;
