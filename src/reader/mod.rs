@@ -361,7 +361,7 @@ macro_rules! read_until_close {
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
-                .read_pi($buf, &mut $self.state.offset)
+                .read_with(PiParser::default(), $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => $self.state.emit_question_mark(bytes),
@@ -374,7 +374,7 @@ macro_rules! read_until_close {
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_element($buf, &mut $self.state.offset)
+                .read_with(ElementParser::default(), $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => $self.state.emit_start(bytes),
@@ -763,6 +763,26 @@ impl<R> Reader<R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Used to decouple reading of data from data source and parsing XML structure from it.
+/// This is a state preserved between getting chunks of bytes from the reader.
+///
+/// This trait is implemented for every parser that processes piece of XML grammar.
+pub trait Parser {
+    /// Process new data and try to determine end of the parsed thing.
+    ///
+    /// Returns position of the end of thing in `bytes` in case of successful search
+    /// and `None` otherwise.
+    ///
+    /// # Parameters
+    /// - `bytes`: a slice to find the end of a thing.
+    ///   Should contain text in ASCII-compatible encoding
+    fn feed(&mut self, bytes: &[u8]) -> Option<usize>;
+
+    /// Returns parse error produced by this parser in case of reaching end of
+    /// input without finding the end of a parsed thing.
+    fn eof_error() -> SyntaxError;
+}
+
 /// Represents an input for a reader that can return borrowed data.
 ///
 /// There are two implementors of this trait: generic one that read data from
@@ -821,20 +841,25 @@ trait XmlSource<'r, B> {
 
     /// Read input until processing instruction is finished.
     ///
-    /// This method expect that `<?` already was read.
+    /// This method expect that start sequence of a parser already was read.
     ///
-    /// Returns a slice of data read up to end of processing instruction (`>`),
-    /// which does not include into result (`?` at the end included).
+    /// Returns a slice of data read up to the end of the thing being parsed.
+    /// The end of thing and the returned content is determined by the used parser.
     ///
-    /// If input (`Self`) is exhausted and nothing was read, returns `None`.
+    /// If input (`Self`) is exhausted and no bytes was read, or if the specified
+    /// parser could not find the ending sequence of the thing, returns `SyntaxError`.
     ///
     /// # Parameters
     /// - `buf`: Buffer that could be filled from an input (`Self`) and
     ///   from which [events] could borrow their data
     /// - `position`: Will be increased by amount of bytes consumed
     ///
+    /// A `P` type parameter is used to preserve state between calls to the underlying
+    /// reader which provides bytes fed into the parser.
     /// [events]: crate::events::Event
-    fn read_pi(&mut self, buf: B, position: &mut usize) -> Result<&'r [u8]>;
+    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut usize) -> Result<&'r [u8]>
+    where
+        P: Parser;
 
     /// Read input until comment or CDATA is finished.
     ///
@@ -852,30 +877,6 @@ trait XmlSource<'r, B> {
     ///
     /// [events]: crate::events::Event
     fn read_bang_element(&mut self, buf: B, position: &mut usize) -> Result<(BangType, &'r [u8])>;
-
-    /// Read input until XML element is closed by approaching a `>` symbol.
-    /// Returns a buffer that contains a data between `<` and `>` or
-    /// [`SyntaxError::UnclosedTag`] if end-of-input was reached before reading `>`.
-    ///
-    /// Derived from `read_until`, but modified to handle XML attributes
-    /// using a minimal state machine.
-    ///
-    /// Attribute values are [defined] as follows:
-    /// ```plain
-    /// AttValue := '"' (([^<&"]) | Reference)* '"'
-    ///           | "'" (([^<&']) | Reference)* "'"
-    /// ```
-    /// (`Reference` is something like `&quot;`, but we don't care about
-    /// escaped characters at this level)
-    ///
-    /// # Parameters
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [defined]: https://www.w3.org/TR/xml11/#NT-AttValue
-    /// [events]: crate::events::Event
-    fn read_element(&mut self, buf: B, position: &mut usize) -> Result<&'r [u8]>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
@@ -1510,6 +1511,7 @@ mod test {
             mod read_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
+                use crate::reader::ElementParser;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -1521,7 +1523,7 @@ mod test {
                     let mut input = b"".as_ref();
                     //                ^= 1
 
-                    match $source(&mut input).read_element(buf, &mut position) $(.$await)? {
+                    match $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? {
                         Err(Error::Syntax(SyntaxError::UnclosedTag)) => {}
                         x => panic!(
                             "Expected `Err(Syntax(UnclosedTag))`, but got `{:?}`",
@@ -1543,7 +1545,7 @@ mod test {
                         //                 ^= 2
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b"")
                         );
                         assert_eq!(position, 2);
@@ -1557,7 +1559,7 @@ mod test {
                         //                    ^= 5
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b"tag")
                         );
                         assert_eq!(position, 5);
@@ -1571,7 +1573,7 @@ mod test {
                         //                  ^= 3
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b":")
                         );
                         assert_eq!(position, 3);
@@ -1585,7 +1587,7 @@ mod test {
                         //                     ^= 6
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b":tag")
                         );
                         assert_eq!(position, 6);
@@ -1599,7 +1601,7 @@ mod test {
                         //                                                        ^= 39
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(br#"tag  attr-1=">"  attr2  =  '>'  3attr"#)
                         );
                         assert_eq!(position, 39);
@@ -1618,7 +1620,7 @@ mod test {
                         //                  ^= 3
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b"/")
                         );
                         assert_eq!(position, 3);
@@ -1632,7 +1634,7 @@ mod test {
                         //                     ^= 6
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b"tag/")
                         );
                         assert_eq!(position, 6);
@@ -1646,7 +1648,7 @@ mod test {
                         //                   ^= 4
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b":/")
                         );
                         assert_eq!(position, 4);
@@ -1660,7 +1662,7 @@ mod test {
                         //                      ^= 7
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(b":tag/")
                         );
                         assert_eq!(position, 7);
@@ -1674,7 +1676,7 @@ mod test {
                         //                                                           ^= 42
 
                         assert_eq!(
-                            Bytes($source(&mut input).read_element(buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
                             Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#)
                         );
                         assert_eq!(position, 42);

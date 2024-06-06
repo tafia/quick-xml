@@ -5,10 +5,10 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use crate::errors::{Error, Result, SyntaxError};
+use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ElementParser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -91,13 +91,12 @@ macro_rules! impl_buffered_source {
             Ok((&buf[start..], done))
         }
 
-        $($async)? fn read_pi $(<$lf>)? (
+        $($async)? fn read_with<$($lf,)? P: Parser>(
             &mut self,
+            mut parser: P,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
         ) -> Result<&'b [u8]> {
-            let mut parser = super::PiParser::default();
-
             let mut read = 0;
             let start = buf.len();
             loop {
@@ -131,7 +130,7 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+            Err(Error::Syntax(P::eof_error()))
         }
 
         $($async)? fn read_bang_element $(<$lf>)? (
@@ -182,50 +181,6 @@ macro_rules! impl_buffered_source {
 
             *position += read;
             Err(bang_type.to_err())
-        }
-
-        #[inline]
-        $($async)? fn read_element $(<$lf>)? (
-            &mut self,
-            buf: &'b mut Vec<u8>,
-            position: &mut usize,
-        ) -> Result<&'b [u8]> {
-            let mut parser = ElementParser::default();
-            let mut read = 0;
-
-            let start = buf.len();
-            loop {
-                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(Error::Io(e.into()));
-                    }
-                };
-
-                if let Some(used) = parser.feed(available) {
-                            buf.extend_from_slice(&available[..used]);
-
-                            // +1 for `>` which we do not include
-                            self $(.$reader)? .consume(used + 1);
-                            read += used + 1;
-
-                    // Position now just after the `>` symbol
-                    *position += read;
-                    return Ok(&buf[start..]);
-                }
-
-                // The `>` symbol not yet found, continue reading
-                buf.extend_from_slice(available);
-                let used = available.len();
-                self $(.$reader)? .consume(used);
-                read += used;
-            }
-
-            *position += read;
-            Err(Error::Syntax(SyntaxError::UnclosedTag))
         }
 
         $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
