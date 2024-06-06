@@ -95,13 +95,12 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<(&'b [u8], bool)> {
+        ) -> Result<&'b [u8]> {
             let mut parser = super::PiParser::default();
 
             let mut read = 0;
-            let mut done = false;
             let start = buf.len();
-            while !done {
+            loop {
                 let used = {
                     let available = match self $(.$reader)? .fill_buf() $(.$await)? {
                         Ok(n) if n.is_empty() => break,
@@ -116,9 +115,13 @@ macro_rules! impl_buffered_source {
                     match parser.feed(available) {
                         Some(i) => {
                             buf.extend_from_slice(&available[..i]);
-                            done = true;
+
                             // +1 for `>` which we do not include
-                            i + 1
+                            self $(.$reader)? .consume(i + 1);
+                            read += i + 1;
+
+                            *position += read;
+                            return Ok(&buf[start..]);
                         }
                         None => {
                             buf.extend_from_slice(available);
@@ -129,9 +132,9 @@ macro_rules! impl_buffered_source {
                 self $(.$reader)? .consume(used);
                 read += used;
             }
-            *position += read;
 
-            Ok((&buf[start..], done))
+            *position += read;
+            Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
         }
 
         $($async)? fn read_bang_element $(<$lf>)? (

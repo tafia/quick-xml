@@ -275,7 +275,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
     }
 
-    fn read_pi(&mut self, _buf: (), position: &mut usize) -> Result<(&'a [u8], bool)> {
+    fn read_pi(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
         let mut parser = PiParser::default();
 
         if let Some(i) = parser.feed(self) {
@@ -283,13 +283,11 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             *position += i + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
-            Ok((bytes, true))
-        } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
-            Ok((bytes, false))
+            return Ok(bytes);
         }
+
+        *position += self.len();
+        Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
     }
 
     fn read_bang_element(
