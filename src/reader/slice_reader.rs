@@ -279,10 +279,10 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         let mut parser = PiParser::default();
 
         if let Some(i) = parser.feed(self) {
-            *position += i;
-            // We does not include `>` in data
-            let bytes = &self[..i - 1];
-            *self = &self[i..];
+            // +1 for `>` which we do not include
+            *position += i + 1;
+            let bytes = &self[..i];
+            *self = &self[i + 1..];
             Ok((bytes, true))
         } else {
             *position += self.len();
