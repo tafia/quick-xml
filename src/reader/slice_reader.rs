@@ -12,7 +12,7 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, PiParser, ReadElementState, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, ElementParser, PiParser, Reader, Span, XmlSource};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -312,12 +312,13 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
-        let mut state = ReadElementState::Elem;
+        let mut parser = ElementParser::default();
 
-        if let Some((bytes, i)) = state.change(self) {
-            // Position now just after the `>` symbol
-            *position += i;
-            *self = &self[i..];
+        if let Some(i) = parser.feed(self) {
+            // +1 for `>` which we do not include
+            *position += i + 1;
+            let bytes = &self[..i];
+            *self = &self[i + 1..];
             return Ok(bytes);
         }
 

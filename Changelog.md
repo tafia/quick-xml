@@ -43,6 +43,7 @@ resolve predefined entities.
   - `quick_xml::escape::resolve_xml_entity`
   - `quick_xml::escape::resolve_html5_entity`
 - [#753]: Added parser for processing instructions: `quick_xml::reader::PiParser`.
+- [#754]: Added parser for elements: `quick_xml::reader::ElementParser`.
 
 ### Bug Fixes
 
@@ -101,6 +102,7 @@ resolve predefined entities.
 [#743]: https://github.com/tafia/quick-xml/pull/743
 [#748]: https://github.com/tafia/quick-xml/pull/748
 [#753]: https://github.com/tafia/quick-xml/pull/753
+[#754]: https://github.com/tafia/quick-xml/pull/754
 [`DeEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.DeEvent.html
 [`PayloadEvent`]: https://docs.rs/quick-xml/latest/quick_xml/de/enum.PayloadEvent.html
 [`Text`]: https://docs.rs/quick-xml/latest/quick_xml/de/struct.Text.html

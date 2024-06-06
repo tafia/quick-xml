@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ReadElementState, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, ElementParser, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -190,7 +190,7 @@ macro_rules! impl_buffered_source {
             buf: &'b mut Vec<u8>,
             position: &mut usize,
         ) -> Result<&'b [u8]> {
-            let mut state = ReadElementState::Elem;
+            let mut parser = ElementParser::default();
             let mut read = 0;
 
             let start = buf.len();
@@ -198,11 +198,12 @@ macro_rules! impl_buffered_source {
                 match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) if n.is_empty() => break,
                     Ok(available) => {
-                        if let Some((consumed, used)) = state.change(available) {
-                            buf.extend_from_slice(consumed);
+                        if let Some(used) = parser.feed(available) {
+                            buf.extend_from_slice(&available[..used]);
 
-                            self $(.$reader)? .consume(used);
-                            read += used;
+                            // +1 for `>` which we do not include
+                            self $(.$reader)? .consume(used + 1);
+                            read += used + 1;
 
                             // Position now just after the `>` symbol
                             *position += read;
