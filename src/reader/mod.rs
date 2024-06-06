@@ -279,7 +279,8 @@ macro_rules! read_until_open {
         }
 
         // If we already at the `<` symbol, do not try to return an empty Text event
-        if $reader.skip_one(b'<', &mut $self.state.offset) $(.$await)? ? {
+        if $reader.skip_one(b'<') $(.$await)? ? {
+            $self.state.offset += 1;
             $self.state.state = ParseState::OpenedTag;
             // Pass $buf to the next next iteration of parsing loop
             return Ok(Err($buf));
@@ -889,8 +890,8 @@ trait XmlSource<'r, B> {
     /// `true` if it matched.
     ///
     /// # Parameters
-    /// - `position`: Will be increased by 1 if byte is matched
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool>;
+    /// - `byte`: Character to skip
+    fn skip_one(&mut self, byte: u8) -> Result<bool>;
 
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return `None`.

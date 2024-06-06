@@ -202,13 +202,12 @@ macro_rules! impl_buffered_source {
             }
         }
 
-        $($async)? fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+        $($async)? fn skip_one(&mut self, byte: u8) -> Result<bool> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
 
             match self.peek_one() $(.$await)? ? {
                 Some(b) if b == byte => {
-                    *position += 1;
                     self $(.$reader)? .consume(1);
                     Ok(true)
                 }
@@ -219,8 +218,7 @@ macro_rules! impl_buffered_source {
         $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) if n.is_empty() => Ok(None),
-                    Ok(n) => Ok(Some(n[0])),
+                    Ok(n) => Ok(n.first().cloned()),
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => Err(Error::Io(e.into())),
                 };

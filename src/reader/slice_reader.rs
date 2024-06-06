@@ -322,12 +322,11 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Ok(())
     }
 
-    fn skip_one(&mut self, byte: u8, position: &mut usize) -> Result<bool> {
+    fn skip_one(&mut self, byte: u8) -> Result<bool> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
         if self.first() == Some(&byte) {
             *self = &self[1..];
-            *position += 1;
             Ok(true)
         } else {
             Ok(false)
