@@ -364,14 +364,13 @@ macro_rules! read_until_close {
                 .read_pi($buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok((bytes, true)) => $self.state.emit_question_mark(bytes),
-                Ok((_, false)) => {
+                Ok(bytes) => $self.state.emit_question_mark(bytes),
+                Err(e) => {
                     // We want to report error at `<`, but offset was increased,
                     // so return it back (-1 for `<`)
                     $self.state.last_error_offset = start - 1;
-                    Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+                    Err(e)
                 }
-                Err(e) => Err(e),
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
@@ -833,7 +832,7 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_pi(&mut self, buf: B, position: &mut usize) -> Result<(&'r [u8], bool)>;
+    fn read_pi(&mut self, buf: B, position: &mut usize) -> Result<&'r [u8]>;
 
     /// Read input until comment or CDATA is finished.
     ///
