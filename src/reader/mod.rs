@@ -426,11 +426,13 @@ macro_rules! read_to_end {
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
 mod buffered_reader;
+mod element;
 mod ns_reader;
 mod pi;
 mod slice_reader;
 mod state;
 
+pub use element::ElementParser;
 pub use ns_reader::NsReader;
 pub use pi::PiParser;
 
@@ -983,40 +985,6 @@ impl BangType {
             Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
             Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
         }
-    }
-}
-
-/// State machine for the [`XmlSource::read_element`]
-#[derive(Clone, Copy)]
-enum ReadElementState {
-    /// The initial state (inside element, but outside of attribute value)
-    Elem,
-    /// Inside a single-quoted attribute value
-    SingleQ,
-    /// Inside a double-quoted attribute value
-    DoubleQ,
-}
-impl ReadElementState {
-    /// Changes state by analyzing part of input.
-    /// Returns a tuple with part of chunk up to element closing symbol `>`
-    /// and a position after that symbol or `None` if such symbol was not found
-    #[inline(always)]
-    fn change<'b>(&mut self, chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
-        for i in memchr::memchr3_iter(b'>', b'\'', b'"', chunk) {
-            *self = match (*self, chunk[i]) {
-                // only allowed to match `>` while we are in state `Elem`
-                (Self::Elem, b'>') => return Some((&chunk[..i], i + 1)),
-                (Self::Elem, b'\'') => Self::SingleQ,
-                (Self::Elem, b'\"') => Self::DoubleQ,
-
-                // the only end_byte that gets us out if the same character
-                (Self::SingleQ, b'\'') | (Self::DoubleQ, b'"') => Self::Elem,
-
-                // all other bytes: no state change
-                _ => *self,
-            };
-        }
-        None
     }
 }
 

@@ -8,9 +8,7 @@ use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{
-    is_whitespace, BangType, NsReader, ParseState, ReadElementState, Reader, Span,
-};
+use crate::reader::{is_whitespace, BangType, ElementParser, NsReader, ParseState, Reader, Span};
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
 ///
