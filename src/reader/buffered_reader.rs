@@ -115,10 +115,10 @@ macro_rules! impl_buffered_source {
 
                     match parser.feed(available) {
                         Some(i) => {
-                            // We does not include `>` in data
-                            buf.extend_from_slice(&available[..i - 1]);
+                            buf.extend_from_slice(&available[..i]);
                             done = true;
-                            i
+                            // +1 for `>` which we do not include
+                            i + 1
                         }
                         None => {
                             buf.extend_from_slice(available);

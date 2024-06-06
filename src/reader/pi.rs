@@ -6,7 +6,7 @@
 /// After successful search the parser will return [`Some`] with position where
 /// processing instruction is ended (the position after `?>`). If search was
 /// unsuccessful, a [`None`] will be returned. You typically would expect positive
-/// result of search, so that you should feed new data until yo'll get it.
+/// result of search, so that you should feed new data until you get it.
 ///
 /// NOTE: after successful match the parser does not returned to the initial
 /// state and should not be used anymore. Create a new parser if you want to perform
@@ -25,9 +25,9 @@
 /// // ...get new chunk of data
 /// assert_eq!(parser.feed(b" with = 'some > and ?"), None);
 /// // ...get another chunk of data
-/// assert_eq!(parser.feed(b"' inside?>and the text follow..."), Some(10));
-/// //                       ^         ^
-/// //                       0         10
+/// assert_eq!(parser.feed(b"' inside?>and the text follow..."), Some(9));
+/// //                       ^        ^
+/// //                       0        9
 /// ```
 ///
 /// [`feed`]: Self::feed()
@@ -56,11 +56,9 @@ impl PiParser {
     pub fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
         for i in memchr::memchr_iter(b'>', bytes) {
             match i {
-                // +1 for `>` which should be included in event
-                0 if self.0 => return Some(1),
+                0 if self.0 => return Some(0),
                 // If the previous byte is `?`, then we found `?>`
-                // +1 for `>` which should be included in event
-                i if i > 0 && bytes[i - 1] == b'?' => return Some(i + 1),
+                i if i > 0 && bytes[i - 1] == b'?' => return Some(i),
                 _ => {}
             }
         }
@@ -95,11 +93,11 @@ fn pi() {
     assert_eq!(parse_pi(b"?", true), Err(true)); // ?|?
 
     assert_eq!(parse_pi(b">", false), Err(false)); // x|>
-    assert_eq!(parse_pi(b">", true), Ok(1)); // ?|>
+    assert_eq!(parse_pi(b">", true), Ok(0)); // ?|>
 
-    assert_eq!(parse_pi(b"?>", false), Ok(2)); // x|?>
-    assert_eq!(parse_pi(b"?>", true), Ok(2)); // ?|?>
+    assert_eq!(parse_pi(b"?>", false), Ok(1)); // x|?>
+    assert_eq!(parse_pi(b"?>", true), Ok(1)); // ?|?>
 
-    assert_eq!(parse_pi(b">?>", false), Ok(3)); // x|>?>
-    assert_eq!(parse_pi(b">?>", true), Ok(1)); // ?|>?>
+    assert_eq!(parse_pi(b">?>", false), Ok(2)); // x|>?>
+    assert_eq!(parse_pi(b">?>", true), Ok(0)); // ?|>?>
 }
