@@ -1,5 +1,8 @@
 //! Contains a parser for an XML element.
 
+use crate::errors::SyntaxError;
+use crate::reader::Parser;
+
 /// A parser that search a `>` symbol in the slice outside of quoted regions.
 ///
 /// The parser considers two quoted regions: a double-quoted (`"..."`) and
@@ -21,8 +24,9 @@
 /// # Example
 ///
 /// ```
-/// # use quick_xml::reader::ElementParser;
 /// # use pretty_assertions::assert_eq;
+/// use quick_xml::reader::{ElementParser, Parser};
+///
 /// let mut parser = ElementParser::default();
 ///
 /// // Parse `<my-element  with = 'some > inside'>and the text follow...`
@@ -47,10 +51,10 @@ pub enum ElementParser {
     DoubleQ,
 }
 
-impl ElementParser {
+impl Parser for ElementParser {
     /// Returns number of consumed bytes or `None` if `>` was not found in `bytes`.
     #[inline]
-    pub fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
+    fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
         for i in memchr::memchr3_iter(b'>', b'\'', b'"', bytes) {
             *self = match (*self, bytes[i]) {
                 // only allowed to match `>` while we are in state `Outside`
@@ -66,6 +70,11 @@ impl ElementParser {
             };
         }
         None
+    }
+
+    #[inline]
+    fn eof_error() -> SyntaxError {
+        SyntaxError::UnclosedTag
     }
 }
 

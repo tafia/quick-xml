@@ -9,10 +9,10 @@ use crate::reader::EncodingRef;
 #[cfg(feature = "encoding")]
 use encoding_rs::{Encoding, UTF_8};
 
-use crate::errors::{Error, Result, SyntaxError};
+use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, ElementParser, PiParser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -275,9 +275,10 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
     }
 
-    fn read_pi(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
-        let mut parser = PiParser::default();
-
+    fn read_with<P>(&mut self, mut parser: P, _buf: (), position: &mut usize) -> Result<&'a [u8]>
+    where
+        P: Parser,
+    {
         if let Some(i) = parser.feed(self) {
             // +1 for `>` which we do not include
             *position += i + 1;
@@ -287,7 +288,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
 
         *position += self.len();
-        Err(Error::Syntax(SyntaxError::UnclosedPIOrXmlDecl))
+        Err(Error::Syntax(P::eof_error()))
     }
 
     fn read_bang_element(
@@ -309,21 +310,6 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
         *position += self.len();
         Err(bang_type.to_err())
-    }
-
-    fn read_element(&mut self, _buf: (), position: &mut usize) -> Result<&'a [u8]> {
-        let mut parser = ElementParser::default();
-
-        if let Some(i) = parser.feed(self) {
-            // +1 for `>` which we do not include
-            *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            return Ok(bytes);
-        }
-
-        *position += self.len();
-        Err(Error::Syntax(SyntaxError::UnclosedTag))
     }
 
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {

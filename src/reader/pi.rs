@@ -1,5 +1,8 @@
 //! Contains a parser for an XML processing instruction.
 
+use crate::errors::SyntaxError;
+use crate::reader::Parser;
+
 /// A parser that search a `?>` sequence in the slice.
 ///
 /// To use a parser create an instance of parser and [`feed`] data into it.
@@ -15,8 +18,9 @@
 /// # Example
 ///
 /// ```
-/// # use quick_xml::reader::PiParser;
 /// # use pretty_assertions::assert_eq;
+/// use quick_xml::reader::{Parser, PiParser};
+///
 /// let mut parser = PiParser::default();
 ///
 /// // Parse `<?instruction with = 'some > and ?' inside?>and the text follow...`
@@ -38,7 +42,7 @@ pub struct PiParser(
     pub bool,
 );
 
-impl PiParser {
+impl Parser for PiParser {
     /// Determines the end position of a processing instruction in the provided slice.
     /// Processing instruction ends on the first occurrence of `?>` which cannot be
     /// escaped.
@@ -53,7 +57,8 @@ impl PiParser {
     ///   Should contain text in ASCII-compatible encoding
     ///
     /// [Section 2.6]: https://www.w3.org/TR/xml11/#sec-pi
-    pub fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
+    #[inline]
+    fn feed(&mut self, bytes: &[u8]) -> Option<usize> {
         for i in memchr::memchr_iter(b'>', bytes) {
             match i {
                 0 if self.0 => return Some(0),
@@ -64,6 +69,11 @@ impl PiParser {
         }
         self.0 = bytes.last().copied() == Some(b'?');
         None
+    }
+
+    #[inline]
+    fn eof_error() -> SyntaxError {
+        SyntaxError::UnclosedPIOrXmlDecl
     }
 }
 
