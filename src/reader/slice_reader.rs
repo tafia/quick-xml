@@ -237,6 +237,7 @@ impl<'a> Reader<&'a [u8]> {
 /// that will be borrowed by events. This implementation provides a zero-copy deserialization
 impl<'a> XmlSource<'a, ()> for &'a [u8] {
     #[cfg(not(feature = "encoding"))]
+    #[inline]
     fn remove_utf8_bom(&mut self) -> Result<()> {
         if self.starts_with(crate::encoding::UTF8_BOM) {
             *self = &self[crate::encoding::UTF8_BOM.len()..];
@@ -245,6 +246,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[cfg(feature = "encoding")]
+    #[inline]
     fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
         if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
             *self = &self[bom_len..];
@@ -253,6 +255,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Ok(None)
     }
 
+    #[inline]
     fn read_bytes_until(
         &mut self,
         byte: u8,
@@ -275,6 +278,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
     }
 
+    #[inline]
     fn read_with<P>(&mut self, mut parser: P, _buf: (), position: &mut usize) -> Result<&'a [u8]>
     where
         P: Parser,
@@ -291,6 +295,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(Error::Syntax(P::eof_error()))
     }
 
+    #[inline]
     fn read_bang_element(
         &mut self,
         _buf: (),
@@ -312,6 +317,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Err(bang_type.to_err())
     }
 
+    #[inline]
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
         let whitespaces = self
             .iter()
@@ -322,6 +328,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         Ok(())
     }
 
+    #[inline]
     fn skip_one(&mut self, byte: u8) -> Result<bool> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
@@ -333,6 +340,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
     }
 
+    #[inline]
     fn peek_one(&mut self) -> Result<Option<u8>> {
         Ok(self.first().copied())
     }
