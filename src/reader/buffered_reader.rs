@@ -13,6 +13,7 @@ use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
         #[cfg(not(feature = "encoding"))]
+        #[inline]
         $($async)? fn remove_utf8_bom(&mut self) -> Result<()> {
             use crate::encoding::UTF8_BOM;
 
@@ -31,6 +32,7 @@ macro_rules! impl_buffered_source {
         }
 
         #[cfg(feature = "encoding")]
+        #[inline]
         $($async)? fn detect_encoding(&mut self) -> Result<Option<&'static encoding_rs::Encoding>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
@@ -91,6 +93,7 @@ macro_rules! impl_buffered_source {
             Ok((&buf[start..], done))
         }
 
+        #[inline]
         $($async)? fn read_with<$($lf,)? P: Parser>(
             &mut self,
             mut parser: P,
@@ -133,6 +136,7 @@ macro_rules! impl_buffered_source {
             Err(Error::Syntax(P::eof_error()))
         }
 
+        #[inline]
         $($async)? fn read_bang_element $(<$lf>)? (
             &mut self,
             buf: &'b mut Vec<u8>,
@@ -183,6 +187,7 @@ macro_rules! impl_buffered_source {
             Err(bang_type.to_err())
         }
 
+        #[inline]
         $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
@@ -202,6 +207,7 @@ macro_rules! impl_buffered_source {
             }
         }
 
+        #[inline]
         $($async)? fn skip_one(&mut self, byte: u8) -> Result<bool> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
@@ -215,6 +221,7 @@ macro_rules! impl_buffered_source {
             }
         }
 
+        #[inline]
         $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
