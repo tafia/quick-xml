@@ -255,3 +255,24 @@ fn issue622() {
         x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
     }
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/706
+#[test]
+fn issue706() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<?procinst-with-xml
+	<parameters>
+		<parameter id="version" value="0.1"/>
+		<parameter id="timeStamp" value="2024-01-16T10:44:00Z"/>
+	</parameters>
+?>
+<Document/>"#;
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event() {
+            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+            Ok(Event::Eof) => break,
+            _ => (),
+        }
+    }
+}
