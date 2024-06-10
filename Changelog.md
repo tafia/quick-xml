@@ -10,6 +10,15 @@
 
 ## Unreleased
 
+### New Features
+
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.32.0 -- 2024-06-10
+
 The way to configure parser is changed. Now all configuration is contained in the
 `Config` struct and can be applied at once. When `serde-types` feature is enabled,
 configuration is serializable.
