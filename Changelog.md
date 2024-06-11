@@ -13,11 +13,20 @@
 
 ## Unreleased
 
+### Significant changes
+
+Now references to entities (as predefined, such as `&lt;`, as user-defined) reported as a new
+`Event::GeneralRef`.
+Caller can parse the content of the entity and stream events from it as it is required by the
+XML specification.
+
 ### New Features
 
 - [#826]: Implement `From<String>` and `From<Cow<str>>` for `quick_xml::de::Text`.
 - [#826]: Make `SimpleTypeDeserializer` and `SimpleTypeSerializer` public.
 - [#826]: Implement `IntoDeserializer` for `&mut Deserializer`.
+- [#766]: Allow to parse resolved entities as XML fragments and stream events from them.
+- [#766]: Added new event `Event::GeneralRef` with content of [general entity].
 
 ### Bug Fixes
 
@@ -51,6 +60,7 @@
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
+[#766]: https://github.com/tafia/quick-xml/pull/766
 [#810]: https://github.com/tafia/quick-xml/pull/810
 [#811]: https://github.com/tafia/quick-xml/pull/811
 [#820]: https://github.com/tafia/quick-xml/pull/820
@@ -58,6 +68,7 @@
 [#826]: https://github.com/tafia/quick-xml/pull/826
 [#827]: https://github.com/tafia/quick-xml/pull/827
 [Xml Schema]: https://www.w3.org/TR/xmlschema11-2/#boolean
+[general entity]: https://www.w3.org/TR/xml11/#gen-entity
 
 
 ## 0.36.2 -- 2024-09-20

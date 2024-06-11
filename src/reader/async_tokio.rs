@@ -7,12 +7,14 @@ use std::task::{Context, Poll};
 
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
 
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::events::{BytesRef, Event};
 use crate::name::{QName, ResolveResult};
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{BangType, BinaryStream, NsReader, ParseState, ReadTextResult, Reader, Span};
+use crate::reader::{
+    BangType, BinaryStream, NsReader, ParseState, ReadRefResult, ReadTextResult, Reader, Span,
+};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
