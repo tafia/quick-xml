@@ -230,7 +230,7 @@ macro_rules! read_event_impl {
                     $self.state.state = ParseState::ClosedTag;
                     continue;
                 },
-                ParseState::ClosedTag => { // Go to OpenedTag state
+                ParseState::ClosedTag => { // Go to OpenedTag or Exit state
                     if $self.state.config.trim_text_start {
                         $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
                     }
@@ -248,6 +248,7 @@ macro_rules! read_event_impl {
                             $self.state.emit_text(bytes)
                         }
                         ReadTextResult::UpToEof(bytes) => {
+                            $self.state.state = ParseState::Exit;
                             // Return Text event with `bytes` content or Eof if bytes is empty
                             $self.state.emit_text(bytes)
                         }
