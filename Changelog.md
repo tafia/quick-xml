@@ -29,6 +29,9 @@ XML specification. See the updated `custom_entities` example!
 
 ### Misc Changes
 
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
+
 [#766]: https://github.com/tafia/quick-xml/pull/766
 [general entity]: https://www.w3.org/TR/xml11/#gen-entity
 

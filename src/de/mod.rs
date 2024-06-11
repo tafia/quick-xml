@@ -2223,9 +2223,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
                         e.inplace_trim_end();
                     }
-                    result
-                        .to_mut()
-                        .push_str(&e.unescape_with(|entity| self.entity_resolver.resolve(entity))?);
+                    result.to_mut().push_str(&e.decode()?);
                 }
                 PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
 
@@ -2247,7 +2245,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
                         continue;
                     }
-                    self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
+                    self.drain_text(e.decode()?)
                 }
                 PayloadEvent::CData(e) => self.drain_text(e.decode()?),
                 PayloadEvent::DocType(e) => {
