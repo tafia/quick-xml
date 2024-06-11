@@ -59,9 +59,8 @@ macro_rules! impl_buffered_source {
             debug_assert!(byte.is_ascii());
 
             let mut read = 0;
-            let mut done = false;
             let start = buf.len();
-            while !done {
+            loop {
                 let available = match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) if n.is_empty() => break,
                     Ok(n) => n,
@@ -75,11 +74,13 @@ macro_rules! impl_buffered_source {
                 match memchr::memchr(byte, available) {
                     Some(i) => {
                         buf.extend_from_slice(&available[..i]);
-                        done = true;
 
                         let used = i + 1;
                         self $(.$reader)? .consume(used);
                         read += used;
+
+                        *position += read;
+                        return Ok((&buf[start..], true));
                     }
                     None => {
                         buf.extend_from_slice(available);
@@ -90,9 +91,9 @@ macro_rules! impl_buffered_source {
                     }
                 }
             }
-            *position += read;
 
-            Ok((&buf[start..], done))
+            *position += read;
+            Ok((&buf[start..], false))
         }
 
         #[inline]
