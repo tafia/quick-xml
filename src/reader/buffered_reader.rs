@@ -49,6 +49,50 @@ macro_rules! impl_buffered_source {
         }
 
         #[inline]
+        $($async)? fn read_text $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> Result<(&'b [u8], bool)> {
+            let mut read = 0;
+            let start = buf.len();
+            loop {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e.into()));
+                    }
+                };
+
+                match memchr::memchr(b'<', available) {
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i]);
+
+                        let used = i + 1;
+                        self $(.$reader)? .consume(used);
+                        read += used;
+
+                        *position += read;
+                        return Ok((&buf[start..], true));
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self $(.$reader)? .consume(used);
+                        read += used;
+                    }
+                }
+            }
+
+            *position += read;
+            Ok((&buf[start..], false))
+        }
+
+        #[inline]
         $($async)? fn read_bytes_until $(<$lf>)? (
             &mut self,
             byte: u8,

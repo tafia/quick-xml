@@ -256,6 +256,21 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
+    fn read_text(&mut self, _buf: (), position: &mut usize) -> Result<(&'a [u8], bool)> {
+        if let Some(i) = memchr::memchr(b'<', self) {
+            *position += i + 1;
+            let bytes = &self[..i];
+            *self = &self[i + 1..];
+            Ok((bytes, true))
+        } else {
+            *position += self.len();
+            let bytes = &self[..];
+            *self = &[];
+            Ok((bytes, false))
+        }
+    }
+
+    #[inline]
     fn read_bytes_until(
         &mut self,
         byte: u8,

@@ -282,7 +282,7 @@ macro_rules! read_until_open {
         }
 
         match $reader
-            .read_bytes_until(b'<', $buf, &mut $self.state.offset)
+            .read_text($buf, &mut $self.state.offset)
             $(.$await)?
         {
             Ok((bytes, found)) => {
@@ -801,6 +801,33 @@ trait XmlSource<'r, B> {
     /// Determines encoding from the start of input and removes BOM if it is present
     #[cfg(feature = "encoding")]
     fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>>;
+
+    /// Read input until start of markup (the `<`) is found or end of input is reached.
+    ///
+    /// Returns a slice of data read up to `<` (exclusive), and a flag noting whether
+    /// `<` was found in the input or not.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut position = 0;
+    /// let mut input = b"abc<def".as_ref();
+    /// //                    ^= 4
+    ///
+    /// assert_eq!(
+    ///     input.read_text((), &mut position).unwrap(),
+    ///     (b"abc".as_ref(), true)
+    /// );
+    /// assert_eq!(position, 4); // position after the symbol matched
+    /// ```
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
+    fn read_text(&mut self, buf: B, position: &mut usize) -> Result<(&'r [u8], bool)>;
 
     /// Read input until `byte` is found or end of input is reached.
     ///
