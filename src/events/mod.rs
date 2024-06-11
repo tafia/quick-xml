@@ -48,10 +48,7 @@ use std::str::from_utf8;
 
 use crate::encoding::{Decoder, EncodingError};
 use crate::errors::{Error, IllFormedError};
-use crate::escape::{
-    escape, minimal_escape, parse_number, partial_escape, resolve_predefined_entity, unescape_with,
-    EscapeError,
-};
+use crate::escape::{escape, minimal_escape, parse_number, partial_escape, EscapeError};
 use crate::name::{LocalName, QName};
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
 use attributes::{AttrError, Attribute, Attributes};
@@ -578,29 +575,12 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Decodes then unescapes the content of the event.
+    /// Decodes the content of the event.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn unescape(&self) -> Result<Cow<'a, str>, Error> {
-        self.unescape_with(resolve_predefined_entity)
-    }
-
-    /// Decodes then unescapes the content of the event with custom entities.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn unescape_with<'entity>(
-        &self,
-        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<'a, str>, Error> {
-        let decoded = self.decoder.decode_cow(&self.content)?;
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
+    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.decode_cow(&self.content)
     }
 
     /// Removes leading XML whitespace bytes from text content.

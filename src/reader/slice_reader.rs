@@ -62,7 +62,7 @@ impl<'a> Reader<&'a [u8]> {
     /// loop {
     ///     match reader.read_event().unwrap() {
     ///         Event::Start(e) => count += 1,
-    ///         Event::Text(e) => txt.push(e.unescape().unwrap().into_owned()),
+    ///         Event::Text(e) => txt.push(e.decode().unwrap().into_owned()),
     ///         Event::Eof => break,
     ///         _ => (),
     ///     }

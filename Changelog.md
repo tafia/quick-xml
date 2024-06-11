@@ -34,6 +34,8 @@ XML specification. See the updated `custom_entities` example!
 
 - [#863]: Remove `From<QName<'a>> for BytesStart<'a>` because now `BytesStart` stores the
   encoding in which its data is encoded, but `QName` is a simple wrapper around byte slice.
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
 
 [#766]: https://github.com/tafia/quick-xml/pull/766
 [#863]: https://github.com/tafia/quick-xml/pull/863

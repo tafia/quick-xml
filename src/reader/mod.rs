@@ -718,7 +718,7 @@ where
 ///                 _ => (),
 ///             }
 ///         }
-///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
 ///
 ///         // There are several other `Event`s we do not consider here
 ///         _ => (),
