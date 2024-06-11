@@ -262,17 +262,28 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     #[inline]
     fn read_text(&mut self, _buf: (), position: &mut u64) -> ReadTextResult<'a, ()> {
-        match memchr::memchr(b'<', self) {
+        // Search for start of markup or an entity or character reference
+        match memchr::memchr2(b'<', b'&', self) {
             Some(0) => {
+                let is_markup = self[0] == b'<';
                 *position += 1;
                 *self = &self[1..];
-                ReadTextResult::Markup(())
+                if is_markup {
+                    ReadTextResult::Markup(())
+                } else {
+                    ReadTextResult::Ref(())
+                }
             }
             Some(i) => {
+                let is_markup = self[i] == b'<';
                 *position += i as u64 + 1;
                 let bytes = &self[..i];
                 *self = &self[i + 1..];
-                ReadTextResult::UpToMarkup(bytes)
+                if is_markup {
+                    ReadTextResult::UpToMarkup(bytes)
+                } else {
+                    ReadTextResult::UpToRef(bytes)
+                }
             }
             None => {
                 *position += self.len() as u64;

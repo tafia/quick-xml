@@ -68,15 +68,24 @@ macro_rules! impl_buffered_source {
                     }
                 };
 
-                match memchr::memchr(b'<', available) {
+                // Search for start of markup or an entity or character reference
+                match memchr::memchr2(b'<', b'&', available) {
                     // Special handling is needed only on the first iteration.
                     // On next iterations we already read something and should emit Text event
                     Some(0) if read == 0 => {
+                        let is_markup = available[0] == b'<';
+
                         self $(.$reader)? .consume(1);
                         *position += 1;
-                        return ReadTextResult::Markup(buf);
+
+                        return if is_markup {
+                            ReadTextResult::Markup(buf)
+                        } else {
+                            ReadTextResult::Ref(buf)
+                        };
                     }
                     Some(i) => {
+                        let is_markup = available[i] == b'<';
                         buf.extend_from_slice(&available[..i]);
 
                         let used = i + 1;
@@ -84,7 +93,11 @@ macro_rules! impl_buffered_source {
                         read += used as u64;
 
                         *position += read;
-                        return ReadTextResult::UpToMarkup(&buf[start..]);
+                        return if is_markup {
+                            ReadTextResult::UpToMarkup(&buf[start..])
+                        } else {
+                            ReadTextResult::UpToRef(&buf[start..])
+                        };
                     }
                     None => {
                         buf.extend_from_slice(available);

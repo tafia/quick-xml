@@ -5,7 +5,7 @@
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
 use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::events::{BytesRef, Event};
 use crate::name::{QName, ResolveResult};
 use crate::reader::buffered_reader::impl_buffered_source;
 use crate::reader::{

@@ -35,6 +35,9 @@ pub enum SyntaxError {
     /// The parser started to parse tag content, but the input ended
     /// before the closing `>` character was found.
     UnclosedTag,
+    /// The parser started to parse entity or character reference (`&...;`) in text,
+    /// but the input ended before the closing `;` character was found.
+    UnclosedReference,
 }
 
 impl fmt::Display for SyntaxError {
@@ -54,6 +57,7 @@ impl fmt::Display for SyntaxError {
                 f.write_str("CDATA not closed: `]]>` not found before end of input")
             }
             Self::UnclosedTag => f.write_str("tag not closed: `>` not found before end of input"),
+            Self::UnclosedReference => f.write_str("entity or character reference not closed: `;` not found before end of input"),
         }
     }
 }
