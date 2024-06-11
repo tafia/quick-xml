@@ -72,19 +72,23 @@ macro_rules! impl_buffered_source {
                     }
                 };
 
-                let used = match memchr::memchr(byte, available) {
+                match memchr::memchr(byte, available) {
                     Some(i) => {
                         buf.extend_from_slice(&available[..i]);
                         done = true;
-                        i + 1
+
+                        let used = i + 1;
+                        self $(.$reader)? .consume(used);
+                        read += used;
                     }
                     None => {
                         buf.extend_from_slice(available);
-                        available.len()
+
+                        let used = available.len();
+                        self $(.$reader)? .consume(used);
+                        read += used;
                     }
-                };
-                self $(.$reader)? .consume(used);
-                read += used;
+                }
             }
             *position += read;
 
