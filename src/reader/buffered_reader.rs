@@ -62,27 +62,25 @@ macro_rules! impl_buffered_source {
             let mut done = false;
             let start = buf.len();
             while !done {
-                let used = {
-                    let available = match self $(.$reader)? .fill_buf() $(.$await)? {
-                        Ok(n) if n.is_empty() => break,
-                        Ok(n) => n,
-                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => {
-                            *position += read;
-                            return Err(Error::Io(e.into()));
-                        }
-                    };
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(Error::Io(e.into()));
+                    }
+                };
 
-                    match memchr::memchr(byte, available) {
-                        Some(i) => {
-                            buf.extend_from_slice(&available[..i]);
-                            done = true;
-                            i + 1
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            available.len()
-                        }
+                let used = match memchr::memchr(byte, available) {
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i]);
+                        done = true;
+                        i + 1
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+                        available.len()
                     }
                 };
                 self $(.$reader)? .consume(used);
