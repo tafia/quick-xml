@@ -8,7 +8,7 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
@@ -53,7 +53,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<(&'b [u8], bool)> {
+        ) -> ReadTextResult<'b> {
             let mut read = 0;
             let start = buf.len();
             loop {
@@ -63,7 +63,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return Err(Error::Io(e.into()));
+                        return ReadTextResult::Err(e);
                     }
                 };
 
@@ -76,7 +76,7 @@ macro_rules! impl_buffered_source {
                         read += used;
 
                         *position += read;
-                        return Ok((&buf[start..], true));
+                        return ReadTextResult::UpToMarkup(&buf[start..]);
                     }
                     None => {
                         buf.extend_from_slice(available);
@@ -89,7 +89,7 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            Ok((&buf[start..], false))
+            ReadTextResult::UpToEof(&buf[start..])
         }
 
         #[inline]

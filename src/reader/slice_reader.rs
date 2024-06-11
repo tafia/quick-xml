@@ -12,7 +12,7 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -256,17 +256,17 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_text(&mut self, _buf: (), position: &mut usize) -> Result<(&'a [u8], bool)> {
+    fn read_text(&mut self, _buf: (), position: &mut usize) -> ReadTextResult<'a> {
         if let Some(i) = memchr::memchr(b'<', self) {
             *position += i + 1;
             let bytes = &self[..i];
             *self = &self[i + 1..];
-            Ok((bytes, true))
+            ReadTextResult::UpToMarkup(bytes)
         } else {
             *position += self.len();
             let bytes = &self[..];
             *self = &[];
-            Ok((bytes, false))
+            ReadTextResult::UpToEof(bytes)
         }
     }
 

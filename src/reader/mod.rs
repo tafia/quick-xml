@@ -2,6 +2,7 @@
 
 #[cfg(feature = "encoding")]
 use encoding_rs::Encoding;
+use std::io;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
@@ -285,14 +286,16 @@ macro_rules! read_until_open {
             .read_text($buf, &mut $self.state.offset)
             $(.$await)?
         {
-            Ok((bytes, found)) => {
-                if found {
-                    $self.state.state = ParseState::OpenedTag;
-                }
+            ReadTextResult::UpToMarkup(bytes) => {
+                $self.state.state = ParseState::OpenedTag;
                 // Return Text event with `bytes` content or Eof if bytes is empty
                 $self.state.emit_text(bytes).map(Ok)
             }
-            Err(e) => Err(e),
+            ReadTextResult::UpToEof(bytes) => {
+                // Return Text event with `bytes` content or Eof if bytes is empty
+                $self.state.emit_text(bytes).map(Ok)
+            }
+            ReadTextResult::Err(e) => Err(Error::Io(e.into())),
         }
     }};
 }
@@ -759,6 +762,16 @@ impl<R> Reader<R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Result of an attempt to read XML textual data from the reader.
+enum ReadTextResult<'r> {
+    /// Contains text block up to start of markup (`<` character).
+    UpToMarkup(&'r [u8]),
+    /// Contains text block up to EOF, start of markup (`<` character) was not found.
+    UpToEof(&'r [u8]),
+    /// IO error occurred.
+    Err(io::Error),
+}
+
 /// Used to decouple reading of data from data source and parsing XML structure from it.
 /// This is a state preserved between getting chunks of bytes from the reader.
 ///
@@ -827,7 +840,7 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_text(&mut self, buf: B, position: &mut usize) -> Result<(&'r [u8], bool)>;
+    fn read_text(&mut self, buf: B, position: &mut usize) -> ReadTextResult<'r>;
 
     /// Read input until `byte` is found or end of input is reached.
     ///
