@@ -2014,7 +2014,8 @@ use crate::{
     de::map::ElementMapAccess,
     encoding::Decoder,
     errors::Error,
-    events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
+    escape::{parse_number, EscapeError},
+    events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event},
     name::QName,
     reader::Reader,
     utils::CowRef,
@@ -2133,6 +2134,8 @@ pub enum PayloadEvent<'a> {
     CData(BytesCData<'a>),
     /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
+    /// Reference `&ref;` in the textual data.
+    GeneralRef(BytesRef<'a>),
     /// End of XML document.
     Eof,
 }
@@ -2147,6 +2150,7 @@ impl<'a> PayloadEvent<'a> {
             PayloadEvent::Text(e) => PayloadEvent::Text(e.into_owned()),
             PayloadEvent::CData(e) => PayloadEvent::CData(e.into_owned()),
             PayloadEvent::DocType(e) => PayloadEvent::DocType(e.into_owned()),
+            PayloadEvent::GeneralRef(e) => PayloadEvent::GeneralRef(e.into_owned()),
             PayloadEvent::Eof => PayloadEvent::Eof,
         }
     }
@@ -2201,7 +2205,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
         // If next event is a text or CDATA, we should not trim trailing spaces
         !matches!(
             self.lookahead,
-            Ok(PayloadEvent::Text(_)) | Ok(PayloadEvent::CData(_))
+            Ok(PayloadEvent::Text(_)) | Ok(PayloadEvent::CData(_) | PayloadEvent::GeneralRef(_))
         )
     }
 
@@ -2226,9 +2230,10 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                     result.to_mut().push_str(&e.decode()?);
                 }
                 PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
+                PayloadEvent::GeneralRef(e) => self.resolve_reference(result.to_mut(), e)?,
 
-                // SAFETY: current_event_is_last_text checks that event is Text or CData
-                _ => unreachable!("Only `Text` and `CData` events can come here"),
+                // SAFETY: current_event_is_last_text checks that event is Text, CData or GeneralRef
+                _ => unreachable!("Only `Text`, `CData` or `GeneralRef` events can come here"),
             }
         }
         Ok(DeEvent::Text(Text { text: result }))
@@ -2254,9 +2259,30 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                         .map_err(|err| DeError::Custom(format!("cannot parse DTD: {}", err)))?;
                     continue;
                 }
+                PayloadEvent::GeneralRef(e) => {
+                    let mut text = String::new();
+                    self.resolve_reference(&mut text, e)?;
+                    self.drain_text(text.into())
+                }
                 PayloadEvent::Eof => Ok(DeEvent::Eof),
             };
         }
+    }
+
+    fn resolve_reference(&mut self, result: &mut String, event: BytesRef) -> Result<(), DeError> {
+        let len = event.len();
+        let reference = self.decoder().decode(&event)?;
+
+        if let Some(num) = reference.strip_prefix('#') {
+            let codepoint = parse_number(num).map_err(EscapeError::InvalidCharRef)?;
+            result.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
+            return Ok(());
+        }
+        if let Some(value) = self.entity_resolver.resolve(reference.as_ref()) {
+            result.push_str(value);
+            return Ok(());
+        }
+        Err(EscapeError::UnrecognizedEntity(0..len, reference.to_string()).into())
     }
 
     #[inline]
@@ -3027,7 +3053,7 @@ impl StartTrimmer {
             Event::End(e) => (PayloadEvent::End(e), true),
             Event::Eof => (PayloadEvent::Eof, true),
 
-            // Do not trim next text event after Text or CDATA event
+            // Do not trim next text event after Text, CDATA or reference event
             Event::CData(e) => (PayloadEvent::CData(e), false),
             Event::Text(mut e) => {
                 // If event is empty after trimming, skip it
@@ -3036,6 +3062,7 @@ impl StartTrimmer {
                 }
                 (PayloadEvent::Text(e), false)
             }
+            Event::GeneralRef(e) => (PayloadEvent::GeneralRef(e), false),
 
             _ => return None,
         };
