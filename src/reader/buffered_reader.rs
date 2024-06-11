@@ -53,7 +53,7 @@ macro_rules! impl_buffered_source {
             &mut self,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> ReadTextResult<'b> {
+        ) -> ReadTextResult<'b, &'b mut Vec<u8>> {
             let mut read = 0;
             let start = buf.len();
             loop {
@@ -68,6 +68,11 @@ macro_rules! impl_buffered_source {
                 };
 
                 match memchr::memchr(b'<', available) {
+                    Some(0) => {
+                        self $(.$reader)? .consume(1);
+                        *position += 1;
+                        return ReadTextResult::Markup(buf);
+                    }
                     Some(i) => {
                         buf.extend_from_slice(&available[..i]);
 
@@ -251,20 +256,6 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => Err(Error::Io(e.into())),
                 };
-            }
-        }
-
-        #[inline]
-        $($async)? fn skip_one(&mut self, byte: u8) -> Result<bool> {
-            // search byte must be within the ascii range
-            debug_assert!(byte.is_ascii());
-
-            match self.peek_one() $(.$await)? ? {
-                Some(b) if b == byte => {
-                    self $(.$reader)? .consume(1);
-                    Ok(true)
-                }
-                _ => Ok(false),
             }
         }
 

@@ -274,18 +274,15 @@ macro_rules! read_until_open {
             $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
         }
 
-        // If we already at the `<` symbol, do not try to return an empty Text event
-        if $reader.skip_one(b'<') $(.$await)? ? {
-            $self.state.offset += 1;
-            $self.state.state = ParseState::OpenedTag;
-            // Pass $buf to the next next iteration of parsing loop
-            return Ok(Err($buf));
-        }
-
         match $reader
             .read_text($buf, &mut $self.state.offset)
             $(.$await)?
         {
+            ReadTextResult::Markup(buf) => {
+                $self.state.state = ParseState::OpenedTag;
+                // Pass `buf` to the next next iteration of parsing loop
+                return Ok(Err(buf));
+            }
             ReadTextResult::UpToMarkup(bytes) => {
                 $self.state.state = ParseState::OpenedTag;
                 // Return Text event with `bytes` content or Eof if bytes is empty
@@ -763,7 +760,11 @@ impl<R> Reader<R> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Result of an attempt to read XML textual data from the reader.
-enum ReadTextResult<'r> {
+enum ReadTextResult<'r, B> {
+    /// Start of markup (`<` character) was found in the first byte.
+    /// Contains buffer that should be returned back to the next iteration cycle
+    /// to satisfy borrow checker requirements.
+    Markup(B),
     /// Contains text block up to start of markup (`<` character).
     UpToMarkup(&'r [u8]),
     /// Contains text block up to EOF, start of markup (`<` character) was not found.
@@ -840,7 +841,7 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_text(&mut self, buf: B, position: &mut usize) -> ReadTextResult<'r>;
+    fn read_text(&mut self, buf: B, position: &mut usize) -> ReadTextResult<'r, B>;
 
     /// Read input until `byte` is found or end of input is reached.
     ///
@@ -920,13 +921,6 @@ trait XmlSource<'r, B> {
     /// # Parameters
     /// - `position`: Will be increased by amount of bytes consumed
     fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
-
-    /// Consume and discard one character if it matches the given byte. Return
-    /// `true` if it matched.
-    ///
-    /// # Parameters
-    /// - `byte`: Character to skip
-    fn skip_one(&mut self, byte: u8) -> Result<bool>;
 
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return `None`.

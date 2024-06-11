@@ -256,17 +256,25 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_text(&mut self, _buf: (), position: &mut usize) -> ReadTextResult<'a> {
-        if let Some(i) = memchr::memchr(b'<', self) {
-            *position += i + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            ReadTextResult::UpToMarkup(bytes)
-        } else {
-            *position += self.len();
-            let bytes = &self[..];
-            *self = &[];
-            ReadTextResult::UpToEof(bytes)
+    fn read_text(&mut self, _buf: (), position: &mut usize) -> ReadTextResult<'a, ()> {
+        match memchr::memchr(b'<', self) {
+            Some(0) => {
+                *position += 1;
+                *self = &self[1..];
+                ReadTextResult::Markup(())
+            }
+            Some(i) => {
+                *position += i + 1;
+                let bytes = &self[..i];
+                *self = &self[i + 1..];
+                ReadTextResult::UpToMarkup(bytes)
+            }
+            None => {
+                *position += self.len();
+                let bytes = &self[..];
+                *self = &[];
+                ReadTextResult::UpToEof(bytes)
+            }
         }
     }
 
@@ -341,18 +349,6 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         *position += whitespaces;
         *self = &self[whitespaces..];
         Ok(())
-    }
-
-    #[inline]
-    fn skip_one(&mut self, byte: u8) -> Result<bool> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
-            Ok(true)
-        } else {
-            Ok(false)
-        }
     }
 
     #[inline]
