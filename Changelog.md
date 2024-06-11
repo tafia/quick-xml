@@ -57,6 +57,8 @@ XML specification. See the updated `custom_entities` example!
 - [#826]: Removed `DeError::InvalidInt`, `DeError::InvalidFloat` and `DeError::InvalidBoolean`.
   Now the responsibility for returning the error lies with the visitor of the type.
   See rationale in https://github.com/serde-rs/serde/pull/2811
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
