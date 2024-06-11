@@ -227,12 +227,7 @@ macro_rules! read_event_impl {
                     #[cfg(not(feature = "encoding"))]
                     $reader.remove_utf8_bom() $(.$await)? ?;
 
-                    // Go to OpenedTag state
-                    match $self.$read_until_open($buf) $(.$await)? {
-                        Ok(Ok(ev)) => break Ok(ev),
-                        Ok(Err(b)) => $buf = b,
-                        Err(err)   => break Err(err),
-                    }
+                    $self.state.state = ParseState::ClosedTag;
                 },
                 ParseState::ClosedTag => { // Go to OpenedTag state
                     match $self.$read_until_open($buf) $(.$await)? {
