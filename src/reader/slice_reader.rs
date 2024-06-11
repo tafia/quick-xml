@@ -14,7 +14,7 @@ use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
 use crate::parser::Parser;
-use crate::reader::{BangType, ReadTextResult, Reader, Span, XmlSource};
+use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
@@ -263,23 +263,75 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     #[inline]
     fn read_text(&mut self, _buf: (), position: &mut u64) -> ReadTextResult<'a, ()> {
-        match memchr::memchr(b'<', self) {
-            Some(0) => {
-                *position += 1;
+        // Search for start of markup or an entity or character reference
+        match memchr::memchr2(b'<', b'&', self) {
+            Some(0) if self[0] == b'<' => {
                 *self = &self[1..];
+                *position += 1;
                 ReadTextResult::Markup(())
             }
-            Some(i) => {
-                *position += i as u64 + 1;
+            // Do not consume `&` because it may be lone and we would be need to
+            // return it as part of Text event
+            Some(0) => ReadTextResult::Ref(()),
+            Some(i) if self[i] == b'<' => {
                 let bytes = &self[..i];
                 *self = &self[i + 1..];
+                *position += i as u64 + 1;
                 ReadTextResult::UpToMarkup(bytes)
             }
+            Some(i) => {
+                let (bytes, rest) = self.split_at(i);
+                *self = rest;
+                *position += i as u64;
+                ReadTextResult::UpToRef(bytes)
+            }
             None => {
-                *position += self.len() as u64;
                 let bytes = &self[..];
                 *self = &[];
+                *position += bytes.len() as u64;
                 ReadTextResult::UpToEof(bytes)
+            }
+        }
+    }
+
+    #[inline]
+    fn read_ref(&mut self, _buf: (), position: &mut u64) -> ReadRefResult<'a> {
+        debug_assert_eq!(
+            self.first(),
+            Some(&b'&'),
+            "`read_ref` must be called at `&`"
+        );
+        // Search for the end of reference or a start of another reference or a markup
+        match memchr::memchr3(b';', b'&', b'<', &self[1..]) {
+            // Do not consume `&` because it may be lone and we would be need to
+            // return it as part of Text event
+            Some(i) if self[i + 1] == b'&' => {
+                let (_, rest) = self.split_at(i + 1);
+                *self = rest;
+                *position += i as u64 + 1;
+
+                ReadRefResult::UpToRef
+            }
+            Some(i) => {
+                let end = i + 1;
+                let is_end = self[end] == b';';
+                let bytes = &self[..end];
+                // +1 -- skip the end `;` or `<`
+                *self = &self[end + 1..];
+                *position += end as u64 + 1;
+
+                if is_end {
+                    ReadRefResult::Ref(bytes)
+                } else {
+                    ReadRefResult::UpToMarkup
+                }
+            }
+            None => {
+                let bytes = &self[..];
+                *self = &[];
+                *position += bytes.len() as u64;
+
+                ReadRefResult::UpToEof
             }
         }
     }

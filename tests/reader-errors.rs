@@ -896,4 +896,29 @@ mod ill_formed {
     //                                   ^= 5
     err!(double_hyphen_in_comment4("<!-- -- -->") => 5: IllFormedError::DoubleHyphenInComment);
     //                                   ^= 5
+
+    mod reference {
+        use super::*;
+        use quick_xml::events::BytesRef;
+
+        err2!(unclosed1(".&")        => 1: IllFormedError::UnclosedReference);
+        err2!(unclosed2(".&x")       => 1: IllFormedError::UnclosedReference);
+        err2!(unclosed_num(".&#")    => 1: IllFormedError::UnclosedReference);
+        err2!(unclosed_dec(".&#2")   => 1: IllFormedError::UnclosedReference);
+        err2!(unclosed_hex1(".&#x")  => 1: IllFormedError::UnclosedReference);
+        err2!(unclosed_hex2(".&#xF") => 1: IllFormedError::UnclosedReference);
+
+        // We do not check correctness of references during parsing
+        ok!(empty("&;")   =>      2: Event::GeneralRef(BytesRef::new("")));
+        ok!(normal1("&x;") =>     3: Event::GeneralRef(BytesRef::new("x")));
+        ok!(normal2("&x;rest") => 3: Event::GeneralRef(BytesRef::new("x")));
+        ok!(num("&#;")    =>      3: Event::GeneralRef(BytesRef::new("#")));
+        ok!(dec("&#2;")   =>      4: Event::GeneralRef(BytesRef::new("#2")));
+        ok!(hex1("&#x;")  =>      4: Event::GeneralRef(BytesRef::new("#x")));
+        ok!(hex2("&#xF;") =>      5: Event::GeneralRef(BytesRef::new("#xF")));
+
+        // XML specification explicitly allowed any number of leading zeroes
+        ok!(long_dec("&#00000000000000000000000000000000000000032;")  => 44: Event::GeneralRef(BytesRef::new("#00000000000000000000000000000000000000032")));
+        ok!(long_hex("&#x00000000000000000000000000000000000000020;") => 45: Event::GeneralRef(BytesRef::new("#x00000000000000000000000000000000000000020")));
+    }
 }

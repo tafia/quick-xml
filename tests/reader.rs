@@ -1,6 +1,6 @@
 use std::str::from_utf8;
 
-use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event::*};
+use quick_xml::events::{BytesCData, BytesEnd, BytesRef, BytesStart, BytesText, Event::*};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
@@ -163,16 +163,17 @@ fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
 
     assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("a")));
+    assert_eq!(r.read_event().unwrap(), GeneralRef(BytesRef::new("lt")));
     match r.read_event() {
         Ok(Text(e)) => {
             assert_eq!(
                 &*e,
-                b"&lt;test&gt;",
-                "content unexpected: expecting '&lt;test&gt;', got '{:?}'",
+                b"test",
+                "content unexpected: expecting 'test', got '{:?}'",
                 from_utf8(&e)
             );
             match e.unescape() {
-                Ok(c) => assert_eq!(c, "<test>"),
+                Ok(c) => assert_eq!(c, "test"),
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
                     r.error_position(),
@@ -187,6 +188,7 @@ fn test_escaped_content() {
             e
         ),
     }
+    assert_eq!(r.read_event().unwrap(), GeneralRef(BytesRef::new("gt")));
     assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
 }
 

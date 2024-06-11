@@ -9,7 +9,7 @@ use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
 use crate::parser::Parser;
-use crate::reader::{BangType, ReadTextResult, Reader, Span, XmlSource};
+use crate::reader::{BangType, ReadRefResult, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
 macro_rules! impl_buffered_source {
@@ -69,23 +69,37 @@ macro_rules! impl_buffered_source {
                     }
                 };
 
-                match memchr::memchr(b'<', available) {
+                // Search for start of markup or an entity or character reference
+                match memchr::memchr2(b'<', b'&', available) {
                     // Special handling is needed only on the first iteration.
                     // On next iterations we already read something and should emit Text event
-                    Some(0) if read == 0 => {
+                    Some(0) if read == 0 && available[0] == b'<' => {
                         self $(.$reader)? .consume(1);
                         *position += 1;
                         return ReadTextResult::Markup(buf);
                     }
-                    Some(i) => {
+                    // Do not consume `&` because it may be lone and we would be need to
+                    // return it as part of Text event
+                    Some(0) if read == 0 => return ReadTextResult::Ref(buf),
+                    Some(i) if available[i] == b'<' => {
                         buf.extend_from_slice(&available[..i]);
 
+                        // +1 to skip `<`
                         let used = i + 1;
                         self $(.$reader)? .consume(used);
                         read += used as u64;
 
                         *position += read;
                         return ReadTextResult::UpToMarkup(&buf[start..]);
+                    }
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i]);
+
+                        self $(.$reader)? .consume(i);
+                        read += i as u64;
+
+                        *position += read;
+                        return ReadTextResult::UpToRef(&buf[start..]);
                     }
                     None => {
                         buf.extend_from_slice(available);
@@ -99,6 +113,85 @@ macro_rules! impl_buffered_source {
 
             *position += read;
             ReadTextResult::UpToEof(&buf[start..])
+        }
+
+        #[inline]
+        $($async)? fn read_ref $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut u64,
+        ) -> ReadRefResult<'b> {
+            let mut read = 0;
+            let start = buf.len();
+            loop {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return ReadRefResult::Err(e);
+                    }
+                };
+                // `read_ref` called when the first character is `&`, so we
+                // should explicitly skip it at first iteration lest we confuse
+                // it with the end
+                if read == 0 {
+                    debug_assert_eq!(
+                        available.first(),
+                        Some(&b'&'),
+                        "`read_ref` must be called at `&`"
+                    );
+                    // If that ampersand is lone, then it will be part of text
+                    // and we should keep it
+                    buf.push(b'&');
+                    self $(.$reader)? .consume(1);
+                    read += 1;
+                    continue;
+                }
+
+                match memchr::memchr3(b';', b'&', b'<', available) {
+                    // Do not consume `&` because it may be lone and we would be need to
+                    // return it as part of Text event
+                    Some(i) if available[i] == b'&' => {
+                        buf.extend_from_slice(&available[..i]);
+
+                        self $(.$reader)? .consume(i);
+                        read += i as u64;
+
+                        *position += read;
+
+                        return ReadRefResult::UpToRef;
+                    }
+                    Some(i) => {
+                        let is_end = available[i] == b';';
+                        buf.extend_from_slice(&available[..i]);
+
+                        // +1 -- skip the end `;` or `<`
+                        let used = i + 1;
+                        self $(.$reader)? .consume(used);
+                        read += used as u64;
+
+                        *position += read;
+
+                        return if is_end {
+                            ReadRefResult::Ref(&buf[start..])
+                        } else {
+                            ReadRefResult::UpToMarkup
+                        };
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self $(.$reader)? .consume(used);
+                        read += used as u64;
+                    }
+                }
+            }
+
+            *position += read;
+            ReadRefResult::UpToEof
         }
 
         #[inline]
