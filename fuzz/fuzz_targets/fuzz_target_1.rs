@@ -55,6 +55,11 @@ where
                     break;
                 }
             }
+            Ok(Event::GeneralRef(ref e)) => {
+                debug_format!(e);
+                debug_format!(e.is_char_ref());
+                debug_format!(e.resolve_char_ref());
+            }
             Ok(Event::PI(ref e)) => {
                 debug_format!(e);
             }
