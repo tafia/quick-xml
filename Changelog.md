@@ -42,6 +42,8 @@ XML specification. See the updated `custom_entities` example!
 - [#820]: Classify output of the `Serializer` by returning an enumeration with kind of written data
 - [#823]: Do not allow serialization of consequent primitives, for example `Vec<usize>` or
   `Vec<String>` in `$value` fields. They cannot be deserialized back with the same result
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
