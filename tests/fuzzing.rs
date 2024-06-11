@@ -38,7 +38,7 @@ fn fuzz_101() {
                 }
             }
             Ok(Event::Text(e)) => {
-                if e.unescape().is_err() {
+                if e.decode().is_err() {
                     break;
                 }
             }
