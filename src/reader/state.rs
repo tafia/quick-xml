@@ -263,7 +263,7 @@ impl ReaderState {
             let event = BytesStart::wrap(content, name_len(content));
 
             if self.config.expand_empty_elements {
-                self.state = ParseState::Empty;
+                self.state = ParseState::InsideEmpty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(event.name().as_ref());
                 Ok(Event::Start(event))
@@ -284,7 +284,7 @@ impl ReaderState {
 
     #[inline]
     pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.state = ParseState::ClosedTag;
+        self.state = ParseState::InsideText;
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());

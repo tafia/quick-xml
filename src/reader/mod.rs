@@ -211,7 +211,7 @@ macro_rules! read_event_impl {
     ) => {{
         let event = loop {
             break match $self.state.state {
-                ParseState::Init => { // Go to OpenedTag state
+                ParseState::Init => { // Go to InsideMarkup state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
                     // But we still need to remove BOM for consistency with no encoding
@@ -227,45 +227,45 @@ macro_rules! read_event_impl {
                     #[cfg(not(feature = "encoding"))]
                     $reader.remove_utf8_bom() $(.$await)? ?;
 
-                    $self.state.state = ParseState::ClosedTag;
+                    $self.state.state = ParseState::InsideText;
                     continue;
                 },
-                ParseState::ClosedTag => { // Go to OpenedTag or Exit state
+                ParseState::InsideText => { // Go to InsideMarkup or Done state
                     if $self.state.config.trim_text_start {
                         $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
                     }
 
                     match $reader.read_text($buf, &mut $self.state.offset) $(.$await)? {
                         ReadTextResult::Markup(buf) => {
-                            $self.state.state = ParseState::OpenedTag;
+                            $self.state.state = ParseState::InsideMarkup;
                             // Pass `buf` to the next next iteration of parsing loop
                             $buf = buf;
                             continue;
                         }
                         ReadTextResult::UpToMarkup(bytes) => {
-                            $self.state.state = ParseState::OpenedTag;
+                            $self.state.state = ParseState::InsideMarkup;
                             // Return Text event with `bytes` content or Eof if bytes is empty
                             $self.state.emit_text(bytes)
                         }
                         ReadTextResult::UpToEof(bytes) => {
-                            $self.state.state = ParseState::Exit;
+                            $self.state.state = ParseState::Done;
                             // Return Text event with `bytes` content or Eof if bytes is empty
                             $self.state.emit_text(bytes)
                         }
                         ReadTextResult::Err(e) => Err(Error::Io(e.into())),
                     }
                 },
-                // Go to ClosedTag state in next two arms
-                ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
-                ParseState::Empty => $self.state.close_expanded_empty(),
-                ParseState::Exit => Ok(Event::Eof),
+                // Go to InsideText state in next two arms
+                ParseState::InsideMarkup => $self.$read_until_close($buf) $(.$await)?,
+                ParseState::InsideEmpty => $self.state.close_expanded_empty(),
+                ParseState::Done => Ok(Event::Eof),
             };
         };
         match event {
             // #513: In case of ill-formed errors we already consume the wrong data
             // and change the state. We can continue parsing if we wish
             Err(Error::IllFormed(_)) => {}
-            Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Exit,
+            Err(_) | Ok(Event::Eof) => $self.state.state = ParseState::Done,
             _ => {}
         }
         event
@@ -283,7 +283,7 @@ macro_rules! read_event_impl {
 /// |`?`    |[`PI`]
 /// |_other_|[`Start`] or [`Empty`]
 ///
-/// Moves parser to the `ClosedTag` state.
+/// Moves parser to the `InsideText` state.
 ///
 /// [`Comment`]: Event::Comment
 /// [`CData`]: Event::CData
@@ -298,7 +298,7 @@ macro_rules! read_until_close {
         $reader:expr
         $(, $await:ident)?
     ) => {{
-        $self.state.state = ParseState::ClosedTag;
+        $self.state.state = ParseState::InsideText;
 
         let start = $self.state.offset;
         match $reader.peek_one() $(.$await)? {
@@ -420,41 +420,41 @@ pub type Span = Range<usize>;
 ///   subgraph _
 ///     direction LR
 ///
-///     Init      -- "(no event)"\n                                       --> OpenedTag
-///     OpenedTag -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> ClosedTag
-///     ClosedTag -- "#lt;false#gt;\n(no event)"\nText                    --> OpenedTag
+///     Init         -- "(no event)"\n                                       --> InsideMarkup
+///     InsideMarkup -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> InsideText
+///     InsideText   -- "#lt;false#gt;\n(no event)"\nText                    --> InsideMarkup
 ///   end
-///   ClosedTag -- "#lt;true#gt;"\nStart --> Empty
-///   Empty     -- End                   --> ClosedTag
-///   _ -. Eof .-> Exit
+///   InsideText     -- "#lt;true#gt;"\nStart --> InsideEmpty
+///   InsideEmpty    -- End                   --> InsideText
+///   _ -. Eof .-> Done
 /// ```
 #[derive(Clone, Debug)]
 enum ParseState {
     /// Initial state in which reader stay after creation. Transition from that
     /// state could produce a `Text`, `Decl`, `Comment` or `Start` event. The next
-    /// state is always `OpenedTag`. The reader will never return to this state. The
-    /// event emitted during transition to `OpenedTag` is a `StartEvent` if the
+    /// state is always `InsideMarkup`. The reader will never return to this state. The
+    /// event emitted during transition to `InsideMarkup` is a `StartEvent` if the
     /// first symbol not `<`, otherwise no event are emitted.
     Init,
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events could be generated.
     ///
-    /// After generating one event the reader moves to the `ClosedTag` state.
-    OpenedTag,
+    /// After generating one event the reader moves to the `InsideText` state.
+    InsideMarkup,
     /// State in which reader searches the `<` symbol of a markup. All bytes before
     /// that symbol will be returned in the [`Event::Text`] event. After that
-    /// the reader moves to the `OpenedTag` state.
-    ClosedTag,
+    /// the reader moves to the `InsideMarkup` state.
+    InsideText,
     /// This state is used only if option [`expand_empty_elements`] is set to `true`.
-    /// Reader enters to this state when it is in a `ClosedTag` state and emits an
+    /// Reader enters to this state when it is in a `InsideText` state and emits an
     /// [`Event::Start`] event. The next event emitted will be an [`Event::End`],
-    /// after which reader returned to the `ClosedTag` state.
+    /// after which reader returned to the `InsideText` state.
     ///
     /// [`expand_empty_elements`]: Config::expand_empty_elements
-    Empty,
+    InsideEmpty,
     /// Reader enters this state when `Eof` event generated or an error occurred.
     /// This is the last state, the reader stay in it forever.
-    Exit,
+    Done,
 }
 
 /// A reference to an encoding together with information about how it was retrieved.
@@ -660,9 +660,9 @@ impl<R> Reader<R> {
 
     /// Gets the current byte position in the input data.
     pub fn buffer_position(&self) -> usize {
-        // when internal state is OpenedTag, we have actually read until '<',
+        // when internal state is InsideMarkup, we have actually read until '<',
         // which we don't want to show
-        if let ParseState::OpenedTag = self.state.state {
+        if let ParseState::InsideMarkup = self.state.state {
             self.state.offset - 1
         } else {
             self.state.offset
