@@ -206,12 +206,11 @@ macro_rules! read_event_impl {
     (
         $self:ident, $buf:ident,
         $reader:expr,
-        $read_until_open:ident,
         $read_until_close:ident
         $(, $await:ident)?
     ) => {{
         let event = loop {
-            match $self.state.state {
+            break match $self.state.state {
                 ParseState::Init => { // Go to OpenedTag state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
@@ -229,18 +228,36 @@ macro_rules! read_event_impl {
                     $reader.remove_utf8_bom() $(.$await)? ?;
 
                     $self.state.state = ParseState::ClosedTag;
+                    continue;
                 },
                 ParseState::ClosedTag => { // Go to OpenedTag state
-                    match $self.$read_until_open($buf) $(.$await)? {
-                        Ok(Ok(ev)) => break Ok(ev),
-                        Ok(Err(b)) => $buf = b,
-                        Err(err)   => break Err(err),
+                    if $self.state.config.trim_text_start {
+                        $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
+                    }
+
+                    match $reader.read_text($buf, &mut $self.state.offset) $(.$await)? {
+                        ReadTextResult::Markup(buf) => {
+                            $self.state.state = ParseState::OpenedTag;
+                            // Pass `buf` to the next next iteration of parsing loop
+                            $buf = buf;
+                            continue;
+                        }
+                        ReadTextResult::UpToMarkup(bytes) => {
+                            $self.state.state = ParseState::OpenedTag;
+                            // Return Text event with `bytes` content or Eof if bytes is empty
+                            $self.state.emit_text(bytes)
+                        }
+                        ReadTextResult::UpToEof(bytes) => {
+                            // Return Text event with `bytes` content or Eof if bytes is empty
+                            $self.state.emit_text(bytes)
+                        }
+                        ReadTextResult::Err(e) => Err(Error::Io(e.into())),
                     }
                 },
                 // Go to ClosedTag state in next two arms
-                ParseState::OpenedTag => break $self.$read_until_close($buf) $(.$await)?,
-                ParseState::Empty => break $self.state.close_expanded_empty(),
-                ParseState::Exit => break Ok(Event::Eof),
+                ParseState::OpenedTag => $self.$read_until_close($buf) $(.$await)?,
+                ParseState::Empty => $self.state.close_expanded_empty(),
+                ParseState::Exit => Ok(Event::Eof),
             };
         };
         match event {
@@ -251,49 +268,6 @@ macro_rules! read_event_impl {
             _ => {}
         }
         event
-    }};
-}
-
-/// Read bytes up to `<` and skip it. If current byte (after skipping all space
-/// characters if [`Config::trim_text_start`] is `true`) is already `<`, then
-/// returns the next event, otherwise stay at position just after the `<` symbol.
-///
-/// Moves parser to the `OpenedTag` state.
-///
-/// This code is executed in two cases:
-/// - after start of parsing just after skipping BOM if it is present
-/// - after parsing `</tag>` or `<tag>`
-macro_rules! read_until_open {
-    (
-        $self:ident, $buf:ident,
-        $reader:expr,
-        $read_event:ident
-        $(, $await:ident)?
-    ) => {{
-        if $self.state.config.trim_text_start {
-            $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
-        }
-
-        match $reader
-            .read_text($buf, &mut $self.state.offset)
-            $(.$await)?
-        {
-            ReadTextResult::Markup(buf) => {
-                $self.state.state = ParseState::OpenedTag;
-                // Pass `buf` to the next next iteration of parsing loop
-                return Ok(Err(buf));
-            }
-            ReadTextResult::UpToMarkup(bytes) => {
-                $self.state.state = ParseState::OpenedTag;
-                // Return Text event with `bytes` content or Eof if bytes is empty
-                $self.state.emit_text(bytes).map(Ok)
-            }
-            ReadTextResult::UpToEof(bytes) => {
-                // Return Text event with `bytes` content or Eof if bytes is empty
-                $self.state.emit_text(bytes).map(Ok)
-            }
-            ReadTextResult::Err(e) => Err(Error::Io(e.into())),
-        }
     }};
 }
 
@@ -733,18 +707,7 @@ impl<R> Reader<R> {
     where
         R: XmlSource<'i, B>,
     {
-        read_event_impl!(self, buf, self.reader, read_until_open, read_until_close)
-    }
-
-    /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    ///
-    /// Returns inner `Ok` if the loop should be broken and an event returned.
-    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
-    fn read_until_open<'i, B>(&mut self, buf: B) -> Result<std::result::Result<Event<'i>, B>>
-    where
-        R: XmlSource<'i, B>,
-    {
-        read_until_open!(self, buf, self.reader, read_event_impl)
+        read_event_impl!(self, buf, self.reader, read_until_close)
     }
 
     /// Private function to read until `>` is found. This function expects that

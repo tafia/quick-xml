@@ -78,7 +78,6 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         read_event_impl!(
             self, buf,
             TokioAdapter(&mut self.reader),
-            read_until_open_async,
             read_until_close_async,
             await
         )
@@ -140,17 +139,6 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         buf: &mut Vec<u8>,
     ) -> Result<Span> {
         Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
-    }
-
-    /// Read until '<' is found, moves reader to an `OpenedTag` state and returns a `Text` event.
-    ///
-    /// Returns inner `Ok` if the loop should be broken and an event returned.
-    /// Returns inner `Err` with the same `buf` because Rust borrowck stumbles upon this case in particular.
-    async fn read_until_open_async<'b>(
-        &mut self,
-        buf: &'b mut Vec<u8>,
-    ) -> Result<std::result::Result<Event<'b>, &'b mut Vec<u8>>> {
-        read_until_open!(self, buf, TokioAdapter(&mut self.reader), read_event_into_async, await)
     }
 
     /// Private function to read until `>` is found. This function expects that
