@@ -244,13 +244,21 @@ macro_rules! read_event_impl {
                         }
                         ReadTextResult::UpToMarkup(bytes) => {
                             $self.state.state = ParseState::InsideMarkup;
-                            // Return Text event with `bytes` content or Eof if bytes is empty
-                            Ok($self.state.emit_text(bytes))
+                            // FIXME: Can produce an empty event if:
+                            // - event contains only spaces
+                            // - trim_text_start = false
+                            // - trim_text_end = true
+                            Ok(Event::Text($self.state.emit_text(bytes)))
                         }
                         ReadTextResult::UpToEof(bytes) => {
                             $self.state.state = ParseState::Done;
-                            // Return Text event with `bytes` content or Eof if bytes is empty
-                            Ok($self.state.emit_text(bytes))
+                            // Trim bytes from end if required
+                            let event = $self.state.emit_text(bytes);
+                            if event.is_empty() {
+                                Ok(Event::Eof)
+                            } else {
+                                Ok(Event::Text(event))
+                            }
                         }
                         ReadTextResult::Err(e) => Err(Error::Io(e.into())),
                     }
