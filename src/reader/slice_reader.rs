@@ -3,6 +3,7 @@
 //! intermediate buffer as the byte slice itself can be used to borrow from.
 
 use std::borrow::Cow;
+use std::io;
 
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -238,7 +239,7 @@ impl<'a> Reader<&'a [u8]> {
 impl<'a> XmlSource<'a, ()> for &'a [u8] {
     #[cfg(not(feature = "encoding"))]
     #[inline]
-    fn remove_utf8_bom(&mut self) -> Result<()> {
+    fn remove_utf8_bom(&mut self) -> io::Result<()> {
         if self.starts_with(crate::encoding::UTF8_BOM) {
             *self = &self[crate::encoding::UTF8_BOM.len()..];
         }
@@ -247,7 +248,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     #[cfg(feature = "encoding")]
     #[inline]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
+    fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>> {
         if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
             *self = &self[bom_len..];
             return Ok(Some(enc));
@@ -284,7 +285,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         byte: u8,
         _buf: (),
         position: &mut usize,
-    ) -> Result<(&'a [u8], bool)> {
+    ) -> io::Result<(&'a [u8], bool)> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
 
@@ -341,7 +342,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+    fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()> {
         let whitespaces = self
             .iter()
             .position(|b| !is_whitespace(*b))
@@ -352,7 +353,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn peek_one(&mut self) -> Result<Option<u8>> {
+    fn peek_one(&mut self) -> io::Result<Option<u8>> {
         Ok(self.first().copied())
     }
 }

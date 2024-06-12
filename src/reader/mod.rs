@@ -328,7 +328,7 @@ macro_rules! read_until_close {
                     $self.state.last_error_offset = start - 1;
                     Err(Error::Syntax(SyntaxError::UnclosedTag))
                 }
-                Err(e) => Err(e),
+                Err(e) => Err(Error::Io(e.into())),
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
@@ -358,7 +358,7 @@ macro_rules! read_until_close {
                 $self.state.last_error_offset = start - 1;
                 Err(Error::Syntax(SyntaxError::UnclosedTag))
             }
-            Err(e) => Err(e),
+            Err(e) => Err(Error::Io(e.into())),
         }
     }};
 }
@@ -774,11 +774,11 @@ pub trait Parser {
 trait XmlSource<'r, B> {
     /// Removes UTF-8 BOM if it is present
     #[cfg(not(feature = "encoding"))]
-    fn remove_utf8_bom(&mut self) -> Result<()>;
+    fn remove_utf8_bom(&mut self) -> io::Result<()>;
 
     /// Determines encoding from the start of input and removes BOM if it is present
     #[cfg(feature = "encoding")]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>>;
+    fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>>;
 
     /// Read input until start of markup (the `<`) is found or end of input is reached.
     ///
@@ -838,7 +838,7 @@ trait XmlSource<'r, B> {
         byte: u8,
         buf: B,
         position: &mut usize,
-    ) -> Result<(&'r [u8], bool)>;
+    ) -> io::Result<(&'r [u8], bool)>;
 
     /// Read input until processing instruction is finished.
     ///
@@ -884,11 +884,11 @@ trait XmlSource<'r, B> {
     ///
     /// # Parameters
     /// - `position`: Will be increased by amount of bytes consumed
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()>;
+    fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()>;
 
     /// Return one character without consuming it, so that future `read_*` calls
     /// will still include it. On EOF, return `None`.
-    fn peek_one(&mut self) -> Result<Option<u8>>;
+    fn peek_one(&mut self) -> io::Result<Option<u8>>;
 }
 
 /// Possible elements started with `<!`

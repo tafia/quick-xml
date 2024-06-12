@@ -14,7 +14,7 @@ macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
         #[cfg(not(feature = "encoding"))]
         #[inline]
-        $($async)? fn remove_utf8_bom(&mut self) -> Result<()> {
+        $($async)? fn remove_utf8_bom(&mut self) -> io::Result<()> {
             use crate::encoding::UTF8_BOM;
 
             loop {
@@ -26,14 +26,14 @@ macro_rules! impl_buffered_source {
                         Ok(())
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
 
         #[cfg(feature = "encoding")]
         #[inline]
-        $($async)? fn detect_encoding(&mut self) -> Result<Option<&'static encoding_rs::Encoding>> {
+        $($async)? fn detect_encoding(&mut self) -> io::Result<Option<&'static encoding_rs::Encoding>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => if let Some((enc, bom_len)) = crate::encoding::detect_encoding(n) {
@@ -43,7 +43,7 @@ macro_rules! impl_buffered_source {
                         Ok(None)
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
@@ -103,7 +103,7 @@ macro_rules! impl_buffered_source {
             byte: u8,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<(&'b [u8], bool)> {
+        ) -> io::Result<(&'b [u8], bool)> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
 
@@ -116,7 +116,7 @@ macro_rules! impl_buffered_source {
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
                     Err(e) => {
                         *position += read;
-                        return Err(Error::Io(e.into()));
+                        return Err(e);
                     }
                 };
 
@@ -240,7 +240,7 @@ macro_rules! impl_buffered_source {
         }
 
         #[inline]
-        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => {
@@ -254,18 +254,18 @@ macro_rules! impl_buffered_source {
                         }
                     }
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
 
         #[inline]
-        $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
+        $($async)? fn peek_one(&mut self) -> io::Result<Option<u8>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => Ok(n.first().cloned()),
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
