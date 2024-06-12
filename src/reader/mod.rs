@@ -245,19 +245,19 @@ macro_rules! read_event_impl {
                         ReadTextResult::UpToMarkup(bytes) => {
                             $self.state.state = ParseState::InsideMarkup;
                             // Return Text event with `bytes` content or Eof if bytes is empty
-                            $self.state.emit_text(bytes)
+                            Ok($self.state.emit_text(bytes))
                         }
                         ReadTextResult::UpToEof(bytes) => {
                             $self.state.state = ParseState::Done;
                             // Return Text event with `bytes` content or Eof if bytes is empty
-                            $self.state.emit_text(bytes)
+                            Ok($self.state.emit_text(bytes))
                         }
                         ReadTextResult::Err(e) => Err(Error::Io(e.into())),
                     }
                 },
                 // Go to InsideText state in next two arms
                 ParseState::InsideMarkup => $self.$read_until_close($buf) $(.$await)?,
-                ParseState::InsideEmpty => $self.state.close_expanded_empty(),
+                ParseState::InsideEmpty => Ok(Event::End($self.state.close_expanded_empty())),
                 ParseState::Done => Ok(Event::Eof),
             };
         };
@@ -348,7 +348,7 @@ macro_rules! read_until_close {
                 .read_with(ElementParser::default(), $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok(bytes) => $self.state.emit_start(bytes),
+                Ok(bytes) => Ok($self.state.emit_start(bytes)),
                 Err(e) => Err(e),
             },
             // `<` - syntax error, tag not closed
