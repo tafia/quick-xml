@@ -71,9 +71,20 @@ impl ReaderState {
         BytesText::wrap(content, self.decoder())
     }
 
-    /// reads `BytesElement` starting with a `!`,
-    /// return `Comment`, `CData` or `DocType` event
+    /// Returns `Comment`, `CData` or `DocType` event.
+    ///
+    /// `buf` contains data between `<` and `>`:
+    /// - CDATA: `![CDATA[...]]`
+    /// - Comment: `!--...--`
+    /// - Doctype (uppercase): `!D...`
+    /// - Doctype (lowercase): `!d...`
     pub fn emit_bang<'b>(&mut self, bang_type: BangType, buf: &'b [u8]) -> Result<Event<'b>> {
+        debug_assert_eq!(
+            buf.first(),
+            Some(&b'!'),
+            "CDATA, comment or DOCTYPE should start from '!'"
+        );
+
         let uncased_starts_with = |string: &[u8], prefix: &[u8]| {
             string.len() >= prefix.len() && string[..prefix.len()].eq_ignore_ascii_case(prefix)
         };
@@ -153,7 +164,15 @@ impl ReaderState {
 
     /// Wraps content of `buf` into the [`Event::End`] event. Does the check that
     /// end name matches the last opened start name if `self.config.check_end_names` is set.
+    ///
+    /// `buf` contains data between `<` and `>`, for example `/tag`.
     pub fn emit_end<'b>(&mut self, buf: &'b [u8]) -> Result<Event<'b>> {
+        debug_assert_eq!(
+            buf.first(),
+            Some(&b'/'),
+            "closing tag should start from '/'"
+        );
+
         // Strip the `/` character. `content` contains data between `</` and `>`
         let content = &buf[1..];
         // XML standard permits whitespaces after the markup name in closing tags.
