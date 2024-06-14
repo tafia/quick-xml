@@ -27,6 +27,12 @@ pub enum EscapeError {
     InvalidDecimal(char),
     /// Not a valid unicode codepoint
     InvalidCodepoint(u32),
+    /// The recursion limit was reached while attempting to unescape XML entities,
+    /// or normalize an attribute value. This could indicate an entity loop.
+    ///
+    /// Limiting recursion prevents Denial-of-Service type attacks
+    /// such as the "billion laughs" [attack](https://en.wikipedia.org/wiki/Billion_laughs_attack).
+    ReachedRecursionLimit(Range<usize>),
 }
 
 impl std::fmt::Display for EscapeError {
@@ -34,17 +40,17 @@ impl std::fmt::Display for EscapeError {
         match self {
             EscapeError::EntityWithNull(e) => write!(
                 f,
-                "Error while escaping character at range {:?}: Null character entity not allowed",
+                "Error while unescaping character at range {:?}: Null character entity not allowed",
                 e
             ),
             EscapeError::UnrecognizedSymbol(rge, res) => write!(
                 f,
-                "Error while escaping character at range {:?}: Unrecognized escape symbol: {:?}",
+                "Error while unescaping character at range {:?}: Unrecognized escape symbol: {:?}",
                 rge, res
             ),
             EscapeError::UnterminatedEntity(e) => write!(
                 f,
-                "Error while escaping character at range {:?}: Cannot find ';' after '&'",
+                "Error while unescaping character at range {:?}: Cannot find ';' after '&'",
                 e
             ),
             EscapeError::TooLongHexadecimal => write!(f, "Cannot convert hexadecimal to utf8"),
@@ -54,6 +60,10 @@ impl std::fmt::Display for EscapeError {
             EscapeError::TooLongDecimal => write!(f, "Cannot convert decimal to utf8"),
             EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
             EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
+            EscapeError::ReachedRecursionLimit(e) => write!(
+                f,
+                "Error while unescaping entity at range {:?}: Recursion limit reached"
+            ),
         }
     }
 }
@@ -310,7 +320,7 @@ where
     let mut iter = bytes.iter();
 
     if let Some(i) = iter.position(is_normalization_char) {
-        let mut normalized = String::new();
+        let mut normalized = String::with_capacity(value.len());
         let pos = normalize_step(
             &mut normalized,
             &mut iter,
@@ -405,7 +415,7 @@ where
             let pat = &input[start..end];
             // 1. For a character reference, append the referenced character
             //    to the normalized value.
-            if pat.starts_with('#') {
+            if let Some(entity) = pat.strip_prefix('#') {
                 let entity = &pat[1..]; // starts after the #
                 let codepoint = parse_number(entity, start..end)?;
                 normalized.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
@@ -432,6 +442,7 @@ where
             Ok(index + 1) // +1 - skip character
         }
 
+        // SAFETY: We call normalize_step only when is_normalization_char() return true
         _ => unreachable!("Only '\\t', '\\n', '\\r', ' ', and '&' are possible here"),
     }
 }
@@ -2160,14 +2171,14 @@ mod normalization {
     fn unclosed_entity() {
         assert_eq!(
             normalize_attribute_value("string with unclosed &entity reference", |_| {
-                //     0                    ^ = 21           ^ = 38
+                //                     0                    ^ = 21           ^ = 38
                 Some("replacement")
             }),
             Err(EscapeError::UnterminatedEntity(21..38))
         );
         assert_eq!(
             normalize_attribute_value("string with unclosed &#32 (character) reference", |_| {
-                //     0                    ^ = 21                    ^ = 47
+                //                     0                    ^ = 21                    ^ = 47
                 None
             }),
             Err(EscapeError::UnterminatedEntity(21..47))
@@ -2178,7 +2189,7 @@ mod normalization {
     fn unknown_entity() {
         assert_eq!(
             normalize_attribute_value("string with unknown &entity; reference", |_| { None }),
-            //         0                    ^     ^ = 21..27
+            //                         0                    ^ 21  ^ 27
             Err(EscapeError::UnrecognizedSymbol(
                 21..27,
                 "entity".to_string()

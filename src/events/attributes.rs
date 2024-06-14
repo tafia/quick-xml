@@ -3,9 +3,9 @@
 //! Provides an iterator over attributes key/value pairs
 
 use crate::errors::Result as XmlResult;
-use crate::escape::{self, escape, resolve_predefined_entity, unescape_with};
 #[cfg(any(doc, not(feature = "encoding")))]
 use crate::escape::EscapeError;
+use crate::escape::{self, escape, resolve_predefined_entity, unescape_with};
 use crate::name::QName;
 use crate::reader::{is_whitespace, Reader};
 use crate::utils::{write_byte_string, write_cow_string, Bytes};
@@ -964,6 +964,45 @@ mod xml {
             assert_eq!(
                 attr.normalized_value_with(&custom_resolver),
                 Ok(Cow::Owned(output))
+            );
+        }
+
+        /// An obvious loop should be detected immediately
+        #[test]
+        #[ignore]
+        fn test_entity_loop() {
+            let raw_value = "&d;".as_bytes();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            fn custom_resolver(ent: &str) -> Option<&'static str> {
+                match ent {
+                    "d" => Some("&d;"),
+                }
+            }
+            assert_eq!(
+                attr.normalized_value_with(&custom_resolver),
+                Err(EscapeError::ReachedRecursionLimit(1..2))
+            );
+        }
+
+        /// A more complex entity loop should hit the recursion limit.
+        #[test]
+        #[ignore]
+        fn test_recursion_limit() {
+            let raw_value = "&a;".as_bytes();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            fn custom_resolver(ent: &str) -> Option<&'static str> {
+                match ent {
+                    "a" => Some("&b;"),
+                    "b" => Some("&c;"),
+                    "c" => Some("&d;"),
+                    "d" => Some("&e;"),
+                    "e" => Some("&f;"),
+                    "f" => Some("&a;"),
+                }
+            }
+            assert_eq!(
+                attr.normalized_value_with(&custom_resolver),
+                Err(EscapeError::ReachedRecursionLimit(1..2))
             );
         }
 

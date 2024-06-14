@@ -21,8 +21,14 @@
 
 ### Misc Changes
 
-- [#379]: Added tests for attribute value normalization
+- [#379]: Fixed error messages for some variants of `EscapeError`
+  which were incorrectly described as occurring during escaping (rather than unescaping).
 - [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
+
+### New Tests
+
+- [#379]: Added tests for attribute value normalization
+
 
 [#379]: https://github.com/tafia/quick-xml/pull/379
 [#650]: https://github.com/tafia/quick-xml/issues/650
@@ -292,11 +298,6 @@ serde >= 1.0.181
 - [#562]: Correctly set minimum required version of memchr dependency to 2.1
 - [#565]: Correctly set minimum required version of tokio dependency to 1.10
 - [#565]: Fix compilation error when build with serde <1.0.139
-
-
-### New Tests
-
-- [#379]: Added tests for attribute value normalization
 
 [externally tagged]: https://serde.rs/enum-representations.html#externally-tagged
 [#490]: https://github.com/tafia/quick-xml/pull/490
