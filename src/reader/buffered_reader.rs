@@ -8,13 +8,13 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {
         #[cfg(not(feature = "encoding"))]
         #[inline]
-        $($async)? fn remove_utf8_bom(&mut self) -> Result<()> {
+        $($async)? fn remove_utf8_bom(&mut self) -> io::Result<()> {
             use crate::encoding::UTF8_BOM;
 
             loop {
@@ -26,14 +26,14 @@ macro_rules! impl_buffered_source {
                         Ok(())
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
 
         #[cfg(feature = "encoding")]
         #[inline]
-        $($async)? fn detect_encoding(&mut self) -> Result<Option<&'static encoding_rs::Encoding>> {
+        $($async)? fn detect_encoding(&mut self) -> io::Result<Option<&'static encoding_rs::Encoding>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => if let Some((enc, bom_len)) = crate::encoding::detect_encoding(n) {
@@ -43,9 +43,58 @@ macro_rules! impl_buffered_source {
                         Ok(None)
                     },
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
+        }
+
+        #[inline]
+        $($async)? fn read_text $(<$lf>)? (
+            &mut self,
+            buf: &'b mut Vec<u8>,
+            position: &mut usize,
+        ) -> ReadTextResult<'b, &'b mut Vec<u8>> {
+            let mut read = 0;
+            let start = buf.len();
+            loop {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return ReadTextResult::Err(e);
+                    }
+                };
+
+                match memchr::memchr(b'<', available) {
+                    Some(0) => {
+                        self $(.$reader)? .consume(1);
+                        *position += 1;
+                        return ReadTextResult::Markup(buf);
+                    }
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i]);
+
+                        let used = i + 1;
+                        self $(.$reader)? .consume(used);
+                        read += used;
+
+                        *position += read;
+                        return ReadTextResult::UpToMarkup(&buf[start..]);
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self $(.$reader)? .consume(used);
+                        read += used;
+                    }
+                }
+            }
+
+            *position += read;
+            ReadTextResult::UpToEof(&buf[start..])
         }
 
         #[inline]
@@ -54,43 +103,46 @@ macro_rules! impl_buffered_source {
             byte: u8,
             buf: &'b mut Vec<u8>,
             position: &mut usize,
-        ) -> Result<(&'b [u8], bool)> {
+        ) -> io::Result<(&'b [u8], bool)> {
             // search byte must be within the ascii range
             debug_assert!(byte.is_ascii());
 
             let mut read = 0;
-            let mut done = false;
             let start = buf.len();
-            while !done {
-                let used = {
-                    let available = match self $(.$reader)? .fill_buf() $(.$await)? {
-                        Ok(n) if n.is_empty() => break,
-                        Ok(n) => n,
-                        Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => {
-                            *position += read;
-                            return Err(Error::Io(e.into()));
-                        }
-                    };
-
-                    match memchr::memchr(byte, available) {
-                        Some(i) => {
-                            buf.extend_from_slice(&available[..i]);
-                            done = true;
-                            i + 1
-                        }
-                        None => {
-                            buf.extend_from_slice(available);
-                            available.len()
-                        }
+            loop {
+                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
+                    Ok(n) if n.is_empty() => break,
+                    Ok(n) => n,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => {
+                        *position += read;
+                        return Err(e);
                     }
                 };
-                self $(.$reader)? .consume(used);
-                read += used;
-            }
-            *position += read;
 
-            Ok((&buf[start..], done))
+                match memchr::memchr(byte, available) {
+                    Some(i) => {
+                        buf.extend_from_slice(&available[..i]);
+
+                        let used = i + 1;
+                        self $(.$reader)? .consume(used);
+                        read += used;
+
+                        *position += read;
+                        return Ok((&buf[start..], true));
+                    }
+                    None => {
+                        buf.extend_from_slice(available);
+
+                        let used = available.len();
+                        self $(.$reader)? .consume(used);
+                        read += used;
+                    }
+                }
+            }
+
+            *position += read;
+            Ok((&buf[start..], false))
         }
 
         #[inline]
@@ -188,7 +240,7 @@ macro_rules! impl_buffered_source {
         }
 
         #[inline]
-        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+        $($async)? fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => {
@@ -202,32 +254,18 @@ macro_rules! impl_buffered_source {
                         }
                     }
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }
 
         #[inline]
-        $($async)? fn skip_one(&mut self, byte: u8) -> Result<bool> {
-            // search byte must be within the ascii range
-            debug_assert!(byte.is_ascii());
-
-            match self.peek_one() $(.$await)? ? {
-                Some(b) if b == byte => {
-                    self $(.$reader)? .consume(1);
-                    Ok(true)
-                }
-                _ => Ok(false),
-            }
-        }
-
-        #[inline]
-        $($async)? fn peek_one(&mut self) -> Result<Option<u8>> {
+        $($async)? fn peek_one(&mut self) -> io::Result<Option<u8>> {
             loop {
                 break match self $(.$reader)? .fill_buf() $(.$await)? {
                     Ok(n) => Ok(n.first().cloned()),
                     Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => Err(Error::Io(e.into())),
+                    Err(e) => Err(e),
                 };
             }
         }

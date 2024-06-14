@@ -14,11 +14,15 @@
 
 ### Bug Fixes
 
+- [#755]: Fix incorrect missing of trimming all-space text events when
+  `trim_text_start = false` and `trim_text_end = true`.
+
 ### Misc Changes
 
 - [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
 
 [#650]: https://github.com/tafia/quick-xml/issues/650
+[#755]: https://github.com/tafia/quick-xml/pull/755
 
 
 ## 0.32.0 -- 2024-06-10

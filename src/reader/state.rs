@@ -52,15 +52,11 @@ pub(super) struct ReaderState {
 }
 
 impl ReaderState {
-    /// Trims end whitespaces from `bytes`, if required, and returns a [`Text`]
-    /// event or an [`Eof`] event, if text after trimming is empty.
+    /// Trims end whitespaces from `bytes`, if required, and returns a text event.
     ///
     /// # Parameters
     /// - `bytes`: data from the start of stream to the first `<` or from `>` to `<`
-    ///
-    /// [`Text`]: Event::Text
-    /// [`Eof`]: Event::Eof
-    pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_text<'b>(&mut self, bytes: &'b [u8]) -> BytesText<'b> {
         let mut content = bytes;
 
         if self.config.trim_text_end {
@@ -68,15 +64,10 @@ impl ReaderState {
             let len = bytes
                 .iter()
                 .rposition(|&b| !is_whitespace(b))
-                .map_or_else(|| bytes.len(), |p| p + 1);
+                .map_or(0, |p| p + 1);
             content = &bytes[..len];
         }
-
-        if content.is_empty() {
-            Ok(Event::Eof)
-        } else {
-            Ok(Event::Text(BytesText::wrap(content, self.decoder())))
-        }
+        BytesText::wrap(content, self.decoder())
     }
 
     /// reads `BytesElement` starting with a `!`,
@@ -257,18 +248,18 @@ impl ReaderState {
     ///
     /// # Parameters
     /// - `content`: Content of a tag between `<` and `>`
-    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Result<Event<'b>> {
+    pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Event<'b> {
         if let Some(content) = content.strip_suffix(b"/") {
             // This is self-closed tag `<something/>`
             let event = BytesStart::wrap(content, name_len(content));
 
             if self.config.expand_empty_elements {
-                self.state = ParseState::Empty;
+                self.state = ParseState::InsideEmpty;
                 self.opened_starts.push(self.opened_buffer.len());
                 self.opened_buffer.extend(event.name().as_ref());
-                Ok(Event::Start(event))
+                Event::Start(event)
             } else {
-                Ok(Event::Empty(event))
+                Event::Empty(event)
             }
         } else {
             let event = BytesStart::wrap(content, name_len(content));
@@ -278,17 +269,17 @@ impl ReaderState {
             // enabled, we should have that information
             self.opened_starts.push(self.opened_buffer.len());
             self.opened_buffer.extend(event.name().as_ref());
-            Ok(Event::Start(event))
+            Event::Start(event)
         }
     }
 
     #[inline]
-    pub fn close_expanded_empty(&mut self) -> Result<Event<'static>> {
-        self.state = ParseState::ClosedTag;
+    pub fn close_expanded_empty(&mut self) -> BytesEnd<'static> {
+        self.state = ParseState::InsideText;
         let name = self
             .opened_buffer
             .split_off(self.opened_starts.pop().unwrap());
-        Ok(Event::End(BytesEnd::wrap(name.into())))
+        BytesEnd::wrap(name.into())
     }
 
     /// Get the decoder, used to decode bytes, read by this reader, to the strings.

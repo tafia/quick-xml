@@ -3,6 +3,7 @@
 //! intermediate buffer as the byte slice itself can be used to borrow from.
 
 use std::borrow::Cow;
+use std::io;
 
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
@@ -12,7 +13,7 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, Parser, Reader, Span, XmlSource};
+use crate::reader::{is_whitespace, BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
 /// This implementation supports not using an intermediate buffer as the byte slice
@@ -238,7 +239,7 @@ impl<'a> Reader<&'a [u8]> {
 impl<'a> XmlSource<'a, ()> for &'a [u8] {
     #[cfg(not(feature = "encoding"))]
     #[inline]
-    fn remove_utf8_bom(&mut self) -> Result<()> {
+    fn remove_utf8_bom(&mut self) -> io::Result<()> {
         if self.starts_with(crate::encoding::UTF8_BOM) {
             *self = &self[crate::encoding::UTF8_BOM.len()..];
         }
@@ -247,7 +248,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
 
     #[cfg(feature = "encoding")]
     #[inline]
-    fn detect_encoding(&mut self) -> Result<Option<&'static Encoding>> {
+    fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>> {
         if let Some((enc, bom_len)) = crate::encoding::detect_encoding(self) {
             *self = &self[bom_len..];
             return Ok(Some(enc));
@@ -256,12 +257,35 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
+    fn read_text(&mut self, _buf: (), position: &mut usize) -> ReadTextResult<'a, ()> {
+        match memchr::memchr(b'<', self) {
+            Some(0) => {
+                *position += 1;
+                *self = &self[1..];
+                ReadTextResult::Markup(())
+            }
+            Some(i) => {
+                *position += i + 1;
+                let bytes = &self[..i];
+                *self = &self[i + 1..];
+                ReadTextResult::UpToMarkup(bytes)
+            }
+            None => {
+                *position += self.len();
+                let bytes = &self[..];
+                *self = &[];
+                ReadTextResult::UpToEof(bytes)
+            }
+        }
+    }
+
+    #[inline]
     fn read_bytes_until(
         &mut self,
         byte: u8,
         _buf: (),
         position: &mut usize,
-    ) -> Result<(&'a [u8], bool)> {
+    ) -> io::Result<(&'a [u8], bool)> {
         // search byte must be within the ascii range
         debug_assert!(byte.is_ascii());
 
@@ -318,7 +342,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn skip_whitespace(&mut self, position: &mut usize) -> Result<()> {
+    fn skip_whitespace(&mut self, position: &mut usize) -> io::Result<()> {
         let whitespaces = self
             .iter()
             .position(|b| !is_whitespace(*b))
@@ -329,19 +353,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn skip_one(&mut self, byte: u8) -> Result<bool> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-        if self.first() == Some(&byte) {
-            *self = &self[1..];
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    #[inline]
-    fn peek_one(&mut self) -> Result<Option<u8>> {
+    fn peek_one(&mut self) -> io::Result<Option<u8>> {
         Ok(self.first().copied())
     }
 }
