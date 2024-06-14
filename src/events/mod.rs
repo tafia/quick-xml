@@ -50,7 +50,7 @@ use crate::escape::{
     escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
 };
 use crate::name::{LocalName, QName};
-use crate::reader::is_whitespace;
+use crate::reader::{is_whitespace, name_len};
 use crate::utils::write_cow_string;
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
@@ -992,6 +992,157 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// [Processing instructions][PI] (PIs) allow documents to contain instructions for applications.
+///
+/// [PI]: https://www.w3.org/TR/xml11/#sec-pi
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesPI<'a> {
+    content: BytesStart<'a>,
+}
+
+impl<'a> BytesPI<'a> {
+    /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
+    #[inline]
+    pub(crate) fn wrap(content: &'a [u8], target_len: usize) -> Self {
+        Self {
+            content: BytesStart::wrap(content, target_len),
+        }
+    }
+
+    /// Creates a new `BytesPI` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` must not contain the `?>` sequence.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        let buf = str_cow_to_bytes(content);
+        let name_len = name_len(&buf);
+        Self {
+            content: BytesStart { buf, name_len },
+        }
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesPI<'static> {
+        BytesPI {
+            content: self.content.into_owned().into(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesPI` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content.buf
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesPI {
+        BytesPI {
+            content: self.content.borrow(),
+        }
+    }
+
+    /// A target used to identify the application to which the instruction is directed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::BytesPI;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// assert_eq!(instruction.target(), b"xml-stylesheet");
+    /// ```
+    #[inline]
+    pub fn target(&self) -> &[u8] {
+        self.content.name().0
+    }
+
+    /// Content of the processing instruction. Contains everything between target
+    /// name and the end of the instruction. A direct consequence is that the first
+    /// character is always a space character.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::BytesPI;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// assert_eq!(instruction.content(), br#" href="style.css""#);
+    /// ```
+    #[inline]
+    pub fn content(&self) -> &[u8] {
+        self.content.attributes_raw()
+    }
+
+    /// A view of the processing instructions' content as a list of key-value pairs.
+    ///
+    /// Key-value pairs are used in some processing instructions, for example in
+    /// `<?xml-stylesheet?>`.
+    ///
+    /// Returned iterator does not validate attribute values as may required by
+    /// target's rules. For example, it doesn't check that substring `?>` is not
+    /// present in the attribute value. That shouldn't be the problem when event
+    /// is produced by the reader, because reader detects end of processing instruction
+    /// by the first `?>` sequence, as required by the specification, and therefore
+    /// this sequence cannot appear inside it.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use std::borrow::Cow;
+    /// use quick_xml::events::attributes::Attribute;
+    /// use quick_xml::events::BytesPI;
+    /// use quick_xml::name::QName;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// for attr in instruction.attributes() {
+    ///     assert_eq!(attr, Ok(Attribute {
+    ///         key: QName(b"href"),
+    ///         value: Cow::Borrowed(b"style.css"),
+    ///     }));
+    /// }
+    /// ```
+    #[inline]
+    pub fn attributes(&self) -> Attributes {
+        self.content.attributes()
+    }
+}
+
+impl<'a> Debug for BytesPI<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesPI {{ content: ")?;
+        write_cow_string(f, &self.content.buf)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesPI<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// Event emitted by [`Reader::read_event_into`].
 ///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
@@ -1013,7 +1164,7 @@ pub enum Event<'a> {
     /// XML declaration `<?xml ...?>`.
     Decl(BytesDecl<'a>),
     /// Processing instruction `<?...?>`.
-    PI(BytesText<'a>),
+    PI(BytesPI<'a>),
     /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
     /// End of XML document.

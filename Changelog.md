@@ -16,6 +16,10 @@
 
 ### Misc Changes
 
+- [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
+
+[#650]: https://github.com/tafia/quick-xml/issues/650
+
 
 ## 0.32.0 -- 2024-06-10
 

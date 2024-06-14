@@ -996,6 +996,16 @@ pub(crate) const fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\r' | b'\n' | b'\t')
 }
 
+/// Calculates name from an element-like content. Name is the first word in `content`,
+/// where word boundaries is XML space characters.
+#[inline]
+pub(crate) fn name_len(content: &[u8]) -> usize {
+    content
+        .iter()
+        .position(|&b| is_whitespace(b))
+        .unwrap_or(content.len())
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
@@ -1687,7 +1697,7 @@ mod test {
 
             /// Ensures, that no empty `Text` events are generated
             mod $read_event {
-                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+                use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -1757,7 +1767,7 @@ mod test {
 
                     assert_eq!(
                         reader.$read_event($buf) $(.$await)? .unwrap(),
-                        Event::PI(BytesText::from_escaped("xml-stylesheet '? >\" "))
+                        Event::PI(BytesPI::new("xml-stylesheet '? >\" "))
                     );
                 }
 
@@ -1838,7 +1848,7 @@ mod test {
             $(, $async:ident, $await:ident)?
         ) => {
             mod small_buffers {
-                use crate::events::{BytesCData, BytesDecl, BytesStart, BytesText, Event};
+                use crate::events::{BytesCData, BytesDecl, BytesPI, BytesStart, BytesText, Event};
                 use crate::reader::Reader;
                 use pretty_assertions::assert_eq;
 
@@ -1872,7 +1882,7 @@ mod test {
 
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
-                        Event::PI(BytesText::new("pi"))
+                        Event::PI(BytesPI::new("pi"))
                     );
                     assert_eq!(
                         reader.$read_event(&mut buf) $(.$await)? .unwrap(),
