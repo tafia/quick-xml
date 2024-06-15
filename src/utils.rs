@@ -197,6 +197,67 @@ impl<'de> Serialize for Bytes<'de> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab).
+#[inline]
+pub const fn is_whitespace(b: u8) -> bool {
+    matches!(b, b' ' | b'\r' | b'\n' | b'\t')
+}
+
+/// Calculates name from an element-like content. Name is the first word in `content`,
+/// where word boundaries is XML whitespace characters.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+#[inline]
+pub const fn name_len(mut bytes: &[u8]) -> usize {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    let mut len = 0;
+    while let [first, rest @ ..] = bytes {
+        if is_whitespace(*first) {
+            break;
+        }
+        len += 1;
+        bytes = rest;
+    }
+    len
+}
+
+/// Returns a byte slice with leading XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+#[inline]
+pub const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [first, rest @ ..] = bytes {
+        if is_whitespace(*first) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+/// Returns a byte slice with trailing XML whitespace bytes removed.
+///
+/// 'Whitespace' refers to the definition used by [`is_whitespace`].
+#[inline]
+pub const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
+    // Note: A pattern matching based approach (instead of indexing) allows
+    // making the function const.
+    while let [rest @ .., last] = bytes {
+        if is_whitespace(*last) {
+            bytes = rest;
+        } else {
+            break;
+        }
+    }
+    bytes
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,5 +287,40 @@ mod tests {
             67, 108, 97, 115, 115, 32, 73, 82, 73, 61, 34, 35, 66, 34,
         ]);
         assert_eq!(format!("{:?}", bytes), r##""Class IRI=\"#B\"""##);
+    }
+
+    #[test]
+    fn name_len() {
+        assert_eq!(super::name_len(b""), 0);
+        assert_eq!(super::name_len(b" abc"), 0);
+        assert_eq!(super::name_len(b" \t\r\n"), 0);
+
+        assert_eq!(super::name_len(b"abc"), 3);
+        assert_eq!(super::name_len(b"abc "), 3);
+
+        assert_eq!(super::name_len(b"a bc"), 1);
+        assert_eq!(super::name_len(b"ab\tc"), 2);
+        assert_eq!(super::name_len(b"ab\rc"), 2);
+        assert_eq!(super::name_len(b"ab\nc"), 2);
+    }
+
+    #[test]
+    fn trim_xml_start() {
+        assert_eq!(Bytes(super::trim_xml_start(b"")), Bytes(b""));
+        assert_eq!(Bytes(super::trim_xml_start(b"abc")), Bytes(b"abc"));
+        assert_eq!(
+            Bytes(super::trim_xml_start(b"\r\n\t ab \t\r\nc \t\r\n")),
+            Bytes(b"ab \t\r\nc \t\r\n")
+        );
+    }
+
+    #[test]
+    fn trim_xml_end() {
+        assert_eq!(Bytes(super::trim_xml_end(b"")), Bytes(b""));
+        assert_eq!(Bytes(super::trim_xml_end(b"abc")), Bytes(b"abc"));
+        assert_eq!(
+            Bytes(super::trim_xml_end(b"\r\n\t ab \t\r\nc \t\r\n")),
+            Bytes(b"\r\n\t ab \t\r\nc")
+        );
     }
 }

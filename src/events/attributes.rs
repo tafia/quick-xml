@@ -5,8 +5,8 @@
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
 use crate::name::QName;
-use crate::reader::{is_whitespace, Reader};
-use crate::utils::{write_byte_string, write_cow_string, Bytes};
+use crate::reader::Reader;
+use crate::utils::{is_whitespace, write_byte_string, write_cow_string, Bytes};
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
 use std::{borrow::Cow, ops::Range};

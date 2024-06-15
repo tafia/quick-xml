@@ -865,6 +865,7 @@ trait XmlSource<'r, B> {
     ///
     /// A `P` type parameter is used to preserve state between calls to the underlying
     /// reader which provides bytes fed into the parser.
+    ///
     /// [events]: crate::events::Event
     fn read_with<P>(&mut self, parser: P, buf: B, position: &mut usize) -> Result<&'r [u8]>
     where
@@ -989,22 +990,6 @@ impl BangType {
             Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
         }
     }
-}
-
-/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
-#[inline]
-pub(crate) const fn is_whitespace(b: u8) -> bool {
-    matches!(b, b' ' | b'\r' | b'\n' | b'\t')
-}
-
-/// Calculates name from an element-like content. Name is the first word in `content`,
-/// where word boundaries is XML space characters.
-#[inline]
-pub(crate) fn name_len(content: &[u8]) -> usize {
-    content
-        .iter()
-        .position(|&b| is_whitespace(b))
-        .unwrap_or(content.len())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

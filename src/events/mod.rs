@@ -41,6 +41,7 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
+use std::mem::replace;
 use std::ops::Deref;
 use std::str::from_utf8;
 
@@ -50,12 +51,10 @@ use crate::escape::{
     escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
 };
 use crate::name::{LocalName, QName};
-use crate::reader::{is_whitespace, name_len};
-use crate::utils::write_cow_string;
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
+use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{Attribute, Attributes};
-use std::mem::replace;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -1255,38 +1254,6 @@ fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
         Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
         Cow::Owned(s) => Cow::Owned(s.into_bytes()),
     }
-}
-
-/// Returns a byte slice with leading XML whitespace bytes removed.
-///
-/// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [first, rest @ ..] = bytes {
-        if is_whitespace(*first) {
-            bytes = rest;
-        } else {
-            break;
-        }
-    }
-    bytes
-}
-
-/// Returns a byte slice with trailing XML whitespace bytes removed.
-///
-/// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [rest @ .., last] = bytes {
-        if is_whitespace(*last) {
-            bytes = rest;
-        } else {
-            break;
-        }
-    }
-    bytes
 }
 
 fn trim_cow<'a, F>(value: Cow<'a, [u8]>, trim: F) -> Cow<'a, [u8]>
