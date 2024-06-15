@@ -22,10 +22,37 @@
 ### Misc Changes
 
 - [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
+- [#759]: Make `const` as much functions as possible:
+  - `resolve_html5_entity()`
+  - `resolve_predefined_entity()`
+  - `resolve_xml_entity()`
+  - `Attr::key()`
+  - `Attr::value()`
+  - `Attributes::html()`
+  - `Attributes::new()`
+  - `BytesDecl::from_start()`
+  - `Decoder::encoding()`
+  - `Deserializer::get_ref()`
+  - `IoReader::get_ref()`
+  - `LocalName::into_inner()`
+  - `Namespace::into_inner()`
+  - `NsReader::config()`
+  - `NsReader::prefixes()`
+  - `Prefix::into_inner()`
+  - `QName::into_inner()`
+  - `Reader::buffer_position()`
+  - `Reader::config()`
+  - `Reader::decoder()`
+  - `Reader::error_position()`
+  - `Reader::get_ref()`
+  - `SliceReader::get_ref()`
+  - `Writer::get_ref()`
+  - `Writer::new()`
 
 [#650]: https://github.com/tafia/quick-xml/issues/650
 [#755]: https://github.com/tafia/quick-xml/pull/755
 [#758]: https://github.com/tafia/quick-xml/pull/758
+[#759]: https://github.com/tafia/quick-xml/pull/759
 
 
 ## 0.32.0 -- 2024-06-10

@@ -2155,7 +2155,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     }
 
     /// Returns `true` if all events was consumed
-    fn is_empty(&self) -> bool {
+    const fn is_empty(&self) -> bool {
         matches!(self.lookahead, Ok(PayloadEvent::Eof))
     }
 
@@ -2166,7 +2166,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     }
 
     #[inline(always)]
-    fn need_trim_end(&self) -> bool {
+    const fn need_trim_end(&self) -> bool {
         // If next event is a text or CDATA, we should not trim trailing spaces
         !matches!(
             self.lookahead,
@@ -2464,7 +2464,7 @@ where
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub fn get_ref(&self) -> &R {
+    pub const fn get_ref(&self) -> &R {
         &self.reader.reader
     }
 
@@ -3127,7 +3127,7 @@ impl<R: BufRead> IoReader<R> {
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub fn get_ref(&self) -> &Reader<R> {
+    pub const fn get_ref(&self) -> &Reader<R> {
         &self.reader
     }
 }
@@ -3194,7 +3194,7 @@ impl<'de> SliceReader<'de> {
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub fn get_ref(&self) -> &Reader<&'de [u8]> {
+    pub const fn get_ref(&self) -> &Reader<&'de [u8]> {
         &self.reader
     }
 }

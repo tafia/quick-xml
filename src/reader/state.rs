@@ -292,7 +292,7 @@ impl ReaderState {
     /// defaults to UTF-8.
     ///
     /// [`encoding`]: ../../index.html#encoding
-    pub fn decoder(&self) -> Decoder {
+    pub const fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: self.encoding.encoding(),
