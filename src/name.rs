@@ -20,7 +20,7 @@ pub struct QName<'a>(pub &'a [u8]);
 impl<'a> QName<'a> {
     /// Converts this name to an internal slice representation.
     #[inline(always)]
-    pub fn into_inner(self) -> &'a [u8] {
+    pub const fn into_inner(self) -> &'a [u8] {
         self.0
     }
 
@@ -137,7 +137,7 @@ pub struct LocalName<'a>(&'a [u8]);
 impl<'a> LocalName<'a> {
     /// Converts this name to an internal slice representation.
     #[inline(always)]
-    pub fn into_inner(self) -> &'a [u8] {
+    pub const fn into_inner(self) -> &'a [u8] {
         self.0
     }
 }
@@ -187,7 +187,7 @@ pub struct Prefix<'a>(&'a [u8]);
 impl<'a> Prefix<'a> {
     /// Extracts internal slice
     #[inline(always)]
-    pub fn into_inner(self) -> &'a [u8] {
+    pub const fn into_inner(self) -> &'a [u8] {
         self.0
     }
 }
@@ -252,7 +252,7 @@ impl<'a> Namespace<'a> {
     /// [non-normalized]: https://www.w3.org/TR/xml11/#AVNormalize
     /// [IRI reference]: https://datatracker.ietf.org/doc/html/rfc3987
     #[inline(always)]
-    pub fn into_inner(self) -> &'a [u8] {
+    pub const fn into_inner(self) -> &'a [u8] {
         self.0
     }
     //TODO: implement value normalization and use it when comparing namespaces
@@ -618,7 +618,7 @@ impl NamespaceResolver {
     }
 
     #[inline]
-    pub fn iter(&self) -> PrefixIter {
+    pub const fn iter(&self) -> PrefixIter {
         PrefixIter {
             resolver: self,
             // We initialize the cursor to 2 to skip the two default namespaces xml: and xmlns:

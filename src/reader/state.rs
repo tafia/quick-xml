@@ -6,7 +6,8 @@ use crate::errors::{Error, IllFormedError, Result, SyntaxError};
 use crate::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 #[cfg(feature = "encoding")]
 use crate::reader::EncodingRef;
-use crate::reader::{is_whitespace, name_len, BangType, Config, ParseState};
+use crate::reader::{BangType, Config, ParseState};
+use crate::utils::{is_whitespace, name_len};
 
 /// A struct that holds a current reader state and a parser configuration.
 /// It is independent on a way of reading data: the reader feed data into it and
@@ -291,7 +292,7 @@ impl ReaderState {
     /// defaults to UTF-8.
     ///
     /// [`encoding`]: ../../index.html#encoding
-    pub fn decoder(&self) -> Decoder {
+    pub const fn decoder(&self) -> Decoder {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: self.encoding.encoding(),

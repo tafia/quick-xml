@@ -284,7 +284,7 @@ where
 /// Behaves like [`resolve_xml_entity`] if feature is not enabled and as
 /// [`resolve_html5_entity`] if enabled.
 #[inline]
-pub fn resolve_predefined_entity(entity: &str) -> Option<&'static str> {
+pub const fn resolve_predefined_entity(entity: &str) -> Option<&'static str> {
     #[cfg(not(feature = "escape-html"))]
     {
         resolve_xml_entity(entity)
@@ -314,7 +314,7 @@ pub fn resolve_predefined_entity(entity: &str) -> Option<&'static str> {
 /// ```
 ///
 /// [specification]: https://www.w3.org/TR/xml11/#sec-predefined-ent
-pub fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
+pub const fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
     // match over strings are not allowed in const functions
     let s = match entity.as_bytes() {
         b"lt" => "<",
@@ -328,7 +328,7 @@ pub fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
 }
 
 /// Resolves all HTML5 entities. For complete list see <https://dev.w3.org/html5/html-author/charref>.
-pub fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
+pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
     //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json

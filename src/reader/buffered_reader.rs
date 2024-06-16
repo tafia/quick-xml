@@ -8,7 +8,8 @@ use std::path::Path;
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{is_whitespace, BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
+use crate::reader::{BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
+use crate::utils::is_whitespace;
 
 macro_rules! impl_buffered_source {
     ($($lf:lifetime, $reader:tt, $async:ident, $await:ident)?) => {

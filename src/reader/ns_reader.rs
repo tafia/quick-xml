@@ -39,7 +39,7 @@ impl<R> NsReader<R> {
 
     /// Returns reference to the parser configuration
     #[inline]
-    pub fn config(&self) -> &Config {
+    pub const fn config(&self) -> &Config {
         self.reader.config()
     }
 
@@ -129,7 +129,7 @@ impl<R> NsReader<R> {
     /// # quick_xml::Result::Ok(())
     /// ```
     #[inline]
-    pub fn prefixes(&self) -> PrefixIter {
+    pub const fn prefixes(&self) -> PrefixIter {
         self.ns_resolver.iter()
     }
 }

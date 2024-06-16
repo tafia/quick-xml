@@ -41,6 +41,7 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
+use std::mem::replace;
 use std::ops::Deref;
 use std::str::from_utf8;
 
@@ -50,12 +51,10 @@ use crate::escape::{
     escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
 };
 use crate::name::{LocalName, QName};
-use crate::reader::{is_whitespace, name_len};
-use crate::utils::write_cow_string;
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
+use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{Attribute, Attributes};
-use std::mem::replace;
 
 /// Opening tag data (`Event::Start`), with optional attributes.
 ///
@@ -78,7 +77,7 @@ pub struct BytesStart<'a> {
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) fn wrap(content: &'a [u8], name_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], name_len: usize) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
@@ -406,7 +405,7 @@ impl<'a> BytesDecl<'a> {
     }
 
     /// Creates a `BytesDecl` from a `BytesStart`
-    pub fn from_start(start: BytesStart<'a>) -> Self {
+    pub const fn from_start(start: BytesStart<'a>) -> Self {
         Self { content: start }
     }
 
@@ -621,7 +620,7 @@ pub struct BytesEnd<'a> {
 impl<'a> BytesEnd<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) fn wrap(name: Cow<'a, [u8]>) -> Self {
+    pub(crate) const fn wrap(name: Cow<'a, [u8]>) -> Self {
         BytesEnd { name }
     }
 
@@ -1019,7 +1018,7 @@ pub struct BytesPI<'a> {
 impl<'a> BytesPI<'a> {
     /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
     #[inline]
-    pub(crate) fn wrap(content: &'a [u8], target_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], target_len: usize) -> Self {
         Self {
             content: BytesStart::wrap(content, target_len),
         }
@@ -1255,38 +1254,6 @@ fn str_cow_to_bytes<'a, C: Into<Cow<'a, str>>>(content: C) -> Cow<'a, [u8]> {
         Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
         Cow::Owned(s) => Cow::Owned(s.into_bytes()),
     }
-}
-
-/// Returns a byte slice with leading XML whitespace bytes removed.
-///
-/// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_start(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [first, rest @ ..] = bytes {
-        if is_whitespace(*first) {
-            bytes = rest;
-        } else {
-            break;
-        }
-    }
-    bytes
-}
-
-/// Returns a byte slice with trailing XML whitespace bytes removed.
-///
-/// 'Whitespace' refers to the definition used by [`is_whitespace`].
-const fn trim_xml_end(mut bytes: &[u8]) -> &[u8] {
-    // Note: A pattern matching based approach (instead of indexing) allows
-    // making the function const.
-    while let [rest @ .., last] = bytes {
-        if is_whitespace(*last) {
-            bytes = rest;
-        } else {
-            break;
-        }
-    }
-    bytes
 }
 
 fn trim_cow<'a, F>(value: Cow<'a, [u8]>, trim: F) -> Cow<'a, [u8]>

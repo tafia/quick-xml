@@ -495,7 +495,7 @@ enum EncodingRef {
 #[cfg(feature = "encoding")]
 impl EncodingRef {
     #[inline]
-    fn encoding(&self) -> &'static Encoding {
+    const fn encoding(&self) -> &'static Encoding {
         match self {
             Self::Implicit(e) => e,
             Self::Explicit(e) => e,
@@ -504,7 +504,7 @@ impl EncodingRef {
         }
     }
     #[inline]
-    fn can_be_refined(&self) -> bool {
+    const fn can_be_refined(&self) -> bool {
         match self {
             Self::Implicit(_) | Self::BomDetected(_) => true,
             Self::Explicit(_) | Self::XmlDetected(_) => false,
@@ -587,7 +587,7 @@ impl<R> Reader<R> {
     }
 
     /// Returns reference to the parser configuration
-    pub fn config(&self) -> &Config {
+    pub const fn config(&self) -> &Config {
         &self.state.config
     }
 
@@ -657,7 +657,7 @@ impl<R> Reader<R> {
     }
 
     /// Gets a reference to the underlying reader.
-    pub fn get_ref(&self) -> &R {
+    pub const fn get_ref(&self) -> &R {
         &self.reader
     }
 
@@ -667,7 +667,7 @@ impl<R> Reader<R> {
     }
 
     /// Gets the current byte position in the input data.
-    pub fn buffer_position(&self) -> usize {
+    pub const fn buffer_position(&self) -> usize {
         // when internal state is InsideMarkup, we have actually read until '<',
         // which we don't want to show
         if let ParseState::InsideMarkup = self.state.state {
@@ -688,7 +688,7 @@ impl<R> Reader<R> {
     /// markup element (i. e. to the `<` character).
     ///
     /// This position is always `<= buffer_position()`.
-    pub fn error_position(&self) -> usize {
+    pub const fn error_position(&self) -> usize {
         self.state.last_error_offset
     }
 
@@ -702,7 +702,7 @@ impl<R> Reader<R> {
     ///
     /// [`encoding`]: ../index.html#encoding
     #[inline]
-    pub fn decoder(&self) -> Decoder {
+    pub const fn decoder(&self) -> Decoder {
         self.state.decoder()
     }
 }
@@ -865,6 +865,7 @@ trait XmlSource<'r, B> {
     ///
     /// A `P` type parameter is used to preserve state between calls to the underlying
     /// reader which provides bytes fed into the parser.
+    ///
     /// [events]: crate::events::Event
     fn read_with<P>(&mut self, parser: P, buf: B, position: &mut usize) -> Result<&'r [u8]>
     where
@@ -911,7 +912,7 @@ enum BangType {
 }
 impl BangType {
     #[inline(always)]
-    fn new(byte: Option<u8>) -> Result<Self> {
+    const fn new(byte: Option<u8>) -> Result<Self> {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
@@ -982,29 +983,13 @@ impl BangType {
         None
     }
     #[inline]
-    fn to_err(&self) -> Error {
+    const fn to_err(&self) -> Error {
         match self {
             Self::CData => Error::Syntax(SyntaxError::UnclosedCData),
             Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
             Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
         }
     }
-}
-
-/// A function to check whether the byte is a whitespace (blank, new line, carriage return or tab)
-#[inline]
-pub(crate) const fn is_whitespace(b: u8) -> bool {
-    matches!(b, b' ' | b'\r' | b'\n' | b'\t')
-}
-
-/// Calculates name from an element-like content. Name is the first word in `content`,
-/// where word boundaries is XML space characters.
-#[inline]
-pub(crate) fn name_len(content: &[u8]) -> usize {
-    content
-        .iter()
-        .position(|&b| is_whitespace(b))
-        .unwrap_or(content.len())
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
