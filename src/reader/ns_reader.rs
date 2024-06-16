@@ -337,7 +337,6 @@ impl<R> NsReader<R> {
     /// ```
     /// # use pretty_assertions::assert_eq;
     /// use quick_xml::events::Event;
-    /// use quick_xml::events::attributes::Attribute;
     /// use quick_xml::name::{Namespace, QName, ResolveResult::*};
     /// use quick_xml::reader::NsReader;
     ///
