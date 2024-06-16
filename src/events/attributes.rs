@@ -2,11 +2,12 @@
 //!
 //! Provides an iterator over attributes key/value pairs
 
+use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
 use crate::name::QName;
-use crate::reader::Reader;
 use crate::utils::{is_whitespace, write_byte_string, write_cow_string, Bytes};
+
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
 use std::{borrow::Cow, ops::Range};
@@ -84,23 +85,23 @@ impl<'a> Attribute<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn decode_and_unescape_value<B>(&self, reader: &Reader<B>) -> XmlResult<Cow<'a, str>> {
-        self.decode_and_unescape_value_with(reader, resolve_predefined_entity)
+    pub fn decode_and_unescape_value(&self, decoder: Decoder) -> XmlResult<Cow<'a, str>> {
+        self.decode_and_unescape_value_with(decoder, resolve_predefined_entity)
     }
 
     /// Decodes then unescapes the value with custom entities.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn decode_and_unescape_value_with<'entity, B>(
+    pub fn decode_and_unescape_value_with<'entity>(
         &self,
-        reader: &Reader<B>,
+        decoder: Decoder,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
         let decoded = match &self.value {
-            Cow::Borrowed(bytes) => reader.decoder().decode(bytes)?,
+            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => reader.decoder().decode(bytes)?.into_owned().into(),
+            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
         };
 
         match unescape_with(&decoded, resolve_entity)? {

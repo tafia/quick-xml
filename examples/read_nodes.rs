@@ -70,8 +70,8 @@ impl Translation {
         for attr_result in element.attributes() {
             let a = attr_result?;
             match a.key.as_ref() {
-                b"Language" => lang = a.decode_and_unescape_value(reader)?,
-                b"Tag" => tag = a.decode_and_unescape_value(reader)?,
+                b"Language" => lang = a.decode_and_unescape_value(reader.decoder())?,
+                b"Tag" => tag = a.decode_and_unescape_value(reader.decoder())?,
                 _ => (),
             }
         }
@@ -138,7 +138,7 @@ fn main() -> Result<(), AppError> {
                                             Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
                                         })
                                         .unwrap().to_string();
-                                    let value = a.decode_and_unescape_value(&reader).or_else(|err| {
+                                    let value = a.decode_and_unescape_value(reader.decoder()).or_else(|err| {
                                             dbg!("unable to read key in DefaultSettings attribute {:?}, utf8 error {:?}", &a, err);
                                             Ok::<Cow<'_, str>, Infallible>(std::borrow::Cow::from(""))
                                     }).unwrap().to_string();
