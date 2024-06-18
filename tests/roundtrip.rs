@@ -11,9 +11,107 @@ mod events {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    /// Test start and end together because reading only end event requires special
+    /// setting on the reader
+    #[test]
+    fn start_end() {
+        let input = r#"<source attr="val" attr2 = ' "-->&entity;<-- '></source>"#;
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
     #[test]
     fn empty() {
         let input = r#"<source attr="val" attr2 = ' "-->&entity;<-- '/>"#;
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
+    #[test]
+    fn text() {
+        let input = "it is just arbitrary text &amp; some character reference";
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
+    #[test]
+    fn cdata() {
+        let input = "<![CDATA[text & no references]]>";
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
+    #[test]
+    fn pi() {
+        let input = "<?!-- some strange processing instruction ?>";
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
+    #[test]
+    fn decl() {
+        let input = "<?xml some strange XML declaration ?>";
+        let mut reader = Reader::from_str(input);
+        let mut writer = Writer::new(Vec::new());
+        loop {
+            match reader.read_event().unwrap() {
+                Eof => break,
+                e => assert!(writer.write_event(e).is_ok()),
+            }
+        }
+
+        let result = writer.into_inner();
+        assert_eq!(String::from_utf8(result).unwrap(), input);
+    }
+
+    #[test]
+    fn comment() {
+        let input = "<!-- some comment with -- inside---->";
         let mut reader = Reader::from_str(input);
         let mut writer = Writer::new(Vec::new());
         loop {
