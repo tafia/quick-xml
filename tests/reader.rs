@@ -179,3 +179,35 @@ fn test_escaped_content() {
     }
     assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
 }
+
+#[test]
+fn it_works() {
+    let src = include_str!("documents/sample_rss.xml");
+    let mut reader = Reader::from_str(src);
+    let mut count = 0;
+    loop {
+        match reader.read_event().unwrap() {
+            Start(_) => count += 1,
+            Decl(e) => println!("{:?}", e.version()),
+            Eof => break,
+            _ => (),
+        }
+    }
+    println!("{}", count);
+}
+
+/// Checks that after cloning reader the parse state is independent in each copy
+#[test]
+fn clone_state() {
+    let mut reader = Reader::from_str("<tag>text</tag>");
+
+    assert!(matches!(reader.read_event().unwrap(), Start(_)));
+
+    let mut cloned = reader.clone();
+
+    assert!(matches!(reader.read_event().unwrap(), Text(_)));
+    assert!(matches!(reader.read_event().unwrap(), End(_)));
+
+    assert!(matches!(cloned.read_event().unwrap(), Text(_)));
+    assert!(matches!(cloned.read_event().unwrap(), End(_)));
+}
