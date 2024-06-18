@@ -1,13 +1,10 @@
 use std::borrow::Cow;
 use std::str::from_utf8;
 
-use quick_xml::events::attributes::{AttrError, Attribute};
+use quick_xml::events::attributes::Attribute;
 use quick_xml::events::Event::*;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
-use quick_xml::writer::Writer;
-use quick_xml::Result;
 
 use pretty_assertions::assert_eq;
 
@@ -153,126 +150,6 @@ fn test_nested() {
 }
 
 #[test]
-fn test_writer() -> Result<()> {
-    let txt = include_str!("../tests/documents/test_writer.xml").trim();
-    let mut reader = Reader::from_str(txt);
-    reader.config_mut().trim_text(true);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), txt);
-    Ok(())
-}
-
-#[test]
-fn test_writer_borrow() -> Result<()> {
-    let txt = include_str!("../tests/documents/test_writer.xml").trim();
-    let mut reader = Reader::from_str(txt);
-    reader.config_mut().trim_text(true);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), txt);
-    Ok(())
-}
-
-#[test]
-fn test_writer_indent() -> Result<()> {
-    let txt = include_str!("../tests/documents/test_writer_indent.xml");
-    let mut reader = Reader::from_str(txt);
-    reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), txt);
-    Ok(())
-}
-
-#[test]
-fn test_writer_indent_cdata() -> Result<()> {
-    let txt = include_str!("../tests/documents/test_writer_indent_cdata.xml");
-    let mut reader = Reader::from_str(txt);
-    reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), txt);
-    Ok(())
-}
-
-#[test]
-fn test_write_empty_element_attrs() -> Result<()> {
-    let str_from = r#"<source attr="val"/>"#;
-    let expected = r#"<source attr="val"/>"#;
-    let mut reader = Reader::from_str(str_from);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), expected);
-    Ok(())
-}
-
-#[test]
-fn test_write_attrs() -> Result<()> {
-    type AttrResult<T> = std::result::Result<T, AttrError>;
-
-    let str_from = r#"<source attr="val"></source>"#;
-    let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
-    let mut reader = Reader::from_str(str_from);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        let event = match reader.read_event()? {
-            Eof => break,
-            Start(elem) => {
-                let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
-                attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
-                let mut elem = BytesStart::new("copy");
-                elem.extend_attributes(attrs);
-                elem.push_attribute(("x", "y\"z"));
-                Start(elem)
-            }
-            End(_) => End(BytesEnd::new("copy")),
-            e => e,
-        };
-        assert!(writer.write_event(event).is_ok());
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), expected);
-    Ok(())
-}
-
-#[test]
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
     next_eq!(r, Start, b"a");
@@ -301,60 +178,6 @@ fn test_escaped_content() {
         ),
     }
     next_eq!(r, End, b"a");
-}
-
-#[test]
-fn test_read_write_roundtrip() -> Result<()> {
-    let input = r#"
-        <?xml version="1.0" encoding="UTF-8"?>
-        <section ns:label="header">
-            <section ns:label="empty element section" />
-            <section ns:label="start/end section"></section>
-            <section ns:label="with text">data &lt;escaped&gt;</section>
-            </section>
-    "#;
-
-    let mut reader = Reader::from_str(input);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
-}
-
-#[test]
-fn test_read_write_roundtrip_escape_text() -> Result<()> {
-    let input = r#"
-        <?xml version="1.0" encoding="UTF-8"?>
-        <section ns:label="header">
-            <section ns:label="empty element section" />
-            <section ns:label="start/end section"></section>
-            <section ns:label="with text">data &lt;escaped&gt;</section>
-            </section>
-    "#;
-
-    let mut reader = Reader::from_str(input);
-    let mut writer = Writer::new(Vec::new());
-    loop {
-        match reader.read_event()? {
-            Eof => break,
-            Text(e) => {
-                let t = e.unescape().unwrap();
-                assert!(writer.write_event(Text(BytesText::new(&t))).is_ok());
-            }
-            e => assert!(writer.write_event(e).is_ok()),
-        }
-    }
-
-    let result = writer.into_inner();
-    assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
 }
 
 #[test]
