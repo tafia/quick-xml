@@ -178,7 +178,7 @@ fn test_writer() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, txt.as_bytes());
+    assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
 
@@ -196,7 +196,7 @@ fn test_writer_borrow() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, txt.as_bytes());
+    assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
 
@@ -214,8 +214,7 @@ fn test_writer_indent() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, txt.as_bytes());
-
+    assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
 
@@ -233,8 +232,7 @@ fn test_writer_indent_cdata() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, txt.as_bytes());
-
+    assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
 
@@ -283,8 +281,7 @@ fn test_write_attrs() -> Result<()> {
     }
 
     let result = writer.into_inner().into_inner();
-    assert_eq!(result, expected.as_bytes());
-
+    assert_eq!(String::from_utf8(result).unwrap(), expected);
     Ok(())
 }
 
