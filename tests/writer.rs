@@ -1,5 +1,9 @@
-use quick_xml::events::{BytesDecl, Event::*};
+use quick_xml::events::{
+    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event::*,
+};
 use quick_xml::writer::Writer;
+
+use pretty_assertions::assert_eq;
 
 mod declaration {
     use super::*;
@@ -86,4 +90,147 @@ mod declaration {
             "writer output (LHS)"
         );
     }
+}
+
+#[test]
+fn pi() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(PI(BytesPI::new("xml-stylesheet href='theme.xls' ")))
+        .expect("writing processing instruction should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<?xml-stylesheet href='theme.xls' ?>",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn empty() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Empty(
+            BytesStart::new("game").with_attributes([("publisher", "Blizzard")]),
+        ))
+        .expect("writing empty tag should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        r#"<game publisher="Blizzard"/>"#,
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn start() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Start(
+            BytesStart::new("info").with_attributes([("genre", "RTS")]),
+        ))
+        .expect("writing start tag should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        r#"<info genre="RTS">"#,
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn end() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(End(BytesEnd::new("info")))
+        .expect("writing end tag should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "</info>",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn text() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Text(BytesText::new(
+            "Kerrigan & Raynor: The Z[erg] programming language",
+        )))
+        .expect("writing text should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "Kerrigan &amp; Raynor: The Z[erg] programming language",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn cdata() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(CData(BytesCData::new(
+            "Kerrigan & Raynor: The Z[erg] programming language",
+        )))
+        .expect("writing CDATA section should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<![CDATA[Kerrigan & Raynor: The Z[erg] programming language]]>",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn comment() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(Comment(BytesText::from_escaped(
+            "Kerrigan & Raynor: The Z[erg] programming language",
+        )))
+        .expect("writing comment should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<!--Kerrigan & Raynor: The Z[erg] programming language-->",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn doctype() {
+    let mut writer = Writer::new(Vec::new());
+    writer
+        .write_event(DocType(BytesText::new("some DTD here...")))
+        .expect("writing DTD should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "<!DOCTYPE some DTD here...>",
+        "writer output (LHS)"
+    );
+}
+
+#[test]
+fn eof() {
+    let mut writer = Writer::new(Vec::new());
+    writer.write_event(Eof).expect("writing EOF should succeed");
+
+    let result = writer.into_inner();
+    assert_eq!(
+        String::from_utf8(result).expect("utf-8 output"),
+        "",
+        "writer output (LHS)"
+    );
 }
