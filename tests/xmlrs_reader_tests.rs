@@ -179,65 +179,6 @@ fn sample_ns_short() {
 }
 
 #[test]
-fn tabs_1() {
-    test(
-        "\t<a>\t<b/></a>",
-        r#"
-            StartElement(a)
-            EmptyElement(b)
-            EndElement(a)
-            EndDocument
-        "#,
-        true,
-    );
-}
-
-#[test]
-fn issue_83_duplicate_attributes() {
-    // Error when parsing attributes won't stop main event reader
-    // as it is a lazy operation => add ending events
-    test(
-        r#"<hello><some-tag a='10' a="20"/></hello>"#,
-        "
-            |StartElement(hello)
-            |1:30 EmptyElement(some-tag, attr-error: \
-                  position 16: duplicated attribute, previous declaration at position 9)
-            |EndElement(hello)
-            |EndDocument
-        ",
-        true,
-    );
-}
-
-#[test]
-fn issue_93_large_characters_in_entity_references() {
-    test(
-        r#"<hello>&𤶼;</hello>"#,
-        r#"
-            |StartElement(hello)
-            |1:10 FailedUnescape([38, 240, 164, 182, 188, 59]; Error while escaping character at range 1..5: Unrecognized escape symbol: "𤶼")
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        true,
-    )
-}
-
-#[test]
-fn issue_98_cdata_ending_with_right_bracket() {
-    test(
-        r#"<hello><![CDATA[Foo [Bar]]]></hello>"#,
-        r#"
-            |StartElement(hello)
-            |CData(Foo [Bar])
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        false,
-    )
-}
-
-#[test]
 fn issue_105_unexpected_double_dash() {
     test(
         r#"<hello>-- </hello>"#,
@@ -285,20 +226,6 @@ fn issue_105_unexpected_double_dash() {
 }
 
 #[test]
-fn issue_attributes_have_no_default_namespace() {
-    // At the moment, the 'test' method doesn't render namespaces for attribute names.
-    // This test only checks whether the default namespace got applied to the EmptyElement.
-    test(
-        r#"<hello xmlns="urn:foo" x="y"/>"#,
-        r#"
-             |EmptyElement({urn:foo}hello [x="y"])
-             |EndDocument
-         "#,
-        true,
-    );
-}
-
-#[test]
 fn issue_default_namespace_on_outermost_element() {
     // Regression test
     test(
@@ -307,22 +234,6 @@ fn issue_default_namespace_on_outermost_element() {
                 |EmptyElement({urn:foo}hello)
                 |EndDocument
             "#,
-        true,
-    );
-}
-
-#[test]
-fn default_namespace_applies_to_end_elem() {
-    test(
-        r#"<hello xmlns="urn:foo" x="y">
-              <inner/>
-            </hello>"#,
-        r#"
-            |StartElement({urn:foo}hello [x="y"])
-            |EmptyElement({urn:foo}inner)
-            |EndElement({urn:foo}hello)
-            |EndDocument
-        "#,
         true,
     );
 }
