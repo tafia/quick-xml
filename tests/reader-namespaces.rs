@@ -87,117 +87,157 @@ fn namespace() {
     );
 }
 
-#[test]
-fn default_namespace() {
-    let mut r = NsReader::from_str(r#"<a ><b xmlns="www1"></b></a>"#);
+mod default_namespace {
+    use super::*;
+    use pretty_assertions::assert_eq;
 
-    // <a>
-    match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
-        e => panic!(
-            "expecting outer start element with no namespace, got {:?}",
-            e
-        ),
+    #[test]
+    fn event_empty() {
+        let mut r = NsReader::from_str("<a attr='val' xmlns='ns' />");
+
+        let e = match r.read_resolved_event() {
+            Ok((ns, Empty(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"ns")));
+                e
+            }
+            e => panic!("Expecting Empty event, got {:?}", e),
+        };
+
+        let mut attrs = e
+            .attributes()
+            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
+            // we don't care about xmlns attributes for this test
+            .filter(|kv| kv.key.as_namespace_binding().is_none())
+            .map(|Attribute { key: name, value }| {
+                let (opt_ns, local_name) = r.resolve_attribute(name);
+                (opt_ns, local_name.into_inner(), value)
+            });
+        assert_eq!(
+            attrs.next(),
+            Some((Unbound, &b"attr"[..], Cow::Borrowed(&b"val"[..])))
+        );
+        assert_eq!(attrs.next(), None);
+
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"ns"))]
+        );
     }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(0)));
-    assert_eq!(it.collect::<Vec<_>>(), vec![]);
 
-    // <b>
-    match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
-        e => panic!(
-            "expecting inner start element with to resolve to 'www1', got {:?}",
-            e
-        ),
+    #[test]
+    fn event_start_end() {
+        let mut r = NsReader::from_str(r#"<a ><b xmlns="www1"></b></a>"#);
+
+        // <a>
+        match r.read_resolved_event() {
+            Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
+            e => panic!(
+                "expecting outer start element with no namespace, got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(0)));
+        assert_eq!(it.collect::<Vec<_>>(), vec![]);
+
+        // <b>
+        match r.read_resolved_event() {
+            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            e => panic!(
+                "expecting inner start element with to resolve to 'www1', got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+        );
+
+        // </b>
+        match r.read_resolved_event() {
+            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            e => panic!(
+                "expecting inner end element with to resolve to 'www1', got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+        );
+
+        // </a> very important: a should not be in any namespace. The default namespace only applies to
+        // the sub-document it is defined on.
+        match r.read_resolved_event() {
+            Ok((ns, End(_))) => assert_eq!(ns, Unbound),
+            e => panic!("expecting outer end element with no namespace, got {:?}", e),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(0)));
+        assert_eq!(it.collect::<Vec<_>>(), vec![]);
     }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(1)));
-    assert_eq!(
-        it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
-    );
 
-    // </b>
-    match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
-        e => panic!(
-            "expecting inner end element with to resolve to 'www1', got {:?}",
-            e
-        ),
+    #[test]
+    fn reset() {
+        let mut r = NsReader::from_str(r#"<a xmlns="www1"><b xmlns=""></b></a>"#);
+
+        // <a>
+        match r.read_resolved_event() {
+            Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            e => panic!(
+                "expecting outer start element with to resolve to 'www1', got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+        );
+
+        // <b>
+        match r.read_resolved_event() {
+            Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
+            e => panic!(
+                "expecting inner start element with no namespace, got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(2)));
+        assert_eq!(it.collect::<Vec<_>>(), vec![]);
+
+        // </b>
+        match r.read_resolved_event() {
+            Ok((ns, End(_))) => assert_eq!(ns, Unbound),
+            e => panic!("expecting inner end element with no namespace, got {:?}", e),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(2)));
+        assert_eq!(it.collect::<Vec<_>>(), vec![]);
+
+        // </a>
+        match r.read_resolved_event() {
+            Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
+            e => panic!(
+                "expecting outer end element with to resolve to 'www1', got {:?}",
+                e
+            ),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
+        );
     }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(1)));
-    assert_eq!(
-        it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
-    );
-
-    // </a> very important: a should not be in any namespace. The default namespace only applies to
-    // the sub-document it is defined on.
-    match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
-        e => panic!("expecting outer end element with no namespace, got {:?}", e),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(0)));
-    assert_eq!(it.collect::<Vec<_>>(), vec![]);
-}
-
-#[test]
-fn default_namespace_reset() {
-    let mut r = NsReader::from_str(r#"<a xmlns="www1"><b xmlns=""></b></a>"#);
-
-    // <a>
-    match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
-        e => panic!(
-            "expecting outer start element with to resolve to 'www1', got {:?}",
-            e
-        ),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(1)));
-    assert_eq!(
-        it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
-    );
-
-    // <b>
-    match r.read_resolved_event() {
-        Ok((ns, Start(_))) => assert_eq!(ns, Unbound),
-        e => panic!(
-            "expecting inner start element with no namespace, got {:?}",
-            e
-        ),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(2)));
-    assert_eq!(it.collect::<Vec<_>>(), vec![]);
-
-    // </b>
-    match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Unbound),
-        e => panic!("expecting inner end element with no namespace, got {:?}", e),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(2)));
-    assert_eq!(it.collect::<Vec<_>>(), vec![]);
-
-    // </a>
-    match r.read_resolved_event() {
-        Ok((ns, End(_))) => assert_eq!(ns, Bound(Namespace(b"www1"))),
-        e => panic!(
-            "expecting outer end element with to resolve to 'www1', got {:?}",
-            e
-        ),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(1)));
-    assert_eq!(
-        it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
-    );
 }
 
 /// Single empty element with qualified attributes.

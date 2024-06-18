@@ -225,19 +225,6 @@ fn issue_105_unexpected_double_dash() {
     );
 }
 
-#[test]
-fn issue_default_namespace_on_outermost_element() {
-    // Regression test
-    test(
-        r#"<hello xmlns="urn:foo"/>"#,
-        r#"
-                |EmptyElement({urn:foo}hello)
-                |EndDocument
-            "#,
-        true,
-    );
-}
-
 #[track_caller]
 fn test(input: &str, output: &str, trim: bool) {
     test_bytes(input.as_bytes(), output.as_bytes(), trim);
