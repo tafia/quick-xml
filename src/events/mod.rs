@@ -370,289 +370,6 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// An XML declaration (`Event::Decl`).
-///
-/// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
-///
-/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
-/// returns the content of this event between `<?` and `?>`.
-///
-/// Note, that inner text will not contain `?>` sequence inside:
-///
-/// ```
-/// # use quick_xml::events::{BytesDecl, BytesStart, Event};
-/// # use quick_xml::reader::Reader;
-/// # use pretty_assertions::assert_eq;
-/// let mut reader = Reader::from_str("<?xml version = '1.0' ?>");
-/// let content = "xml version = '1.0' ";
-/// let event = BytesDecl::from_start(BytesStart::from_content(content, 3));
-///
-/// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
-/// // deref coercion of &BytesDecl to &[u8]
-/// assert_eq!(&event as &[u8], content.as_bytes());
-/// // AsRef<[u8]> for &T + deref coercion
-/// assert_eq!(event.as_ref(), content.as_bytes());
-/// ```
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BytesDecl<'a> {
-    content: BytesStart<'a>,
-}
-
-impl<'a> BytesDecl<'a> {
-    /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
-    /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
-    /// attribute.
-    ///
-    /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
-    /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
-    /// the double quote character is not allowed in any of the attribute values.
-    pub fn new(
-        version: &str,
-        encoding: Option<&str>,
-        standalone: Option<&str>,
-    ) -> BytesDecl<'static> {
-        // Compute length of the buffer based on supplied attributes
-        // ' encoding=""'   => 12
-        let encoding_attr_len = if let Some(xs) = encoding {
-            12 + xs.len()
-        } else {
-            0
-        };
-        // ' standalone=""' => 14
-        let standalone_attr_len = if let Some(xs) = standalone {
-            14 + xs.len()
-        } else {
-            0
-        };
-        // 'xml version=""' => 14
-        let mut buf = String::with_capacity(14 + encoding_attr_len + standalone_attr_len);
-
-        buf.push_str("xml version=\"");
-        buf.push_str(version);
-
-        if let Some(encoding_val) = encoding {
-            buf.push_str("\" encoding=\"");
-            buf.push_str(encoding_val);
-        }
-
-        if let Some(standalone_val) = standalone {
-            buf.push_str("\" standalone=\"");
-            buf.push_str(standalone_val);
-        }
-        buf.push('"');
-
-        BytesDecl {
-            content: BytesStart::from_content(buf, 3),
-        }
-    }
-
-    /// Creates a `BytesDecl` from a `BytesStart`
-    pub const fn from_start(start: BytesStart<'a>) -> Self {
-        Self { content: start }
-    }
-
-    /// Gets xml version, excluding quotes (`'` or `"`).
-    ///
-    /// According to the [grammar], the version *must* be the first thing in the declaration.
-    /// This method tries to extract the first thing in the declaration and return it.
-    /// In case of multiple attributes value of the first one is returned.
-    ///
-    /// If version is missed in the declaration, or the first thing is not a version,
-    /// [`IllFormedError::MissingDeclVersion`] will be returned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use quick_xml::errors::{Error, IllFormedError};
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap(), b"1.1".as_ref());
-    ///
-    /// // <?xml version='1.0' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
-    /// assert_eq!(decl.version().unwrap(), b"1.0".as_ref());
-    ///
-    /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
-    /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml encoding='utf-8' version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
-    /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content("", 0));
-    /// match decl.version() {
-    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))) => {},
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn version(&self) -> Result<Cow<[u8]>> {
-        // The version *must* be the first thing in the declaration.
-        match self.content.attributes().with_checks(false).next() {
-            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
-            // first attribute was not "version"
-            Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref())?.to_string();
-                Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(
-                    found,
-                ))))
-            }
-            // error parsing attributes
-            Some(Err(e)) => Err(e.into()),
-            // no attributes
-            None => Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))),
-        }
-    }
-
-    /// Gets xml encoding, excluding quotes (`'` or `"`).
-    ///
-    /// Although according to the [grammar] encoding must appear before `"standalone"`
-    /// and after `"version"`, this method does not check that. The first occurrence
-    /// of the attribute will be returned even if there are several. Also, method does
-    /// not restrict symbols that can forming the encoding, so the returned encoding
-    /// name may not correspond to the grammar.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::borrow::Cow;
-    /// use quick_xml::Error;
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert!(decl.encoding().is_none());
-    ///
-    /// // <?xml encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
-    /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='something_WRONG' encoding='utf-8'", 0));
-    /// match decl.encoding() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
-        self.content
-            .try_get_attribute("encoding")
-            .map(|a| a.map(|a| a.value))
-            .transpose()
-    }
-
-    /// Gets xml standalone, excluding quotes (`'` or `"`).
-    ///
-    /// Although according to the [grammar] standalone flag must appear after `"version"`
-    /// and `"encoding"`, this method does not check that. The first occurrence of the
-    /// attribute will be returned even if there are several. Also, method does not
-    /// restrict symbols that can forming the value, so the returned flag name may not
-    /// correspond to the grammar.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::borrow::Cow;
-    /// use quick_xml::Error;
-    /// use quick_xml::events::{BytesDecl, BytesStart};
-    ///
-    /// // <?xml version='1.1'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
-    /// assert!(decl.standalone().is_none());
-    ///
-    /// // <?xml standalone='yes'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='yes'", 0));
-    /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
-    ///     _ => assert!(false),
-    /// }
-    ///
-    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
-    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='something_WRONG' encoding='utf-8'", 0));
-    /// match decl.standalone() {
-    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
-    ///     _ => assert!(false),
-    /// }
-    /// ```
-    ///
-    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
-        self.content
-            .try_get_attribute("standalone")
-            .map(|a| a.map(|a| a.value))
-            .transpose()
-    }
-
-    /// Gets the actual encoding using [_get an encoding_](https://encoding.spec.whatwg.org/#concept-encoding-get)
-    /// algorithm.
-    ///
-    /// If encoding in not known, or `encoding` key was not found, returns `None`.
-    /// In case of duplicated `encoding` key, encoding, corresponding to the first
-    /// one, is returned.
-    #[cfg(feature = "encoding")]
-    pub fn encoder(&self) -> Option<&'static Encoding> {
-        self.encoding()
-            .and_then(|e| e.ok())
-            .and_then(|e| Encoding::for_label(&e))
-    }
-
-    /// Converts the event into an owned event.
-    pub fn into_owned(self) -> BytesDecl<'static> {
-        BytesDecl {
-            content: self.content.into_owned(),
-        }
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesDecl {
-        BytesDecl {
-            content: self.content.borrow(),
-        }
-    }
-}
-
-impl<'a> Deref for BytesDecl<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.content
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self::new(
-            <&str>::arbitrary(u)?,
-            Option::<&str>::arbitrary(u)?,
-            Option::<&str>::arbitrary(u)?,
-        ))
-    }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 /// Closing tag data (`Event::End`): `</name>`.
 ///
 /// The name can be accessed using the [`name`] or [`local_name`] methods.
@@ -1293,6 +1010,289 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self::new(<&str>::arbitrary(u)?))
     }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// An XML declaration (`Event::Decl`).
+///
+/// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<?` and `?>`.
+///
+/// Note, that inner text will not contain `?>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesDecl, BytesStart, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<?xml version = '1.0' ?>");
+/// let content = "xml version = '1.0' ";
+/// let event = BytesDecl::from_start(BytesStart::from_content(content, 3));
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
+/// // deref coercion of &BytesDecl to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BytesDecl<'a> {
+    content: BytesStart<'a>,
+}
+
+impl<'a> BytesDecl<'a> {
+    /// Constructs a new `XmlDecl` from the (mandatory) _version_ (should be `1.0` or `1.1`),
+    /// the optional _encoding_ (e.g., `UTF-8`) and the optional _standalone_ (`yes` or `no`)
+    /// attribute.
+    ///
+    /// Does not escape any of its inputs. Always uses double quotes to wrap the attribute values.
+    /// The caller is responsible for escaping attribute values. Shouldn't usually be relevant since
+    /// the double quote character is not allowed in any of the attribute values.
+    pub fn new(
+        version: &str,
+        encoding: Option<&str>,
+        standalone: Option<&str>,
+    ) -> BytesDecl<'static> {
+        // Compute length of the buffer based on supplied attributes
+        // ' encoding=""'   => 12
+        let encoding_attr_len = if let Some(xs) = encoding {
+            12 + xs.len()
+        } else {
+            0
+        };
+        // ' standalone=""' => 14
+        let standalone_attr_len = if let Some(xs) = standalone {
+            14 + xs.len()
+        } else {
+            0
+        };
+        // 'xml version=""' => 14
+        let mut buf = String::with_capacity(14 + encoding_attr_len + standalone_attr_len);
+
+        buf.push_str("xml version=\"");
+        buf.push_str(version);
+
+        if let Some(encoding_val) = encoding {
+            buf.push_str("\" encoding=\"");
+            buf.push_str(encoding_val);
+        }
+
+        if let Some(standalone_val) = standalone {
+            buf.push_str("\" standalone=\"");
+            buf.push_str(standalone_val);
+        }
+        buf.push('"');
+
+        BytesDecl {
+            content: BytesStart::from_content(buf, 3),
+        }
+    }
+
+    /// Creates a `BytesDecl` from a `BytesStart`
+    pub const fn from_start(start: BytesStart<'a>) -> Self {
+        Self { content: start }
+    }
+
+    /// Gets xml version, excluding quotes (`'` or `"`).
+    ///
+    /// According to the [grammar], the version *must* be the first thing in the declaration.
+    /// This method tries to extract the first thing in the declaration and return it.
+    /// In case of multiple attributes value of the first one is returned.
+    ///
+    /// If version is missed in the declaration, or the first thing is not a version,
+    /// [`IllFormedError::MissingDeclVersion`] will be returned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use quick_xml::errors::{Error, IllFormedError};
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert_eq!(decl.version().unwrap(), b"1.1".as_ref());
+    ///
+    /// // <?xml version='1.0' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.0' version='1.1'", 0));
+    /// assert_eq!(decl.version().unwrap(), b"1.0".as_ref());
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
+    /// match decl.version() {
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='utf-8' version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8' version='1.1'", 0));
+    /// match decl.version() {
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(key)))) => assert_eq!(key, "encoding"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content("", 0));
+    /// match decl.version() {
+    ///     Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))) => {},
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn version(&self) -> Result<Cow<[u8]>> {
+        // The version *must* be the first thing in the declaration.
+        match self.content.attributes().with_checks(false).next() {
+            Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
+            // first attribute was not "version"
+            Some(Ok(a)) => {
+                let found = from_utf8(a.key.as_ref())?.to_string();
+                Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(
+                    found,
+                ))))
+            }
+            // error parsing attributes
+            Some(Err(e)) => Err(e.into()),
+            // no attributes
+            None => Err(Error::IllFormed(IllFormedError::MissingDeclVersion(None))),
+        }
+    }
+
+    /// Gets xml encoding, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] encoding must appear before `"standalone"`
+    /// and after `"version"`, this method does not check that. The first occurrence
+    /// of the attribute will be returned even if there are several. Also, method does
+    /// not restrict symbols that can forming the encoding, so the returned encoding
+    /// name may not correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert!(decl.encoding().is_none());
+    ///
+    /// // <?xml encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"utf-8"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml encoding='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" encoding='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.encoding() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
+        self.content
+            .try_get_attribute("encoding")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
+    }
+
+    /// Gets xml standalone, excluding quotes (`'` or `"`).
+    ///
+    /// Although according to the [grammar] standalone flag must appear after `"version"`
+    /// and `"encoding"`, this method does not check that. The first occurrence of the
+    /// attribute will be returned even if there are several. Also, method does not
+    /// restrict symbols that can forming the value, so the returned flag name may not
+    /// correspond to the grammar.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use quick_xml::Error;
+    /// use quick_xml::events::{BytesDecl, BytesStart};
+    ///
+    /// // <?xml version='1.1'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" version='1.1'", 0));
+    /// assert!(decl.standalone().is_none());
+    ///
+    /// // <?xml standalone='yes'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='yes'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(encoding))) => assert_eq!(encoding, b"yes"),
+    ///     _ => assert!(false),
+    /// }
+    ///
+    /// // <?xml standalone='something_WRONG' encoding='utf-8'?>
+    /// let decl = BytesDecl::from_start(BytesStart::from_content(" standalone='something_WRONG' encoding='utf-8'", 0));
+    /// match decl.standalone() {
+    ///     Some(Ok(Cow::Borrowed(flag))) => assert_eq!(flag, b"something_WRONG"),
+    ///     _ => assert!(false),
+    /// }
+    /// ```
+    ///
+    /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
+    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
+        self.content
+            .try_get_attribute("standalone")
+            .map(|a| a.map(|a| a.value))
+            .transpose()
+    }
+
+    /// Gets the actual encoding using [_get an encoding_](https://encoding.spec.whatwg.org/#concept-encoding-get)
+    /// algorithm.
+    ///
+    /// If encoding in not known, or `encoding` key was not found, returns `None`.
+    /// In case of duplicated `encoding` key, encoding, corresponding to the first
+    /// one, is returned.
+    #[cfg(feature = "encoding")]
+    pub fn encoder(&self) -> Option<&'static Encoding> {
+        self.encoding()
+            .and_then(|e| e.ok())
+            .and_then(|e| Encoding::for_label(&e))
+    }
+
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesDecl<'static> {
+        BytesDecl {
+            content: self.content.into_owned(),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesDecl {
+        BytesDecl {
+            content: self.content.borrow(),
+        }
+    }
+}
+
+impl<'a> Deref for BytesDecl<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(
+            <&str>::arbitrary(u)?,
+            Option::<&str>::arbitrary(u)?,
+            Option::<&str>::arbitrary(u)?,
+        ))
+    }
+
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
         return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }
