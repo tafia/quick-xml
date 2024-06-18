@@ -4,7 +4,6 @@ use quick_xml::events::attributes::AttrError;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::reader::Reader;
 use quick_xml::writer::Writer;
-use quick_xml::Result;
 
 use pretty_assertions::assert_eq;
 
@@ -13,12 +12,12 @@ mod events {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn empty() -> Result<()> {
-        let input = r#"<source attr="val"/>"#;
+    fn empty() {
+        let input = r#"<source attr="val" attr2 = ' "-->&entity;<-- '/>"#;
         let mut reader = Reader::from_str(input);
         let mut writer = Writer::new(Vec::new());
         loop {
-            match reader.read_event()? {
+            match reader.read_event().unwrap() {
                 Eof => break,
                 e => assert!(writer.write_event(e).is_ok()),
             }
@@ -26,7 +25,6 @@ mod events {
 
         let result = writer.into_inner();
         assert_eq!(String::from_utf8(result).unwrap(), input);
-        Ok(())
     }
 }
 
@@ -42,11 +40,11 @@ const XML: &str = r#"
 
 /// Directly write event from reader without any processing.
 #[test]
-fn simple() -> Result<()> {
+fn simple() {
     let mut reader = Reader::from_str(XML);
     let mut writer = Writer::new(Vec::new());
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -54,18 +52,17 @@ fn simple() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), XML);
-    Ok(())
 }
 
 /// Directly write event from reader without processing (except auto-trimming text).
 #[test]
-fn with_trim() -> Result<()> {
+fn with_trim() {
     let input = include_str!("documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Vec::new());
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -73,18 +70,17 @@ fn with_trim() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
 }
 
 /// Directly write reference to event from reader without processing (except auto-trimming text).
 #[test]
-fn with_trim_ref() -> Result<()> {
+fn with_trim_ref() {
     let input = include_str!("documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Vec::new());
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             e => assert!(writer.write_event(&e).is_ok()), // either `e` or `&e`
         }
@@ -92,19 +88,18 @@ fn with_trim_ref() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
 }
 
 /// Directly write event from reader without processing (except auto-trimming text)
 /// with the same indentation settings as in the original document.
 #[test]
-fn with_indent() -> Result<()> {
+fn with_indent() {
     let input = include_str!("documents/test_writer_indent.xml");
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
     let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -112,20 +107,19 @@ fn with_indent() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
 }
 
 /// Directly write event from reader without processing (except auto-trimming text)
 /// with the same indentation settings as in the original document.
 /// Document contains CDATA section.
 #[test]
-fn with_indent_cdata() -> Result<()> {
+fn with_indent_cdata() {
     let input = include_str!("documents/test_writer_indent_cdata.xml");
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
     let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             e => assert!(writer.write_event(e).is_ok()),
         }
@@ -133,16 +127,15 @@ fn with_indent_cdata() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
-    Ok(())
 }
 
 /// Directly write event from reader with unescaping and re-escaping content of the `Text` events.
 #[test]
-fn reescape_text() -> Result<()> {
+fn reescape_text() {
     let mut reader = Reader::from_str(XML);
     let mut writer = Writer::new(Vec::new());
     loop {
-        match reader.read_event()? {
+        match reader.read_event().unwrap() {
             Eof => break,
             Text(e) => {
                 let t = e.unescape().unwrap();
@@ -154,12 +147,11 @@ fn reescape_text() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), XML);
-    Ok(())
 }
 
 /// Rewrite some events during processing
 #[test]
-fn partial_rewrite() -> Result<()> {
+fn partial_rewrite() {
     type AttrResult<T> = std::result::Result<T, AttrError>;
 
     let str_from = r#"<source attr="val"></source>"#;
@@ -167,10 +159,10 @@ fn partial_rewrite() -> Result<()> {
     let mut reader = Reader::from_str(str_from);
     let mut writer = Writer::new(Vec::new());
     loop {
-        let event = match reader.read_event()? {
+        let event = match reader.read_event().unwrap() {
             Eof => break,
             Start(elem) => {
-                let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>()?;
+                let mut attrs = elem.attributes().collect::<AttrResult<Vec<_>>>().unwrap();
                 attrs.extend_from_slice(&[("a", "b").into(), ("c", "d").into()]);
                 let mut elem = BytesStart::new("copy");
                 elem.extend_attributes(attrs);
@@ -185,5 +177,4 @@ fn partial_rewrite() -> Result<()> {
 
     let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), expected);
-    Ok(())
 }
