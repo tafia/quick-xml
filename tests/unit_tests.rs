@@ -55,28 +55,24 @@ macro_rules! next_eq {
 #[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_with_ws() {
     let mut r = Reader::from_str("<a></a >");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_start_end_attr() {
     let mut r = Reader::from_str("<a b=\"test\"></a>");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", End, b"a");
 }
 
 #[test]
 fn test_empty_attr() {
     let mut r = Reader::from_str("<a b=\"test\" />");
-    r.config_mut().trim_text(true);
     next_eq!(r, Empty, b"a");
 }
 
@@ -90,21 +86,18 @@ fn test_start_end_comment() {
 #[test]
 fn test_start_txt_end() {
     let mut r = Reader::from_str("<a>test</a>");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", Text, b"test", End, b"a");
 }
 
 #[test]
 fn test_comment() {
     let mut r = Reader::from_str("<!--test-->");
-    r.config_mut().trim_text(true);
     next_eq!(r, Comment, b"test");
 }
 
 #[test]
 fn test_xml_decl() {
     let mut r = Reader::from_str("<?xml version=\"1.0\" encoding='utf-8'?>");
-    r.config_mut().trim_text(true);
     match r.read_event().unwrap() {
         Decl(ref e) => {
             match e.version() {
@@ -138,28 +131,24 @@ fn test_xml_decl() {
 #[test]
 fn test_cdata() {
     let mut r = Reader::from_str("<![CDATA[test]]>");
-    r.config_mut().trim_text(true);
     next_eq!(r, CData, b"test");
 }
 
 #[test]
 fn test_cdata_open_close() {
     let mut r = Reader::from_str("<![CDATA[test <> test]]>");
-    r.config_mut().trim_text(true);
     next_eq!(r, CData, b"test <> test");
 }
 
 #[test]
 fn test_start_attr() {
     let mut r = Reader::from_str("<a b=\"c\">");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a");
 }
 
 #[test]
 fn test_nested() {
     let mut r = Reader::from_str("<a><b>test</b><c/></a>");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a", Start, b"b", Text, b"test", End, b"b", Empty, b"c", End, b"a");
 }
 
@@ -260,7 +249,6 @@ fn test_write_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"></source>"#;
     let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
-    reader.config_mut().trim_text(true);
     let mut writer = Writer::new(Vec::new());
     loop {
         let event = match reader.read_event()? {
@@ -287,7 +275,6 @@ fn test_write_attrs() -> Result<()> {
 #[test]
 fn test_escaped_content() {
     let mut r = Reader::from_str("<a>&lt;test&gt;</a>");
-    r.config_mut().trim_text(true);
     next_eq!(r, Start, b"a");
     match r.read_event() {
         Ok(Text(e)) => {
@@ -373,7 +360,6 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
 #[test]
 fn test_closing_bracket_in_single_quote_attr() {
     let mut r = Reader::from_str("<a attr='>' check='2'></a>");
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -401,7 +387,6 @@ fn test_closing_bracket_in_single_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_attr() {
     let mut r = Reader::from_str(r#"<a attr=">" check="2"></a>"#);
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -429,7 +414,6 @@ fn test_closing_bracket_in_double_quote_attr() {
 #[test]
 fn test_closing_bracket_in_double_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr="'>'" check="'2'"></a>"#);
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();
@@ -457,7 +441,6 @@ fn test_closing_bracket_in_double_quote_mixed() {
 #[test]
 fn test_closing_bracket_in_single_quote_mixed() {
     let mut r = Reader::from_str(r#"<a attr='">"' check='"2"'></a>"#);
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Start(e)) => {
             let mut attrs = e.attributes();

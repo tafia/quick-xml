@@ -28,7 +28,6 @@ use {crate::de::DeError, serde::Serialize};
 ///
 /// let xml = r#"<this_tag k1="v1" k2="v2"><child>text</child></this_tag>"#;
 /// let mut reader = Reader::from_str(xml);
-/// reader.config_mut().trim_text(true);
 /// let mut writer = Writer::new(Cursor::new(Vec::new()));
 /// loop {
 ///     match reader.read_event() {

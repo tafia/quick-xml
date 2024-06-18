@@ -26,7 +26,6 @@ fn test_sample() {
 fn test_attributes_empty() {
     let src = "<a att1='a' att2='b'/>";
     let mut r = Reader::from_str(src);
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
@@ -54,7 +53,6 @@ fn test_attributes_empty() {
 fn test_attribute_equal() {
     let src = "<a att1=\"a=b\"/>";
     let mut r = Reader::from_str(src);
-    r.config_mut().trim_text(true);
     match r.read_event() {
         Ok(Empty(e)) => {
             let mut attrs = e.attributes();
@@ -74,7 +72,6 @@ fn test_attribute_equal() {
 #[test]
 fn test_clone_reader() {
     let mut reader = Reader::from_str("<tag>text</tag>");
-    reader.config_mut().trim_text(true);
 
     assert!(matches!(reader.read_event().unwrap(), Start(_)));
 

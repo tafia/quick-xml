@@ -9,7 +9,6 @@ use std::borrow::Cow;
 #[test]
 fn namespace() {
     let mut r = NsReader::from_str("<a xmlns:myns='www1'><myns:b>in namespace!</myns:b></a>");
-    r.config_mut().trim_text(true);
 
     // <a>
     match r.read_resolved_event() {
@@ -91,7 +90,6 @@ fn namespace() {
 #[test]
 fn default_namespace() {
     let mut r = NsReader::from_str(r#"<a ><b xmlns="www1"></b></a>"#);
-    r.config_mut().trim_text(true);
 
     // <a>
     match r.read_resolved_event() {
@@ -149,7 +147,6 @@ fn default_namespace() {
 #[test]
 fn default_namespace_reset() {
     let mut r = NsReader::from_str(r#"<a xmlns="www1"><b xmlns=""></b></a>"#);
-    r.config_mut().trim_text(true);
 
     // <a>
     match r.read_resolved_event() {
@@ -211,7 +208,6 @@ fn attributes_empty_ns() {
     let src = "<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
     let mut r = NsReader::from_str(src);
-    r.config_mut().trim_text(true);
 
     let e = match r.read_resolved_event() {
         Ok((Unbound, Empty(e))) => e,
@@ -257,9 +253,7 @@ fn attributes_empty_ns_expanded() {
     let src = "<a att1='a' r:att2='b' xmlns:r='urn:example:r' />";
 
     let mut r = NsReader::from_str(src);
-    let config = r.config_mut();
-    config.trim_text(true);
-    config.expand_empty_elements = true;
+    r.config_mut().expand_empty_elements = true;
     {
         let e = match r.read_resolved_event() {
             Ok((Unbound, Start(e))) => e,
@@ -308,7 +302,6 @@ fn default_ns_shadowing_empty() {
     let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
     let mut r = NsReader::from_str(src);
-    r.config_mut().trim_text(true);
 
     // <outer xmlns='urn:example:o'>
     {
@@ -385,9 +378,7 @@ fn default_ns_shadowing_expanded() {
     let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
 
     let mut r = NsReader::from_str(src);
-    let config = r.config_mut();
-    config.trim_text(true);
-    config.expand_empty_elements = true;
+    r.config_mut().expand_empty_elements = true;
 
     // <outer xmlns='urn:example:o'>
     {
@@ -458,7 +449,6 @@ fn reserved_name() {
     // Name "xmlns-something" is reserved according to spec, because started with "xml"
     let mut r =
         NsReader::from_str(r#"<a xmlns-something="reserved attribute name" xmlns="www1"/>"#);
-    r.config_mut().trim_text(true);
 
     // <a />
     match r.read_resolved_event() {
