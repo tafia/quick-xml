@@ -56,12 +56,34 @@ use crate::utils::CowRef;
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{Attribute, Attributes};
 
-/// Opening tag data (`Event::Start`), with optional attributes.
-///
-/// `<name attr="value">`.
+/// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
 ///
 /// The name can be accessed using the [`name`] or [`local_name`] methods.
 /// An iterator over the attributes is returned by the [`attributes`] method.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<` and `>` or `/>`:
+///
+/// ```
+/// # use quick_xml::events::{BytesStart, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// // Remember, that \ at the end of string literal strips
+/// // all space characters to the first non-space character
+/// let mut reader = Reader::from_str("\
+///     <element a1 = 'val1' a2=\"val2\" />\
+///     <element a1 = 'val1' a2=\"val2\" >"
+/// );
+/// let content = "element a1 = 'val1' a2=\"val2\" ";
+/// let event = BytesStart::from_content(content, 7);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Empty(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Start(event.borrow()));
+/// // deref coercion of &BytesStart to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 ///
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
@@ -351,6 +373,26 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<?` and `?>`.
+///
+/// Note, that inner text will not contain `?>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesDecl, BytesStart, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<?xml version = '1.0' ?>");
+/// let content = "xml version = '1.0' ";
+/// let event = BytesDecl::from_start(BytesStart::from_content(content, 3));
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
+/// // deref coercion of &BytesDecl to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
     content: BytesStart<'a>,
@@ -611,7 +653,38 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A struct to manage `Event::End` events
+/// Closing tag data (`Event::End`): `</name>`.
+///
+/// The name can be accessed using the [`name`] or [`local_name`] methods.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `</` and `>`.
+///
+/// Note, that inner text will not contain `>` character inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesEnd, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str(r#"<element></element a1 = 'val1' a2="val2" >"#);
+/// // Note, that this entire string considered as a .name()
+/// let content = "element a1 = 'val1' a2=\"val2\" ";
+/// let event = BytesEnd::new(content);
+///
+/// reader.config_mut().trim_markup_names_in_closing_tags = false;
+/// reader.config_mut().check_end_names = false;
+/// reader.read_event().unwrap(); // Skip `<element>`
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::End(event.borrow()));
+/// assert_eq!(event.name().as_ref(), content.as_bytes());
+/// // deref coercion of &BytesEnd to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+///
+/// [`name`]: Self::name
+/// [`local_name`]: Self::local_name
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesEnd<'a> {
     name: Cow<'a, [u8]>,
@@ -701,7 +774,36 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Data from various events (most notably, `Event::Text`) that stored in XML
-/// in escaped form. Internally data is stored in escaped form
+/// in escaped form. Internally data is stored in escaped form.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event. In case of comment this is everything
+/// between `<!--` and `-->` and the text of comment will not contain `-->` inside.
+/// In case of DTD this is everything between `<!DOCTYPE` + spaces and closing `>`
+/// (i.e. in case of DTD the first character is never space):
+///
+/// ```
+/// # use quick_xml::events::{BytesText, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// // Remember, that \ at the end of string literal strips
+/// // all space characters to the first non-space character
+/// let mut reader = Reader::from_str("\
+///     <!DOCTYPE comment or text >\
+///     comment or text \
+///     <!--comment or text -->"
+/// );
+/// let content = "comment or text ";
+/// let event = BytesText::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::DocType(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Text(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
+/// // deref coercion of &BytesText to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesText<'a> {
     /// Escaped then encoded content of the event. Content is encoded in the XML
@@ -843,7 +945,27 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// CDATA content contains unescaped data from the reader. If you want to write them as a text,
-/// [convert](Self::escape) it to [`BytesText`]
+/// [convert](Self::escape) it to [`BytesText`].
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<![CDATA[` and `]]>`.
+///
+/// Note, that inner text will not contain `]]>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesCData, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<![CDATA[ CDATA section ]]>");
+/// let content = " CDATA section ";
+/// let event = BytesCData::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::CData(event.borrow()));
+/// // deref coercion of &BytesCData to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct BytesCData<'a> {
     content: Cow<'a, [u8]>,
@@ -1008,6 +1130,26 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// [Processing instructions][PI] (PIs) allow documents to contain instructions for applications.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<?` and `?>`.
+///
+/// Note, that inner text will not contain `?>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesPI, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<?processing instruction >:-<~ ?>");
+/// let content = "processing instruction >:-<~ ";
+/// let event = BytesPI::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::PI(event.borrow()));
+/// // deref coercion of &BytesPI to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 ///
 /// [PI]: https://www.w3.org/TR/xml11/#sec-pi
 #[derive(Clone, Eq, PartialEq)]
