@@ -238,6 +238,146 @@ mod default_namespace {
             vec![(PrefixDeclaration::Default, Namespace(b"www1"))]
         );
     }
+
+    #[test]
+    fn shadowing_empty() {
+        let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
+
+        let mut r = NsReader::from_str(src);
+
+        // <outer xmlns='urn:example:o'>
+        {
+            match r.read_resolved_event() {
+                Ok((ns, Start(e))) => {
+                    assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                    assert_eq!(e.name(), QName(b"e"));
+                }
+                e => panic!("Expected Start event (<outer>), got {:?}", e),
+            }
+
+            let it = r.prefixes();
+            assert_eq!(it.size_hint(), (0, Some(1)));
+            assert_eq!(
+                it.collect::<Vec<_>>(),
+                vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+            );
+        }
+
+        // <inner att1='a' xmlns='urn:example:i' />
+        {
+            let e = match r.read_resolved_event() {
+                Ok((ns, Empty(e))) => {
+                    assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+                    assert_eq!(e.name(), QName(b"e"));
+                    e
+                }
+                e => panic!("Expecting Empty event, got {:?}", e),
+            };
+
+            let mut attrs = e
+                .attributes()
+                .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
+                // we don't care about xmlns attributes for this test
+                .filter(|kv| kv.key.as_namespace_binding().is_none())
+                .map(|Attribute { key: name, value }| {
+                    let (opt_ns, local_name) = r.resolve_attribute(name);
+                    (opt_ns, local_name.into_inner(), value)
+                });
+            // the attribute should _not_ have a namespace name. The default namespace does not
+            // apply to attributes.
+            assert_eq!(
+                attrs.next(),
+                Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            );
+            assert_eq!(attrs.next(), None);
+
+            let it = r.prefixes();
+            assert_eq!(it.size_hint(), (0, Some(2)));
+            assert_eq!(
+                it.collect::<Vec<_>>(),
+                vec![(PrefixDeclaration::Default, Namespace(b"urn:example:i")),]
+            );
+        }
+
+        // </outer>
+        match r.read_resolved_event() {
+            Ok((ns, End(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                assert_eq!(e.name(), QName(b"e"));
+            }
+            e => panic!("Expected End event (<outer>), got {:?}", e),
+        }
+        let it = r.prefixes();
+        assert_eq!(it.size_hint(), (0, Some(1)));
+        assert_eq!(
+            it.collect::<Vec<_>>(),
+            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
+        );
+    }
+
+    #[test]
+    fn shadowing_expanded() {
+        let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
+
+        let mut r = NsReader::from_str(src);
+        r.config_mut().expand_empty_elements = true;
+
+        // <outer xmlns='urn:example:o'>
+        {
+            match r.read_resolved_event() {
+                Ok((ns, Start(e))) => {
+                    assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                    assert_eq!(e.name(), QName(b"e"));
+                }
+                e => panic!("Expected Start event (<outer>), got {:?}", e),
+            }
+        }
+
+        // <inner att1='a' xmlns='urn:example:i' />
+        {
+            let e = match r.read_resolved_event() {
+                Ok((ns, Start(e))) => {
+                    assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+                    assert_eq!(e.name(), QName(b"e"));
+                    e
+                }
+                e => panic!("Expecting Start event (<inner>), got {:?}", e),
+            };
+            let mut attrs = e
+                .attributes()
+                .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
+                // we don't care about xmlns attributes for this test
+                .filter(|kv| kv.key.as_namespace_binding().is_none())
+                .map(|Attribute { key: name, value }| {
+                    let (opt_ns, local_name) = r.resolve_attribute(name);
+                    (opt_ns, local_name.into_inner(), value)
+                });
+            // the attribute should _not_ have a namespace name. The default namespace does not
+            // apply to attributes.
+            assert_eq!(
+                attrs.next(),
+                Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
+            );
+            assert_eq!(attrs.next(), None);
+        }
+
+        // virtual </inner>
+        match r.read_resolved_event() {
+            Ok((ns, End(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
+                assert_eq!(e.name(), QName(b"e"));
+            }
+            e => panic!("Expected End event (</inner>), got {:?}", e),
+        }
+        // </outer>
+        match r.read_resolved_event() {
+            Ok((ns, End(e))) => {
+                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
+                assert_eq!(e.name(), QName(b"e"));
+            }
+            e => panic!("Expected End event (</outer>), got {:?}", e),
+        }
+    }
 }
 
 /// Single empty element with qualified attributes.
@@ -334,146 +474,6 @@ fn attributes_empty_ns_expanded() {
     match r.read_resolved_event() {
         Ok((Unbound, End(e))) => assert_eq!(e.name(), QName(b"a")),
         e => panic!("Expecting End event, got {:?}", e),
-    }
-}
-
-#[test]
-fn default_ns_shadowing_empty() {
-    let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
-
-    let mut r = NsReader::from_str(src);
-
-    // <outer xmlns='urn:example:o'>
-    {
-        match r.read_resolved_event() {
-            Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
-            }
-            e => panic!("Expected Start event (<outer>), got {:?}", e),
-        }
-
-        let it = r.prefixes();
-        assert_eq!(it.size_hint(), (0, Some(1)));
-        assert_eq!(
-            it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
-        );
-    }
-
-    // <inner att1='a' xmlns='urn:example:i' />
-    {
-        let e = match r.read_resolved_event() {
-            Ok((ns, Empty(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), QName(b"e"));
-                e
-            }
-            e => panic!("Expecting Empty event, got {:?}", e),
-        };
-
-        let mut attrs = e
-            .attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| kv.key.as_namespace_binding().is_none())
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_attribute(name);
-                (opt_ns, local_name.into_inner(), value)
-            });
-        // the attribute should _not_ have a namespace name. The default namespace does not
-        // apply to attributes.
-        assert_eq!(
-            attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
-        );
-        assert_eq!(attrs.next(), None);
-
-        let it = r.prefixes();
-        assert_eq!(it.size_hint(), (0, Some(2)));
-        assert_eq!(
-            it.collect::<Vec<_>>(),
-            vec![(PrefixDeclaration::Default, Namespace(b"urn:example:i")),]
-        );
-    }
-
-    // </outer>
-    match r.read_resolved_event() {
-        Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), QName(b"e"));
-        }
-        e => panic!("Expected End event (<outer>), got {:?}", e),
-    }
-    let it = r.prefixes();
-    assert_eq!(it.size_hint(), (0, Some(1)));
-    assert_eq!(
-        it.collect::<Vec<_>>(),
-        vec![(PrefixDeclaration::Default, Namespace(b"urn:example:o"))]
-    );
-}
-
-#[test]
-fn default_ns_shadowing_expanded() {
-    let src = "<e xmlns='urn:example:o'><e att1='a' xmlns='urn:example:i' /></e>";
-
-    let mut r = NsReader::from_str(src);
-    r.config_mut().expand_empty_elements = true;
-
-    // <outer xmlns='urn:example:o'>
-    {
-        match r.read_resolved_event() {
-            Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-                assert_eq!(e.name(), QName(b"e"));
-            }
-            e => panic!("Expected Start event (<outer>), got {:?}", e),
-        }
-    }
-
-    // <inner att1='a' xmlns='urn:example:i' />
-    {
-        let e = match r.read_resolved_event() {
-            Ok((ns, Start(e))) => {
-                assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-                assert_eq!(e.name(), QName(b"e"));
-                e
-            }
-            e => panic!("Expecting Start event (<inner>), got {:?}", e),
-        };
-        let mut attrs = e
-            .attributes()
-            .map(|ar| ar.expect("Expecting attribute parsing to succeed."))
-            // we don't care about xmlns attributes for this test
-            .filter(|kv| kv.key.as_namespace_binding().is_none())
-            .map(|Attribute { key: name, value }| {
-                let (opt_ns, local_name) = r.resolve_attribute(name);
-                (opt_ns, local_name.into_inner(), value)
-            });
-        // the attribute should _not_ have a namespace name. The default namespace does not
-        // apply to attributes.
-        assert_eq!(
-            attrs.next(),
-            Some((Unbound, &b"att1"[..], Cow::Borrowed(&b"a"[..])))
-        );
-        assert_eq!(attrs.next(), None);
-    }
-
-    // virtual </inner>
-    match r.read_resolved_event() {
-        Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:i")));
-            assert_eq!(e.name(), QName(b"e"));
-        }
-        e => panic!("Expected End event (</inner>), got {:?}", e),
-    }
-    // </outer>
-    match r.read_resolved_event() {
-        Ok((ns, End(e))) => {
-            assert_eq!(ns, Bound(Namespace(b"urn:example:o")));
-            assert_eq!(e.name(), QName(b"e"));
-        }
-        e => panic!("Expected End event (</outer>), got {:?}", e),
     }
 }
 
