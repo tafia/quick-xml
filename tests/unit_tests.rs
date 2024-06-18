@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::io::Cursor;
 use std::str::from_utf8;
 
 use quick_xml::events::attributes::{AttrError, Attribute};
@@ -169,7 +168,7 @@ fn test_writer() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -177,7 +176,7 @@ fn test_writer() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
@@ -187,7 +186,7 @@ fn test_writer_borrow() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer.xml").trim();
     let mut reader = Reader::from_str(txt);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -195,7 +194,7 @@ fn test_writer_borrow() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
@@ -205,7 +204,7 @@ fn test_writer_indent() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent.xml");
     let mut reader = Reader::from_str(txt);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -213,7 +212,7 @@ fn test_writer_indent() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
@@ -223,7 +222,7 @@ fn test_writer_indent_cdata() -> Result<()> {
     let txt = include_str!("../tests/documents/test_writer_indent_cdata.xml");
     let mut reader = Reader::from_str(txt);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 4);
+    let mut writer = Writer::new_with_indent(Vec::new(), b' ', 4);
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -231,7 +230,7 @@ fn test_writer_indent_cdata() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), txt);
     Ok(())
 }
@@ -241,7 +240,7 @@ fn test_write_empty_element_attrs() -> Result<()> {
     let str_from = r#"<source attr="val"/>"#;
     let expected = r#"<source attr="val"/>"#;
     let mut reader = Reader::from_str(str_from);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -249,7 +248,7 @@ fn test_write_empty_element_attrs() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), expected);
     Ok(())
 }
@@ -262,7 +261,7 @@ fn test_write_attrs() -> Result<()> {
     let expected = r#"<copy attr="val" a="b" c="d" x="y&quot;z"></copy>"#;
     let mut reader = Reader::from_str(str_from);
     reader.config_mut().trim_text(true);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         let event = match reader.read_event()? {
             Eof => break,
@@ -280,7 +279,7 @@ fn test_write_attrs() -> Result<()> {
         assert!(writer.write_event(event).is_ok());
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), expected);
     Ok(())
 }
@@ -329,7 +328,7 @@ fn test_read_write_roundtrip() -> Result<()> {
     "#;
 
     let mut reader = Reader::from_str(input);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -337,7 +336,7 @@ fn test_read_write_roundtrip() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
     Ok(())
 }
@@ -354,7 +353,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
     "#;
 
     let mut reader = Reader::from_str(input);
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(Vec::new());
     loop {
         match reader.read_event()? {
             Eof => break,
@@ -366,7 +365,7 @@ fn test_read_write_roundtrip_escape_text() -> Result<()> {
         }
     }
 
-    let result = writer.into_inner().into_inner();
+    let result = writer.into_inner();
     assert_eq!(String::from_utf8(result).unwrap(), input);
     Ok(())
 }
