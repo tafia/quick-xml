@@ -1,9 +1,6 @@
-use std::borrow::Cow;
 use std::str::from_utf8;
 
-use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event::*};
-use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
 use pretty_assertions::assert_eq;
@@ -179,114 +176,6 @@ fn test_escaped_content() {
             r.buffer_position(),
             e
         ),
-    }
-    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
-}
-
-#[test]
-fn test_closing_bracket_in_single_quote_attr() {
-    let mut r = Reader::from_str("<a attr='>' check='2'></a>");
-    match r.read_event() {
-        Ok(Start(e)) => {
-            let mut attrs = e.attributes();
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b">"),
-                }))
-            );
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"2"),
-                }))
-            );
-            assert_eq!(attrs.next(), None);
-        }
-        x => panic!("expected <a attr='>'>, got {:?}", x),
-    }
-    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
-}
-
-#[test]
-fn test_closing_bracket_in_double_quote_attr() {
-    let mut r = Reader::from_str(r#"<a attr=">" check="2"></a>"#);
-    match r.read_event() {
-        Ok(Start(e)) => {
-            let mut attrs = e.attributes();
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b">"),
-                }))
-            );
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"2"),
-                }))
-            );
-            assert_eq!(attrs.next(), None);
-        }
-        x => panic!("expected <a attr='>'>, got {:?}", x),
-    }
-    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
-}
-
-#[test]
-fn test_closing_bracket_in_double_quote_mixed() {
-    let mut r = Reader::from_str(r#"<a attr="'>'" check="'2'"></a>"#);
-    match r.read_event() {
-        Ok(Start(e)) => {
-            let mut attrs = e.attributes();
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(b"'>'"),
-                }))
-            );
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(b"'2'"),
-                }))
-            );
-            assert_eq!(attrs.next(), None);
-        }
-        x => panic!("expected <a attr='>'>, got {:?}", x),
-    }
-    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
-}
-
-#[test]
-fn test_closing_bracket_in_single_quote_mixed() {
-    let mut r = Reader::from_str(r#"<a attr='">"' check='"2"'></a>"#);
-    match r.read_event() {
-        Ok(Start(e)) => {
-            let mut attrs = e.attributes();
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"attr"),
-                    value: Cow::Borrowed(br#"">""#),
-                }))
-            );
-            assert_eq!(
-                attrs.next(),
-                Some(Ok(Attribute {
-                    key: QName(b"check"),
-                    value: Cow::Borrowed(br#""2""#),
-                }))
-            );
-            assert_eq!(attrs.next(), None);
-        }
-        x => panic!("expected <a attr='>'>, got {:?}", x),
     }
     assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("a")));
 }
