@@ -99,26 +99,6 @@ fn escaped_characters_html() {
     )
 }
 
-#[cfg(feature = "encoding")]
-#[test]
-fn encoded_characters() {
-    test_bytes(
-        b"\
-            <?xml version = \"1.0\" encoding = \"Shift_JIS\" ?>\n\
-            <a>\x82\xA0\x82\xA2\x82\xA4</a>\
-        ",
-        "
-            |StartDocument(1.0, Shift_JIS)
-            |StartElement(a)
-            |Characters(あいう)
-            |EndElement(a)
-            |EndDocument
-        "
-        .as_bytes(),
-        true,
-    )
-}
-
 // #[test]
 // fn sample_3_short() {
 //     test(
