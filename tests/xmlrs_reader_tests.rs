@@ -178,53 +178,6 @@ fn sample_ns_short() {
     );
 }
 
-#[test]
-fn issue_105_unexpected_double_dash() {
-    test(
-        r#"<hello>-- </hello>"#,
-        r#"
-            |StartElement(hello)
-            |Characters(-- )
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        false,
-    );
-
-    test(
-        r#"<hello>--</hello>"#,
-        r#"
-            |StartElement(hello)
-            |Characters(--)
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        false,
-    );
-
-    test(
-        r#"<hello>--></hello>"#,
-        r#"
-            |StartElement(hello)
-            |Characters(-->)
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        false,
-    );
-
-    test(
-        r#"<hello><![CDATA[--]]></hello>"#,
-        r#"
-            |StartElement(hello)
-            |CData(--)
-            |EndElement(hello)
-            |EndDocument
-        "#,
-        false,
-    );
-}
-
 #[track_caller]
 fn test(input: &str, output: &str, trim: bool) {
     test_bytes(input.as_bytes(), output.as_bytes(), trim);

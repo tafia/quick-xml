@@ -211,3 +211,48 @@ fn clone_state() {
     assert!(matches!(cloned.read_event().unwrap(), Text(_)));
     assert!(matches!(cloned.read_event().unwrap(), End(_)));
 }
+
+/// Ported tests from xml-rs crate from function `issue_105_unexpected_double_dash`
+mod double_dash {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn text1() {
+        let mut r = Reader::from_str("<hello>-- </hello>");
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("hello")));
+        assert_eq!(r.read_event().unwrap(), Text(BytesText::new("-- ")));
+        assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("hello")));
+    }
+
+    #[test]
+    fn text2() {
+        let mut r = Reader::from_str("<hello>--</hello>");
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("hello")));
+        assert_eq!(r.read_event().unwrap(), Text(BytesText::new("--")));
+        assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("hello")));
+    }
+
+    #[test]
+    fn text3() {
+        let mut r = Reader::from_str("<hello>--></hello>");
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("hello")));
+        assert_eq!(
+            r.read_event().unwrap(),
+            Text(BytesText::from_escaped("-->"))
+        );
+        assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("hello")));
+    }
+
+    #[test]
+    fn cdata() {
+        let mut r = Reader::from_str("<hello><![CDATA[--]]></hello>");
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("hello")));
+        assert_eq!(r.read_event().unwrap(), CData(BytesCData::new("--")));
+        assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("hello")));
+    }
+}
