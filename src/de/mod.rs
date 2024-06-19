@@ -2165,8 +2165,9 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
         replace(&mut self.lookahead, self.reader.next())
     }
 
+    /// Returns `true` when next event is not a text event in any form.
     #[inline(always)]
-    const fn need_trim_end(&self) -> bool {
+    const fn current_event_is_last_text(&self) -> bool {
         // If next event is a text or CDATA, we should not trim trailing spaces
         !matches!(
             self.lookahead,
@@ -2182,16 +2183,15 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     /// [`CData`]: PayloadEvent::CData
     fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<DeEvent<'i>, DeError> {
         loop {
-            match self.lookahead {
-                Ok(PayloadEvent::Text(_) | PayloadEvent::CData(_)) => {
-                    let text = self.next_text()?;
-
-                    let mut s = result.into_owned();
-                    s += &text;
-                    result = Cow::Owned(s);
-                }
-                _ => break,
+            if self.current_event_is_last_text() {
+                break;
             }
+
+            let text = self.next_text()?;
+
+            let mut s = result.into_owned();
+            s += &text;
+            result = Cow::Owned(s);
         }
         Ok(DeEvent::Text(Text { text: result }))
     }
@@ -2209,7 +2209,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     fn next_text(&mut self) -> Result<Cow<'i, str>, DeError> {
         match self.next_impl()? {
             PayloadEvent::Text(mut e) => {
-                if self.need_trim_end() {
+                if self.current_event_is_last_text() {
                     e.inplace_trim_end();
                 }
                 Ok(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
@@ -2228,7 +2228,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
                 PayloadEvent::Text(mut e) => {
-                    if self.need_trim_end() && e.inplace_trim_end() {
+                    if self.current_event_is_last_text() && e.inplace_trim_end() {
                         continue;
                     }
                     self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
