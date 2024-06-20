@@ -48,11 +48,14 @@
   - `SliceReader::get_ref()`
   - `Writer::get_ref()`
   - `Writer::new()`
+- [#763]: Hide `quick_xml::escape::resolve_html5_entity` under `escape-html` feature again.
+  This function has significant influence to the compilation time (10+ seconds or 5x times)
 
 [#650]: https://github.com/tafia/quick-xml/issues/650
 [#755]: https://github.com/tafia/quick-xml/pull/755
 [#758]: https://github.com/tafia/quick-xml/pull/758
 [#759]: https://github.com/tafia/quick-xml/pull/759
+[#763]: https://github.com/tafia/quick-xml/issues/763
 
 
 ## 0.32.0 -- 2024-06-10

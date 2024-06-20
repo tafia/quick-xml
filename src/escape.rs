@@ -328,10 +328,14 @@ pub const fn resolve_xml_entity(entity: &str) -> Option<&'static str> {
 }
 
 /// Resolves all HTML5 entities. For complete list see <https://dev.w3.org/html5/html-author/charref>.
+#[cfg(feature = "escape-html")]
 pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     // imported from https://dev.w3.org/html5/html-author/charref
     // match over strings are not allowed in const functions
     //TODO: automate up-to-dating using https://html.spec.whatwg.org/entities.json
+    //TODO: building this function increases compilation time by 10+ seconds (or 5x times)
+    // Maybe this is because of very long match
+    // See https://github.com/tafia/quick-xml/issues/763
     let s = match entity.as_bytes() {
         b"Tab" => "\u{09}",
         b"NewLine" => "\u{0A}",
