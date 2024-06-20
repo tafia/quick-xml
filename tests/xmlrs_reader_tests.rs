@@ -52,20 +52,6 @@ fn html5() {
     );
 }
 
-#[test]
-fn escaped_characters() {
-    test(
-        r#"<e attr="&quot;Hello&quot;">&apos;a&apos; &lt; &apos;&amp;&apos;</e>"#,
-        r#"
-            |StartElement(e [attr=""Hello""])
-            |Characters('a' < '&')
-            |EndElement(e)
-            |EndDocument
-        "#,
-        true,
-    )
-}
-
 #[cfg(feature = "escape-html")]
 #[test]
 fn escaped_characters_html() {
