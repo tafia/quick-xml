@@ -482,7 +482,10 @@ mod test {
             let mut buf = Vec::new();
 
             assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event_into(&mut buf).unwrap();
+            assert!(matches!(
+                reader.read_event_into(&mut buf).unwrap(),
+                Event::Decl(_)
+            ));
             assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
 
             assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
@@ -497,10 +500,16 @@ mod test {
             let mut buf = Vec::new();
 
             assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event_into(&mut buf).unwrap();
+            assert!(matches!(
+                reader.read_event_into(&mut buf).unwrap(),
+                Event::Decl(_)
+            ));
             assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
-            reader.read_event_into(&mut buf).unwrap();
+            assert!(matches!(
+                reader.read_event_into(&mut buf).unwrap(),
+                Event::Decl(_)
+            ));
             assert_eq!(reader.decoder().encoding(), UTF_16LE);
 
             assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);

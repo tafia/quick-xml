@@ -53,24 +53,6 @@ fn html5() {
 }
 
 #[test]
-fn bom_removed_from_initial_text() {
-    let expected = r#"
-        |Characters(asdf)
-        |StartElement(paired [attr1="value1", attr2="value2"])
-        |Characters(text)
-        |EndElement(paired)
-        |EndDocument
-    "#;
-
-    // BOM right up against the text
-    test(
-        "\u{FEFF}asdf<paired attr1=\"value1\" attr2=\"value2\">text</paired>",
-        expected,
-        true,
-    );
-}
-
-#[test]
 fn escaped_characters() {
     test(
         r#"<e attr="&quot;Hello&quot;">&apos;a&apos; &lt; &apos;&amp;&apos;</e>"#,

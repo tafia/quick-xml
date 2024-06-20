@@ -1,4 +1,4 @@
-use quick_xml::events::Event::*;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::Reader;
 
 mod decode {
@@ -206,4 +206,22 @@ mod detect {
     check_detection!(windows_1258, WINDOWS_1258, "windows-1258");
     check_detection!(x_mac_cyrillic, X_MAC_CYRILLIC, "x-mac-cyrillic");
     check_detection!(x_user_defined, X_USER_DEFINED, "x-user-defined");
+}
+
+#[test]
+fn bom_removed_from_initial_text() {
+    let mut r =
+        Reader::from_str("\u{FEFF}asdf<paired attr1=\"value1\" attr2=\"value2\">text</paired>");
+
+    assert_eq!(r.read_event().unwrap(), Text(BytesText::new("asdf")));
+    assert_eq!(
+        r.read_event().unwrap(),
+        Start(BytesStart::from_content(
+            "paired attr1=\"value1\" attr2=\"value2\"",
+            6
+        ))
+    );
+    assert_eq!(r.read_event().unwrap(), Text(BytesText::new("text")));
+    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("paired")));
+    assert_eq!(r.read_event().unwrap(), Eof);
 }
