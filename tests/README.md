@@ -1,4 +1,4 @@
-# Document descrptions
+# Document descriptions
 
 document.xml
     medium length, mostly empty tags, a few short attributes per element, no escaping
@@ -25,16 +25,7 @@ sample_1_short.txt
 sample_1_full.txt
 sample_2.xml
 sample_2_short.txt
-sample_3.xml
 sample_2_full.txt
-sample_3_short.txt
-sample_3_full.txt
-sample_4.xml
-sample_4_short.txt
-sample_4_full.txt
-sample_5_short.txt
-sample_5_utf16bom.xml
-sample_5_full.txt
 sample_ns_short.txt
 sample_ns.xml
     short, lots of namespaces, no escapes

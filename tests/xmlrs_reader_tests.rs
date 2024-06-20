@@ -67,56 +67,6 @@ fn escaped_characters_html() {
     )
 }
 
-// #[test]
-// fn sample_3_short() {
-//     test(
-//         include_str!("documents/sample_3.xml"),
-//         include_str!("documents/sample_3_short.txt"),
-//         true
-//     );
-// }
-
-// #[test]
-// fn sample_3_full() {
-//     test(
-//         include_str!("documents/sample_3.xml"),
-//         include_str!("documents/sample_3_full.txt"),
-//         false
-//     );
-// }
-
-// #[test]
-// fn sample_4_short() {
-//     test(
-//         include_str!("documents/sample_4.xml"),
-//         include_str!("documents/sample_4_short.txt"),
-//         true
-//     );
-// }
-
-// #[test]
-// fn sample_4_full() {
-//     test(
-//         include_str!("documents/sample_4.xml"),
-//         include_str!("documents/sample_4_full.txt"),
-//         false
-//     );
-//
-// }
-
-#[test]
-// FIXME: Trips on the first byte-order-mark byte
-// Expected: StartDocument(1.0, utf-16)
-// Found: InvalidUtf8([255, 254]; invalid utf-8 sequence of 1 bytes from index 0)
-#[ignore]
-fn sample_5_short() {
-    test_bytes(
-        include_bytes!("documents/sample_5_utf16bom.xml"),
-        include_bytes!("documents/sample_5_short.txt"),
-        true,
-    );
-}
-
 #[test]
 fn sample_ns_short() {
     test(
