@@ -1,13 +1,3 @@
-> Legend:
-  - feat: A new feature
-  - fix: A bug fix
-  - docs: Documentation only changes
-  - style: White-space, formatting, missing semi-colons, etc
-  - refactor: A code change that neither fixes a bug nor adds a feature
-  - perf: A code change that improves performance
-  - test: Adding missing tests
-  - chore: Changes to the build process or auxiliary tools/libraries/documentation
-
 ## Unreleased
 
 ### New Features
@@ -705,6 +695,18 @@ serde >= 1.0.181
 [#456]: https://github.com/tafia/quick-xml/pull/456
 [#459]: https://github.com/tafia/quick-xml/pull/459
 [#467]: https://github.com/tafia/quick-xml/pull/467
+
+----------------------------------------------------------------------------------------------------
+
+> Legend:
+> - feat: A new feature
+> - fix: A bug fix
+> - docs: Documentation only changes
+> - style: White-space, formatting, missing semi-colons, etc
+> - refactor: A code change that neither fixes a bug nor adds a feature
+> - perf: A code change that improves performance
+> - test: Adding missing tests
+> - chore: Changes to the build process or auxiliary tools/libraries/documentation
 
 
 ## 0.23.1 -- 2022-09-11
