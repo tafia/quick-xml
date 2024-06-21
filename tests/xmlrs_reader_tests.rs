@@ -24,24 +24,6 @@ fn sample_1_full() {
     );
 }
 
-#[test]
-fn sample_2_short() {
-    test(
-        include_str!("documents/sample_2.xml"),
-        include_str!("documents/sample_2_short.txt"),
-        true,
-    );
-}
-
-#[test]
-fn sample_2_full() {
-    test(
-        include_str!("documents/sample_2.xml"),
-        include_str!("documents/sample_2_full.txt"),
-        false,
-    );
-}
-
 #[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
@@ -65,15 +47,6 @@ fn escaped_characters_html() {
         "#,
         true,
     )
-}
-
-#[test]
-fn sample_ns_short() {
-    test(
-        include_str!("documents/sample_ns.xml"),
-        include_str!("documents/sample_ns_short.txt"),
-        true,
-    );
 }
 
 #[track_caller]

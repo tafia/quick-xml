@@ -23,10 +23,6 @@ sample_1.xml
     short, mix of attributes and text, lots of escapes
 sample_1_short.txt
 sample_1_full.txt
-sample_2.xml
-sample_2_short.txt
-sample_2_full.txt
-sample_ns_short.txt
 sample_ns.xml
     short, lots of namespaces, no escapes
 sample_rss.xml
