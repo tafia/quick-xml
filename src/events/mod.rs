@@ -56,12 +56,34 @@ use crate::utils::CowRef;
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{Attribute, Attributes};
 
-/// Opening tag data (`Event::Start`), with optional attributes.
-///
-/// `<name attr="value">`.
+/// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
 ///
 /// The name can be accessed using the [`name`] or [`local_name`] methods.
 /// An iterator over the attributes is returned by the [`attributes`] method.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<` and `>` or `/>`:
+///
+/// ```
+/// # use quick_xml::events::{BytesStart, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// // Remember, that \ at the end of string literal strips
+/// // all space characters to the first non-space character
+/// let mut reader = Reader::from_str("\
+///     <element a1 = 'val1' a2=\"val2\" />\
+///     <element a1 = 'val1' a2=\"val2\" >"
+/// );
+/// let content = "element a1 = 'val1' a2=\"val2\" ";
+/// let event = BytesStart::from_content(content, 7);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Empty(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Start(event.borrow()));
+/// // deref coercion of &BytesStart to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 ///
 /// [`name`]: Self::name
 /// [`local_name`]: Self::local_name
@@ -348,9 +370,676 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Closing tag data (`Event::End`): `</name>`.
+///
+/// The name can be accessed using the [`name`] or [`local_name`] methods.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `</` and `>`.
+///
+/// Note, that inner text will not contain `>` character inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesEnd, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str(r#"<element></element a1 = 'val1' a2="val2" >"#);
+/// // Note, that this entire string considered as a .name()
+/// let content = "element a1 = 'val1' a2=\"val2\" ";
+/// let event = BytesEnd::new(content);
+///
+/// reader.config_mut().trim_markup_names_in_closing_tags = false;
+/// reader.config_mut().check_end_names = false;
+/// reader.read_event().unwrap(); // Skip `<element>`
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::End(event.borrow()));
+/// assert_eq!(event.name().as_ref(), content.as_bytes());
+/// // deref coercion of &BytesEnd to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+///
+/// [`name`]: Self::name
+/// [`local_name`]: Self::local_name
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesEnd<'a> {
+    name: Cow<'a, [u8]>,
+}
+
+impl<'a> BytesEnd<'a> {
+    /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
+    #[inline]
+    pub(crate) const fn wrap(name: Cow<'a, [u8]>) -> Self {
+        BytesEnd { name }
+    }
+
+    /// Creates a new `BytesEnd` borrowing a slice.
+    ///
+    /// # Warning
+    ///
+    /// `name` must be a valid name.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        Self::wrap(str_cow_to_bytes(name))
+    }
+
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesEnd<'static> {
+        BytesEnd {
+            name: Cow::Owned(self.name.into_owned()),
+        }
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesEnd {
+        BytesEnd {
+            name: Cow::Borrowed(&self.name),
+        }
+    }
+
+    /// Gets the undecoded raw tag name, as present in the input stream.
+    #[inline]
+    pub fn name(&self) -> QName {
+        QName(&self.name)
+    }
+
+    /// Gets the undecoded raw local tag name (excluding namespace) as present
+    /// in the input stream.
+    ///
+    /// All content up to and including the first `:` character is removed from the tag name.
+    #[inline]
+    pub fn local_name(&self) -> LocalName {
+        self.name().into()
+    }
+}
+
+impl<'a> Debug for BytesEnd<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesEnd {{ name: ")?;
+        write_cow_string(f, &self.name)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesEnd<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.name
+    }
+}
+
+impl<'a> From<QName<'a>> for BytesEnd<'a> {
+    #[inline]
+    fn from(name: QName<'a>) -> Self {
+        Self::wrap(name.into_inner().into())
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Data from various events (most notably, `Event::Text`) that stored in XML
+/// in escaped form. Internally data is stored in escaped form.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event. In case of comment this is everything
+/// between `<!--` and `-->` and the text of comment will not contain `-->` inside.
+/// In case of DTD this is everything between `<!DOCTYPE` + spaces and closing `>`
+/// (i.e. in case of DTD the first character is never space):
+///
+/// ```
+/// # use quick_xml::events::{BytesText, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// // Remember, that \ at the end of string literal strips
+/// // all space characters to the first non-space character
+/// let mut reader = Reader::from_str("\
+///     <!DOCTYPE comment or text >\
+///     comment or text \
+///     <!--comment or text -->"
+/// );
+/// let content = "comment or text ";
+/// let event = BytesText::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::DocType(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Text(event.borrow()));
+/// assert_eq!(reader.read_event().unwrap(), Event::Comment(event.borrow()));
+/// // deref coercion of &BytesText to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesText<'a> {
+    /// Escaped then encoded content of the event. Content is encoded in the XML
+    /// document encoding when event comes from the reader and should be in the
+    /// document encoding when event passed to the writer
+    content: Cow<'a, [u8]>,
+    /// Encoding in which the `content` is stored inside the event
+    decoder: Decoder,
+}
+
+impl<'a> BytesText<'a> {
+    /// Creates a new `BytesText` from an escaped byte sequence in the specified encoding.
+    #[inline]
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
+        Self {
+            content: content.into(),
+            decoder,
+        }
+    }
+
+    /// Creates a new `BytesText` from an escaped string.
+    #[inline]
+    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
+    }
+
+    /// Creates a new `BytesText` from a string. The string is expected not to
+    /// be escaped.
+    #[inline]
+    pub fn new(content: &'a str) -> Self {
+        Self::from_escaped(escape(content))
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesText<'static> {
+        BytesText {
+            content: self.content.into_owned().into(),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesText` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesText {
+        BytesText {
+            content: Cow::Borrowed(&self.content),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Decodes then unescapes the content of the event.
+    ///
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
+    pub fn unescape(&self) -> Result<Cow<'a, str>> {
+        self.unescape_with(resolve_predefined_entity)
+    }
+
+    /// Decodes then unescapes the content of the event with custom entities.
+    ///
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
+    pub fn unescape_with<'entity>(
+        &self,
+        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
+    ) -> Result<Cow<'a, str>> {
+        let decoded = match &self.content {
+            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
+        };
+
+        match unescape_with(&decoded, resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            Cow::Owned(s) => Ok(s.into()),
+        }
+    }
+
+    /// Removes leading XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_start(&mut self) -> bool {
+        self.content = trim_cow(
+            replace(&mut self.content, Cow::Borrowed(b"")),
+            trim_xml_start,
+        );
+        self.content.is_empty()
+    }
+
+    /// Removes trailing XML whitespace bytes from text content.
+    ///
+    /// Returns `true` if content is empty after that
+    pub fn inplace_trim_end(&mut self) -> bool {
+        self.content = trim_cow(replace(&mut self.content, Cow::Borrowed(b"")), trim_xml_end);
+        self.content.is_empty()
+    }
+}
+
+impl<'a> Debug for BytesText<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesText {{ content: ")?;
+        write_cow_string(f, &self.content)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesText<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let s = <&str>::arbitrary(u)?;
+        if !s.chars().all(char::is_alphanumeric) {
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+        Ok(Self::new(s))
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// CDATA content contains unescaped data from the reader. If you want to write them as a text,
+/// [convert](Self::escape) it to [`BytesText`].
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<![CDATA[` and `]]>`.
+///
+/// Note, that inner text will not contain `]]>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesCData, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<![CDATA[ CDATA section ]]>");
+/// let content = " CDATA section ";
+/// let event = BytesCData::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::CData(event.borrow()));
+/// // deref coercion of &BytesCData to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesCData<'a> {
+    content: Cow<'a, [u8]>,
+    /// Encoding in which the `content` is stored inside the event
+    decoder: Decoder,
+}
+
+impl<'a> BytesCData<'a> {
+    /// Creates a new `BytesCData` from a byte sequence in the specified encoding.
+    #[inline]
+    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
+        Self {
+            content: content.into(),
+            decoder,
+        }
+    }
+
+    /// Creates a new `BytesCData` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` must not contain the `]]>` sequence.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesCData<'static> {
+        BytesCData {
+            content: self.content.into_owned().into(),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesCData` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesCData {
+        BytesCData {
+            content: Cow::Borrowed(&self.content),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    /// | `'`       | `&apos;`
+    /// | `"`       | `&quot;`
+    pub fn escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
+        Ok(BytesText::wrap(
+            match escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML.
+    ///
+    /// In XML text content, it is allowed (though not recommended) to leave
+    /// the quote special characters `"` and `'` unescaped.
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `>`       | `&gt;`
+    /// | `&`       | `&amp;`
+    pub fn partial_escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
+        Ok(BytesText::wrap(
+            match partial_escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
+    }
+
+    /// Converts this CDATA content to an escaped version, that can be written
+    /// as an usual text in XML. This method escapes only those characters that
+    /// must be escaped according to the [specification].
+    ///
+    /// This function performs following replacements:
+    ///
+    /// | Character | Replacement
+    /// |-----------|------------
+    /// | `<`       | `&lt;`
+    /// | `&`       | `&amp;`
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#syntax
+    pub fn minimal_escape(self) -> Result<BytesText<'a>> {
+        let decoded = self.decode()?;
+        Ok(BytesText::wrap(
+            match minimal_escape(&decoded) {
+                // Because result is borrowed, no replacements was done and we can use original content
+                Cow::Borrowed(_) => self.content,
+                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
+            },
+            Decoder::utf8(),
+        ))
+    }
+
+    /// Gets content of this text buffer in the specified encoding
+    pub(crate) fn decode(&self) -> Result<Cow<'a, str>> {
+        Ok(match &self.content {
+            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
+        })
+    }
+}
+
+impl<'a> Debug for BytesCData<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesCData {{ content: ")?;
+        write_cow_string(f, &self.content)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesCData<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// [Processing instructions][PI] (PIs) allow documents to contain instructions for applications.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<?` and `?>`.
+///
+/// Note, that inner text will not contain `?>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesPI, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<?processing instruction >:-<~ ?>");
+/// let content = "processing instruction >:-<~ ";
+/// let event = BytesPI::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::PI(event.borrow()));
+/// // deref coercion of &BytesPI to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+///
+/// [PI]: https://www.w3.org/TR/xml11/#sec-pi
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesPI<'a> {
+    content: BytesStart<'a>,
+}
+
+impl<'a> BytesPI<'a> {
+    /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
+    #[inline]
+    pub(crate) const fn wrap(content: &'a [u8], target_len: usize) -> Self {
+        Self {
+            content: BytesStart::wrap(content, target_len),
+        }
+    }
+
+    /// Creates a new `BytesPI` from a string.
+    ///
+    /// # Warning
+    ///
+    /// `content` must not contain the `?>` sequence.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
+        let buf = str_cow_to_bytes(content);
+        let name_len = name_len(&buf);
+        Self {
+            content: BytesStart { buf, name_len },
+        }
+    }
+
+    /// Ensures that all data is owned to extend the object's lifetime if
+    /// necessary.
+    #[inline]
+    pub fn into_owned(self) -> BytesPI<'static> {
+        BytesPI {
+            content: self.content.into_owned().into(),
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesPI` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content.buf
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesPI {
+        BytesPI {
+            content: self.content.borrow(),
+        }
+    }
+
+    /// A target used to identify the application to which the instruction is directed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::BytesPI;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// assert_eq!(instruction.target(), b"xml-stylesheet");
+    /// ```
+    #[inline]
+    pub fn target(&self) -> &[u8] {
+        self.content.name().0
+    }
+
+    /// Content of the processing instruction. Contains everything between target
+    /// name and the end of the instruction. A direct consequence is that the first
+    /// character is always a space character.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::BytesPI;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// assert_eq!(instruction.content(), br#" href="style.css""#);
+    /// ```
+    #[inline]
+    pub fn content(&self) -> &[u8] {
+        self.content.attributes_raw()
+    }
+
+    /// A view of the processing instructions' content as a list of key-value pairs.
+    ///
+    /// Key-value pairs are used in some processing instructions, for example in
+    /// `<?xml-stylesheet?>`.
+    ///
+    /// Returned iterator does not validate attribute values as may required by
+    /// target's rules. For example, it doesn't check that substring `?>` is not
+    /// present in the attribute value. That shouldn't be the problem when event
+    /// is produced by the reader, because reader detects end of processing instruction
+    /// by the first `?>` sequence, as required by the specification, and therefore
+    /// this sequence cannot appear inside it.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use std::borrow::Cow;
+    /// use quick_xml::events::attributes::Attribute;
+    /// use quick_xml::events::BytesPI;
+    /// use quick_xml::name::QName;
+    ///
+    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
+    /// for attr in instruction.attributes() {
+    ///     assert_eq!(attr, Ok(Attribute {
+    ///         key: QName(b"href"),
+    ///         value: Cow::Borrowed(b"style.css"),
+    ///     }));
+    /// }
+    /// ```
+    #[inline]
+    pub fn attributes(&self) -> Attributes {
+        self.content.attributes()
+    }
+}
+
+impl<'a> Debug for BytesPI<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesPI {{ content: ")?;
+        write_cow_string(f, &self.content.buf)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesPI<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        return <&str as arbitrary::Arbitrary>::size_hint(depth);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// An XML declaration (`Event::Decl`).
 ///
 /// [W3C XML 1.1 Prolog and Document Type Declaration](http://w3.org/TR/xml11/#sec-prolog-dtd)
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `<?` and `?>`.
+///
+/// Note, that inner text will not contain `?>` sequence inside:
+///
+/// ```
+/// # use quick_xml::events::{BytesDecl, BytesStart, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str("<?xml version = '1.0' ?>");
+/// let content = "xml version = '1.0' ";
+/// let event = BytesDecl::from_start(BytesStart::from_content(content, 3));
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::Decl(event.borrow()));
+/// // deref coercion of &BytesDecl to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BytesDecl<'a> {
     content: BytesStart<'a>,
@@ -604,553 +1293,6 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
         ))
     }
 
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// A struct to manage `Event::End` events
-#[derive(Clone, Eq, PartialEq)]
-pub struct BytesEnd<'a> {
-    name: Cow<'a, [u8]>,
-}
-
-impl<'a> BytesEnd<'a> {
-    /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
-    #[inline]
-    pub(crate) const fn wrap(name: Cow<'a, [u8]>) -> Self {
-        BytesEnd { name }
-    }
-
-    /// Creates a new `BytesEnd` borrowing a slice.
-    ///
-    /// # Warning
-    ///
-    /// `name` must be a valid name.
-    #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
-        Self::wrap(str_cow_to_bytes(name))
-    }
-
-    /// Converts the event into an owned event.
-    pub fn into_owned(self) -> BytesEnd<'static> {
-        BytesEnd {
-            name: Cow::Owned(self.name.into_owned()),
-        }
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesEnd {
-        BytesEnd {
-            name: Cow::Borrowed(&self.name),
-        }
-    }
-
-    /// Gets the undecoded raw tag name, as present in the input stream.
-    #[inline]
-    pub fn name(&self) -> QName {
-        QName(&self.name)
-    }
-
-    /// Gets the undecoded raw local tag name (excluding namespace) as present
-    /// in the input stream.
-    ///
-    /// All content up to and including the first `:` character is removed from the tag name.
-    #[inline]
-    pub fn local_name(&self) -> LocalName {
-        self.name().into()
-    }
-}
-
-impl<'a> Debug for BytesEnd<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "BytesEnd {{ name: ")?;
-        write_cow_string(f, &self.name)?;
-        write!(f, " }}")
-    }
-}
-
-impl<'a> Deref for BytesEnd<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.name
-    }
-}
-
-impl<'a> From<QName<'a>> for BytesEnd<'a> {
-    #[inline]
-    fn from(name: QName<'a>) -> Self {
-        Self::wrap(name.into_inner().into())
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesEnd<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self::new(<&str>::arbitrary(u)?))
-    }
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Data from various events (most notably, `Event::Text`) that stored in XML
-/// in escaped form. Internally data is stored in escaped form
-#[derive(Clone, Eq, PartialEq)]
-pub struct BytesText<'a> {
-    /// Escaped then encoded content of the event. Content is encoded in the XML
-    /// document encoding when event comes from the reader and should be in the
-    /// document encoding when event passed to the writer
-    content: Cow<'a, [u8]>,
-    /// Encoding in which the `content` is stored inside the event
-    decoder: Decoder,
-}
-
-impl<'a> BytesText<'a> {
-    /// Creates a new `BytesText` from an escaped byte sequence in the specified encoding.
-    #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
-        Self {
-            content: content.into(),
-            decoder,
-        }
-    }
-
-    /// Creates a new `BytesText` from an escaped string.
-    #[inline]
-    pub fn from_escaped<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
-    }
-
-    /// Creates a new `BytesText` from a string. The string is expected not to
-    /// be escaped.
-    #[inline]
-    pub fn new(content: &'a str) -> Self {
-        Self::from_escaped(escape(content))
-    }
-
-    /// Ensures that all data is owned to extend the object's lifetime if
-    /// necessary.
-    #[inline]
-    pub fn into_owned(self) -> BytesText<'static> {
-        BytesText {
-            content: self.content.into_owned().into(),
-            decoder: self.decoder,
-        }
-    }
-
-    /// Extracts the inner `Cow` from the `BytesText` event container.
-    #[inline]
-    pub fn into_inner(self) -> Cow<'a, [u8]> {
-        self.content
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesText {
-        BytesText {
-            content: Cow::Borrowed(&self.content),
-            decoder: self.decoder,
-        }
-    }
-
-    /// Decodes then unescapes the content of the event.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn unescape(&self) -> Result<Cow<'a, str>> {
-        self.unescape_with(resolve_predefined_entity)
-    }
-
-    /// Decodes then unescapes the content of the event with custom entities.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn unescape_with<'entity>(
-        &self,
-        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<'a, str>> {
-        let decoded = match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        };
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
-    }
-
-    /// Removes leading XML whitespace bytes from text content.
-    ///
-    /// Returns `true` if content is empty after that
-    pub fn inplace_trim_start(&mut self) -> bool {
-        self.content = trim_cow(
-            replace(&mut self.content, Cow::Borrowed(b"")),
-            trim_xml_start,
-        );
-        self.content.is_empty()
-    }
-
-    /// Removes trailing XML whitespace bytes from text content.
-    ///
-    /// Returns `true` if content is empty after that
-    pub fn inplace_trim_end(&mut self) -> bool {
-        self.content = trim_cow(replace(&mut self.content, Cow::Borrowed(b"")), trim_xml_end);
-        self.content.is_empty()
-    }
-}
-
-impl<'a> Debug for BytesText<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "BytesText {{ content: ")?;
-        write_cow_string(f, &self.content)?;
-        write!(f, " }}")
-    }
-}
-
-impl<'a> Deref for BytesText<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.content
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesText<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let s = <&str>::arbitrary(u)?;
-        if !s.chars().all(char::is_alphanumeric) {
-            return Err(arbitrary::Error::IncorrectFormat);
-        }
-        Ok(Self::new(s))
-    }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// CDATA content contains unescaped data from the reader. If you want to write them as a text,
-/// [convert](Self::escape) it to [`BytesText`]
-#[derive(Clone, Eq, PartialEq)]
-pub struct BytesCData<'a> {
-    content: Cow<'a, [u8]>,
-    /// Encoding in which the `content` is stored inside the event
-    decoder: Decoder,
-}
-
-impl<'a> BytesCData<'a> {
-    /// Creates a new `BytesCData` from a byte sequence in the specified encoding.
-    #[inline]
-    pub(crate) fn wrap<C: Into<Cow<'a, [u8]>>>(content: C, decoder: Decoder) -> Self {
-        Self {
-            content: content.into(),
-            decoder,
-        }
-    }
-
-    /// Creates a new `BytesCData` from a string.
-    ///
-    /// # Warning
-    ///
-    /// `content` must not contain the `]]>` sequence.
-    #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
-    }
-
-    /// Ensures that all data is owned to extend the object's lifetime if
-    /// necessary.
-    #[inline]
-    pub fn into_owned(self) -> BytesCData<'static> {
-        BytesCData {
-            content: self.content.into_owned().into(),
-            decoder: self.decoder,
-        }
-    }
-
-    /// Extracts the inner `Cow` from the `BytesCData` event container.
-    #[inline]
-    pub fn into_inner(self) -> Cow<'a, [u8]> {
-        self.content
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesCData {
-        BytesCData {
-            content: Cow::Borrowed(&self.content),
-            decoder: self.decoder,
-        }
-    }
-
-    /// Converts this CDATA content to an escaped version, that can be written
-    /// as an usual text in XML.
-    ///
-    /// This function performs following replacements:
-    ///
-    /// | Character | Replacement
-    /// |-----------|------------
-    /// | `<`       | `&lt;`
-    /// | `>`       | `&gt;`
-    /// | `&`       | `&amp;`
-    /// | `'`       | `&apos;`
-    /// | `"`       | `&quot;`
-    pub fn escape(self) -> Result<BytesText<'a>> {
-        let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
-    }
-
-    /// Converts this CDATA content to an escaped version, that can be written
-    /// as an usual text in XML.
-    ///
-    /// In XML text content, it is allowed (though not recommended) to leave
-    /// the quote special characters `"` and `'` unescaped.
-    ///
-    /// This function performs following replacements:
-    ///
-    /// | Character | Replacement
-    /// |-----------|------------
-    /// | `<`       | `&lt;`
-    /// | `>`       | `&gt;`
-    /// | `&`       | `&amp;`
-    pub fn partial_escape(self) -> Result<BytesText<'a>> {
-        let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match partial_escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
-    }
-
-    /// Converts this CDATA content to an escaped version, that can be written
-    /// as an usual text in XML. This method escapes only those characters that
-    /// must be escaped according to the [specification].
-    ///
-    /// This function performs following replacements:
-    ///
-    /// | Character | Replacement
-    /// |-----------|------------
-    /// | `<`       | `&lt;`
-    /// | `&`       | `&amp;`
-    ///
-    /// [specification]: https://www.w3.org/TR/xml11/#syntax
-    pub fn minimal_escape(self) -> Result<BytesText<'a>> {
-        let decoded = self.decode()?;
-        Ok(BytesText::wrap(
-            match minimal_escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
-                Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
-            },
-            Decoder::utf8(),
-        ))
-    }
-
-    /// Gets content of this text buffer in the specified encoding
-    pub(crate) fn decode(&self) -> Result<Cow<'a, str>> {
-        Ok(match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        })
-    }
-}
-
-impl<'a> Debug for BytesCData<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "BytesCData {{ content: ")?;
-        write_cow_string(f, &self.content)?;
-        write!(f, " }}")
-    }
-}
-
-impl<'a> Deref for BytesCData<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.content
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self::new(<&str>::arbitrary(u)?))
-    }
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        return <&str as arbitrary::Arbitrary>::size_hint(depth);
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// [Processing instructions][PI] (PIs) allow documents to contain instructions for applications.
-///
-/// [PI]: https://www.w3.org/TR/xml11/#sec-pi
-#[derive(Clone, Eq, PartialEq)]
-pub struct BytesPI<'a> {
-    content: BytesStart<'a>,
-}
-
-impl<'a> BytesPI<'a> {
-    /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
-    #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], target_len: usize) -> Self {
-        Self {
-            content: BytesStart::wrap(content, target_len),
-        }
-    }
-
-    /// Creates a new `BytesPI` from a string.
-    ///
-    /// # Warning
-    ///
-    /// `content` must not contain the `?>` sequence.
-    #[inline]
-    pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
-        let buf = str_cow_to_bytes(content);
-        let name_len = name_len(&buf);
-        Self {
-            content: BytesStart { buf, name_len },
-        }
-    }
-
-    /// Ensures that all data is owned to extend the object's lifetime if
-    /// necessary.
-    #[inline]
-    pub fn into_owned(self) -> BytesPI<'static> {
-        BytesPI {
-            content: self.content.into_owned().into(),
-        }
-    }
-
-    /// Extracts the inner `Cow` from the `BytesPI` event container.
-    #[inline]
-    pub fn into_inner(self) -> Cow<'a, [u8]> {
-        self.content.buf
-    }
-
-    /// Converts the event into a borrowed event.
-    #[inline]
-    pub fn borrow(&self) -> BytesPI {
-        BytesPI {
-            content: self.content.borrow(),
-        }
-    }
-
-    /// A target used to identify the application to which the instruction is directed.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::events::BytesPI;
-    ///
-    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
-    /// assert_eq!(instruction.target(), b"xml-stylesheet");
-    /// ```
-    #[inline]
-    pub fn target(&self) -> &[u8] {
-        self.content.name().0
-    }
-
-    /// Content of the processing instruction. Contains everything between target
-    /// name and the end of the instruction. A direct consequence is that the first
-    /// character is always a space character.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use quick_xml::events::BytesPI;
-    ///
-    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
-    /// assert_eq!(instruction.content(), br#" href="style.css""#);
-    /// ```
-    #[inline]
-    pub fn content(&self) -> &[u8] {
-        self.content.attributes_raw()
-    }
-
-    /// A view of the processing instructions' content as a list of key-value pairs.
-    ///
-    /// Key-value pairs are used in some processing instructions, for example in
-    /// `<?xml-stylesheet?>`.
-    ///
-    /// Returned iterator does not validate attribute values as may required by
-    /// target's rules. For example, it doesn't check that substring `?>` is not
-    /// present in the attribute value. That shouldn't be the problem when event
-    /// is produced by the reader, because reader detects end of processing instruction
-    /// by the first `?>` sequence, as required by the specification, and therefore
-    /// this sequence cannot appear inside it.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use pretty_assertions::assert_eq;
-    /// use std::borrow::Cow;
-    /// use quick_xml::events::attributes::Attribute;
-    /// use quick_xml::events::BytesPI;
-    /// use quick_xml::name::QName;
-    ///
-    /// let instruction = BytesPI::new(r#"xml-stylesheet href="style.css""#);
-    /// for attr in instruction.attributes() {
-    ///     assert_eq!(attr, Ok(Attribute {
-    ///         key: QName(b"href"),
-    ///         value: Cow::Borrowed(b"style.css"),
-    ///     }));
-    /// }
-    /// ```
-    #[inline]
-    pub fn attributes(&self) -> Attributes {
-        self.content.attributes()
-    }
-}
-
-impl<'a> Debug for BytesPI<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "BytesPI {{ content: ")?;
-        write_cow_string(f, &self.content.buf)?;
-        write!(f, " }}")
-    }
-}
-
-impl<'a> Deref for BytesPI<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &[u8] {
-        &self.content
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for BytesPI<'a> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self::new(<&str>::arbitrary(u)?))
-    }
     fn size_hint(depth: usize) -> (usize, Option<usize>) {
         return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }

@@ -1854,7 +1854,10 @@ fn test_unescape() {
     assert_eq!(unchanged, Cow::Borrowed("test"));
     assert!(matches!(unchanged, Cow::Borrowed(_)));
 
-    assert_eq!(unescape("&lt;test&gt;").unwrap(), "<test>");
+    assert_eq!(
+        unescape("&lt;&amp;test&apos;&quot;&gt;").unwrap(),
+        "<&test'\">"
+    );
     assert_eq!(unescape("&#x30;").unwrap(), "0");
     assert_eq!(unescape("&#48;").unwrap(), "0");
     assert!(unescape("&foo;").is_err());

@@ -1,4 +1,4 @@
-use quick_xml::events::Event;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::Reader;
 
 mod decode {
@@ -34,10 +34,10 @@ fn test_koi8_r_encoding() {
     r.config_mut().trim_text(true);
     loop {
         match r.read_event_into(&mut buf) {
-            Ok(Event::Text(e)) => {
+            Ok(Text(e)) => {
                 e.unescape().unwrap();
             }
-            Ok(Event::Eof) => break,
+            Ok(Eof) => break,
             _ => (),
         }
     }
@@ -50,6 +50,88 @@ mod detect {
     use encoding_rs::*;
     use pretty_assertions::assert_eq;
 
+    macro_rules! assert_matches {
+        ($number:literal : $left:expr, $pattern:pat_param) => {{
+            let event = $left;
+            if !matches!(event, $pattern) {
+                assert_eq!(
+                    format!("{:#?}", event),
+                    stringify!($pattern),
+                    concat!("Message ", stringify!($number), " is incorrect")
+                );
+            }
+        }};
+    }
+    macro_rules! check_detection {
+        ($test:ident, $enc:ident, $file:literal) => {
+            #[test]
+            fn $test() {
+                let mut r = Reader::from_reader(
+                    include_bytes!(concat!("documents/encoding/", $file, ".xml")).as_ref(),
+                );
+                assert_eq!(r.decoder().encoding(), UTF_8);
+
+                let mut buf = Vec::new();
+                // XML declaration with encoding
+                assert_matches!(1: r.read_event_into(&mut buf).unwrap(), Decl(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(2: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // Comment with information that this is generated file
+                assert_matches!(3: r.read_event_into(&mut buf).unwrap(), Comment(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(4: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // Open root element tag. Contains 3 attributes:
+                // - attribute1 - double-quoted. Value - all possible characters in that encoding
+                // - attribute2 - single-quoted. Value - all possible characters in that encoding
+                // - unquoted. Name and value - all possible characters in that encoding
+                assert_matches!(5: r.read_event_into(&mut buf).unwrap(), Start(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(6: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // Processing instruction with all possible characters in that encoding
+                assert_matches!(7: r.read_event_into(&mut buf).unwrap(), PI(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(8: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // Comment with all possible characters in that encoding
+                assert_matches!(9: r.read_event_into(&mut buf).unwrap(), Comment(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                buf.clear();
+
+                // Text with all possible characters in that encoding except some
+                assert_matches!(10: r.read_event_into(&mut buf).unwrap(), Text(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                buf.clear();
+
+                // Empty tag with name from all possible characters in that encoding except some
+                assert_matches!(11: r.read_event_into(&mut buf).unwrap(), Empty(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(12: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // CDATA section with all possible characters in that encoding
+                assert_matches!(13: r.read_event_into(&mut buf).unwrap(), CData(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                assert_matches!(14: r.read_event_into(&mut buf).unwrap(), Text(_)); // spaces
+                buf.clear();
+
+                // Close root element tag
+                assert_matches!(15: r.read_event_into(&mut buf).unwrap(), End(_));
+                assert_eq!(r.decoder().encoding(), $enc);
+                buf.clear();
+
+                // Document should end
+                assert_matches!(16: r.read_event_into(&mut buf).unwrap(), Eof);
+                assert_eq!(r.decoder().encoding(), $enc);
+            }
+        };
+    }
     macro_rules! detect_test {
         ($test:ident, $enc:ident, $file:literal $($break:stmt)?) => {
             #[test]
@@ -62,7 +144,7 @@ mod detect {
                 let mut buf = Vec::new();
                 loop {
                     match dbg!(r.read_event_into(&mut buf).unwrap()) {
-                        Event::Eof => break,
+                        Eof => break,
                         _ => {}
                     }
                     assert_eq!(r.decoder().encoding(), $enc);
@@ -84,44 +166,62 @@ mod detect {
     detect_test!(utf16le_bom, UTF_16LE, "utf16le-bom");
 
     // legacy multi-byte encodings (7)
-    detect_test!(big5, BIG5, "Big5");
-    detect_test!(euc_jp, EUC_JP, "EUC-JP");
-    detect_test!(euc_kr, EUC_KR, "EUC-KR");
-    detect_test!(gb18030, GB18030, "gb18030");
-    detect_test!(gbk, GBK, "GBK");
+    check_detection!(big5, BIG5, "Big5");
+    check_detection!(euc_jp, EUC_JP, "EUC-JP");
+    check_detection!(euc_kr, EUC_KR, "EUC-KR");
+    check_detection!(gb18030, GB18030, "gb18030");
+    check_detection!(gbk, GBK, "GBK");
     // TODO: XML in this encoding cannot be parsed successfully until #158 resolves
     // We only read the first event to ensure, that encoding detected correctly
     detect_test!(iso_2022_jp, ISO_2022_JP, "ISO-2022-JP" break);
-    detect_test!(shift_jis, SHIFT_JIS, "Shift_JIS");
+    check_detection!(shift_jis, SHIFT_JIS, "Shift_JIS");
 
     // legacy single-byte encodings (19)
-    detect_test!(ibm866, IBM866, "IBM866");
-    detect_test!(iso_8859_2, ISO_8859_2, "ISO-8859-2");
-    detect_test!(iso_8859_3, ISO_8859_3, "ISO-8859-3");
-    detect_test!(iso_8859_4, ISO_8859_4, "ISO-8859-4");
-    detect_test!(iso_8859_5, ISO_8859_5, "ISO-8859-5");
-    detect_test!(iso_8859_6, ISO_8859_6, "ISO-8859-6");
-    detect_test!(iso_8859_7, ISO_8859_7, "ISO-8859-7");
-    detect_test!(iso_8859_8, ISO_8859_8, "ISO-8859-8");
-    detect_test!(iso_8859_8_i, ISO_8859_8_I, "ISO-8859-8-I");
-    detect_test!(iso_8859_10, ISO_8859_10, "ISO-8859-10");
-    detect_test!(iso_8859_13, ISO_8859_13, "ISO-8859-13");
-    detect_test!(iso_8859_14, ISO_8859_14, "ISO-8859-14");
-    detect_test!(iso_8859_15, ISO_8859_15, "ISO-8859-15");
-    detect_test!(iso_8859_16, ISO_8859_16, "ISO-8859-16");
-    detect_test!(koi8_r, KOI8_R, "KOI8-R");
-    detect_test!(koi8_u, KOI8_U, "KOI8-U");
-    detect_test!(macintosh, MACINTOSH, "macintosh");
-    detect_test!(windows_874, WINDOWS_874, "windows-874");
-    detect_test!(windows_1250, WINDOWS_1250, "windows-1250");
-    detect_test!(windows_1251, WINDOWS_1251, "windows-1251");
-    detect_test!(windows_1252, WINDOWS_1252, "windows-1252");
-    detect_test!(windows_1253, WINDOWS_1253, "windows-1253");
-    detect_test!(windows_1254, WINDOWS_1254, "windows-1254");
-    detect_test!(windows_1255, WINDOWS_1255, "windows-1255");
-    detect_test!(windows_1256, WINDOWS_1256, "windows-1256");
-    detect_test!(windows_1257, WINDOWS_1257, "windows-1257");
-    detect_test!(windows_1258, WINDOWS_1258, "windows-1258");
-    detect_test!(x_mac_cyrillic, X_MAC_CYRILLIC, "x-mac-cyrillic");
-    detect_test!(x_user_defined, X_USER_DEFINED, "x-user-defined");
+    check_detection!(ibm866, IBM866, "IBM866");
+    check_detection!(iso_8859_2, ISO_8859_2, "ISO-8859-2");
+    check_detection!(iso_8859_3, ISO_8859_3, "ISO-8859-3");
+    check_detection!(iso_8859_4, ISO_8859_4, "ISO-8859-4");
+    check_detection!(iso_8859_5, ISO_8859_5, "ISO-8859-5");
+    check_detection!(iso_8859_6, ISO_8859_6, "ISO-8859-6");
+    check_detection!(iso_8859_7, ISO_8859_7, "ISO-8859-7");
+    check_detection!(iso_8859_8, ISO_8859_8, "ISO-8859-8");
+    check_detection!(iso_8859_8_i, ISO_8859_8_I, "ISO-8859-8-I");
+    check_detection!(iso_8859_10, ISO_8859_10, "ISO-8859-10");
+    check_detection!(iso_8859_13, ISO_8859_13, "ISO-8859-13");
+    check_detection!(iso_8859_14, ISO_8859_14, "ISO-8859-14");
+    check_detection!(iso_8859_15, ISO_8859_15, "ISO-8859-15");
+    check_detection!(iso_8859_16, ISO_8859_16, "ISO-8859-16");
+    check_detection!(koi8_r, KOI8_R, "KOI8-R");
+    check_detection!(koi8_u, KOI8_U, "KOI8-U");
+    check_detection!(macintosh, MACINTOSH, "macintosh");
+    check_detection!(windows_874, WINDOWS_874, "windows-874");
+    check_detection!(windows_1250, WINDOWS_1250, "windows-1250");
+    check_detection!(windows_1251, WINDOWS_1251, "windows-1251");
+    check_detection!(windows_1252, WINDOWS_1252, "windows-1252");
+    check_detection!(windows_1253, WINDOWS_1253, "windows-1253");
+    check_detection!(windows_1254, WINDOWS_1254, "windows-1254");
+    check_detection!(windows_1255, WINDOWS_1255, "windows-1255");
+    check_detection!(windows_1256, WINDOWS_1256, "windows-1256");
+    check_detection!(windows_1257, WINDOWS_1257, "windows-1257");
+    check_detection!(windows_1258, WINDOWS_1258, "windows-1258");
+    check_detection!(x_mac_cyrillic, X_MAC_CYRILLIC, "x-mac-cyrillic");
+    check_detection!(x_user_defined, X_USER_DEFINED, "x-user-defined");
+}
+
+#[test]
+fn bom_removed_from_initial_text() {
+    let mut r =
+        Reader::from_str("\u{FEFF}asdf<paired attr1=\"value1\" attr2=\"value2\">text</paired>");
+
+    assert_eq!(r.read_event().unwrap(), Text(BytesText::new("asdf")));
+    assert_eq!(
+        r.read_event().unwrap(),
+        Start(BytesStart::from_content(
+            "paired attr1=\"value1\" attr2=\"value2\"",
+            6
+        ))
+    );
+    assert_eq!(r.read_event().unwrap(), Text(BytesText::new("text")));
+    assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("paired")));
+    assert_eq!(r.read_event().unwrap(), Eof);
 }
