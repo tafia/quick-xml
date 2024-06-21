@@ -1,3 +1,16 @@
+> Release checklist (minimal list of actions for cutting a release):
+> 1. `$env:RUSTDOCFLAGS="--cfg docsrs"; cargo +nightly doc --all-features` and check generated documentation for missing / unclear things
+> 2. Update version in `Cargo.toml`
+> 3. Update `Changelog.md` with date of release, add new empty Unreleased headings
+> 4. Commit changes with message "Release x.y.z"
+> 5. `cargo package` for final check
+> 6. Push `master` to my fork, wait while CI pass. Repeat with force pushs if necessary
+> 7. `cargo publish`
+> 8. Create and push tag `vx.y.z` and push `master` to upstream
+> 9. Create a Release on GitHub (in GitHub UI)
+
+----------------------------------------------------------------------------------------------------
+
 ## Unreleased
 
 ### New Features
