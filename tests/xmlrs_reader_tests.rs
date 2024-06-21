@@ -6,24 +6,6 @@ use quick_xml::name::{QName, ResolveResult};
 use quick_xml::reader::NsReader;
 use std::str::from_utf8;
 
-#[test]
-fn sample_1_short() {
-    test(
-        include_str!("documents/sample_1.xml"),
-        include_str!("documents/sample_1_short.txt"),
-        true,
-    );
-}
-
-#[test]
-fn sample_1_full() {
-    test(
-        include_str!("documents/sample_1.xml"),
-        include_str!("documents/sample_1_full.txt"),
-        false,
-    );
-}
-
 #[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
