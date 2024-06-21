@@ -2,8 +2,6 @@
 
 document.xml
     medium length, mostly empty tags, a few short attributes per element, no escaping
-html5.html
-html5.txt
 libreoffice_document.fodt
     long, mix of attributes and text, not much escaping, lots of non-ascii characters, lots of namespaces
 linescore.xml
