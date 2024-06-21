@@ -15,6 +15,15 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.33.0 -- 2024-06-21
+
+### New Features
+
 - [#758]: Implemented `From<QName>` for `BytesStart` and `BytesEnd`.
 
 ### Bug Fixes
