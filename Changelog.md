@@ -18,7 +18,7 @@
 Now references to entities (as predefined, such as `&lt;`, as user-defined) reported as a new
 `Event::GeneralRef`.
 Caller can parse the content of the entity and stream events from it as it is required by the
-XML specification.
+XML specification. See the updated `custom_entities` example!
 
 ### New Features
 
