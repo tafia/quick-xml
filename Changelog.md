@@ -19,6 +19,12 @@
 
 ### Misc Changes
 
+- [#760]: `Attribute::decode_and_unescape_value` and `Attribute::decode_and_unescape_value_with` now
+  accepts `Decoder` instead of `Reader`. Use `Reader::decoder()` to get it.
+- [#760]: `Writer::write_event` now consumes event. Use `Event::borrow()` if you want to keep ownership.
+
+[#760]: https://github.com/tafia/quick-xml/pull/760
+
 
 ## 0.33.0 -- 2024-06-21
 

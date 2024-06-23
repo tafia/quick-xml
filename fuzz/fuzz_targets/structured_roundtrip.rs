@@ -51,7 +51,7 @@ fn fuzz_round_trip(driver: Driver) -> quick_xml::Result<()> {
         // TODO: Handle error cases.
         use WriterFunc::*;
         match writer_func {
-            WriteEvent(event) => writer.write_event(event)?,
+            WriteEvent(event) => writer.write_event(event.borrow())?,
             WriteBom => writer.write_bom()?,
             WriteIndent => writer.write_indent()?,
             CreateElement {

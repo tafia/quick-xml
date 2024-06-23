@@ -50,7 +50,7 @@ fn parse_document_from_str(doc: &str) -> XmlResult<()> {
         match criterion::black_box(r.read_event()?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(&r)?);
+                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
@@ -75,7 +75,7 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
         match criterion::black_box(r.read_event_into(&mut buf)?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(&r)?);
+                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
@@ -101,7 +101,7 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 criterion::black_box(resolved_ns);
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(&r)?);
+                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
@@ -129,7 +129,7 @@ fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 criterion::black_box(resolved_ns);
                 for attr in e.attributes() {
-                    criterion::black_box(attr?.decode_and_unescape_value(&r)?);
+                    criterion::black_box(attr?.decode_and_unescape_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {

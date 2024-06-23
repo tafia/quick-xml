@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .attributes()
                         .map(|a| {
                             a.unwrap()
-                                .decode_and_unescape_value_with(&reader, |ent| {
+                                .decode_and_unescape_value_with(reader.decoder(), |ent| {
                                     custom_entities.get(ent).map(|s| s.as_str())
                                 })
                                 .unwrap()
