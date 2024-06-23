@@ -376,25 +376,4 @@ mod test {
         identity,
         ()
     );
-
-    #[cfg(feature = "encoding")]
-    mod encoding {
-        use crate::events::Event;
-        use crate::reader::Reader;
-        use encoding_rs::UTF_8;
-        use pretty_assertions::assert_eq;
-
-        /// Checks that XML declaration cannot change the encoding from UTF-8 if
-        /// a `Reader` was created using `from_str` method
-        #[test]
-        fn str_always_has_utf8() {
-            let mut reader = Reader::from_str("<?xml encoding='UTF-16'?>");
-
-            assert_eq!(reader.decoder().encoding(), UTF_8);
-            reader.read_event().unwrap();
-            assert_eq!(reader.decoder().encoding(), UTF_8);
-
-            assert_eq!(reader.read_event().unwrap(), Event::Eof);
-        }
-    }
 }

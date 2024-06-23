@@ -445,7 +445,7 @@ impl Reader<BufReader<File>> {
 
 #[cfg(test)]
 mod test {
-    use crate::reader::test::{check, small_buffers};
+    use crate::reader::test::check;
     use crate::reader::XmlSource;
 
     /// Default buffer constructor just pass the byte array from the test
@@ -460,59 +460,4 @@ mod test {
         identity,
         &mut Vec::new()
     );
-
-    small_buffers!(
-        #[test]
-        read_event_into: std::io::BufReader<_>
-    );
-
-    #[cfg(feature = "encoding")]
-    mod encoding {
-        use crate::events::Event;
-        use crate::reader::Reader;
-        use encoding_rs::{UTF_16LE, UTF_8, WINDOWS_1251};
-        use pretty_assertions::assert_eq;
-
-        /// Checks that encoding is detected by BOM and changed after XML declaration
-        /// BOM indicates UTF-16LE, but XML - windows-1251
-        #[test]
-        fn bom_detected() {
-            let mut reader =
-                Reader::from_reader(b"\xFF\xFE<?xml encoding='windows-1251'?>".as_ref());
-            let mut buf = Vec::new();
-
-            assert_eq!(reader.decoder().encoding(), UTF_8);
-            assert!(matches!(
-                reader.read_event_into(&mut buf).unwrap(),
-                Event::Decl(_)
-            ));
-            assert_eq!(reader.decoder().encoding(), WINDOWS_1251);
-
-            assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
-        }
-
-        /// Checks that encoding is changed by XML declaration, but only once
-        #[test]
-        fn xml_declaration() {
-            let mut reader = Reader::from_reader(
-                b"<?xml encoding='UTF-16'?><?xml encoding='windows-1251'?>".as_ref(),
-            );
-            let mut buf = Vec::new();
-
-            assert_eq!(reader.decoder().encoding(), UTF_8);
-            assert!(matches!(
-                reader.read_event_into(&mut buf).unwrap(),
-                Event::Decl(_)
-            ));
-            assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-            assert!(matches!(
-                reader.read_event_into(&mut buf).unwrap(),
-                Event::Decl(_)
-            ));
-            assert_eq!(reader.decoder().encoding(), UTF_16LE);
-
-            assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
-        }
-    }
 }

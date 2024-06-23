@@ -2165,8 +2165,9 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
         replace(&mut self.lookahead, self.reader.next())
     }
 
+    /// Returns `true` when next event is not a text event in any form.
     #[inline(always)]
-    const fn need_trim_end(&self) -> bool {
+    const fn current_event_is_last_text(&self) -> bool {
         // If next event is a text or CDATA, we should not trim trailing spaces
         !matches!(
             self.lookahead,
@@ -2182,43 +2183,27 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     /// [`CData`]: PayloadEvent::CData
     fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<DeEvent<'i>, DeError> {
         loop {
-            match self.lookahead {
-                Ok(PayloadEvent::Text(_) | PayloadEvent::CData(_)) => {
-                    let text = self.next_text()?;
+            if self.current_event_is_last_text() {
+                break;
+            }
 
-                    let mut s = result.into_owned();
-                    s += &text;
-                    result = Cow::Owned(s);
+            match self.next_impl()? {
+                PayloadEvent::Text(mut e) => {
+                    if self.current_event_is_last_text() {
+                        // FIXME: Actually, we should trim after decoding text, but now we trim before
+                        e.inplace_trim_end();
+                    }
+                    result
+                        .to_mut()
+                        .push_str(&e.unescape_with(|entity| self.entity_resolver.resolve(entity))?);
                 }
-                _ => break,
+                PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
+
+                // SAFETY: current_event_is_last_text checks that event is Text or CData
+                _ => unreachable!("Only `Text` and `CData` events can come here"),
             }
         }
         Ok(DeEvent::Text(Text { text: result }))
-    }
-
-    /// Read one text event, panics if current event is not a text event
-    ///
-    /// |Event                  |XML                        |Handling
-    /// |-----------------------|---------------------------|----------------------------------------
-    /// |[`PayloadEvent::Start`]|`<tag>...</tag>`           |Possible panic (unreachable)
-    /// |[`PayloadEvent::End`]  |`</any-tag>`               |Possible panic (unreachable)
-    /// |[`PayloadEvent::Text`] |`text content`             |Unescapes `text content` and returns it
-    /// |[`PayloadEvent::CData`]|`<![CDATA[cdata content]]>`|Returns `cdata content` unchanged
-    /// |[`PayloadEvent::Eof`]  |                           |Possible panic (unreachable)
-    #[inline(always)]
-    fn next_text(&mut self) -> Result<Cow<'i, str>, DeError> {
-        match self.next_impl()? {
-            PayloadEvent::Text(mut e) => {
-                if self.need_trim_end() {
-                    e.inplace_trim_end();
-                }
-                Ok(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
-            }
-            PayloadEvent::CData(e) => Ok(e.decode()?),
-
-            // SAFETY: this method is called only when we peeked Text or CData
-            _ => unreachable!("Only `Text` and `CData` events can come here"),
-        }
     }
 
     /// Return an input-borrowing event.
@@ -2228,7 +2213,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
                 PayloadEvent::Text(mut e) => {
-                    if self.need_trim_end() && e.inplace_trim_end() {
+                    if self.current_event_is_last_text() && e.inplace_trim_end() {
+                        // FIXME: Actually, we should trim after decoding text, but now we trim before
                         continue;
                     }
                     self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
