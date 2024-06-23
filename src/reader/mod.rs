@@ -8,6 +8,7 @@ use std::ops::Range;
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
+use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
 
 /// A struct that holds a parser configuration.
@@ -449,15 +450,11 @@ macro_rules! read_to_end {
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
 mod buffered_reader;
-mod element;
 mod ns_reader;
-mod pi;
 mod slice_reader;
 mod state;
 
-pub use element::ElementParser;
 pub use ns_reader::NsReader;
-pub use pi::PiParser;
 
 /// Range of input in bytes, that corresponds to some piece of XML
 pub type Span = Range<u64>;
@@ -788,26 +785,6 @@ enum ReadTextResult<'r, B> {
     UpToEof(&'r [u8]),
     /// IO error occurred.
     Err(io::Error),
-}
-
-/// Used to decouple reading of data from data source and parsing XML structure from it.
-/// This is a state preserved between getting chunks of bytes from the reader.
-///
-/// This trait is implemented for every parser that processes piece of XML grammar.
-pub trait Parser {
-    /// Process new data and try to determine end of the parsed thing.
-    ///
-    /// Returns position of the end of thing in `bytes` in case of successful search
-    /// and `None` otherwise.
-    ///
-    /// # Parameters
-    /// - `bytes`: a slice to find the end of a thing.
-    ///   Should contain text in ASCII-compatible encoding
-    fn feed(&mut self, bytes: &[u8]) -> Option<usize>;
-
-    /// Returns parse error produced by this parser in case of reaching end of
-    /// input without finding the end of a parsed thing.
-    fn eof_error() -> SyntaxError;
 }
 
 /// Represents an input for a reader that can return borrowed data.
@@ -1541,7 +1518,7 @@ mod test {
             mod read_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
-                use crate::reader::ElementParser;
+                use crate::parser::ElementParser;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 

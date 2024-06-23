@@ -1,7 +1,7 @@
 //! Contains a parser for an XML element.
 
 use crate::errors::SyntaxError;
-use crate::reader::Parser;
+use crate::parser::Parser;
 
 /// A parser that search a `>` symbol in the slice outside of quoted regions.
 ///
@@ -25,7 +25,7 @@ use crate::reader::Parser;
 ///
 /// ```
 /// # use pretty_assertions::assert_eq;
-/// use quick_xml::reader::{ElementParser, Parser};
+/// use quick_xml::parser::{ElementParser, Parser};
 ///
 /// let mut parser = ElementParser::default();
 ///

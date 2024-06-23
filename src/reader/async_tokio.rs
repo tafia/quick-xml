@@ -7,10 +7,9 @@ use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
+use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{
-    BangType, ElementParser, NsReader, ParseState, Parser, PiParser, ReadTextResult, Reader, Span,
-};
+use crate::reader::{BangType, NsReader, ParseState, ReadTextResult, Reader, Span};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].

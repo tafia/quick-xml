@@ -22,6 +22,9 @@
 
 ### Misc Changes
 
+- [#780]: `reader::Parser`, `reader::ElementParser` and `reader::PiParser` moved to the new module `parser`.
+
+[#780]: https://github.com/tafia/quick-xml/pull/780
 [#781]: https://github.com/tafia/quick-xml/pull/781
 
 

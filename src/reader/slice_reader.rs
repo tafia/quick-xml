@@ -13,7 +13,8 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
+use crate::parser::Parser;
+use crate::reader::{BangType, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
