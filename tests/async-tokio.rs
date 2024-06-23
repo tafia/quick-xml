@@ -2,6 +2,16 @@ use pretty_assertions::assert_eq;
 use quick_xml::events::Event::*;
 use quick_xml::reader::Reader;
 
+// Import `small_buffers_tests!`
+#[macro_use]
+mod reader;
+
+small_buffers_tests!(
+    #[tokio::test]
+    read_event_into_async: tokio::io::BufReader<_>,
+    async, await
+);
+
 #[tokio::test]
 async fn test_sample() {
     let src = include_str!("documents/sample_rss.xml");
