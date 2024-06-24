@@ -103,3 +103,29 @@ jobs:
         verbose: true
       continue-on-error: true
 
+  # Check that tests that are sensitive to target are passed
+  x86:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install 32-bit target
+      run: rustup target add i686-unknown-linux-gnu
+    - name: Install 32-bit libs (for criterion)
+      # Criterion wants to compile something.
+      # Cargo builds criterion even when it is not required for those tests.
+      # Without those libs compilation failed with:
+      # error: linking with `cc` failed: exit status: 1
+      #   |
+      #   = note: LC_ALL="C" PATH="..." ...
+      #   = note: /usr/bin/ld: cannot find Scrt1.o: No such file or directory
+      #           /usr/bin/ld: cannot find crti.o: No such file or directory
+      #           /usr/bin/ld: skipping incompatible /usr/lib/gcc/x86_64-linux-gnu/11/libgcc.a when searching for -lgcc
+      #           /usr/bin/ld: cannot find -lgcc: No such file or directory
+      #           collect2: error: ld returned 1 exit status
+      # Fixed as suggested in this answer:
+      # https://stackoverflow.com/a/16016792/7518605
+      run: sudo apt install gcc-multilib
+    - name: Run some tests on 32-bit target
+      run: cargo test --target i686-unknown-linux-gnu --test issues
+    - name: Run some tests on 32-bit target (async-tokio)
+      run: cargo test --target i686-unknown-linux-gnu --features async-tokio --test async-tokio
