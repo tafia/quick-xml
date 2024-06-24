@@ -1,6 +1,13 @@
 use std::borrow::{Borrow, Cow};
 use std::fmt::{self, Debug, Formatter};
+use std::io;
 use std::ops::Deref;
+
+#[cfg(feature = "async-tokio")]
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 #[cfg(feature = "serialize")]
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
@@ -192,6 +199,75 @@ impl<'de> Serialize for Bytes<'de> {
         S: Serializer,
     {
         serializer.serialize_bytes(self.0)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// A simple producer of infinite stream of bytes, useful in tests.
+///
+/// Will repeat `chunk` field indefinitely.
+pub struct Fountain<'a> {
+    /// That piece of data repeated infinitely...
+    pub chunk: &'a [u8],
+    /// Part of `chunk` that was consumed by BufRead impl
+    pub consumed: usize,
+    /// The overall count of read bytes
+    pub overall_read: u64,
+}
+
+impl<'a> io::Read for Fountain<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let available = &self.chunk[self.consumed..];
+        let len = buf.len().min(available.len());
+        let (portion, _) = available.split_at(len);
+
+        buf.copy_from_slice(portion);
+        Ok(len)
+    }
+}
+
+impl<'a> io::BufRead for Fountain<'a> {
+    #[inline]
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        Ok(&self.chunk[self.consumed..])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.consumed += amt;
+        if self.consumed == self.chunk.len() {
+            self.consumed = 0;
+        }
+        self.overall_read += amt as u64;
+    }
+}
+
+#[cfg(feature = "async-tokio")]
+impl<'a> tokio::io::AsyncRead for Fountain<'a> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let available = &self.chunk[self.consumed..];
+        let len = buf.remaining().min(available.len());
+        let (portion, _) = available.split_at(len);
+
+        buf.put_slice(portion);
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(feature = "async-tokio")]
+impl<'a> tokio::io::AsyncBufRead for Fountain<'a> {
+    #[inline]
+    fn poll_fill_buf(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
+        Poll::Ready(io::BufRead::fill_buf(self.get_mut()))
+    }
+
+    #[inline]
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        io::BufRead::consume(self.get_mut(), amt);
     }
 }
 

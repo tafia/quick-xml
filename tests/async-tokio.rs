@@ -1,5 +1,8 @@
+use std::iter;
+
 use pretty_assertions::assert_eq;
 use quick_xml::events::Event::*;
+use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
 // Import `small_buffers_tests!`
@@ -35,4 +38,66 @@ async fn test_sample() {
         buf.clear();
     }
     assert_eq!((count, reads), (1247, 5245));
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/751
+///
+/// Actually, that error was not found in async reader, but we would to test it as well.
+#[tokio::test]
+async fn issue751() {
+    let mut text = Vec::new();
+    let mut chunk = Vec::new();
+    chunk.extend_from_slice(b"<content>");
+    for data in iter::repeat(b"some text inside").take(1000) {
+        chunk.extend_from_slice(data);
+        text.extend_from_slice(data);
+    }
+    chunk.extend_from_slice(b"</content>");
+
+    let mut reader = Reader::from_reader(quick_xml::utils::Fountain {
+        chunk: &chunk,
+        consumed: 0,
+        overall_read: 0,
+    });
+    let mut buf = Vec::new();
+    let mut starts = 0u64;
+    let mut ends = 0u64;
+    let mut texts = 0u64;
+    loop {
+        buf.clear();
+        match reader.read_event_into_async(&mut buf).await {
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Ok(Eof) => break,
+
+            Ok(Start(e)) => {
+                starts += 1;
+                assert_eq!(
+                    e.name(),
+                    QName(b"content"),
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            Ok(End(e)) => {
+                ends += 1;
+                assert_eq!(
+                    e.name(),
+                    QName(b"content"),
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            Ok(Text(e)) => {
+                texts += 1;
+                assert_eq!(
+                    e.as_ref(),
+                    text,
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            _ => (),
+        }
+        // If we successfully read more than `u32::MAX`, the test is passed
+        if reader.get_ref().overall_read >= u32::MAX as u64 {
+            break;
+        }
+    }
 }

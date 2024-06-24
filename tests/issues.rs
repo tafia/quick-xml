@@ -2,6 +2,7 @@
 //!
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
+use std::iter;
 use std::sync::mpsc;
 
 use quick_xml::errors::{Error, IllFormedError, SyntaxError};
@@ -273,6 +274,66 @@ fn issue706() {
             Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
             Ok(Event::Eof) => break,
             _ => (),
+        }
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/751
+#[test]
+fn issue751() {
+    let mut text = Vec::new();
+    let mut chunk = Vec::new();
+    chunk.extend_from_slice(b"<content>");
+    for data in iter::repeat(b"some text inside").take(1000) {
+        chunk.extend_from_slice(data);
+        text.extend_from_slice(data);
+    }
+    chunk.extend_from_slice(b"</content>");
+
+    let mut reader = Reader::from_reader(quick_xml::utils::Fountain {
+        chunk: &chunk,
+        consumed: 0,
+        overall_read: 0,
+    });
+    let mut buf = Vec::new();
+    let mut starts = 0u64;
+    let mut ends = 0u64;
+    let mut texts = 0u64;
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf) {
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Ok(Event::Eof) => break,
+
+            Ok(Event::Start(e)) => {
+                starts += 1;
+                assert_eq!(
+                    e.name(),
+                    QName(b"content"),
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            Ok(Event::End(e)) => {
+                ends += 1;
+                assert_eq!(
+                    e.name(),
+                    QName(b"content"),
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            Ok(Event::Text(e)) => {
+                texts += 1;
+                assert_eq!(
+                    e.as_ref(),
+                    text,
+                    "starts: {starts}, ends: {ends}, texts: {texts}"
+                );
+            }
+            _ => (),
+        }
+        // If we successfully read more than `u32::MAX`, the test is passed
+        if reader.get_ref().overall_read >= u32::MAX as u64 {
+            break;
         }
     }
 }
