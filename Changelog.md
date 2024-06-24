@@ -17,6 +17,13 @@
 
 ### Bug Fixes
 
+### Misc Changes
+
+
+## 0.34.0 -- 2024-06-25
+
+### Bug Fixes
+
 - [#751]: Fix internal overflow when read 4GB+ files on 32-bit targets using `Reader<impl BufRead>` readers.
 
 ### Misc Changes
