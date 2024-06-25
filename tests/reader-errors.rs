@@ -5,7 +5,7 @@ use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, By
 use quick_xml::reader::{NsReader, Reader};
 
 macro_rules! ok {
-    ($test:ident($xml:literal) => $event:expr) => {
+    ($test:ident($xml:literal) => $pos:literal : $event:expr) => {
         mod $test {
             use super::*;
 
@@ -18,6 +18,7 @@ macro_rules! ok {
                     let mut reader = Reader::from_str($xml);
                     reader.config_mut().enable_all_checks(true);
                     assert_eq!(reader.read_event().unwrap(), $event);
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
 
                 #[test]
@@ -26,6 +27,7 @@ macro_rules! ok {
                     let mut reader = Reader::from_str($xml);
                     reader.config_mut().enable_all_checks(true);
                     assert_eq!(reader.read_event_into(&mut buf).unwrap(), $event);
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
 
                 #[cfg(feature = "async-tokio")]
@@ -38,6 +40,7 @@ macro_rules! ok {
                         reader.read_event_into_async(&mut buf).await.unwrap(),
                         $event
                     );
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
             }
 
@@ -50,6 +53,7 @@ macro_rules! ok {
                     let mut reader = NsReader::from_str($xml);
                     reader.config_mut().enable_all_checks(true);
                     assert_eq!(reader.read_resolved_event().unwrap().1, $event);
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
 
                 #[test]
@@ -58,6 +62,7 @@ macro_rules! ok {
                     let mut reader = NsReader::from_str($xml);
                     reader.config_mut().enable_all_checks(true);
                     assert_eq!(reader.read_resolved_event_into(&mut buf).unwrap().1, $event);
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
 
                 #[cfg(feature = "async-tokio")]
@@ -74,6 +79,7 @@ macro_rules! ok {
                             .1,
                         $event
                     );
+                    assert_eq!(reader.buffer_position(), $pos);
                 }
             }
         }
@@ -303,7 +309,8 @@ mod syntax {
         err!(unclosed09("<!--->") => SyntaxError::UnclosedComment);
         err!(unclosed10("<!---c") => SyntaxError::UnclosedComment);
 
-        ok!(normal("<!---->") => Event::Comment(BytesText::new("")));
+        ok!(normal1("<!---->")     => 7: Event::Comment(BytesText::new("")));
+        ok!(normal2("<!---->rest") => 7: Event::Comment(BytesText::new("")));
     }
 
     /// https://www.w3.org/TR/xml11/#NT-CDSect
@@ -336,7 +343,8 @@ mod syntax {
         err!(unclosed24("<![CDATA[]h") => SyntaxError::UnclosedCData);
         err!(unclosed25("<![CDATA[]>") => SyntaxError::UnclosedCData);
 
-        ok!(normal("<![CDATA[]]>") => Event::CData(BytesCData::new("")));
+        ok!(normal1("<![CDATA[]]>")     => 12: Event::CData(BytesCData::new("")));
+        ok!(normal2("<![CDATA[]]>rest") => 12: Event::CData(BytesCData::new("")));
     }
 
     /// According to the grammar, only upper-case letters allowed for DOCTYPE writing.
@@ -371,7 +379,8 @@ mod syntax {
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and an element name, but we do not consider this as a _syntax_ error.
-        ok!(normal("<!DOCTYPE e>") => Event::DocType(BytesText::new("e")));
+        ok!(normal1("<!DOCTYPE e>")     => 12: Event::DocType(BytesText::new("e")));
+        ok!(normal2("<!DOCTYPE e>rest") => 12: Event::DocType(BytesText::new("e")));
     }
 
     /// https://www.w3.org/TR/xml11/#NT-PI
@@ -391,8 +400,10 @@ mod syntax {
 
         // According to the grammar, processing instruction MUST contain a non-empty
         // target name, but we do not consider this as a _syntax_ error.
-        ok!(normal_empty("<??>")    => Event::PI(BytesPI::new("")));
-        ok!(normal_xmlx("<?xmlx?>") => Event::PI(BytesPI::new("xmlx")));
+        ok!(normal_empty1("<??>")        => 4: Event::PI(BytesPI::new("")));
+        ok!(normal_empty2("<??>rest")    => 4: Event::PI(BytesPI::new("")));
+        ok!(normal_xmlx1("<?xmlx?>")     => 8: Event::PI(BytesPI::new("xmlx")));
+        ok!(normal_xmlx2("<?xmlx?>rest") => 8: Event::PI(BytesPI::new("xmlx")));
     }
 
     /// https://www.w3.org/TR/xml11/#NT-prolog
@@ -406,11 +417,12 @@ mod syntax {
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and `version` attribute, but we do not consider this as a _syntax_ error.
-        ok!(normal1("<?xml?>")   => Event::Decl(BytesDecl::from_start(BytesStart::new("xml"))));
-        ok!(normal2("<?xml ?>")  => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3))));
-        ok!(normal3("<?xml\t?>") => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\t", 3))));
-        ok!(normal4("<?xml\r?>") => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\r", 3))));
-        ok!(normal5("<?xml\n?>") => Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
+        ok!(normal1("<?xml?>")       => 7: Event::Decl(BytesDecl::from_start(BytesStart::new("xml"))));
+        ok!(normal2("<?xml ?>")      => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml ", 3))));
+        ok!(normal3("<?xml\t?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\t", 3))));
+        ok!(normal4("<?xml\r?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\r", 3))));
+        ok!(normal5("<?xml\n?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
+        ok!(normal6("<?xml\n?>rest") => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
     }
 }
 
@@ -811,13 +823,13 @@ mod ill_formed {
     //                                   ^= 9
     err!(missing_doctype_name2("<!DOCTYPE \t\r\n>") => 13: IllFormedError::MissingDoctypeName);
     //                                          ^= 13
-    ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => Event::DocType(BytesText::new("x")));
+    ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => 15: Event::DocType(BytesText::new("x")));
 
     err!(unmatched_end_tag1("</>") => 0: IllFormedError::UnmatchedEndTag("".to_string()));
     err!(unmatched_end_tag2("</end>") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
     err!(unmatched_end_tag3("</end >") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
 
-    ok!(mismatched_end_tag1("<start></start>") => Event::Start(BytesStart::new("start")));
+    ok!(mismatched_end_tag1("<start></start>") => 7: Event::Start(BytesStart::new("start")));
     err2!(mismatched_end_tag2("<start></>") => 7: IllFormedError::MismatchedEndTag {
         //                            ^= 7
         expected: "start".to_string(),
@@ -834,7 +846,7 @@ mod ill_formed {
         found: "end".to_string(),
     });
 
-    ok!(double_hyphen_in_comment1("<!---->") => Event::Comment(BytesText::new("")));
+    ok!(double_hyphen_in_comment1("<!---->") => 7: Event::Comment(BytesText::new("")));
     err!(double_hyphen_in_comment2("<!----->") => 4: IllFormedError::DoubleHyphenInComment);
     //                                  ^= 4
     err!(double_hyphen_in_comment3("<!-- --->") => 5: IllFormedError::DoubleHyphenInComment);
