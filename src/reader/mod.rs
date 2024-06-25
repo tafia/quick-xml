@@ -394,28 +394,52 @@ macro_rules! read_until_close {
 /// Generalization of `read_to_end` method for buffered and borrowed readers
 macro_rules! read_to_end {
     (
+        // $self: &mut Reader
         $self:expr, $end:expr, $buf:expr,
         $read_event:ident,
         // Code block that performs clearing of internal buffer after read of each event
         $clear:block
         $(, $await:ident)?
     ) => {{
+        // Because we take position after the event before the End event,
+        // it is important that this position indicates beginning of the End event.
+        // If between last event and the End event would be only spaces, then we
+        // take position before the spaces, but spaces would be skipped without
+        // generating event if `trim_text_start` is set to `true`. To prevent that
+        // we temporary disable start text trimming.
+        //
+        // We also cannot take position after getting End event, because if
+        // `trim_markup_names_in_closing_tags` is set to `true` (which is the default),
+        // we do not known the real size of the End event that it is occupies in
+        // the source and cannot correct the position after the End event.
+        // So, we in any case should tweak parser configuration.
+        let config = $self.config_mut();
+        let trim = config.trim_text_start;
+        config.trim_text_start = false;
+
         let start = $self.buffer_position();
         let mut depth = 0;
         loop {
             $clear
             let end = $self.buffer_position();
             match $self.$read_event($buf) $(.$await)? {
-                Err(e) => return Err(e),
+                Err(e) => {
+                    $self.config_mut().trim_text_start = trim;
+                    return Err(e);
+                }
 
                 Ok(Event::Start(e)) if e.name() == $end => depth += 1,
                 Ok(Event::End(e)) if e.name() == $end => {
                     if depth == 0 {
+                        $self.config_mut().trim_text_start = trim;
                         break start..end;
                     }
                     depth -= 1;
                 }
-                Ok(Event::Eof) => return Err(Error::missed_end($end, $self.decoder())),
+                Ok(Event::Eof) => {
+                    $self.config_mut().trim_text_start = trim;
+                    return Err(Error::missed_end($end, $self.decoder()));
+                }
                 _ => (),
             }
         }
