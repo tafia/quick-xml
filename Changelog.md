@@ -19,9 +19,14 @@
 
 ### Bug Fixes
 
+- [#773]: Fixed reporting incorrect end position in `Reader::read_to_end` family
+  of methods and trimming of the trailing spaces in `Reader::read_text` when
+  `trim_text_start` is set and the last event is not a `Text` event.
+
 ### Misc Changes
 
 [#772]: https://github.com/tafia/quick-xml/pull/772
+[#773]: https://github.com/tafia/quick-xml/pull/773
 
 
 ## 0.34.0 -- 2024-06-25
