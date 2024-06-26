@@ -212,12 +212,14 @@ impl ReaderState {
                 self.opened_buffer.truncate(start);
             }
             None => {
-                // Report error at start of the end tag at `<` character
-                // -2 for `<` and `>`
-                self.last_error_offset = self.offset - buf.len() as u64 - 2;
-                return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
-                    decoder.decode(name).unwrap_or_default().into_owned(),
-                )));
+                if !self.config.allow_unmatched_ends {
+                    // Report error at start of the end tag at `<` character
+                    // -2 for `<` and `>`
+                    self.last_error_offset = self.offset - buf.len() as u64 - 2;
+                    return Err(Error::IllFormed(IllFormedError::UnmatchedEndTag(
+                        decoder.decode(name).unwrap_or_default().into_owned(),
+                    )));
+                }
             }
         }
 
