@@ -13,12 +13,8 @@ pub enum EscapeError {
     UnrecognizedEntity(Range<usize>, String),
     /// Cannot find `;` after `&`
     UnterminatedEntity(Range<usize>),
-    /// Cannot convert Hexa to utf8
-    TooLongHexadecimal,
     /// Character is not a valid hexadecimal value
     InvalidHexadecimal(char),
-    /// Cannot convert decimal to hexa
-    TooLongDecimal,
     /// Character is not a valid decimal value
     InvalidDecimal(char),
     /// Not a valid unicode codepoint
@@ -41,11 +37,9 @@ impl std::fmt::Display for EscapeError {
                 "Error while escaping character at range {:?}: Cannot find ';' after '&'",
                 e
             ),
-            EscapeError::TooLongHexadecimal => write!(f, "Cannot convert hexadecimal to utf8"),
             EscapeError::InvalidHexadecimal(e) => {
                 write!(f, "'{}' is not a valid hexadecimal character", e)
             }
-            EscapeError::TooLongDecimal => write!(f, "Cannot convert decimal to utf8"),
             EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
             EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
         }
@@ -1807,10 +1801,6 @@ fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
 }
 
 fn parse_hexadecimal(bytes: &str) -> Result<u32, EscapeError> {
-    // maximum code is 0x10FFFF => 6 characters
-    if bytes.len() > 6 {
-        return Err(EscapeError::TooLongHexadecimal);
-    }
     let mut code = 0;
     for b in bytes.bytes() {
         code <<= 4;
@@ -1825,10 +1815,6 @@ fn parse_hexadecimal(bytes: &str) -> Result<u32, EscapeError> {
 }
 
 fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
-    // maximum code is 0x10FFFF = 1114111 => 7 characters
-    if bytes.len() > 7 {
-        return Err(EscapeError::TooLongDecimal);
-    }
     let mut code = 0;
     for b in bytes.bytes() {
         code *= 10;

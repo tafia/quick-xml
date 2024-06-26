@@ -74,6 +74,23 @@ fn unescape() {
     );
 }
 
+/// XML allows any number of leading zeroes. That is not explicitly mentioned
+/// in the specification, but enforced by the conformance test suite
+/// (https://www.w3.org/XML/Test/)
+/// 100 digits should be enough to ensure that any artificial restrictions
+/// (such as maximal string of u128 representation) does not applied
+#[test]
+fn unescape_long() {
+    assert_eq!(
+        escape::unescape("&#0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000048;"),
+        Ok("0".into()),
+    );
+    assert_eq!(
+        escape::unescape("&#x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030;"),
+        Ok("0".into()),
+    );
+}
+
 #[test]
 fn unescape_with() {
     let custom_entities = |ent: &str| match ent {
@@ -107,5 +124,22 @@ fn unescape_with() {
     assert_eq!(
         escape::unescape_with("&fop;", custom_entities),
         Err(EscapeError::UnrecognizedEntity(1..4, "fop".into()))
+    );
+}
+
+/// XML allows any number of leading zeroes. That is not explicitly mentioned
+/// in the specification, but enforced by the conformance test suite
+/// (https://www.w3.org/XML/Test/)
+/// 100 digits should be enough to ensure that any artificial restrictions
+/// (such as maximal string of u128 representation) does not applied
+#[test]
+fn unescape_with_long() {
+    assert_eq!(
+        escape::unescape_with("&#0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000048;", |_| None),
+        Ok("0".into()),
+    );
+    assert_eq!(
+        escape::unescape_with("&#x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030;", |_| None),
+        Ok("0".into()),
     );
 }

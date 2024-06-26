@@ -22,6 +22,10 @@
 - [#773]: Fixed reporting incorrect end position in `Reader::read_to_end` family
   of methods and trimming of the trailing spaces in `Reader::read_text` when
   `trim_text_start` is set and the last event is not a `Text` event.
+- [#771]: Character references now allow any number of leading zeroes as it should.
+  As a result, the following variants of `quick_xml::escape::EscapeError` are removed:
+  - `TooLongDecimal`
+  - `TooLongHexadecimal`
 
 ### Misc Changes
 
