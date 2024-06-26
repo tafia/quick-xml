@@ -31,6 +31,10 @@
 
 - [#771]: `EscapeError::UnrecognizedSymbol` renamed to `EscapeError::UnrecognizedEntity`.
 - [#771]: Implemented `PartialEq` for `EscapeError`.
+- [#771]: Replace the following variants of `EscapeError` by `InvalidCharRef` variant
+  with a standard `ParseIntError` inside:
+  - `InvalidDecimal`
+  - `InvalidHexadecimal`
 
 [#771]: https://github.com/tafia/quick-xml/pull/771
 [#772]: https://github.com/tafia/quick-xml/pull/772

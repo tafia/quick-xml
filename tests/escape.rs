@@ -1,6 +1,7 @@
 use pretty_assertions::assert_eq;
 use quick_xml::escape::{self, EscapeError};
 use std::borrow::Cow;
+use std::num::IntErrorKind;
 
 #[test]
 fn escape() {
@@ -89,6 +90,16 @@ fn unescape_long() {
         escape::unescape("&#x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030;"),
         Ok("0".into()),
     );
+
+    // Too big numbers for u32 should produce errors
+    match escape::unescape(&format!("&#{};", u32::MAX as u64 + 1)) {
+        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
+        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+    }
+    match escape::unescape(&format!("&#x{:x};", u32::MAX as u64 + 1)) {
+        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
+        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+    }
 }
 
 #[test]
@@ -142,4 +153,14 @@ fn unescape_with_long() {
         escape::unescape_with("&#x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030;", |_| None),
         Ok("0".into()),
     );
+
+    // Too big numbers for u32 should produce errors
+    match escape::unescape_with(&format!("&#{};", u32::MAX as u64 + 1), |_| None) {
+        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
+        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+    }
+    match escape::unescape_with(&format!("&#x{:x};", u32::MAX as u64 + 1), |_| None) {
+        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
+        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+    }
 }

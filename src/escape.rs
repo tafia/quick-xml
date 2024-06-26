@@ -2,6 +2,7 @@
 
 use memchr::memchr2_iter;
 use std::borrow::Cow;
+use std::num::ParseIntError;
 use std::ops::Range;
 
 /// Error for XML escape / unescape.
@@ -13,10 +14,9 @@ pub enum EscapeError {
     UnrecognizedEntity(Range<usize>, String),
     /// Cannot find `;` after `&`
     UnterminatedEntity(Range<usize>),
-    /// Character is not a valid hexadecimal value
-    InvalidHexadecimal(char),
-    /// Character is not a valid decimal value
-    InvalidDecimal(char),
+    /// Attempt to parse character reference (`&#<dec-number>;` or `&#x<hex-number>;`)
+    /// was unsuccessful, not all characters are decimal or hexadecimal numbers.
+    InvalidCharRef(ParseIntError),
     /// Not a valid unicode codepoint
     InvalidCodepoint(u32),
 }
@@ -37,16 +37,22 @@ impl std::fmt::Display for EscapeError {
                 "Error while escaping character at range {:?}: Cannot find ';' after '&'",
                 e
             ),
-            EscapeError::InvalidHexadecimal(e) => {
-                write!(f, "'{}' is not a valid hexadecimal character", e)
+            EscapeError::InvalidCharRef(e) => {
+                write!(f, "invalid character reference: {}", e)
             }
-            EscapeError::InvalidDecimal(e) => write!(f, "'{}' is not a valid decimal character", e),
             EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
         }
     }
 }
 
-impl std::error::Error for EscapeError {}
+impl std::error::Error for EscapeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidCharRef(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 /// Escapes an `&str` and replaces all xml special characters (`<`, `>`, `&`, `'`, `"`)
 /// with their corresponding xml escaped value.
@@ -1787,10 +1793,11 @@ pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
 
 fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
     let code = if let Some(hex_digits) = bytes.strip_prefix('x') {
-        parse_hexadecimal(hex_digits)
+        u32::from_str_radix(hex_digits, 16)
     } else {
-        parse_decimal(bytes)
-    }?;
+        u32::from_str_radix(bytes, 10)
+    }
+    .map_err(EscapeError::InvalidCharRef)?;
     if code == 0 {
         return Err(EscapeError::EntityWithNull(range));
     }
@@ -1798,30 +1805,4 @@ fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
         Some(c) => Ok(c),
         None => Err(EscapeError::InvalidCodepoint(code)),
     }
-}
-
-fn parse_hexadecimal(bytes: &str) -> Result<u32, EscapeError> {
-    let mut code = 0;
-    for b in bytes.bytes() {
-        code <<= 4;
-        code += match b {
-            b'0'..=b'9' => b - b'0',
-            b'a'..=b'f' => b - b'a' + 10,
-            b'A'..=b'F' => b - b'A' + 10,
-            b => return Err(EscapeError::InvalidHexadecimal(b as char)),
-        } as u32;
-    }
-    Ok(code)
-}
-
-fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
-    let mut code = 0;
-    for b in bytes.bytes() {
-        code *= 10;
-        code += match b {
-            b'0'..=b'9' => b - b'0',
-            b => return Err(EscapeError::InvalidDecimal(b as char)),
-        } as u32;
-    }
-    Ok(code)
 }
