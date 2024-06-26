@@ -98,11 +98,7 @@ impl<'a> Attribute<'a> {
         decoder: Decoder,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
-        let decoded = match &self.value {
-            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
-        };
+        let decoded = decoder.decode_cow(&self.value)?;
 
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string

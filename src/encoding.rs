@@ -99,6 +99,15 @@ impl Decoder {
 
         Ok(())
     }
+
+    /// Decodes the `Cow` buffer, preserves the lifetime
+    pub(crate) fn decode_cow<'b>(&self, bytes: &Cow<'b, [u8]>) -> Result<Cow<'b, str>> {
+        match bytes {
+            Cow::Borrowed(bytes) => self.decode(bytes),
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Ok(self.decode(bytes)?.into_owned().into()),
+        }
+    }
 }
 
 /// Decodes the provided bytes using the specified encoding.
