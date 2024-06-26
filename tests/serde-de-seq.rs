@@ -3,8 +3,8 @@
 use quick_xml::DeError;
 use serde::Deserialize;
 
-mod helpers;
-use helpers::from_str;
+mod serde_helpers;
+use serde_helpers::from_str;
 
 /// Check that top-level sequences can be deserialized from the multi-root XML documents
 mod top_level {

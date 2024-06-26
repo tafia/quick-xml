@@ -3,8 +3,8 @@
 use quick_xml::DeError;
 use serde::Deserialize;
 
-mod helpers;
-use helpers::from_str;
+mod serde_helpers;
+use serde_helpers::from_str;
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Nested {
