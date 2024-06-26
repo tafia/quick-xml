@@ -4,9 +4,6 @@ use memchr::memchr2_iter;
 use std::borrow::Cow;
 use std::ops::Range;
 
-#[cfg(test)]
-use pretty_assertions::assert_eq;
-
 /// Error for XML escape / unescape.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EscapeError {
@@ -1841,94 +1838,4 @@ fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
         } as u32;
     }
     Ok(code)
-}
-
-#[test]
-fn test_unescape() {
-    let unchanged = unescape("test");
-    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
-    // because it influences diff
-    // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Ok(Cow::Borrowed("test")));
-    assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
-
-    assert_eq!(
-        unescape("&lt;&amp;test&apos;&quot;&gt;"),
-        Ok("<&test'\">".into())
-    );
-    assert_eq!(unescape("&#x30;"), Ok("0".into()));
-    assert_eq!(unescape("&#48;"), Ok("0".into()));
-    assert!(unescape("&foo;").is_err());
-}
-
-#[test]
-fn test_unescape_with() {
-    let custom_entities = |ent: &str| match ent {
-        "foo" => Some("BAR"),
-        _ => None,
-    };
-
-    let unchanged = unescape_with("test", custom_entities);
-    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
-    // because it influences diff
-    // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Ok(Cow::Borrowed("test")));
-    assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
-
-    assert!(unescape_with("&lt;", custom_entities).is_err());
-    assert_eq!(unescape_with("&#x30;", custom_entities), Ok("0".into()));
-    assert_eq!(unescape_with("&#48;", custom_entities), Ok("0".into()));
-    assert_eq!(unescape_with("&foo;", custom_entities), Ok("BAR".into()));
-    assert!(unescape_with("&fop;", custom_entities).is_err());
-}
-
-#[test]
-fn test_escape() {
-    let unchanged = escape("test");
-    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
-    // because it influences diff
-    // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Cow::Borrowed("test"));
-    assert!(matches!(unchanged, Cow::Borrowed(_)));
-
-    assert_eq!(escape("<&\"'>"), "&lt;&amp;&quot;&apos;&gt;");
-    assert_eq!(escape("<test>"), "&lt;test&gt;");
-    assert_eq!(escape("\"a\"bc"), "&quot;a&quot;bc");
-    assert_eq!(escape("\"a\"b&c"), "&quot;a&quot;b&amp;c");
-    assert_eq!(
-        escape("prefix_\"a\"b&<>c"),
-        "prefix_&quot;a&quot;b&amp;&lt;&gt;c"
-    );
-}
-
-#[test]
-fn test_partial_escape() {
-    let unchanged = partial_escape("test");
-    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
-    // because it influences diff
-    // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Cow::Borrowed("test"));
-    assert!(matches!(unchanged, Cow::Borrowed(_)));
-
-    assert_eq!(partial_escape("<&\"'>"), "&lt;&amp;\"'&gt;");
-    assert_eq!(partial_escape("<test>"), "&lt;test&gt;");
-    assert_eq!(partial_escape("\"a\"bc"), "\"a\"bc");
-    assert_eq!(partial_escape("\"a\"b&c"), "\"a\"b&amp;c");
-    assert_eq!(
-        partial_escape("prefix_\"a\"b&<>c"),
-        "prefix_\"a\"b&amp;&lt;&gt;c"
-    );
-}
-
-#[test]
-fn test_minimal_escape() {
-    assert_eq!(minimal_escape("test"), Cow::Borrowed("test"));
-    assert_eq!(minimal_escape("<&\"'>"), "&lt;&amp;\"'>");
-    assert_eq!(minimal_escape("<test>"), "&lt;test>");
-    assert_eq!(minimal_escape("\"a\"bc"), "\"a\"bc");
-    assert_eq!(minimal_escape("\"a\"b&c"), "\"a\"b&amp;c");
-    assert_eq!(
-        minimal_escape("prefix_\"a\"b&<>c"),
-        "prefix_\"a\"b&amp;&lt;>c"
-    );
 }
