@@ -1,7 +1,7 @@
 use std::iter;
 
 use pretty_assertions::assert_eq;
-use quick_xml::events::Event::*;
+use quick_xml::events::{BytesStart, Event::*};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
@@ -38,6 +38,53 @@ async fn test_sample() {
         buf.clear();
     }
     assert_eq!((count, reads), (1247, 5245));
+}
+
+/// This tests checks that read_to_end() correctly returns span even when
+/// text is trimmed from both sides
+mod read_to_end {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn text() {
+        let mut r = Reader::from_str("<tag> text </tag>");
+        //                            ^0   ^5    ^11
+        r.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        assert_eq!(
+            r.read_event_into_async(&mut buf).await.unwrap(),
+            Start(BytesStart::new("tag"))
+        );
+        assert_eq!(
+            r.read_to_end_into_async(QName(b"tag"), &mut buf)
+                .await
+                .unwrap(),
+            5..11
+        );
+        assert_eq!(r.read_event_into_async(&mut buf).await.unwrap(), Eof);
+    }
+
+    #[tokio::test]
+    async fn tag() {
+        let mut r = Reader::from_str("<tag> <nested/> </tag>");
+        //                            ^0   ^5         ^16
+        r.config_mut().trim_text(true);
+
+        let mut buf = Vec::new();
+        assert_eq!(
+            r.read_event_into_async(&mut buf).await.unwrap(),
+            Start(BytesStart::new("tag"))
+        );
+        assert_eq!(
+            r.read_to_end_into_async(QName(b"tag"), &mut buf)
+                .await
+                .unwrap(),
+            5..16
+        );
+        assert_eq!(r.read_event_into_async(&mut buf).await.unwrap(), Eof);
+    }
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/751
