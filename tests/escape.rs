@@ -1,5 +1,5 @@
 use pretty_assertions::assert_eq;
-use quick_xml::escape::{self, EscapeError};
+use quick_xml::escape::{self, EscapeError, ParseCharRefError};
 use std::borrow::Cow;
 use std::num::IntErrorKind;
 
@@ -93,13 +93,52 @@ fn unescape_long() {
 
     // Too big numbers for u32 should produce errors
     match escape::unescape(&format!("&#{};", u32::MAX as u64 + 1)) {
-        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
-        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+        Err(EscapeError::InvalidCharRef(ParseCharRefError::InvalidNumber(err))) => {
+            assert_eq!(err.kind(), &IntErrorKind::PosOverflow)
+        }
+        x => panic!(
+            "expected Err(InvalidCharRef(InvalidNumber(PosOverflow))), bug got {:?}",
+            x
+        ),
     }
     match escape::unescape(&format!("&#x{:x};", u32::MAX as u64 + 1)) {
-        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
-        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+        Err(EscapeError::InvalidCharRef(ParseCharRefError::InvalidNumber(err))) => {
+            assert_eq!(err.kind(), &IntErrorKind::PosOverflow)
+        }
+        x => panic!(
+            "expected Err(InvalidCharRef(InvalidNumber(PosOverflow))), bug got {:?}",
+            x
+        ),
     }
+}
+
+#[test]
+fn unescape_sign() {
+    assert_eq!(
+        escape::unescape("&#+48;"),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+    assert_eq!(
+        escape::unescape("&#x+30;"),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+
+    assert_eq!(
+        escape::unescape("&#-48;"),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+    assert_eq!(
+        escape::unescape("&#x-30;"),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
 }
 
 #[test]
@@ -156,11 +195,50 @@ fn unescape_with_long() {
 
     // Too big numbers for u32 should produce errors
     match escape::unescape_with(&format!("&#{};", u32::MAX as u64 + 1), |_| None) {
-        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
-        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+        Err(EscapeError::InvalidCharRef(ParseCharRefError::InvalidNumber(err))) => {
+            assert_eq!(err.kind(), &IntErrorKind::PosOverflow)
+        }
+        x => panic!(
+            "expected Err(InvalidCharRef(InvalidNumber(PosOverflow))), bug got {:?}",
+            x
+        ),
     }
     match escape::unescape_with(&format!("&#x{:x};", u32::MAX as u64 + 1), |_| None) {
-        Err(EscapeError::InvalidCharRef(err)) => assert_eq!(err.kind(), &IntErrorKind::PosOverflow),
-        x => panic!("expected Err(InvalidCharRef(PosOverflow)), bug got {:?}", x),
+        Err(EscapeError::InvalidCharRef(ParseCharRefError::InvalidNumber(err))) => {
+            assert_eq!(err.kind(), &IntErrorKind::PosOverflow)
+        }
+        x => panic!(
+            "expected Err(InvalidCharRef(InvalidNumber(PosOverflow))), bug got {:?}",
+            x
+        ),
     }
+}
+
+#[test]
+fn unescape_with_sign() {
+    assert_eq!(
+        escape::unescape_with("&#+48;", |_| None),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+    assert_eq!(
+        escape::unescape_with("&#x+30;", |_| None),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+
+    assert_eq!(
+        escape::unescape_with("&#-48;", |_| None),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
+    assert_eq!(
+        escape::unescape_with("&#x-30;", |_| None),
+        Err(EscapeError::InvalidCharRef(
+            ParseCharRefError::UnexpectedSign
+        )),
+    );
 }

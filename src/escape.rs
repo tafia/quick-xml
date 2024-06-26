@@ -5,30 +5,56 @@ use std::borrow::Cow;
 use std::num::ParseIntError;
 use std::ops::Range;
 
+/// Error of parsing character reference (`&#<dec-number>;` or `&#x<hex-number>;`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum ParseCharRefError {
+    /// Number contains sign character (`+` or `-`) which is not allowed.
+    UnexpectedSign,
+    /// Number cannot be parsed due to non-number characters or a numeric overflow.
+    InvalidNumber(ParseIntError),
+    /// Character reference represents not a valid unicode codepoint.
+    InvalidCodepoint(u32),
+    /// Character reference expanded to a not permitted character for an XML.
+    ///
+    /// Currently, only `0x0` character produces this error.
+    IllegalCharacter(u32),
+}
+
+impl std::fmt::Display for ParseCharRefError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedSign => f.write_str("unexpected number sign"),
+            Self::InvalidNumber(e) => e.fmt(f),
+            Self::InvalidCodepoint(n) => write!(f, "`{}` is not a valid codepoint", n),
+            Self::IllegalCharacter(n) => write!(f, "0x{:x} character is not permitted in XML", n),
+        }
+    }
+}
+
+impl std::error::Error for ParseCharRefError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidNumber(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 /// Error for XML escape / unescape.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EscapeError {
-    /// Entity with Null character
-    EntityWithNull(Range<usize>),
     /// Referenced entity in unknown to the parser.
     UnrecognizedEntity(Range<usize>, String),
     /// Cannot find `;` after `&`
     UnterminatedEntity(Range<usize>),
     /// Attempt to parse character reference (`&#<dec-number>;` or `&#x<hex-number>;`)
     /// was unsuccessful, not all characters are decimal or hexadecimal numbers.
-    InvalidCharRef(ParseIntError),
-    /// Not a valid unicode codepoint
-    InvalidCodepoint(u32),
+    InvalidCharRef(ParseCharRefError),
 }
 
 impl std::fmt::Display for EscapeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            EscapeError::EntityWithNull(e) => write!(
-                f,
-                "Error while escaping character at range {:?}: Null character entity not allowed",
-                e
-            ),
             EscapeError::UnrecognizedEntity(rge, res) => {
                 write!(f, "at {:?}: unrecognized entity `{}`", rge, res)
             }
@@ -40,7 +66,6 @@ impl std::fmt::Display for EscapeError {
             EscapeError::InvalidCharRef(e) => {
                 write!(f, "invalid character reference: {}", e)
             }
-            EscapeError::InvalidCodepoint(n) => write!(f, "'{}' is not a valid codepoint", n),
         }
     }
 }
@@ -246,7 +271,7 @@ where
                 // search for character correctness
                 let pat = &raw[start + 1..end];
                 if let Some(entity) = pat.strip_prefix('#') {
-                    let codepoint = parse_number(entity, start..end)?;
+                    let codepoint = parse_number(entity).map_err(EscapeError::InvalidCharRef)?;
                     unescaped.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
                 } else if let Some(value) = resolve_entity(pat) {
                     unescaped.push_str(value);
@@ -1791,18 +1816,27 @@ pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     Some(s)
 }
 
-fn parse_number(bytes: &str, range: Range<usize>) -> Result<char, EscapeError> {
-    let code = if let Some(hex_digits) = bytes.strip_prefix('x') {
-        u32::from_str_radix(hex_digits, 16)
+fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
+    let code = if let Some(hex) = num.strip_prefix('x') {
+        from_str_radix(hex, 16)?
     } else {
-        u32::from_str_radix(bytes, 10)
-    }
-    .map_err(EscapeError::InvalidCharRef)?;
+        from_str_radix(num, 10)?
+    };
     if code == 0 {
-        return Err(EscapeError::EntityWithNull(range));
+        return Err(ParseCharRefError::IllegalCharacter(code));
     }
     match std::char::from_u32(code) {
         Some(c) => Ok(c),
-        None => Err(EscapeError::InvalidCodepoint(code)),
+        None => Err(ParseCharRefError::InvalidCodepoint(code)),
+    }
+}
+
+#[inline]
+fn from_str_radix(src: &str, radix: u32) -> Result<u32, ParseCharRefError> {
+    match src.as_bytes().first().copied() {
+        // We should not allow sign numbers, but u32::from_str_radix will accept `+`.
+        // We also handle `-` to be consistent in returned errors
+        Some(b'+') | Some(b'-') => Err(ParseCharRefError::UnexpectedSign),
+        _ => u32::from_str_radix(src, radix).map_err(ParseCharRefError::InvalidNumber),
     }
 }
