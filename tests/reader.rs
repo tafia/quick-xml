@@ -1,6 +1,7 @@
 use std::str::from_utf8;
 
 use quick_xml::events::{BytesCData, BytesEnd, BytesStart, BytesText, Event::*};
+use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
 use pretty_assertions::assert_eq;
@@ -263,5 +264,100 @@ mod double_dash {
         assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("hello")));
         assert_eq!(r.read_event().unwrap(), CData(BytesCData::new("--")));
         assert_eq!(r.read_event().unwrap(), End(BytesEnd::new("hello")));
+    }
+}
+
+/// This tests checks that read_to_end() correctly returns span even when
+/// text is trimmed from both sides
+mod read_to_end {
+    use super::*;
+
+    mod borrowed {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn text() {
+            let mut r = Reader::from_str("<tag> text </tag>");
+            //                            ^0   ^5    ^11
+            r.config_mut().trim_text(true);
+
+            assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
+            assert_eq!(r.read_to_end(QName(b"tag")).unwrap(), 5..11);
+            assert_eq!(r.read_event().unwrap(), Eof);
+        }
+
+        #[test]
+        fn tag() {
+            let mut r = Reader::from_str("<tag> <nested/> </tag>");
+            //                            ^0   ^5         ^16
+            r.config_mut().trim_text(true);
+
+            assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
+            assert_eq!(r.read_to_end(QName(b"tag")).unwrap(), 5..16);
+            assert_eq!(r.read_event().unwrap(), Eof);
+        }
+    }
+
+    mod buffered {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn text() {
+            let mut r = Reader::from_str("<tag> text </tag>");
+            //                            ^0   ^5    ^11
+            r.config_mut().trim_text(true);
+
+            let mut buf = Vec::new();
+            assert_eq!(
+                r.read_event_into(&mut buf).unwrap(),
+                Start(BytesStart::new("tag"))
+            );
+            assert_eq!(r.read_to_end_into(QName(b"tag"), &mut buf).unwrap(), 5..11);
+            assert_eq!(r.read_event_into(&mut buf).unwrap(), Eof);
+        }
+
+        #[test]
+        fn tag() {
+            let mut r = Reader::from_str("<tag> <nested/> </tag>");
+            //                            ^0   ^5         ^16
+            r.config_mut().trim_text(true);
+
+            let mut buf = Vec::new();
+            assert_eq!(
+                r.read_event_into(&mut buf).unwrap(),
+                Start(BytesStart::new("tag"))
+            );
+            assert_eq!(r.read_to_end_into(QName(b"tag"), &mut buf).unwrap(), 5..16);
+            assert_eq!(r.read_event_into(&mut buf).unwrap(), Eof);
+        }
+    }
+}
+
+/// This tests checks that read_text() correctly returns text even when
+/// text is trimmed from both sides
+mod read_text {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn text() {
+        let mut r = Reader::from_str("<tag> text </tag>");
+        r.config_mut().trim_text(true);
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
+        assert_eq!(r.read_text(QName(b"tag")).unwrap(), " text ");
+        assert_eq!(r.read_event().unwrap(), Eof);
+    }
+
+    #[test]
+    fn tag() {
+        let mut r = Reader::from_str("<tag> <nested/> </tag>");
+        r.config_mut().trim_text(true);
+
+        assert_eq!(r.read_event().unwrap(), Start(BytesStart::new("tag")));
+        assert_eq!(r.read_text(QName(b"tag")).unwrap(), " <nested/> ");
+        assert_eq!(r.read_event().unwrap(), Eof);
     }
 }
