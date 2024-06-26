@@ -63,22 +63,12 @@ impl<'a> Attribute<'a> {
     ///
     /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
+    #[inline]
     pub fn unescape_value_with<'entity>(
         &self,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> XmlResult<Cow<'a, str>> {
-        // from_utf8 should never fail because content is always UTF-8 encoded
-        let decoded = match &self.value {
-            Cow::Borrowed(bytes) => Cow::Borrowed(std::str::from_utf8(bytes)?),
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => Cow::Owned(std::str::from_utf8(bytes)?.to_string()),
-        };
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
+        self.decode_and_unescape_value_with(Decoder::utf8(), resolve_entity)
     }
 
     /// Decodes then unescapes the value.
