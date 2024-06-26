@@ -344,6 +344,27 @@ mod check_end_names {
             );
             assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }
+
+        #[test]
+        fn unmatched_end_tags() {
+            let mut reader = Reader::from_str("<tag></tag></unmatched>");
+            reader.config_mut().allow_unmatched_ends = true;
+
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::Start(BytesStart::new("tag"))
+            );
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("tag"))
+            );
+            // #770: We want to allow this
+            assert_eq!(
+                reader.read_event().unwrap(),
+                Event::End(BytesEnd::new("unmatched"))
+            );
+            assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        }
     }
 }
 

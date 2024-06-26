@@ -76,6 +76,25 @@ pub struct Config {
     /// [`expand_empty_elements`]: Self::expand_empty_elements
     pub check_end_names: bool,
 
+    /// Whether unmatched closing tag names should be allowed. Unless enabled,
+    /// in case of a dangling end tag, the [`Error::IllFormed(UnmatchedEndTag)`]
+    /// is returned from read methods.
+    ///
+    /// When set to `true`, it won't check if a closing tag has a corresponding
+    /// opening tag at all. For example, `<a></a></b>` will be permitted.
+    ///
+    /// Note that the emitted [`End`] event will not be modified if this is enabled,
+    /// ie. it will contain the data of the unmatched end tag.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event.
+    ///
+    /// Default: `false`
+    ///
+    /// [`Error::IllFormed(UnmatchedEndTag)`]: crate::errors::IllFormedError::UnmatchedEndTag
+    /// [`End`]: crate::events::Event::End
+    pub allow_unmatched_ends: bool,
+
     /// Whether empty elements should be split into an `Open` and a `Close` event.
     ///
     /// When set to `true`, all [`Empty`] events produced by a self-closing tag
@@ -192,6 +211,7 @@ impl Default for Config {
         Self {
             check_comments: false,
             check_end_names: true,
+            allow_unmatched_ends: false,
             expand_empty_elements: false,
             trim_markup_names_in_closing_tags: true,
             trim_text_start: false,
