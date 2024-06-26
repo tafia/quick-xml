@@ -8,7 +8,7 @@ use std::ops::Range;
 use pretty_assertions::assert_eq;
 
 /// Error for XML escape / unescape.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EscapeError {
     /// Entity with Null character
     EntityWithNull(Range<usize>),
@@ -1845,19 +1845,19 @@ fn parse_decimal(bytes: &str) -> Result<u32, EscapeError> {
 
 #[test]
 fn test_unescape() {
-    let unchanged = unescape("test").unwrap();
+    let unchanged = unescape("test");
     // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
     // because it influences diff
     // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Cow::Borrowed("test"));
-    assert!(matches!(unchanged, Cow::Borrowed(_)));
+    assert_eq!(unchanged, Ok(Cow::Borrowed("test")));
+    assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
 
     assert_eq!(
-        unescape("&lt;&amp;test&apos;&quot;&gt;").unwrap(),
-        "<&test'\">"
+        unescape("&lt;&amp;test&apos;&quot;&gt;"),
+        Ok("<&test'\">".into())
     );
-    assert_eq!(unescape("&#x30;").unwrap(), "0");
-    assert_eq!(unescape("&#48;").unwrap(), "0");
+    assert_eq!(unescape("&#x30;"), Ok("0".into()));
+    assert_eq!(unescape("&#48;"), Ok("0".into()));
     assert!(unescape("&foo;").is_err());
 }
 
@@ -1868,17 +1868,17 @@ fn test_unescape_with() {
         _ => None,
     };
 
-    let unchanged = unescape_with("test", custom_entities).unwrap();
+    let unchanged = unescape_with("test", custom_entities);
     // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
     // because it influences diff
     // TODO: use assert_matches! when stabilized and other features will bump MSRV
-    assert_eq!(unchanged, Cow::Borrowed("test"));
-    assert!(matches!(unchanged, Cow::Borrowed(_)));
+    assert_eq!(unchanged, Ok(Cow::Borrowed("test")));
+    assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
 
     assert!(unescape_with("&lt;", custom_entities).is_err());
-    assert_eq!(unescape_with("&#x30;", custom_entities).unwrap(), "0");
-    assert_eq!(unescape_with("&#48;", custom_entities).unwrap(), "0");
-    assert_eq!(unescape_with("&foo;", custom_entities).unwrap(), "BAR");
+    assert_eq!(unescape_with("&#x30;", custom_entities), Ok("0".into()));
+    assert_eq!(unescape_with("&#48;", custom_entities), Ok("0".into()));
+    assert_eq!(unescape_with("&foo;", custom_entities), Ok("BAR".into()));
     assert!(unescape_with("&fop;", custom_entities).is_err());
 }
 
