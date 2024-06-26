@@ -8,8 +8,8 @@ use serde::de::IgnoredAny;
 use serde::serde_if_integer128;
 use serde::Deserialize;
 
-mod helpers;
-use helpers::from_str;
+mod serde_helpers;
+use serde_helpers::from_str;
 
 /// Tests for deserializing into specially named field `$text` which represent
 /// textual content of an XML element

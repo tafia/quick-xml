@@ -1,4 +1,4 @@
-//! Utility functions for integration tests
+//! Utility functions for serde integration tests
 
 use quick_xml::de::Deserializer;
 use quick_xml::DeError;
