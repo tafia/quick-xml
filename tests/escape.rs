@@ -1,5 +1,5 @@
 use pretty_assertions::assert_eq;
-use quick_xml::escape;
+use quick_xml::escape::{self, EscapeError};
 use std::borrow::Cow;
 
 #[test]
@@ -68,7 +68,10 @@ fn unescape() {
     );
     assert_eq!(escape::unescape("&#x30;"), Ok("0".into()));
     assert_eq!(escape::unescape("&#48;"), Ok("0".into()));
-    assert!(escape::unescape("&foo;").is_err());
+    assert_eq!(
+        escape::unescape("&foo;"),
+        Err(EscapeError::UnrecognizedEntity(1..4, "foo".into()))
+    );
 }
 
 #[test]
@@ -85,7 +88,10 @@ fn unescape_with() {
     assert_eq!(unchanged, Ok(Cow::Borrowed("test")));
     assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
 
-    assert!(escape::unescape_with("&lt;", custom_entities).is_err());
+    assert_eq!(
+        escape::unescape_with("&lt;", custom_entities),
+        Err(EscapeError::UnrecognizedEntity(1..3, "lt".into())),
+    );
     assert_eq!(
         escape::unescape_with("&#x30;", custom_entities),
         Ok("0".into())
@@ -98,5 +104,8 @@ fn unescape_with() {
         escape::unescape_with("&foo;", custom_entities),
         Ok("BAR".into())
     );
-    assert!(escape::unescape_with("&fop;", custom_entities).is_err());
+    assert_eq!(
+        escape::unescape_with("&fop;", custom_entities),
+        Err(EscapeError::UnrecognizedEntity(1..4, "fop".into()))
+    );
 }
