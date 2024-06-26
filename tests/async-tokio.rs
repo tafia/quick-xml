@@ -7,7 +7,7 @@ use quick_xml::reader::Reader;
 
 // Import `small_buffers_tests!`
 #[macro_use]
-mod reader;
+mod helpers;
 
 small_buffers_tests!(
     #[tokio::test]
