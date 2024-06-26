@@ -45,7 +45,7 @@ impl<'a> Attribute<'a> {
     /// [`encoding`]: ../../index.html#encoding
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
-        self.unescape_value_with(|_| None)
+        self.unescape_value_with(resolve_predefined_entity)
     }
 
     /// Decodes using UTF-8 then unescapes the value, using custom entities.

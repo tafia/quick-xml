@@ -26,6 +26,7 @@
   As a result, the following variants of `quick_xml::escape::EscapeError` are removed:
   - `TooLongDecimal`
   - `TooLongHexadecimal`
+- [#771]: Fixed `Attribute::unescape_value` which does not unescape predefined values since 0.32.0.
 
 ### Misc Changes
 
