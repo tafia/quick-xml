@@ -15,9 +15,13 @@
 
 ### New Features
 
+- [#772]: Add `reader::Config::allow_unmatched_ends` to permit dangling end tags
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#772]: https://github.com/tafia/quick-xml/pull/772
 
 
 ## 0.34.0 -- 2024-06-25
