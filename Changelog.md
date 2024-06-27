@@ -13,6 +13,10 @@
 
 ## Unreleased
 
+The feature `escape-html` was removed. Since [#739] custom entity resolution function
+have precedence over standard one, so that user can implement resolution of HTML entities
+by yourself.
+
 ### New Features
 
 - [#772]: Add `reader::Config::allow_unmatched_ends` to permit dangling end tags
@@ -57,9 +61,7 @@
 
 - [#650]: Change the type of `Event::PI` to a new dedicated `BytesPI` type.
 - [#759]: Make `const` as much functions as possible:
-  - `resolve_html5_entity()`
   - `resolve_predefined_entity()`
-  - `resolve_xml_entity()`
   - `Attr::key()`
   - `Attr::value()`
   - `Attributes::html()`
@@ -82,10 +84,12 @@
   - `SliceReader::get_ref()`
   - `Writer::get_ref()`
   - `Writer::new()`
-- [#763]: Hide `quick_xml::escape::resolve_html5_entity` under `escape-html` feature again.
-  This function has significant influence to the compilation time (10+ seconds or 5x times)
+- [#763]: Remove `escape-html` feature and the following functions dependent on it:
+  - `resolve_html5_entity()` (this function had a significant impact to the compilation time (10+ seconds or 5x times))
+  - `resolve_xml_entity()` (now `resolve_predefined_entity()` is equal to this one)
 
 [#650]: https://github.com/tafia/quick-xml/issues/650
+[#739]: https://github.com/tafia/quick-xml/pull/739
 [#755]: https://github.com/tafia/quick-xml/pull/755
 [#758]: https://github.com/tafia/quick-xml/pull/758
 [#759]: https://github.com/tafia/quick-xml/pull/759

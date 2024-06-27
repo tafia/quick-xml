@@ -7,7 +7,7 @@ edition = "2021"
 documentation = "https://docs.rs/quick-xml"
 repository = "https://github.com/tafia/quick-xml"
 
-keywords = ["xml", "serde", "parser", "writer", "html"]
+keywords = ["xml", "serde", "parser", "writer"]
 categories = ["asynchronous", "encoding", "parsing", "parser-implementations"]
 license = "MIT"
 rust-version = "1.56"
@@ -110,14 +110,6 @@ async-tokio = ["tokio"]
 ## [ISO-2022-JP]: encoding_rs::ISO_2022_JP
 ## [#158]: https://github.com/tafia/quick-xml/issues/158
 encoding = ["encoding_rs"]
-
-## Enables support for recognizing all [HTML 5 entities] in [`unescape`]
-## function. The full list of entities also can be found in
-## <https://html.spec.whatwg.org/entities.json>.
-##
-## [HTML 5 entities]: https://dev.w3.org/html5/html-author/charref
-## [`unescape`]: crate::escape::unescape
-escape-html = []
 
 ## This feature is for the Serde deserializer that enables support for deserializing
 ## lists where tags are overlapped with tags that do not correspond to the list.
