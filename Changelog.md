@@ -27,6 +27,8 @@
   - `TooLongDecimal`
   - `TooLongHexadecimal`
 - [#771]: Fixed `Attribute::unescape_value` which does not unescape predefined values since 0.32.0.
+- [#774]: Fixed regression since 0.33.0: `Text` event may be skipped in `read_event_into()`
+  and `read_event_into_async()` in some circumstances.
 
 ### Misc Changes
 
@@ -42,6 +44,7 @@
 [#771]: https://github.com/tafia/quick-xml/pull/771
 [#772]: https://github.com/tafia/quick-xml/pull/772
 [#773]: https://github.com/tafia/quick-xml/pull/773
+[#774]: https://github.com/tafia/quick-xml/issues/774
 
 
 ## 0.34.0 -- 2024-06-25

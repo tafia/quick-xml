@@ -69,7 +69,9 @@ macro_rules! impl_buffered_source {
                 };
 
                 match memchr::memchr(b'<', available) {
-                    Some(0) => {
+                    // Special handling is needed only on the first iteration.
+                    // On next iterations we already read something and should emit Text event
+                    Some(0) if read == 0 => {
                         self $(.$reader)? .consume(1);
                         *position += 1;
                         return ReadTextResult::Markup(buf);
