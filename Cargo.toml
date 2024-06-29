@@ -11,6 +11,11 @@ keywords = ["xml", "serde", "parser", "writer", "html"]
 categories = ["asynchronous", "encoding", "parsing", "parser-implementations"]
 license = "MIT"
 rust-version = "1.56"
+# We exclude tests & examples & benches to reduce the size of a package.
+# Unfortunately, this is source of warnings in latest cargo when packaging:
+# > warning: ignoring {context} `{name}` as `{path}` is not included in the published package
+# That may become unnecessary once https://github.com/rust-lang/cargo/issues/13491
+# will be resolved
 include = ["src/*", "LICENSE-MIT.md", "README.md"]
 
 [dependencies]
@@ -188,6 +193,8 @@ all-features = true
 
 # Tests, benchmarks and examples doesn't included in package on crates.io,
 # so we need to specify a path, otherwise `cargo package` complains
+# That may become unnecessary once https://github.com/rust-lang/cargo/issues/13491
+# will be resolved
 
 [[test]]
 name = "encodings"
