@@ -1,9 +1,10 @@
 use std::iter;
 
 use pretty_assertions::assert_eq;
-use quick_xml::events::{BytesStart, Event::*};
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
+use tokio::io::BufReader;
 
 // Import `small_buffers_tests!`
 #[macro_use]
@@ -147,4 +148,30 @@ async fn issue751() {
             break;
         }
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/774
+///
+/// Capacity of the buffer selected in that way, that "text" will be read into
+/// one internal buffer of `BufReader` in one `fill_buf()` call and `<` of the
+/// closing tag in the next call.
+#[tokio::test]
+async fn issue774() {
+    let xml = BufReader::with_capacity(9, b"<tag>text</tag>" as &[u8]);
+    //                                      ^0       ^9
+    let mut reader = Reader::from_reader(xml);
+    let mut buf = Vec::new();
+
+    assert_eq!(
+        reader.read_event_into_async(&mut buf).await.unwrap(),
+        Start(BytesStart::new("tag"))
+    );
+    assert_eq!(
+        reader.read_event_into_async(&mut buf).await.unwrap(),
+        Text(BytesText::new("text"))
+    );
+    assert_eq!(
+        reader.read_event_into_async(&mut buf).await.unwrap(),
+        End(BytesEnd::new("tag"))
+    );
 }

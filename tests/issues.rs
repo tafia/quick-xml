@@ -2,11 +2,12 @@
 //!
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
+use std::io::BufReader;
 use std::iter;
 use std::sync::mpsc;
 
 use quick_xml::errors::{Error, IllFormedError, SyntaxError};
-use quick_xml::events::{BytesDecl, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
@@ -336,4 +337,30 @@ fn issue751() {
             break;
         }
     }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/774
+///
+/// Capacity of the buffer selected in that way, that "text" will be read into
+/// one internal buffer of `BufReader` in one `fill_buf()` call and `<` of the
+/// closing tag in the next call.
+#[test]
+fn issue774() {
+    let xml = BufReader::with_capacity(9, b"<tag>text</tag>" as &[u8]);
+    //                                      ^0       ^9
+    let mut reader = Reader::from_reader(xml);
+    let mut buf = Vec::new();
+
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::Start(BytesStart::new("tag"))
+    );
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::Text(BytesText::new("text"))
+    );
+    assert_eq!(
+        reader.read_event_into(&mut buf).unwrap(),
+        Event::End(BytesEnd::new("tag"))
+    );
 }
