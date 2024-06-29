@@ -595,11 +595,7 @@ impl<'a> BytesText<'a> {
         &self,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
     ) -> Result<Cow<'a, str>> {
-        let decoded = match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        };
+        let decoded = self.decoder.decode_cow(&self.content)?;
 
         match unescape_with(&decoded, resolve_entity)? {
             // Because result is borrowed, no replacements was done and we can use original string
@@ -810,11 +806,7 @@ impl<'a> BytesCData<'a> {
 
     /// Gets content of this text buffer in the specified encoding
     pub(crate) fn decode(&self) -> Result<Cow<'a, str>> {
-        Ok(match &self.content {
-            Cow::Borrowed(bytes) => self.decoder.decode(bytes)?,
-            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => self.decoder.decode(bytes)?.into_owned().into(),
-        })
+        self.decoder.decode_cow(&self.content)
     }
 }
 

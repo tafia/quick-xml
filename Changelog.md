@@ -22,9 +22,24 @@
 - [#773]: Fixed reporting incorrect end position in `Reader::read_to_end` family
   of methods and trimming of the trailing spaces in `Reader::read_text` when
   `trim_text_start` is set and the last event is not a `Text` event.
+- [#771]: Character references now allow any number of leading zeroes as it should.
+  As a result, the following variants of `quick_xml::escape::EscapeError` are removed:
+  - `TooLongDecimal`
+  - `TooLongHexadecimal`
+- [#771]: Fixed `Attribute::unescape_value` which does not unescape predefined values since 0.32.0.
 
 ### Misc Changes
 
+- [#771]: `EscapeError::UnrecognizedSymbol` renamed to `EscapeError::UnrecognizedEntity`.
+- [#771]: Implemented `PartialEq` for `EscapeError`.
+- [#771]: Replace the following variants of `EscapeError` by `InvalidCharRef` variant
+  with a new `ParseCharRefError` inside:
+  - `EntityWithNull`
+  - `InvalidDecimal`
+  - `InvalidHexadecimal`
+  - `InvalidCodepoint`
+
+[#771]: https://github.com/tafia/quick-xml/pull/771
 [#772]: https://github.com/tafia/quick-xml/pull/772
 [#773]: https://github.com/tafia/quick-xml/pull/773
 

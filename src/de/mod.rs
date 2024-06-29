@@ -2135,9 +2135,9 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = PredefinedEntityResolve
     lookahead: Result<PayloadEvent<'i>, DeError>,
 
     /// Used to resolve unknown entities that would otherwise cause the parser
-    /// to return an [`EscapeError::UnrecognizedSymbol`] error.
+    /// to return an [`EscapeError::UnrecognizedEntity`] error.
     ///
-    /// [`EscapeError::UnrecognizedSymbol`]: crate::escape::EscapeError::UnrecognizedSymbol
+    /// [`EscapeError::UnrecognizedEntity`]: crate::escape::EscapeError::UnrecognizedEntity
     entity_resolver: E,
 }
 

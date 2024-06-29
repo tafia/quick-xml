@@ -81,10 +81,10 @@ pub trait EntityResolver {
     /// Called when an entity needs to be resolved.
     ///
     /// `None` is returned if a suitable value can not be found.
-    /// In that case an [`EscapeError::UnrecognizedSymbol`] will be returned by
+    /// In that case an [`EscapeError::UnrecognizedEntity`] will be returned by
     /// a deserializer.
     ///
-    /// [`EscapeError::UnrecognizedSymbol`]: crate::escape::EscapeError::UnrecognizedSymbol
+    /// [`EscapeError::UnrecognizedEntity`]: crate::escape::EscapeError::UnrecognizedEntity
     fn resolve(&self, entity: &str) -> Option<&str>;
 }
 
