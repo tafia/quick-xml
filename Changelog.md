@@ -15,6 +15,15 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.35.0 -- 2024-06-29
+
+### New Features
+
 - [#772]: Add `reader::Config::allow_unmatched_ends` to permit dangling end tags
 
 ### Bug Fixes
