@@ -1,7 +1,9 @@
 //! Contains tests that produces errors during parsing XML.
 
 use quick_xml::errors::{Error, SyntaxError};
-use quick_xml::events::{BytesCData, BytesDecl, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use quick_xml::events::{
+    BytesCData, BytesDecl, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event,
+};
 use quick_xml::reader::{NsReader, Reader};
 
 macro_rules! ok {
@@ -423,6 +425,30 @@ mod syntax {
         ok!(normal4("<?xml\r?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\r", 3))));
         ok!(normal5("<?xml\n?>")     => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
         ok!(normal6("<?xml\n?>rest") => 8: Event::Decl(BytesDecl::from_start(BytesStart::from_content("xml\n", 3))));
+    }
+
+    mod reference {
+        use super::*;
+
+        err!(unclosed1("&")        => SyntaxError::UnclosedReference);
+        err!(unclosed2("&x")       => SyntaxError::UnclosedReference);
+        err!(unclosed_num("&#")    => SyntaxError::UnclosedReference);
+        err!(unclosed_dec("&#2")   => SyntaxError::UnclosedReference);
+        err!(unclosed_hex1("&#x")  => SyntaxError::UnclosedReference);
+        err!(unclosed_hex2("&#xF") => SyntaxError::UnclosedReference);
+
+        // We do not check correctness of references during parsing
+        ok!(empty("&;")   =>      2: Event::GeneralRef(BytesRef::new("")));
+        ok!(normal1("&x;") =>     3: Event::GeneralRef(BytesRef::new("x")));
+        ok!(normal2("&x;rest") => 3: Event::GeneralRef(BytesRef::new("x")));
+        ok!(num("&#;")    =>      3: Event::GeneralRef(BytesRef::new("#")));
+        ok!(dec("&#2;")   =>      4: Event::GeneralRef(BytesRef::new("#2")));
+        ok!(hex1("&#x;")  =>      4: Event::GeneralRef(BytesRef::new("#x")));
+        ok!(hex2("&#xF;") =>      5: Event::GeneralRef(BytesRef::new("#xF")));
+
+        // XML specification explicitly allowed any number of leading zeroes
+        ok!(long_dec("&#00000000000000000000000000000000000000032;")  => 44: Event::GeneralRef(BytesRef::new("#00000000000000000000000000000000000000032")));
+        ok!(long_hex("&#x00000000000000000000000000000000000000020;") => 45: Event::GeneralRef(BytesRef::new("#x00000000000000000000000000000000000000020")));
     }
 }
 

@@ -7,7 +7,7 @@ use std::ops::Range;
 
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::events::{BytesRef, Event};
 use crate::reader::state::ReaderState;
 
 /// A struct that holds a parser configuration.
@@ -231,7 +231,7 @@ macro_rules! read_event_impl {
     ) => {{
         let event = loop {
             break match $self.state.state {
-                ParseState::Init => { // Go to InsideMarkup state
+                ParseState::Init => { // Go to InsideText state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
                     // But we still need to remove BOM for consistency with no encoding
@@ -250,6 +250,25 @@ macro_rules! read_event_impl {
                     $self.state.state = ParseState::InsideText;
                     continue;
                 },
+                ParseState::InsideRef => { // Go to InsideText
+                    let start = $self.state.offset;
+                    match $reader
+                        .read_bytes_until(b';', $buf, &mut $self.state.offset)
+                        $(.$await)?
+                    {
+                        Ok((bytes, true)) => {
+                            $self.state.state = ParseState::InsideText;
+                            Ok(Event::GeneralRef(BytesRef::wrap(bytes, $self.decoder())))
+                        },
+                        Ok((_, false)) => {
+                            // We want to report error at `&`, but offset was increased,
+                            // so return it back (-1 for `&`)
+                            $self.state.last_error_offset = start - 1;
+                            Err(Error::Syntax(SyntaxError::UnclosedReference))
+                        }
+                        Err(e) => Err(Error::Io(e.into())),
+                    }
+                }
                 ParseState::InsideText => { // Go to InsideMarkup or Done state
                     if $self.state.config.trim_text_start {
                         $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
@@ -262,12 +281,23 @@ macro_rules! read_event_impl {
                             $buf = buf;
                             continue;
                         }
+                        ReadTextResult::Ref(buf) => {
+                            $self.state.state = ParseState::InsideRef;
+                            // Pass `buf` to the next next iteration of parsing loop
+                            $buf = buf;
+                            continue;
+                        }
                         ReadTextResult::UpToMarkup(bytes) => {
                             $self.state.state = ParseState::InsideMarkup;
                             // FIXME: Can produce an empty event if:
                             // - event contains only spaces
                             // - trim_text_start = false
                             // - trim_text_end = true
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadTextResult::UpToRef(bytes) => {
+                            $self.state.state = ParseState::InsideRef;
+                            // Return Text event with `bytes` content or Eof if bytes is empty
                             Ok(Event::Text($self.state.emit_text(bytes)))
                         }
                         ReadTextResult::UpToEof(bytes) => {
@@ -475,6 +505,7 @@ pub type Span = Range<u64>;
 ///     Init         -- "(no event)"\n                                       --> InsideMarkup
 ///     InsideMarkup -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> InsideText
 ///     InsideText   -- "#lt;false#gt;\n(no event)"\nText                    --> InsideMarkup
+///     InsideRef    -- "(no event)"\nGeneralRef                             --> InsideText
 ///   end
 ///   InsideText     -- "#lt;true#gt;"\nStart --> InsideEmpty
 ///   InsideEmpty    -- End                   --> InsideText
@@ -488,6 +519,11 @@ enum ParseState {
     /// event emitted during transition to `InsideMarkup` is a `StartEvent` if the
     /// first symbol not `<`, otherwise no event are emitted.
     Init,
+    /// State after seeing the `&` symbol in textual content. Depending on the next symbol all other
+    /// events could be generated.
+    ///
+    /// After generating one event the reader moves to the `ClosedTag` state.
+    InsideRef,
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events could be generated.
     ///
@@ -601,7 +637,7 @@ impl EncodingRef {
 ///                 _ => (),
 ///             }
 ///         }
-///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
 ///
 ///         // There are several other `Event`s we do not consider here
 ///         _ => (),
@@ -782,9 +818,16 @@ enum ReadTextResult<'r, B> {
     /// Contains buffer that should be returned back to the next iteration cycle
     /// to satisfy borrow checker requirements.
     Markup(B),
+    /// Start of reference (`&` character) was found in the first byte.
+    /// Contains buffer that should be returned back to the next iteration cycle
+    /// to satisfy borrow checker requirements.
+    Ref(B),
     /// Contains text block up to start of markup (`<` character).
     UpToMarkup(&'r [u8]),
-    /// Contains text block up to EOF, start of markup (`<` character) was not found.
+    /// Contains text block up to start of reference (`&` character).
+    UpToRef(&'r [u8]),
+    /// Contains text block up to EOF, start of markup (`<` character) or of reference
+    /// (`&` character) was not found.
     UpToEof(&'r [u8]),
     /// IO error occurred.
     Err(io::Error),
