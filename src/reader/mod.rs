@@ -835,23 +835,6 @@ trait XmlSource<'r, B> {
 
     /// Read input until start of markup (the `<`) is found or end of input is reached.
     ///
-    /// Returns a slice of data read up to `<` (exclusive), and a flag noting whether
-    /// `<` was found in the input or not.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc<def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_text((), &mut position).unwrap(),
-    ///     (b"abc".as_ref(), true)
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
     /// # Parameters
     /// - `buf`: Buffer that could be filled from an input (`Self`) and
     ///   from which [events] could borrow their data
