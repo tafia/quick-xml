@@ -9,6 +9,54 @@ use quick_xml::errors::{Error, IllFormedError};
 use quick_xml::events::{BytesCData, BytesEnd, BytesPI, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
 
+mod allow_unmatched_ends {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn false_() {
+        let mut reader = Reader::from_str("<tag></tag></unmatched>");
+        reader.config_mut().allow_unmatched_ends = false;
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("tag"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::End(BytesEnd::new("tag"))
+        );
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::UnmatchedEndTag("unmatched".into()));
+            }
+            x => panic!("Expected `Err(IllFormed(_))`, but got `{:?}`", x),
+        }
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn true_() {
+        let mut reader = Reader::from_str("<tag></tag></unmatched>");
+        reader.config_mut().allow_unmatched_ends = true;
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Start(BytesStart::new("tag"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::End(BytesEnd::new("tag"))
+        );
+        // #770: We want to allow this
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::End(BytesEnd::new("unmatched"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+}
+
 mod check_comments {
     use super::*;
 
@@ -341,27 +389,6 @@ mod check_end_names {
             assert_eq!(
                 reader.read_event().unwrap(),
                 Event::End(BytesEnd::new("tag"))
-            );
-            assert_eq!(reader.read_event().unwrap(), Event::Eof);
-        }
-
-        #[test]
-        fn unmatched_end_tags() {
-            let mut reader = Reader::from_str("<tag></tag></unmatched>");
-            reader.config_mut().allow_unmatched_ends = true;
-
-            assert_eq!(
-                reader.read_event().unwrap(),
-                Event::Start(BytesStart::new("tag"))
-            );
-            assert_eq!(
-                reader.read_event().unwrap(),
-                Event::End(BytesEnd::new("tag"))
-            );
-            // #770: We want to allow this
-            assert_eq!(
-                reader.read_event().unwrap(),
-                Event::End(BytesEnd::new("unmatched"))
             );
             assert_eq!(reader.read_event().unwrap(), Event::Eof);
         }
