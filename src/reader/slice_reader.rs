@@ -285,29 +285,6 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
     }
 
     #[inline]
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: (),
-        position: &mut u64,
-    ) -> io::Result<(&'a [u8], bool)> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        if let Some(i) = memchr::memchr(byte, self) {
-            *position += i as u64 + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            Ok((bytes, true))
-        } else {
-            *position += self.len() as u64;
-            let bytes = &self[..];
-            *self = &[];
-            Ok((bytes, false))
-        }
-    }
-
-    #[inline]
     fn read_with<P>(&mut self, mut parser: P, _buf: (), position: &mut u64) -> Result<&'a [u8]>
     where
         P: Parser,

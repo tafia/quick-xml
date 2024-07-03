@@ -345,18 +345,26 @@ macro_rules! read_until_close {
                 }
             },
             // `</` - closing tag
+            // #776: We parse using ElementParser which allows us to have attributes
+            // in close tags. While such tags are not allowed by the specification,
+            // we anyway allow to parse them because:
+            // - we do not check constraints during parsing. This is performed by the
+            //   optional validate step which user should call manually
+            // - if we just look for `>` we will parse `</tag attr=">" >` as end tag
+            //   `</tag attr=">` and text `" >` which probably no one existing parser
+            //   does. This is malformed XML, however it is tolerated by some parsers
+            //   (e.g. the one used by Adobe Flash) and such documents do exist in the wild.
             Ok(Some(b'/')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
+                .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok((bytes, true)) => $self.state.emit_end(bytes),
-                Ok((_, false)) => {
+                Ok(bytes) => $self.state.emit_end(bytes),
+                Err(e) => {
                     // We want to report error at `<`, but offset was increased,
                     // so return it back (-1 for `<`)
                     $self.state.last_error_offset = start - 1;
-                    Err(Error::Syntax(SyntaxError::UnclosedTag))
+                    Err(e)
                 }
-                Err(e) => Err(Error::Io(e.into())),
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
@@ -824,39 +832,6 @@ trait XmlSource<'r, B> {
     /// [events]: crate::events::Event
     fn read_text(&mut self, buf: B, position: &mut u64) -> ReadTextResult<'r, B>;
 
-    /// Read input until `byte` is found or end of input is reached.
-    ///
-    /// Returns a slice of data read up to `byte` (exclusive),
-    /// and a flag noting whether `byte` was found in the input or not.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc*def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     (b"abc".as_ref(), true)
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
-    /// # Parameters
-    /// - `byte`: Byte for search
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: B,
-        position: &mut u64,
-    ) -> io::Result<(&'r [u8], bool)>;
-
     /// Read input until processing instruction is finished.
     ///
     /// This method expect that start sequence of a parser already was read.
@@ -1022,115 +997,6 @@ mod test {
             $buf:expr
             $(, $async:ident, $await:ident)?
         ) => {
-            mod read_bytes_until {
-                use super::*;
-                // Use Bytes for printing bytes as strings for ASCII range
-                use crate::utils::Bytes;
-                use pretty_assertions::assert_eq;
-
-                /// Checks that search in the empty buffer returns `None`
-                #[$test]
-                $($async)? fn empty() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"".as_ref();
-                    //                ^= 0
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b""), false)
-                    );
-                    assert_eq!(position, 0);
-                }
-
-                /// Checks that search in the buffer non-existent value returns entire buffer
-                /// as a result and set `position` to `len()`
-                #[$test]
-                $($async)? fn non_existent() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abcdef".as_ref();
-                    //                      ^= 6
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abcdef"), false)
-                    );
-                    assert_eq!(position, 6);
-                }
-
-                /// Checks that search in the buffer an element that is located in the front of
-                /// buffer returns empty slice as a result and set `position` to one symbol
-                /// after match (`1`)
-                #[$test]
-                $($async)? fn at_the_start() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"*abcdef".as_ref();
-                    //                 ^= 1
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b""), true)
-                    );
-                    assert_eq!(position, 1); // position after the symbol matched
-                }
-
-                /// Checks that search in the buffer an element that is located in the middle of
-                /// buffer returns slice before that symbol as a result and set `position` to one
-                /// symbol after match
-                #[$test]
-                $($async)? fn inside() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abc*def".as_ref();
-                    //                    ^= 4
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abc"), true)
-                    );
-                    assert_eq!(position, 4); // position after the symbol matched
-                }
-
-                /// Checks that search in the buffer an element that is located in the end of
-                /// buffer returns slice before that symbol as a result and set `position` to one
-                /// symbol after match (`len()`)
-                #[$test]
-                $($async)? fn in_the_end() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abcdef*".as_ref();
-                    //                       ^= 7
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abcdef"), true)
-                    );
-                    assert_eq!(position, 7); // position after the symbol matched
-                }
-            }
-
             mod read_bang_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
@@ -1691,6 +1557,81 @@ mod test {
                             Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#)
                         );
                         assert_eq!(position, 42);
+                    }
+                }
+
+                mod close {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[$test]
+                    $($async)? fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/ >".as_ref();
+                        //                   ^= 4
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/ ")
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[$test]
+                    $($async)? fn normal() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/tag>".as_ref();
+                        //                     ^= 6
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/tag")
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[$test]
+                    $($async)? fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/:>".as_ref();
+                        //                   ^= 4
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/:")
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[$test]
+                    $($async)? fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/:tag>".as_ref();
+                        //                      ^= 7
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/:tag")
+                        );
+                        assert_eq!(position, 7);
+                    }
+
+                    #[$test]
+                    $($async)? fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = br#"/tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref();
+                        //                                                         ^= 40
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(br#"/tag  attr-1=">"  attr2  =  '>'  3attr"#)
+                        );
+                        assert_eq!(position, 40);
                     }
                 }
             }

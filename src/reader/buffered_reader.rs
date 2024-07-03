@@ -102,54 +102,6 @@ macro_rules! impl_buffered_source {
         }
 
         #[inline]
-        $($async)? fn read_bytes_until $(<$lf>)? (
-            &mut self,
-            byte: u8,
-            buf: &'b mut Vec<u8>,
-            position: &mut u64,
-        ) -> io::Result<(&'b [u8], bool)> {
-            // search byte must be within the ascii range
-            debug_assert!(byte.is_ascii());
-
-            let mut read = 0;
-            let start = buf.len();
-            loop {
-                let available = match self $(.$reader)? .fill_buf() $(.$await)? {
-                    Ok(n) if n.is_empty() => break,
-                    Ok(n) => n,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e) => {
-                        *position += read;
-                        return Err(e);
-                    }
-                };
-
-                match memchr::memchr(byte, available) {
-                    Some(i) => {
-                        buf.extend_from_slice(&available[..i]);
-
-                        let used = i + 1;
-                        self $(.$reader)? .consume(used);
-                        read += used as u64;
-
-                        *position += read;
-                        return Ok((&buf[start..], true));
-                    }
-                    None => {
-                        buf.extend_from_slice(available);
-
-                        let used = available.len();
-                        self $(.$reader)? .consume(used);
-                        read += used as u64;
-                    }
-                }
-            }
-
-            *position += read;
-            Ok((&buf[start..], false))
-        }
-
-        #[inline]
         $($async)? fn read_with<$($lf,)? P: Parser>(
             &mut self,
             mut parser: P,
