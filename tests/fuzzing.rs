@@ -51,7 +51,7 @@ fn fuzz_101() {
 
 #[test]
 fn fuzz_empty_doctype() {
-    let data: &[u8] = b"<!doctype  \n    >";
+    let data: &[u8] = b"<!DOCTYPE  \n    >";
     let mut reader = Reader::from_reader(data);
     let mut buf = Vec::new();
     assert!(matches!(
