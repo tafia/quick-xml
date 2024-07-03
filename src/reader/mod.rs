@@ -360,7 +360,7 @@ macro_rules! read_until_close {
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
-                .read_with(PiParser::default(), $buf, &mut $self.state.offset)
+                .read_with(PiParser(false), $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => $self.state.emit_question_mark(bytes),
@@ -373,7 +373,7 @@ macro_rules! read_until_close {
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_with(ElementParser::default(), $buf, &mut $self.state.offset)
+                .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => Ok($self.state.emit_start(bytes)),
