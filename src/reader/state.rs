@@ -128,7 +128,11 @@ impl ReaderState {
                     self.decoder(),
                 )))
             }
-            BangType::CData if uncased_starts_with(buf, b"![CDATA[") => {
+            // XML requires uppercase only:
+            // https://www.w3.org/TR/xml11/#sec-cdata-sect
+            // Even HTML5 required uppercase only:
+            // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
+            BangType::CData if buf.starts_with(b"![CDATA[") => {
                 debug_assert!(buf.ends_with(b"]]"));
                 Ok(Event::CData(BytesCData::wrap(
                     // Cut of `![CDATA[` and `]]` from start and end
@@ -136,6 +140,10 @@ impl ReaderState {
                     self.decoder(),
                 )))
             }
+            // XML requires uppercase only, but we will check that on validation stage:
+            // https://www.w3.org/TR/xml11/#sec-prolog-dtd
+            // HTML5 allows mixed case for doctype declarations:
+            // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
             BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(

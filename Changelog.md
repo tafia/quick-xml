@@ -17,7 +17,12 @@
 
 ### Bug Fixes
 
+- [#781]: Fix conditions to start CDATA section. Only uppercase `<![CDATA[` can start it.
+  Previously any case was allowed.
+
 ### Misc Changes
+
+[#781]: https://github.com/tafia/quick-xml/pull/781
 
 
 ## 0.35.0 -- 2024-06-29
