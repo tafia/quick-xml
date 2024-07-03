@@ -1172,9 +1172,9 @@ mod test {
                         //                ^= 1
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedCData),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1191,9 +1191,9 @@ mod test {
                         //                ^= 1                 ^= 22
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedCData),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1270,9 +1270,9 @@ mod test {
                         //                ^= 1
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1287,9 +1287,9 @@ mod test {
                         //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1304,9 +1304,9 @@ mod test {
                         //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1321,9 +1321,9 @@ mod test {
                         //                ^= 1             ^= 18
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1338,9 +1338,9 @@ mod test {
                         //                ^= 1              ^= 19
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1400,9 +1400,9 @@ mod test {
                             //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1417,9 +1417,9 @@ mod test {
                             //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1452,9 +1452,9 @@ mod test {
                             //                ^= 1                  ^23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1474,9 +1474,9 @@ mod test {
                             //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1491,9 +1491,9 @@ mod test {
                             //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1526,9 +1526,9 @@ mod test {
                             //                ^= 1                  ^= 23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1554,9 +1554,9 @@ mod test {
                     //                ^= 1
 
                     match $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedTag)) => {}
+                        Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedTag),
                         x => panic!(
-                            "Expected `Err(Syntax(UnclosedTag))`, but got `{:?}`",
+                            "Expected `Err(Syntax(_))`, but got `{:?}`",
                             x
                         ),
                     }
