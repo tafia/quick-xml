@@ -338,9 +338,8 @@ macro_rules! read_until_close {
             {
                 Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
                 Err(e) => {
-                    // <!....EOF
-                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                    //          so we move offset to it (-1 for `<`)
+                    // We want to report error at `<`, but offset was increased,
+                    // so return it back (-1 for `<`)
                     $self.state.last_error_offset = start - 1;
                     Err(e)
                 }
@@ -378,7 +377,12 @@ macro_rules! read_until_close {
                 $(.$await)?
             {
                 Ok(bytes) => Ok($self.state.emit_start(bytes)),
-                Err(e) => Err(e),
+                Err(e) => {
+                    // We want to report error at `<`, but offset was increased,
+                    // so return it back (-1 for `<`)
+                    $self.state.last_error_offset = start - 1;
+                    Err(e)
+                }
             },
             // `<` - syntax error, tag not closed
             Ok(None) => {

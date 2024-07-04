@@ -19,6 +19,7 @@
 
 - [#781]: Fix conditions to start CDATA section. Only uppercase `<![CDATA[` can start it.
   Previously any case was allowed.
+- [#780]: Fixed incorrect `.error_position()` when encountering syntax error for open or self-closed tag.
 
 ### Misc Changes
 
