@@ -974,32 +974,35 @@ impl BangType {
     /// - `chunk`: data read on current iteration and not yet consumed from reader
     #[inline(always)]
     fn parse<'b>(&self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
-        for i in memchr::memchr_iter(b'>', chunk) {
-            match self {
-                // Need to read at least 6 symbols (`!---->`) for properly finished comment
-                // <!----> - XML comment
-                //  012345 - i
-                Self::Comment if buf.len() + i > 4 => {
-                    if chunk[..i].ends_with(b"--") {
-                        // We cannot strip last `--` from the buffer because we need it in case of
-                        // check_comments enabled option. XML standard requires that comment
-                        // will not end with `--->` sequence because this is a special case of
-                        // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `-|->` was splitted at |
-                    //        buf --/   \-- chunk
-                    if i == 1 && buf.ends_with(b"-") && chunk[0] == b'-' {
-                        return Some((&chunk[..i], i + 1)); // +1 for `>`
-                    }
-                    // End sequence `--|>` was splitted at |
-                    //         buf --/   \-- chunk
-                    if i == 0 && buf.ends_with(b"--") {
-                        return Some((&[], i + 1)); // +1 for `>`
+        match self {
+            Self::Comment => {
+                for i in memchr::memchr_iter(b'>', chunk) {
+                    // Need to read at least 6 symbols (`!---->`) for properly finished comment
+                    // <!----> - XML comment
+                    //  012345 - i
+                    if buf.len() + i > 4 {
+                        if chunk[..i].ends_with(b"--") {
+                            // We cannot strip last `--` from the buffer because we need it in case of
+                            // check_comments enabled option. XML standard requires that comment
+                            // will not end with `--->` sequence because this is a special case of
+                            // `--` in the comment (https://www.w3.org/TR/xml11/#sec-comments)
+                            return Some((&chunk[..i], i + 1)); // +1 for `>`
+                        }
+                        // End sequence `-|->` was splitted at |
+                        //        buf --/   \-- chunk
+                        if i == 1 && buf.ends_with(b"-") && chunk[0] == b'-' {
+                            return Some((&chunk[..i], i + 1)); // +1 for `>`
+                        }
+                        // End sequence `--|>` was splitted at |
+                        //         buf --/   \-- chunk
+                        if i == 0 && buf.ends_with(b"--") {
+                            return Some((&[], i + 1)); // +1 for `>`
+                        }
                     }
                 }
-                Self::Comment => {}
-                Self::CData => {
+            }
+            Self::CData => {
+                for i in memchr::memchr_iter(b'>', chunk) {
                     if chunk[..i].ends_with(b"]]") {
                         return Some((&chunk[..i], i + 1)); // +1 for `>`
                     }
@@ -1014,7 +1017,9 @@ impl BangType {
                         return Some((&[], i + 1)); // +1 for `>`
                     }
                 }
-                Self::DocType => {
+            }
+            Self::DocType => {
+                for i in memchr::memchr_iter(b'>', chunk) {
                     let content = &chunk[..i];
                     let balance = memchr::memchr2_iter(b'<', b'>', content)
                         .map(|p| if content[p] == b'<' { 1i32 } else { -1 })

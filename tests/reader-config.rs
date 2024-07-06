@@ -471,7 +471,7 @@ mod trim_markup_names_in_closing_tags {
 }
 
 const XML: &str = " \t\r\n\
-<!doctype root \t\r\n> \t\r\n\
+<!DOCTYPE root \t\r\n> \t\r\n\
 <root \t\r\n> \t\r\n\
     <empty \t\r\n/> \t\r\n\
     text \t\r\n\

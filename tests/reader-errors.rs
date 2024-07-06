@@ -343,6 +343,8 @@ mod syntax {
         err!(unclosed24("<![CDATA[]h") => SyntaxError::UnclosedCData);
         err!(unclosed25("<![CDATA[]>") => SyntaxError::UnclosedCData);
 
+        err!(lowercase("<![cdata[]]>") => SyntaxError::UnclosedCData);
+
         ok!(normal1("<![CDATA[]]>")     => 12: Event::CData(BytesCData::new("")));
         ok!(normal2("<![CDATA[]]>rest") => 12: Event::CData(BytesCData::new("")));
     }
