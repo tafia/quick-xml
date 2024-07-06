@@ -328,7 +328,7 @@ impl<R: BufRead> Reader<R> {
     ///     match reader.read_event_into(&mut buf) {
     ///         Ok(Event::Start(_)) => count += 1,
     ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
     ///     }

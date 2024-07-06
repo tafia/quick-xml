@@ -589,7 +589,7 @@ impl EncodingRef {
 ///     // when the input is a &str or a &[u8], we don't actually need to use another
 ///     // buffer, we could directly call `reader.read_event()`
 ///     match reader.read_event_into(&mut buf) {
-///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
 ///         // exits the loop when reaching end of file
 ///         Ok(Event::Eof) => break,
 ///
