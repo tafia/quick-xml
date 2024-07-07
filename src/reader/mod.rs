@@ -24,6 +24,32 @@ use crate::reader::state::ReaderState;
 #[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct Config {
+    /// Whether lone ampersand character (without a paired semicolon) should be
+    /// allowed in textual content. Unless enabled, in case of a dangling ampersand,
+    /// the [`Error::IllFormed(UnclosedReference)`] is returned from read methods.
+    ///
+    /// Default: `false`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::events::{BytesRef, BytesText, Event};
+    /// # use quick_xml::reader::Reader;
+    /// # use pretty_assertions::assert_eq;
+    /// let mut reader = Reader::from_str("text with & &amp; & alone");
+    /// reader.config_mut().allow_dangling_amp = true;
+    ///
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::new("text with ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::from_escaped("& ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::GeneralRef(BytesRef::new("amp")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::new(" ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::from_escaped("& alone")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Error::IllFormed(UnclosedReference)`]: crate::errors::IllFormedError::UnclosedReference
+    pub allow_dangling_amp: bool,
+
     /// Whether unmatched closing tag names should be allowed. Unless enabled,
     /// in case of a dangling end tag, the [`Error::IllFormed(UnmatchedEndTag)`]
     /// is returned from read methods.
@@ -210,6 +236,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            allow_dangling_amp: false,
             allow_unmatched_ends: false,
             check_comments: false,
             check_end_names: true,
@@ -261,18 +288,29 @@ macro_rules! read_event_impl {
                             Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..], $self.decoder())))
                         }
                         // Go to Done state
-                        ReadRefResult::UpToEof => {
+                        ReadRefResult::UpToEof(bytes) if $self.state.config.allow_dangling_amp => {
+                            $self.state.state = ParseState::Done;
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToEof(_) => {
                             $self.state.state = ParseState::Done;
                             $self.state.last_error_offset = start;
                             Err(Error::IllFormed(IllFormedError::UnclosedReference))
                         }
                         // Do not change state, stay in InsideRef
-                        ReadRefResult::UpToRef => {
+                        ReadRefResult::UpToRef(bytes) if $self.state.config.allow_dangling_amp => {
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToRef(_) => {
                             $self.state.last_error_offset = start;
                             Err(Error::IllFormed(IllFormedError::UnclosedReference))
                         }
                         // Go to InsideMarkup state
-                        ReadRefResult::UpToMarkup => {
+                        ReadRefResult::UpToMarkup(bytes) if $self.state.config.allow_dangling_amp => {
+                            $self.state.state = ParseState::InsideMarkup;
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToMarkup(_) => {
                             $self.state.state = ParseState::InsideMarkup;
                             $self.state.last_error_offset = start;
                             Err(Error::IllFormed(IllFormedError::UnclosedReference))
@@ -997,13 +1035,13 @@ enum ReadRefResult<'r> {
     /// Contains text block up to EOF. Neither end of reference (`;`), start of
     /// another reference (`&`) or start of markup (`<`) characters was found.
     /// Result includes start `&`.
-    UpToEof,
+    UpToEof(&'r [u8]),
     /// Contains text block up to next possible reference (`&` character).
     /// Result includes start `&`.
-    UpToRef,
+    UpToRef(&'r [u8]),
     /// Contains text block up to start of markup (`<` character).
     /// Result includes start `&`.
-    UpToMarkup,
+    UpToMarkup(&'r [u8]),
     /// IO error occurred.
     Err(io::Error),
 }
@@ -1722,8 +1760,8 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToEof => (),
-                        x => panic!("Expected `UpToEof`, but got `{:?}`", x),
+                        ReadRefResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
                 }
@@ -1736,8 +1774,8 @@ mod test {
                     //                 ^= 2
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToRef => (),
-                        x => panic!("Expected `UpToRef`, but got `{:?}`", x),
+                        ReadRefResult::UpToRef(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 2);
                 }
@@ -1750,8 +1788,8 @@ mod test {
                     //                  ^= 3
 
                     match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
-                        ReadRefResult::UpToMarkup => (),
-                        x => panic!("Expected `UpToMarkup`, but got `{:?}`", x),
+                        ReadRefResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
                     }
                     assert_eq!(position, 3);
                 }

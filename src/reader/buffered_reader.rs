@@ -161,7 +161,7 @@ macro_rules! impl_buffered_source {
 
                         *position += read;
 
-                        return ReadRefResult::UpToRef;
+                        return ReadRefResult::UpToRef(&buf[start..]);
                     }
                     Some(i) => {
                         let is_end = available[i] == b';';
@@ -177,7 +177,7 @@ macro_rules! impl_buffered_source {
                         return if is_end {
                             ReadRefResult::Ref(&buf[start..])
                         } else {
-                            ReadRefResult::UpToMarkup
+                            ReadRefResult::UpToMarkup(&buf[start..])
                         };
                     }
                     None => {
@@ -191,7 +191,7 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            ReadRefResult::UpToEof
+            ReadRefResult::UpToEof(&buf[start..])
         }
 
         #[inline]

@@ -306,11 +306,11 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
             // Do not consume `&` because it may be lone and we would be need to
             // return it as part of Text event
             Some(i) if self[i + 1] == b'&' => {
-                let (_, rest) = self.split_at(i + 1);
+                let (bytes, rest) = self.split_at(i + 1);
                 *self = rest;
                 *position += i as u64 + 1;
 
-                ReadRefResult::UpToRef
+                ReadRefResult::UpToRef(bytes)
             }
             Some(i) => {
                 let end = i + 1;
@@ -323,7 +323,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
                 if is_end {
                     ReadRefResult::Ref(bytes)
                 } else {
-                    ReadRefResult::UpToMarkup
+                    ReadRefResult::UpToMarkup(bytes)
                 }
             }
             None => {
@@ -331,7 +331,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
                 *self = &[];
                 *position += bytes.len() as u64;
 
-                ReadRefResult::UpToEof
+                ReadRefResult::UpToEof(bytes)
             }
         }
     }
