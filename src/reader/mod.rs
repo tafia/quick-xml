@@ -913,13 +913,14 @@ impl<R> Reader<R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of an attempt to read XML textual data from the reader.
+/// Result of an attempt to read XML textual data from the source.
+#[derive(Debug)]
 enum ReadTextResult<'r, B> {
-    /// Start of markup (`<` character) was found in the first byte.
+    /// Start of markup (`<` character) was found in the first byte. `<` was consumed.
     /// Contains buffer that should be returned back to the next iteration cycle
     /// to satisfy borrow checker requirements.
     Markup(B),
-    /// Contains text block up to start of markup (`<` character).
+    /// Contains text block up to start of markup (`<` character). `<` was consumed.
     UpToMarkup(&'r [u8]),
     /// Contains text block up to EOF, start of markup (`<` character) was not found.
     UpToEof(&'r [u8]),
@@ -1515,6 +1516,69 @@ mod test {
                             assert_eq!(position, 23);
                         }
                     }
+                }
+            }
+
+            mod read_text {
+                use super::*;
+                use crate::reader::ReadTextResult;
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                #[$test]
+                $($async)? fn empty() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"".as_ref();
+                    //                ^= 1
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 1);
+                }
+
+                #[$test]
+                $($async)? fn markup() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"<".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::Markup(b) => assert_eq!(b, $buf),
+                        x => panic!("Expected `Markup(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+
+                #[$test]
+                $($async)? fn up_to_markup() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"a<".as_ref();
+                    //                1 ^= 3
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 3);
+                }
+
+                #[$test]
+                $($async)? fn up_to_eof() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"a".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
                 }
             }
 
