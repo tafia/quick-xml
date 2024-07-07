@@ -24,6 +24,9 @@ XML specification. See the updated `custom_entities` example!
 
 - [#766]: Allow to parse resolved entities as XML fragments and stream events from them.
 - [#766]: Added new event `Event::GeneralRef` with content of [general entity].
+- [#766]: Added new configuration option `allow_dangling_amp` which allows to have
+  a `&` not followed by `;` in the textual data which is required for some applications
+  for compatibility reasons.
 
 ### Bug Fixes
 
