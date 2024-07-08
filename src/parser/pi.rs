@@ -1,7 +1,7 @@
 //! Contains a parser for an XML processing instruction.
 
 use crate::errors::SyntaxError;
-use crate::reader::Parser;
+use crate::parser::Parser;
 
 /// A parser that search a `?>` sequence in the slice.
 ///
@@ -19,7 +19,7 @@ use crate::reader::Parser;
 ///
 /// ```
 /// # use pretty_assertions::assert_eq;
-/// use quick_xml::reader::{Parser, PiParser};
+/// use quick_xml::parser::{Parser, PiParser};
 ///
 /// let mut parser = PiParser::default();
 ///

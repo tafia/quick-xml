@@ -52,7 +52,7 @@ use {crate::de::DeError, serde::Serialize};
 ///         Ok(Event::Eof) => break,
 ///         // we can either move or borrow the event to write, depending on your use-case
 ///         Ok(e) => assert!(writer.write_event(e.borrow()).is_ok()),
-///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
 ///     }
 /// }
 ///

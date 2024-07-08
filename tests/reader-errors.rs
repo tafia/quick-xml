@@ -101,10 +101,16 @@ mod syntax {
                     #[test]
                     fn borrowed() {
                         let mut reader = Reader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_event()
+                                .expect("parser should return `Event::Text`"),
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_event() {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -120,10 +126,16 @@ mod syntax {
                     fn buffered() {
                         let mut buf = Vec::new();
                         let mut reader = Reader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_event_into(&mut buf)
+                                .expect("parser should return `Event::Text`"),
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_event_into(&mut buf) {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -140,10 +152,17 @@ mod syntax {
                     async fn async_tokio() {
                         let mut buf = Vec::new();
                         let mut reader = Reader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_event_into_async(&mut buf)
+                                .await
+                                .expect("parser should return `Event::Text`"),
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_event_into_async(&mut buf).await {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -164,10 +183,17 @@ mod syntax {
                     #[test]
                     fn borrowed() {
                         let mut reader = NsReader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_resolved_event()
+                                .expect("parser should return `Event::Text`")
+                                .1,
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_resolved_event() {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -184,10 +210,17 @@ mod syntax {
                     fn buffered() {
                         let mut buf = Vec::new();
                         let mut reader = NsReader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into(&mut buf)
+                                .expect("parser should return `Event::Text`")
+                                .1,
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_resolved_event_into(&mut buf) {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -205,10 +238,18 @@ mod syntax {
                     async fn async_tokio() {
                         let mut buf = Vec::new();
                         let mut reader = NsReader::from_str($xml);
+                        assert_eq!(
+                            reader
+                                .read_resolved_event_into_async(&mut buf)
+                                .await
+                                .expect("parser should return `Event::Text`")
+                                .1,
+                            Event::Text(BytesText::new("."))
+                        );
                         match reader.read_resolved_event_into_async(&mut buf).await {
                             Err(Error::Syntax(cause)) => assert_eq!(
                                 (cause, reader.error_position(), reader.buffer_position()),
-                                ($cause, 0, $pos),
+                                ($cause, 1, $pos),
                             ),
                             x => panic!("Expected `Err(Syntax(_))`, but got {:?}", x),
                         }
@@ -232,14 +273,14 @@ mod syntax {
     mod tag {
         use super::*;
 
-        err!(unclosed1("<")   => SyntaxError::UnclosedTag);
-        err!(unclosed2("</")  => SyntaxError::UnclosedTag);
-        err!(unclosed3("<x")  => SyntaxError::UnclosedTag);
-        err!(unclosed4("< ")  => SyntaxError::UnclosedTag);
-        err!(unclosed5("<\t") => SyntaxError::UnclosedTag);
-        err!(unclosed6("<\r") => SyntaxError::UnclosedTag);
-        err!(unclosed7("<\n") => SyntaxError::UnclosedTag);
-        err!(unclosed8("< \t\r\nx") => SyntaxError::UnclosedTag);
+        err!(unclosed1(".<")   => SyntaxError::UnclosedTag);
+        err!(unclosed2(".</")  => SyntaxError::UnclosedTag);
+        err!(unclosed3(".<x")  => SyntaxError::UnclosedTag);
+        err!(unclosed4(".< ")  => SyntaxError::UnclosedTag);
+        err!(unclosed5(".<\t") => SyntaxError::UnclosedTag);
+        err!(unclosed6(".<\r") => SyntaxError::UnclosedTag);
+        err!(unclosed7(".<\n") => SyntaxError::UnclosedTag);
+        err!(unclosed8(".< \t\r\nx") => SyntaxError::UnclosedTag);
 
         /// Closed tags can be tested only in pair with open tags, because otherwise
         /// `IllFormedError::UnmatchedEndTag` will be raised
@@ -289,25 +330,25 @@ mod syntax {
     }
 
     // Incorrect after-bang symbol is detected early, so buffer_position() stay at `!`
-    err!(unclosed_bang1("<!")   => 1, SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang2("<!>")  => 1, SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang3("<!a")  => 1, SyntaxError::InvalidBangMarkup);
-    err!(unclosed_bang4("<!a>") => 1, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang1(".<!")   => 2, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang2(".<!>")  => 2, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang3(".<!a")  => 2, SyntaxError::InvalidBangMarkup);
+    err!(unclosed_bang4(".<!a>") => 2, SyntaxError::InvalidBangMarkup);
 
     /// https://www.w3.org/TR/xml11/#NT-Comment
     mod comment {
         use super::*;
 
-        err!(unclosed01("<!-")    => SyntaxError::UnclosedComment);
-        err!(unclosed02("<!--")   => SyntaxError::UnclosedComment);
-        err!(unclosed03("<!->")   => SyntaxError::UnclosedComment);
-        err!(unclosed04("<!-a")   => SyntaxError::UnclosedComment);
-        err!(unclosed05("<!---")  => SyntaxError::UnclosedComment);
-        err!(unclosed06("<!-->")  => SyntaxError::UnclosedComment);
-        err!(unclosed07("<!--b")  => SyntaxError::UnclosedComment);
-        err!(unclosed08("<!----") => SyntaxError::UnclosedComment);
-        err!(unclosed09("<!--->") => SyntaxError::UnclosedComment);
-        err!(unclosed10("<!---c") => SyntaxError::UnclosedComment);
+        err!(unclosed01(".<!-")    => SyntaxError::UnclosedComment);
+        err!(unclosed02(".<!--")   => SyntaxError::UnclosedComment);
+        err!(unclosed03(".<!->")   => SyntaxError::UnclosedComment);
+        err!(unclosed04(".<!-a")   => SyntaxError::UnclosedComment);
+        err!(unclosed05(".<!---")  => SyntaxError::UnclosedComment);
+        err!(unclosed06(".<!-->")  => SyntaxError::UnclosedComment);
+        err!(unclosed07(".<!--b")  => SyntaxError::UnclosedComment);
+        err!(unclosed08(".<!----") => SyntaxError::UnclosedComment);
+        err!(unclosed09(".<!--->") => SyntaxError::UnclosedComment);
+        err!(unclosed10(".<!---c") => SyntaxError::UnclosedComment);
 
         ok!(normal1("<!---->")     => 7: Event::Comment(BytesText::new("")));
         ok!(normal2("<!---->rest") => 7: Event::Comment(BytesText::new("")));
@@ -317,33 +358,33 @@ mod syntax {
     mod cdata {
         use super::*;
 
-        err!(unclosed01("<![")         => SyntaxError::UnclosedCData);
-        err!(unclosed02("<![C")        => SyntaxError::UnclosedCData);
-        err!(unclosed03("<![a")        => SyntaxError::UnclosedCData);
-        err!(unclosed04("<![>")        => SyntaxError::UnclosedCData);
-        err!(unclosed05("<![CD")       => SyntaxError::UnclosedCData);
-        err!(unclosed06("<![Cb")       => SyntaxError::UnclosedCData);
-        err!(unclosed07("<![C>")       => SyntaxError::UnclosedCData);
-        err!(unclosed08("<![CDA")      => SyntaxError::UnclosedCData);
-        err!(unclosed09("<![CDc")      => SyntaxError::UnclosedCData);
-        err!(unclosed10("<![CD>")      => SyntaxError::UnclosedCData);
-        err!(unclosed11("<![CDAT")     => SyntaxError::UnclosedCData);
-        err!(unclosed12("<![CDAd")     => SyntaxError::UnclosedCData);
-        err!(unclosed13("<![CDA>")     => SyntaxError::UnclosedCData);
-        err!(unclosed14("<![CDATA")    => SyntaxError::UnclosedCData);
-        err!(unclosed15("<![CDATe")    => SyntaxError::UnclosedCData);
-        err!(unclosed16("<![CDAT>")    => SyntaxError::UnclosedCData);
-        err!(unclosed17("<![CDATA[")   => SyntaxError::UnclosedCData);
-        err!(unclosed18("<![CDATAf")   => SyntaxError::UnclosedCData);
-        err!(unclosed19("<![CDATA>")   => SyntaxError::UnclosedCData);
-        err!(unclosed20("<![CDATA[]")  => SyntaxError::UnclosedCData);
-        err!(unclosed21("<![CDATA[g")  => SyntaxError::UnclosedCData);
-        err!(unclosed22("<![CDATA[>")  => SyntaxError::UnclosedCData);
-        err!(unclosed23("<![CDATA[]]") => SyntaxError::UnclosedCData);
-        err!(unclosed24("<![CDATA[]h") => SyntaxError::UnclosedCData);
-        err!(unclosed25("<![CDATA[]>") => SyntaxError::UnclosedCData);
+        err!(unclosed01(".<![")         => SyntaxError::UnclosedCData);
+        err!(unclosed02(".<![C")        => SyntaxError::UnclosedCData);
+        err!(unclosed03(".<![a")        => SyntaxError::UnclosedCData);
+        err!(unclosed04(".<![>")        => SyntaxError::UnclosedCData);
+        err!(unclosed05(".<![CD")       => SyntaxError::UnclosedCData);
+        err!(unclosed06(".<![Cb")       => SyntaxError::UnclosedCData);
+        err!(unclosed07(".<![C>")       => SyntaxError::UnclosedCData);
+        err!(unclosed08(".<![CDA")      => SyntaxError::UnclosedCData);
+        err!(unclosed09(".<![CDc")      => SyntaxError::UnclosedCData);
+        err!(unclosed10(".<![CD>")      => SyntaxError::UnclosedCData);
+        err!(unclosed11(".<![CDAT")     => SyntaxError::UnclosedCData);
+        err!(unclosed12(".<![CDAd")     => SyntaxError::UnclosedCData);
+        err!(unclosed13(".<![CDA>")     => SyntaxError::UnclosedCData);
+        err!(unclosed14(".<![CDATA")    => SyntaxError::UnclosedCData);
+        err!(unclosed15(".<![CDATe")    => SyntaxError::UnclosedCData);
+        err!(unclosed16(".<![CDAT>")    => SyntaxError::UnclosedCData);
+        err!(unclosed17(".<![CDATA[")   => SyntaxError::UnclosedCData);
+        err!(unclosed18(".<![CDATAf")   => SyntaxError::UnclosedCData);
+        err!(unclosed19(".<![CDATA>")   => SyntaxError::UnclosedCData);
+        err!(unclosed20(".<![CDATA[]")  => SyntaxError::UnclosedCData);
+        err!(unclosed21(".<![CDATA[g")  => SyntaxError::UnclosedCData);
+        err!(unclosed22(".<![CDATA[>")  => SyntaxError::UnclosedCData);
+        err!(unclosed23(".<![CDATA[]]") => SyntaxError::UnclosedCData);
+        err!(unclosed24(".<![CDATA[]h") => SyntaxError::UnclosedCData);
+        err!(unclosed25(".<![CDATA[]>") => SyntaxError::UnclosedCData);
 
-        err!(lowercase("<![cdata[]]>") => SyntaxError::UnclosedCData);
+        err!(lowercase(".<![cdata[]]>") => SyntaxError::UnclosedCData);
 
         ok!(normal1("<![CDATA[]]>")     => 12: Event::CData(BytesCData::new("")));
         ok!(normal2("<![CDATA[]]>rest") => 12: Event::CData(BytesCData::new("")));
@@ -355,29 +396,29 @@ mod syntax {
     mod doctype {
         use super::*;
 
-        err!(unclosed01("<!D")         => SyntaxError::UnclosedDoctype);
-        err!(unclosed02("<!DO")        => SyntaxError::UnclosedDoctype);
-        err!(unclosed03("<!Da")        => SyntaxError::UnclosedDoctype);
-        err!(unclosed04("<!D>")        => SyntaxError::UnclosedDoctype);
-        err!(unclosed05("<!DOC")       => SyntaxError::UnclosedDoctype);
-        err!(unclosed06("<!DOb")       => SyntaxError::UnclosedDoctype);
-        err!(unclosed07("<!DO>")       => SyntaxError::UnclosedDoctype);
-        err!(unclosed08("<!DOCT")      => SyntaxError::UnclosedDoctype);
-        err!(unclosed09("<!DOCc")      => SyntaxError::UnclosedDoctype);
-        err!(unclosed10("<!DOC>")      => SyntaxError::UnclosedDoctype);
-        err!(unclosed11("<!DOCTY")     => SyntaxError::UnclosedDoctype);
-        err!(unclosed12("<!DOCTd")     => SyntaxError::UnclosedDoctype);
-        err!(unclosed13("<!DOCT>")     => SyntaxError::UnclosedDoctype);
-        err!(unclosed14("<!DOCTYP")    => SyntaxError::UnclosedDoctype);
-        err!(unclosed15("<!DOCTYe")    => SyntaxError::UnclosedDoctype);
-        err!(unclosed16("<!DOCTY>")    => SyntaxError::UnclosedDoctype);
-        err!(unclosed17("<!DOCTYPE")   => SyntaxError::UnclosedDoctype);
-        err!(unclosed18("<!DOCTYPf")   => SyntaxError::UnclosedDoctype);
-        err!(unclosed19("<!DOCTYP>")   => SyntaxError::UnclosedDoctype);
-        err!(unclosed20("<!DOCTYPE ")  => SyntaxError::UnclosedDoctype);
-        err!(unclosed21("<!DOCTYPEg")  => SyntaxError::UnclosedDoctype);
+        err!(unclosed01(".<!D")         => SyntaxError::UnclosedDoctype);
+        err!(unclosed02(".<!DO")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed03(".<!Da")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed04(".<!D>")        => SyntaxError::UnclosedDoctype);
+        err!(unclosed05(".<!DOC")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed06(".<!DOb")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed07(".<!DO>")       => SyntaxError::UnclosedDoctype);
+        err!(unclosed08(".<!DOCT")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed09(".<!DOCc")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed10(".<!DOC>")      => SyntaxError::UnclosedDoctype);
+        err!(unclosed11(".<!DOCTY")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed12(".<!DOCTd")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed13(".<!DOCT>")     => SyntaxError::UnclosedDoctype);
+        err!(unclosed14(".<!DOCTYP")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed15(".<!DOCTYe")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed16(".<!DOCTY>")    => SyntaxError::UnclosedDoctype);
+        err!(unclosed17(".<!DOCTYPE")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed18(".<!DOCTYPf")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed19(".<!DOCTYP>")   => SyntaxError::UnclosedDoctype);
+        err!(unclosed20(".<!DOCTYPE ")  => SyntaxError::UnclosedDoctype);
+        err!(unclosed21(".<!DOCTYPEg")  => SyntaxError::UnclosedDoctype);
         // <!DOCTYPE> results in IllFormed(MissingDoctypeName), checked below
-        err!(unclosed22("<!DOCTYPE e") => SyntaxError::UnclosedDoctype);
+        err!(unclosed22(".<!DOCTYPE e") => SyntaxError::UnclosedDoctype);
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and an element name, but we do not consider this as a _syntax_ error.
@@ -389,16 +430,16 @@ mod syntax {
     mod pi {
         use super::*;
 
-        err!(unclosed1("<?")    => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed2("<??")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed3("<?>")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed4("<?<")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed5("<?&")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed6("<?p")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed7("<? ")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed8("<?\t")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed9("<?\r")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed10("<?\n") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed01(".<?")   => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed02(".<??")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed03(".<?>")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed04(".<?<")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed05(".<?&")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed06(".<?p")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed07(".<? ")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed08(".<?\t") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed09(".<?\r") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed10(".<?\n") => SyntaxError::UnclosedPIOrXmlDecl);
 
         // According to the grammar, processing instruction MUST contain a non-empty
         // target name, but we do not consider this as a _syntax_ error.
@@ -412,10 +453,10 @@ mod syntax {
     mod decl {
         use super::*;
 
-        err!(unclosed1("<?x")    => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed2("<?xm")   => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed3("<?xml")  => SyntaxError::UnclosedPIOrXmlDecl);
-        err!(unclosed4("<?xml?") => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed1(".<?x")    => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed2(".<?xm")   => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed3(".<?xml")  => SyntaxError::UnclosedPIOrXmlDecl);
+        err!(unclosed4(".<?xml?") => SyntaxError::UnclosedPIOrXmlDecl);
 
         // According to the grammar, XML declaration MUST contain at least one space
         // and `version` attribute, but we do not consider this as a _syntax_ error.
@@ -827,9 +868,9 @@ mod ill_formed {
     //                                          ^= 13
     ok!(missing_doctype_name3("<!DOCTYPE \t\r\nx>") => 15: Event::DocType(BytesText::new("x")));
 
-    err!(unmatched_end_tag1("</>") => 0: IllFormedError::UnmatchedEndTag("".to_string()));
-    err!(unmatched_end_tag2("</end>") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
-    err!(unmatched_end_tag3("</end >") => 0: IllFormedError::UnmatchedEndTag("end".to_string()));
+    err2!(unmatched_end_tag1(".</>") => 1: IllFormedError::UnmatchedEndTag("".to_string()));
+    err2!(unmatched_end_tag2(".</end>") => 1: IllFormedError::UnmatchedEndTag("end".to_string()));
+    err2!(unmatched_end_tag3(".</end >") => 1: IllFormedError::UnmatchedEndTag("end".to_string()));
 
     ok!(mismatched_end_tag1("<start></start>") => 7: Event::Start(BytesStart::new("start")));
     err2!(mismatched_end_tag2("<start></>") => 7: IllFormedError::MismatchedEndTag {

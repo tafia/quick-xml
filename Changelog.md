@@ -19,9 +19,15 @@
 
 - [#781]: Fix conditions to start CDATA section. Only uppercase `<![CDATA[` can start it.
   Previously any case was allowed.
+- [#780]: Fixed incorrect `.error_position()` when encountering syntax error for open or self-closed tag.
 
 ### Misc Changes
 
+- [#780]: `reader::Parser`, `reader::ElementParser` and `reader::PiParser` moved to the new module `parser`.
+- [#776]: Allow to have attributes in the end tag for compatibility reasons with Adobe Flash XML parser.
+
+[#776]: https://github.com/tafia/quick-xml/issues/776
+[#780]: https://github.com/tafia/quick-xml/pull/780
 [#781]: https://github.com/tafia/quick-xml/pull/781
 
 

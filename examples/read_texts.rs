@@ -18,7 +18,7 @@ fn main() {
                 println!("{:?}", txt);
             }
             Ok(Event::Eof) => break, // exits the loop when reaching end of file
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
             _ => (), // There are several other `Event`s we do not consider here
         }
     }

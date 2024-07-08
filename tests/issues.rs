@@ -364,3 +364,30 @@ fn issue774() {
         Event::End(BytesEnd::new("tag"))
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/776
+#[test]
+fn issue776() {
+    let mut reader = Reader::from_str(r#"<tag></tag/><tag></tag attr=">">"#);
+    // We still think that the name of the end tag is everything between `</` and `>`
+    // and if we do not disable this check we get error
+    reader.config_mut().check_end_names = false;
+
+    assert_eq!(
+        reader.read_event().unwrap(),
+        Event::Start(BytesStart::new("tag"))
+    );
+    assert_eq!(
+        reader.read_event().unwrap(),
+        Event::End(BytesEnd::new("tag/"))
+    );
+
+    assert_eq!(
+        reader.read_event().unwrap(),
+        Event::Start(BytesStart::new("tag"))
+    );
+    assert_eq!(
+        reader.read_event().unwrap(),
+        Event::End(BytesEnd::new(r#"tag attr=">""#))
+    );
+}

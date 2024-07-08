@@ -8,6 +8,7 @@ use std::ops::Range;
 use crate::encoding::Decoder;
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
+use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
 
 /// A struct that holds a parser configuration.
@@ -23,6 +24,25 @@ use crate::reader::state::ReaderState;
 #[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct Config {
+    /// Whether unmatched closing tag names should be allowed. Unless enabled,
+    /// in case of a dangling end tag, the [`Error::IllFormed(UnmatchedEndTag)`]
+    /// is returned from read methods.
+    ///
+    /// When set to `true`, it won't check if a closing tag has a corresponding
+    /// opening tag at all. For example, `<a></a></b>` will be permitted.
+    ///
+    /// Note that the emitted [`End`] event will not be modified if this is enabled,
+    /// ie. it will contain the data of the unmatched end tag.
+    ///
+    /// Note, that setting this to `true` will lead to additional allocates that
+    /// needed to store tag name for an [`End`] event.
+    ///
+    /// Default: `false`
+    ///
+    /// [`Error::IllFormed(UnmatchedEndTag)`]: crate::errors::IllFormedError::UnmatchedEndTag
+    /// [`End`]: crate::events::Event::End
+    pub allow_unmatched_ends: bool,
+
     /// Whether comments should be validated. If enabled, in case of invalid comment
     /// [`Error::IllFormed(DoubleHyphenInComment)`] is returned from read methods.
     ///
@@ -75,25 +95,6 @@ pub struct Config {
     /// [`End`]: crate::events::Event::End
     /// [`expand_empty_elements`]: Self::expand_empty_elements
     pub check_end_names: bool,
-
-    /// Whether unmatched closing tag names should be allowed. Unless enabled,
-    /// in case of a dangling end tag, the [`Error::IllFormed(UnmatchedEndTag)`]
-    /// is returned from read methods.
-    ///
-    /// When set to `true`, it won't check if a closing tag has a corresponding
-    /// opening tag at all. For example, `<a></a></b>` will be permitted.
-    ///
-    /// Note that the emitted [`End`] event will not be modified if this is enabled,
-    /// ie. it will contain the data of the unmatched end tag.
-    ///
-    /// Note, that setting this to `true` will lead to additional allocates that
-    /// needed to store tag name for an [`End`] event.
-    ///
-    /// Default: `false`
-    ///
-    /// [`Error::IllFormed(UnmatchedEndTag)`]: crate::errors::IllFormedError::UnmatchedEndTag
-    /// [`End`]: crate::events::Event::End
-    pub allow_unmatched_ends: bool,
 
     /// Whether empty elements should be split into an `Open` and a `Close` event.
     ///
@@ -209,9 +210,9 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            allow_unmatched_ends: false,
             check_comments: false,
             check_end_names: true,
-            allow_unmatched_ends: false,
             expand_empty_elements: false,
             trim_markup_names_in_closing_tags: true,
             trim_text_start: false,
@@ -337,30 +338,37 @@ macro_rules! read_until_close {
             {
                 Ok((bang_type, bytes)) => $self.state.emit_bang(bang_type, bytes),
                 Err(e) => {
-                    // <!....EOF
-                    //  ^^^^^ - `buf` does not contains `<`, but we want to report error at `<`,
-                    //          so we move offset to it (-1 for `<`)
+                    // We want to report error at `<`, but offset was increased,
+                    // so return it back (-1 for `<`)
                     $self.state.last_error_offset = start - 1;
                     Err(e)
                 }
             },
             // `</` - closing tag
+            // #776: We parse using ElementParser which allows us to have attributes
+            // in close tags. While such tags are not allowed by the specification,
+            // we anyway allow to parse them because:
+            // - we do not check constraints during parsing. This is performed by the
+            //   optional validate step which user should call manually
+            // - if we just look for `>` we will parse `</tag attr=">" >` as end tag
+            //   `</tag attr=">` and text `" >` which probably no one existing parser
+            //   does. This is malformed XML, however it is tolerated by some parsers
+            //   (e.g. the one used by Adobe Flash) and such documents do exist in the wild.
             Ok(Some(b'/')) => match $reader
-                .read_bytes_until(b'>', $buf, &mut $self.state.offset)
+                .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
                 $(.$await)?
             {
-                Ok((bytes, true)) => $self.state.emit_end(bytes),
-                Ok((_, false)) => {
+                Ok(bytes) => $self.state.emit_end(bytes),
+                Err(e) => {
                     // We want to report error at `<`, but offset was increased,
                     // so return it back (-1 for `<`)
                     $self.state.last_error_offset = start - 1;
-                    Err(Error::Syntax(SyntaxError::UnclosedTag))
+                    Err(e)
                 }
-                Err(e) => Err(Error::Io(e.into())),
             },
             // `<?` - processing instruction
             Ok(Some(b'?')) => match $reader
-                .read_with(PiParser::default(), $buf, &mut $self.state.offset)
+                .read_with(PiParser(false), $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => $self.state.emit_question_mark(bytes),
@@ -373,11 +381,16 @@ macro_rules! read_until_close {
             },
             // `<...` - opening or self-closed tag
             Ok(Some(_)) => match $reader
-                .read_with(ElementParser::default(), $buf, &mut $self.state.offset)
+                .read_with(ElementParser::Outside, $buf, &mut $self.state.offset)
                 $(.$await)?
             {
                 Ok(bytes) => Ok($self.state.emit_start(bytes)),
-                Err(e) => Err(e),
+                Err(e) => {
+                    // We want to report error at `<`, but offset was increased,
+                    // so return it back (-1 for `<`)
+                    $self.state.last_error_offset = start - 1;
+                    Err(e)
+                }
             },
             // `<` - syntax error, tag not closed
             Ok(None) => {
@@ -449,15 +462,11 @@ macro_rules! read_to_end {
 #[cfg(feature = "async-tokio")]
 mod async_tokio;
 mod buffered_reader;
-mod element;
 mod ns_reader;
-mod pi;
 mod slice_reader;
 mod state;
 
-pub use element::ElementParser;
 pub use ns_reader::NsReader;
-pub use pi::PiParser;
 
 /// Range of input in bytes, that corresponds to some piece of XML
 pub type Span = Range<u64>;
@@ -588,7 +597,7 @@ impl EncodingRef {
 ///     // when the input is a &str or a &[u8], we don't actually need to use another
 ///     // buffer, we could directly call `reader.read_event()`
 ///     match reader.read_event_into(&mut buf) {
-///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
 ///         // exits the loop when reaching end of file
 ///         Ok(Event::Eof) => break,
 ///
@@ -790,26 +799,6 @@ enum ReadTextResult<'r, B> {
     Err(io::Error),
 }
 
-/// Used to decouple reading of data from data source and parsing XML structure from it.
-/// This is a state preserved between getting chunks of bytes from the reader.
-///
-/// This trait is implemented for every parser that processes piece of XML grammar.
-pub trait Parser {
-    /// Process new data and try to determine end of the parsed thing.
-    ///
-    /// Returns position of the end of thing in `bytes` in case of successful search
-    /// and `None` otherwise.
-    ///
-    /// # Parameters
-    /// - `bytes`: a slice to find the end of a thing.
-    ///   Should contain text in ASCII-compatible encoding
-    fn feed(&mut self, bytes: &[u8]) -> Option<usize>;
-
-    /// Returns parse error produced by this parser in case of reaching end of
-    /// input without finding the end of a parsed thing.
-    fn eof_error() -> SyntaxError;
-}
-
 /// Represents an input for a reader that can return borrowed data.
 ///
 /// There are two implementors of this trait: generic one that read data from
@@ -835,23 +824,6 @@ trait XmlSource<'r, B> {
 
     /// Read input until start of markup (the `<`) is found or end of input is reached.
     ///
-    /// Returns a slice of data read up to `<` (exclusive), and a flag noting whether
-    /// `<` was found in the input or not.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc<def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_text((), &mut position).unwrap(),
-    ///     (b"abc".as_ref(), true)
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
     /// # Parameters
     /// - `buf`: Buffer that could be filled from an input (`Self`) and
     ///   from which [events] could borrow their data
@@ -859,39 +831,6 @@ trait XmlSource<'r, B> {
     ///
     /// [events]: crate::events::Event
     fn read_text(&mut self, buf: B, position: &mut u64) -> ReadTextResult<'r, B>;
-
-    /// Read input until `byte` is found or end of input is reached.
-    ///
-    /// Returns a slice of data read up to `byte` (exclusive),
-    /// and a flag noting whether `byte` was found in the input or not.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let mut position = 0;
-    /// let mut input = b"abc*def".as_ref();
-    /// //                    ^= 4
-    ///
-    /// assert_eq!(
-    ///     input.read_bytes_until(b'*', (), &mut position).unwrap(),
-    ///     (b"abc".as_ref(), true)
-    /// );
-    /// assert_eq!(position, 4); // position after the symbol matched
-    /// ```
-    ///
-    /// # Parameters
-    /// - `byte`: Byte for search
-    /// - `buf`: Buffer that could be filled from an input (`Self`) and
-    ///   from which [events] could borrow their data
-    /// - `position`: Will be increased by amount of bytes consumed
-    ///
-    /// [events]: crate::events::Event
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        buf: B,
-        position: &mut u64,
-    ) -> io::Result<(&'r [u8], bool)>;
 
     /// Read input until processing instruction is finished.
     ///
@@ -1058,115 +997,6 @@ mod test {
             $buf:expr
             $(, $async:ident, $await:ident)?
         ) => {
-            mod read_bytes_until {
-                use super::*;
-                // Use Bytes for printing bytes as strings for ASCII range
-                use crate::utils::Bytes;
-                use pretty_assertions::assert_eq;
-
-                /// Checks that search in the empty buffer returns `None`
-                #[$test]
-                $($async)? fn empty() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"".as_ref();
-                    //                ^= 0
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b""), false)
-                    );
-                    assert_eq!(position, 0);
-                }
-
-                /// Checks that search in the buffer non-existent value returns entire buffer
-                /// as a result and set `position` to `len()`
-                #[$test]
-                $($async)? fn non_existent() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abcdef".as_ref();
-                    //                      ^= 6
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abcdef"), false)
-                    );
-                    assert_eq!(position, 6);
-                }
-
-                /// Checks that search in the buffer an element that is located in the front of
-                /// buffer returns empty slice as a result and set `position` to one symbol
-                /// after match (`1`)
-                #[$test]
-                $($async)? fn at_the_start() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"*abcdef".as_ref();
-                    //                 ^= 1
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b""), true)
-                    );
-                    assert_eq!(position, 1); // position after the symbol matched
-                }
-
-                /// Checks that search in the buffer an element that is located in the middle of
-                /// buffer returns slice before that symbol as a result and set `position` to one
-                /// symbol after match
-                #[$test]
-                $($async)? fn inside() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abc*def".as_ref();
-                    //                    ^= 4
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abc"), true)
-                    );
-                    assert_eq!(position, 4); // position after the symbol matched
-                }
-
-                /// Checks that search in the buffer an element that is located in the end of
-                /// buffer returns slice before that symbol as a result and set `position` to one
-                /// symbol after match (`len()`)
-                #[$test]
-                $($async)? fn in_the_end() {
-                    let buf = $buf;
-                    let mut position = 0;
-                    let mut input = b"abcdef*".as_ref();
-                    //                       ^= 7
-
-                    let (bytes, found) = $source(&mut input)
-                        .read_bytes_until(b'*', buf, &mut position)
-                        $(.$await)?
-                        .unwrap();
-                    assert_eq!(
-                        (Bytes(bytes), found),
-                        (Bytes(b"abcdef"), true)
-                    );
-                    assert_eq!(position, 7); // position after the symbol matched
-                }
-            }
-
             mod read_bang_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
@@ -1189,9 +1019,9 @@ mod test {
                         //                ^= 1
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedCData),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1208,9 +1038,9 @@ mod test {
                         //                ^= 1                 ^= 22
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedCData)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedCData),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedCData))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1287,9 +1117,9 @@ mod test {
                         //                ^= 1
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1304,9 +1134,9 @@ mod test {
                         //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1321,9 +1151,9 @@ mod test {
                         //                ^= 1            ^= 17
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1338,9 +1168,9 @@ mod test {
                         //                ^= 1             ^= 18
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1355,9 +1185,9 @@ mod test {
                         //                ^= 1              ^= 19
 
                         match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                            Err(Error::Syntax(SyntaxError::UnclosedComment)) => {}
+                            Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedComment),
                             x => panic!(
-                                "Expected `Err(Syntax(UnclosedComment))`, but got `{:?}`",
+                                "Expected `Err(Syntax(_))`, but got `{:?}`",
                                 x
                             ),
                         }
@@ -1417,9 +1247,9 @@ mod test {
                             //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1434,9 +1264,9 @@ mod test {
                             //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1469,9 +1299,9 @@ mod test {
                             //                ^= 1                  ^23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1491,9 +1321,9 @@ mod test {
                             //                ^= 1            ^= 17
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1508,9 +1338,9 @@ mod test {
                             //                ^= 1                 ^= 22
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1543,9 +1373,9 @@ mod test {
                             //                ^= 1                  ^= 23
 
                             match $source(&mut input).read_bang_element(buf, &mut position) $(.$await)? {
-                                Err(Error::Syntax(SyntaxError::UnclosedDoctype)) => {}
+                                Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedDoctype),
                                 x => panic!(
-                                    "Expected `Err(Syntax(UnclosedDoctype))`, but got `{:?}`",
+                                    "Expected `Err(Syntax(_))`, but got `{:?}`",
                                     x
                                 ),
                             }
@@ -1558,7 +1388,7 @@ mod test {
             mod read_element {
                 use super::*;
                 use crate::errors::{Error, SyntaxError};
-                use crate::reader::ElementParser;
+                use crate::parser::ElementParser;
                 use crate::utils::Bytes;
                 use pretty_assertions::assert_eq;
 
@@ -1571,9 +1401,9 @@ mod test {
                     //                ^= 1
 
                     match $source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? {
-                        Err(Error::Syntax(SyntaxError::UnclosedTag)) => {}
+                        Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedTag),
                         x => panic!(
-                            "Expected `Err(Syntax(UnclosedTag))`, but got `{:?}`",
+                            "Expected `Err(Syntax(_))`, but got `{:?}`",
                             x
                         ),
                     }
@@ -1727,6 +1557,81 @@ mod test {
                             Bytes(br#"tag  attr-1="/>"  attr2  =  '/>'  3attr/"#)
                         );
                         assert_eq!(position, 42);
+                    }
+                }
+
+                mod close {
+                    use super::*;
+                    use pretty_assertions::assert_eq;
+
+                    #[$test]
+                    $($async)? fn empty_tag() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/ >".as_ref();
+                        //                   ^= 4
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/ ")
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[$test]
+                    $($async)? fn normal() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/tag>".as_ref();
+                        //                     ^= 6
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/tag")
+                        );
+                        assert_eq!(position, 6);
+                    }
+
+                    #[$test]
+                    $($async)? fn empty_ns_empty_tag() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/:>".as_ref();
+                        //                   ^= 4
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/:")
+                        );
+                        assert_eq!(position, 4);
+                    }
+
+                    #[$test]
+                    $($async)? fn empty_ns() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = b"/:tag>".as_ref();
+                        //                      ^= 7
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(b"/:tag")
+                        );
+                        assert_eq!(position, 7);
+                    }
+
+                    #[$test]
+                    $($async)? fn with_attributes() {
+                        let buf = $buf;
+                        let mut position = 1;
+                        let mut input = br#"/tag  attr-1=">"  attr2  =  '>'  3attr>"#.as_ref();
+                        //                                                         ^= 40
+
+                        assert_eq!(
+                            Bytes($source(&mut input).read_with(ElementParser::default(), buf, &mut position) $(.$await)? .unwrap()),
+                            Bytes(br#"/tag  attr-1=">"  attr2  =  '>'  3attr"#)
+                        );
+                        assert_eq!(position, 40);
                     }
                 }
             }

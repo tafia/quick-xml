@@ -7,10 +7,9 @@ use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
+use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{
-    BangType, ElementParser, NsReader, ParseState, Parser, PiParser, ReadTextResult, Reader, Span,
-};
+use crate::reader::{BangType, NsReader, ParseState, ReadTextResult, Reader, Span};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
@@ -59,7 +58,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     ///     match reader.read_event_into_async(&mut buf).await {
     ///         Ok(Event::Start(_)) => count += 1,
     ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
-    ///         Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+    ///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
     ///     }

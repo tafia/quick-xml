@@ -175,7 +175,7 @@ fn test_escaped_content() {
                 Ok(c) => assert_eq!(c, "<test>"),
                 Err(e) => panic!(
                     "cannot escape content at position {}: {:?}",
-                    r.buffer_position(),
+                    r.error_position(),
                     e
                 ),
             }
@@ -183,7 +183,7 @@ fn test_escaped_content() {
         Ok(e) => panic!("Expecting text event, got {:?}", e),
         Err(e) => panic!(
             "Cannot get next event at position {}: {:?}",
-            r.buffer_position(),
+            r.error_position(),
             e
         ),
     }

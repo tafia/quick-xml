@@ -13,7 +13,8 @@ use encoding_rs::{Encoding, UTF_8};
 use crate::errors::{Error, Result};
 use crate::events::Event;
 use crate::name::QName;
-use crate::reader::{BangType, Parser, ReadTextResult, Reader, Span, XmlSource};
+use crate::parser::Parser;
+use crate::reader::{BangType, ReadTextResult, Reader, Span, XmlSource};
 use crate::utils::is_whitespace;
 
 /// This is an implementation for reading from a `&[u8]` as underlying byte stream.
@@ -280,29 +281,6 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
                 *self = &[];
                 ReadTextResult::UpToEof(bytes)
             }
-        }
-    }
-
-    #[inline]
-    fn read_bytes_until(
-        &mut self,
-        byte: u8,
-        _buf: (),
-        position: &mut u64,
-    ) -> io::Result<(&'a [u8], bool)> {
-        // search byte must be within the ascii range
-        debug_assert!(byte.is_ascii());
-
-        if let Some(i) = memchr::memchr(byte, self) {
-            *position += i as u64 + 1;
-            let bytes = &self[..i];
-            *self = &self[i + 1..];
-            Ok((bytes, true))
-        } else {
-            *position += self.len() as u64;
-            let bytes = &self[..];
-            *self = &[];
-            Ok((bytes, false))
         }
     }
 
