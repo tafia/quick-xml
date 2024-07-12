@@ -2,7 +2,7 @@
 //!
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Cursor, Read};
 use std::iter;
 use std::sync::mpsc;
 
@@ -10,6 +10,9 @@ use quick_xml::errors::{Error, IllFormedError, SyntaxError};
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
+use quick_xml::utils::Bytes;
+
+use pretty_assertions::assert_eq;
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/94
 #[test]
@@ -255,6 +258,89 @@ fn issue622() {
     match reader.read_event() {
         Err(Error::Syntax(cause)) => assert_eq!(cause, SyntaxError::UnclosedTag),
         x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
+    }
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/623
+mod issue623 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn borrowed() {
+        let mut reader = Reader::from_str(
+            "
+            <AppendedData>
+                _binary << data&>
+            </AppendedData>
+        ",
+        );
+        reader.config_mut().trim_text(true);
+
+        assert_eq!(
+            (reader.read_event().unwrap(), reader.buffer_position()),
+            (Event::Start(BytesStart::new("AppendedData")), 27)
+        );
+
+        let mut inner = reader.stream();
+        // Read to start of data marker
+        inner.read_until(b'_', &mut Vec::new()).unwrap();
+
+        // Read binary data. We somehow should known its size
+        let mut binary = [0u8; 16];
+        inner.read_exact(&mut binary).unwrap();
+        assert_eq!(Bytes(&binary), Bytes(b"binary << data&>"));
+        assert_eq!(inner.offset(), 61);
+        assert_eq!(reader.buffer_position(), 61);
+
+        assert_eq!(
+            (reader.read_event().unwrap(), reader.buffer_position()),
+            (Event::End(BytesEnd::new("AppendedData")), 89)
+        );
+
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+
+    #[test]
+    fn buffered() {
+        let mut buf = Vec::new();
+        let mut reader = Reader::from_reader(Cursor::new(
+            b"
+            <AppendedData>
+                _binary << data&>
+            </AppendedData>
+        ",
+        ));
+        reader.config_mut().trim_text(true);
+
+        assert_eq!(
+            (
+                reader.read_event_into(&mut buf).unwrap(),
+                reader.buffer_position()
+            ),
+            (Event::Start(BytesStart::new("AppendedData")), 27)
+        );
+
+        let mut inner = reader.stream();
+        // Read to start of data marker
+        inner.read_until(b'_', &mut buf).unwrap();
+
+        // Read binary data. We somehow should known its size
+        let mut binary = [0u8; 16];
+        inner.read_exact(&mut binary).unwrap();
+        assert_eq!(Bytes(&binary), Bytes(b"binary << data&>"));
+        assert_eq!(inner.offset(), 61);
+        assert_eq!(reader.buffer_position(), 61);
+
+        assert_eq!(
+            (
+                reader.read_event_into(&mut buf).unwrap(),
+                reader.buffer_position()
+            ),
+            (Event::End(BytesEnd::new("AppendedData")), 89)
+        );
+
+        assert_eq!(reader.read_event_into(&mut buf).unwrap(), Event::Eof);
     }
 }
 
