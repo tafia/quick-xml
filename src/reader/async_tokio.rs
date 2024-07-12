@@ -2,14 +2,17 @@
 //! as underlying byte stream. This reader fully implements async/await so reading
 //! can use non-blocking I/O.
 
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
 
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
 use crate::name::{QName, ResolveResult};
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{BangType, NsReader, ParseState, ReadTextResult, Reader, Span};
+use crate::reader::{BangType, BinaryStream, NsReader, ParseState, ReadTextResult, Reader, Span};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
@@ -20,6 +23,47 @@ struct TokioAdapter<'a, R>(&'a mut R);
 
 impl<'a, R: AsyncBufRead + Unpin> TokioAdapter<'a, R> {
     impl_buffered_source!('b, 0, async, await);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+impl<'r, R> AsyncRead for BinaryStream<'r, R>
+where
+    R: AsyncRead + Unpin,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let start = buf.remaining();
+        let this = self.get_mut();
+        let poll = Pin::new(&mut *this.inner).poll_read(cx, buf);
+
+        // If something was read, update offset
+        if let Poll::Ready(Ok(_)) = poll {
+            let amt = start - buf.remaining();
+            *this.offset += amt as u64;
+        }
+        poll
+    }
+}
+
+impl<'r, R> AsyncBufRead for BinaryStream<'r, R>
+where
+    R: AsyncBufRead + Unpin,
+{
+    #[inline]
+    fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
+        Pin::new(&mut *self.get_mut().inner).poll_fill_buf(cx)
+    }
+
+    #[inline]
+    fn consume(self: Pin<&mut Self>, amt: usize) {
+        let this = self.get_mut();
+        this.inner.consume(amt);
+        *this.offset += amt as u64;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
