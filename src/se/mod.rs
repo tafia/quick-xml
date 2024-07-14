@@ -1,5 +1,7 @@
 //! Module to handle custom serde `Serializer`
 
+pub mod io;
+
 /// Implements writing primitives to the underlying writer.
 /// Implementor must provide `write_str(self, &str) -> Result<(), DeError>` method
 macro_rules! write_primitive {

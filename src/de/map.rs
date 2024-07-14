@@ -247,7 +247,7 @@ where
                 // We shouldn't have both `$value` and `$text` fields in the same
                 // struct, so if we have `$value` field, the we should deserialize
                 // text content to `$value`
-                DeEvent::Text(_) if self.has_value_field => {
+                DeEvent::Text(_) | DeEvent::Binary(_) if self.has_value_field => {
                     self.source = ValueSource::Content;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -255,7 +255,7 @@ where
                     let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
                     seed.deserialize(de).map(Some)
                 }
-                DeEvent::Text(_) => {
+                DeEvent::Text(_) | DeEvent::Binary(_) => {
                     self.source = ValueSource::Text;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -943,6 +943,9 @@ where
                     // SAFETY: we just checked that the next event is Text
                     _ => unreachable!(),
                 },
+                DeEvent::Binary(_) => Err(Self::Error::Unsupported(
+                    "undecodable binary data among a sequence of xml elements".into(),
+                )),
                 DeEvent::Start(_) => match self.map.de.next()? {
                     DeEvent::Start(start) => seed
                         .deserialize(ElementDeserializer {

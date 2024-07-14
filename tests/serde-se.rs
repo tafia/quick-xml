@@ -88,7 +88,7 @@ enum ExternallyTagged {
 ///
 /// Anyway, deserialization of that type in roundtrip suffers from
 /// <https://github.com/serde-rs/serde/issues/1183>
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 enum ExternallyTaggedWorkaround {
     Flatten {
         #[serde(flatten)]

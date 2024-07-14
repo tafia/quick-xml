@@ -2056,6 +2056,31 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
+/// Docs
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binary<'a> {
+    /// Field
+    pub text: Cow<'a, [u8]>,
+}
+
+impl<'a> Deref for Binary<'a> {
+    type Target = [u8];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.text.deref()
+    }
+}
+
+impl<'a> From<&'a [u8]> for Binary<'a> {
+    #[inline]
+    fn from(text: &'a [u8]) -> Self {
+        Self {
+            text: Cow::Borrowed(text),
+        }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Simplified event which contains only these variants that used by deserializer
@@ -2074,6 +2099,8 @@ pub enum DeEvent<'a> {
     /// [`Comment`]: Event::Comment
     /// [`PI`]: Event::PI
     Text(Text<'a>),
+    /// Binary undecoded
+    Binary(Binary<'a>),
     /// End of XML document.
     Eof,
 }
@@ -2217,7 +2244,16 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
                         continue;
                     }
-                    self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
+                    match e
+                        .unescape_with(|entity| self.entity_resolver.resolve(entity))
+                        .map(|res| self.drain_text(res))
+                    {
+                        Ok(x) => x,
+                        // failed to escape treat as binary blob.
+                        Err(_) => Ok(DeEvent::Binary(Binary {
+                            text: e.into_inner(),
+                        })),
+                    }
                 }
                 PayloadEvent::CData(e) => self.drain_text(e.decode()?),
                 PayloadEvent::DocType(e) => {
@@ -2687,6 +2723,8 @@ where
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e.text),
+            // SAFETY: Binary event should never be emitted for decoded strings.
+            DeEvent::Binary(e) => unreachable!("{:?}", e),
             // allow one nested level
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
@@ -2708,10 +2746,12 @@ where
                 // The matching tag name is guaranteed by the reader
                 DeEvent::End(_) => Ok(e.text),
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
-                DeEvent::Text(_) => unreachable!(),
+                DeEvent::Text(_) | DeEvent::Binary(_) => unreachable!(),
                 DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
                 DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
+            // SAFETY: Binary event should never be emitted for decoded strings.
+            DeEvent::Binary(e) => unreachable!("{:?}", e),
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
             // The matching tag name is guaranteed by the reader
@@ -2827,6 +2867,30 @@ where
     }
 }
 
+impl<'de, R> Deserializer<'de, IoReader<R>>
+where
+    R: BufRead,
+{
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
+    pub fn from_custom_reader(reader: Reader<R>) -> Self {
+        Self::new(
+            IoReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+                buf: Vec::new(),
+            },
+            PredefinedEntityResolver,
+        )
+    }
+}
+
 impl<'de, R, E> Deserializer<'de, IoReader<R>, E>
 where
     R: BufRead,
@@ -2884,6 +2948,10 @@ where
                 Cow::Borrowed(s) => visitor.visit_borrowed_str(s),
                 Cow::Owned(s) => visitor.visit_string(s),
             },
+            DeEvent::Binary(e) => match e.text {
+                Cow::Borrowed(s) => visitor.visit_borrowed_bytes(s),
+                Cow::Owned(s) => visitor.visit_byte_buf(s),
+            },
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2914,7 +2982,7 @@ where
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            DeEvent::Text(_) => visitor.visit_unit(),
+            DeEvent::Text(_) | DeEvent::Binary(_) => visitor.visit_unit(),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then out deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),

@@ -46,7 +46,7 @@ where
                 seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
                 false,
             ),
-            DeEvent::Text(_) => (
+            DeEvent::Text(_) | DeEvent::Binary(_) => (
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
             ),
