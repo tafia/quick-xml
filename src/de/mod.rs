@@ -2005,7 +2005,7 @@ use crate::{
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Reader,
+    reader::{Config, Reader},
 };
 use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use std::borrow::Cow;
@@ -2168,6 +2168,31 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = PredefinedEntityResolve
     entity_resolver: E,
 }
 
+fn trim_cow<'a, F>(value: Cow<'a, str>, trim: F) -> Cow<'a, str>
+where
+    F: FnOnce(&str) -> &str,
+{
+    match value {
+        Cow::Borrowed(bytes) => Cow::Borrowed(trim(bytes)),
+        Cow::Owned(mut bytes) => {
+            let trimmed = trim(&bytes);
+            if trimmed.len() != bytes.len() {
+                bytes = trimmed.to_string();
+            }
+            Cow::Owned(bytes)
+        }
+    }
+}
+
+/// Removes trailing XML whitespace bytes from text content.
+///
+/// Returns `true` if content is empty after that
+fn inplace_trim_end(mut s: &mut Cow<str>) -> bool {
+    let c: Cow<str> = replace(&mut s, Cow::Borrowed(""));
+    *s = trim_cow(c, str::trim_end);
+    s.is_empty()
+}
+
 impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     fn new(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
@@ -2206,19 +2231,22 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     /// occurs. Content of all events would be appended to `result` and returned
     /// as [`DeEvent::Text`].
     ///
+    /// If the resulting text empty, this function returns None to avoid creating an empty Event.
+    ///
     /// [`Text`]: PayloadEvent::Text
     /// [`CData`]: PayloadEvent::CData
-    fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<DeEvent<'i>, DeError> {
+    fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<Option<DeEvent<'i>>, DeError> {
         loop {
             if self.current_event_is_last_text() {
                 break;
             }
-
             match self.next_impl()? {
                 PayloadEvent::Text(mut e) => {
                     if self.current_event_is_last_text() {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        e.inplace_trim_end();
+                        if self.reader.config().trim_text_end {
+                            e.inplace_trim_end();
+                        }
                     }
                     result
                         .to_mut()
@@ -2227,10 +2255,12 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
 
                 // SAFETY: current_event_is_last_text checks that event is Text or CData
-                _ => unreachable!("Only `Text` and `CData` events can come here"),
+                e => {
+                    unreachable!("Only `Text` and `CData` events can come here: {:?}", &e);
+                }
             }
         }
-        Ok(DeEvent::Text(Text { text: result }))
+        Ok(Some(DeEvent::Text(Text { text: result })))
     }
 
     /// Return an input-borrowing event.
@@ -2240,22 +2270,29 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
                 PayloadEvent::Text(mut e) => {
-                    if self.current_event_is_last_text() && e.inplace_trim_end() {
-                        // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        continue;
+                    if self.current_event_is_last_text() {
+                        if self.reader.config().trim_text_end && e.inplace_trim_end() {
+                            continue;
+                        }
                     }
+
                     match e
                         .unescape_with(|entity| self.entity_resolver.resolve(entity))
                         .map(|res| self.drain_text(res))
                     {
-                        Ok(x) => x,
+                        Ok(Ok(None)) => continue,
+                        Ok(Ok(Some(x))) => Ok(x),
+                        Ok(Err(x)) => Err(x),
                         // failed to escape treat as binary blob.
                         Err(_) => Ok(DeEvent::Binary(Binary {
                             text: e.into_inner(),
                         })),
                     }
                 }
-                PayloadEvent::CData(e) => self.drain_text(e.decode()?),
+                PayloadEvent::CData(e) => match self.drain_text(e.decode()?).transpose() {
+                    None => continue,
+                    Some(x) => x,
+                },
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
                         .capture(e)
@@ -2838,6 +2875,8 @@ where
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
         let mut reader = Reader::from_str(source);
         let config = reader.config_mut();
+        config.trim_text_start = true;
+        config.trim_text_end = true;
         config.expand_empty_elements = true;
 
         Self::new(
@@ -3139,6 +3178,9 @@ pub trait XmlRead<'i> {
 
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
+
+    /// Returns a reference to the reader config.
+    fn config(&self) -> &Config;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -3208,6 +3250,10 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
     }
+
+    fn config(&self) -> &Config {
+        self.reader.config()
+    }
 }
 
 /// XML input source that reads from a slice of bytes and can borrow from it.
@@ -3272,6 +3318,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
+    }
+
+    fn config(&self) -> &Config {
+        self.reader.config()
     }
 }
 

@@ -402,7 +402,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
 /// - CDATA content (`<...><![CDATA[cdata]]></...>`)
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
-pub struct SimpleTypeSerializer<'i, W: Write> {
+pub struct SimpleTypeSerializer<'i, W> {
     /// Writer to which this serializer writes content
     pub writer: W,
     /// Target for which element is serializing. Affects additional characters to escape.

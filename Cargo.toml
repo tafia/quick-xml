@@ -25,6 +25,7 @@ serde = { version = ">=1.0.139", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
 arbitrary = { version = "1", features = ["derive"], optional = true }
+ref-cast = "1"
 
 [dev-dependencies]
 criterion = "0.4"

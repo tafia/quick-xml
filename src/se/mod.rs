@@ -368,7 +368,7 @@ const fn is_xml11_name_char(ch: char) -> bool {
 
 /// Helper struct to self-defense from errors
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(self) struct XmlName<'n>(&'n str);
+pub(crate) struct XmlName<'n>(&'n str);
 
 impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
@@ -613,6 +613,11 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 None => XmlName::try_from(key)?,
             },
         })
+    }
+
+    /// Get writer.
+    pub fn get_mut(&mut self) -> &mut W {
+        self.ser.writer
     }
 }
 
