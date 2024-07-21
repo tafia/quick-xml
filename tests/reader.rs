@@ -16,6 +16,13 @@ small_buffers_tests!(
 );
 
 #[test]
+fn test_text() {
+    let mut r = Reader::from_str(" text ");
+
+    assert_eq!(r.read_event().unwrap(), Text(BytesText::new(" text ")));
+}
+
+#[test]
 fn test_start_end() {
     let mut r = Reader::from_str("<a></a>");
 

@@ -464,4 +464,10 @@ pub mod serialize {
             Self::Custom(e.to_string())
         }
     }
+    impl From<std::io::Error> for DeError {
+        #[inline]
+        fn from(e: std::io::Error) -> Self {
+            Self::Custom(e.to_string())
+        }
+    }
 }

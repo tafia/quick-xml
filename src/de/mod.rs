@@ -2005,7 +2005,7 @@ use crate::{
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Reader,
+    reader::{Config, Reader},
 };
 use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use std::borrow::Cow;
@@ -2056,6 +2056,31 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
+/// Docs
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binary<'a> {
+    /// Field
+    pub text: Cow<'a, [u8]>,
+}
+
+impl<'a> Deref for Binary<'a> {
+    type Target = [u8];
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.text.deref()
+    }
+}
+
+impl<'a> From<&'a [u8]> for Binary<'a> {
+    #[inline]
+    fn from(text: &'a [u8]) -> Self {
+        Self {
+            text: Cow::Borrowed(text),
+        }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Simplified event which contains only these variants that used by deserializer
@@ -2074,6 +2099,8 @@ pub enum DeEvent<'a> {
     /// [`Comment`]: Event::Comment
     /// [`PI`]: Event::PI
     Text(Text<'a>),
+    /// Binary undecoded
+    Binary(Binary<'a>),
     /// End of XML document.
     Eof,
 }
@@ -2179,19 +2206,22 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     /// occurs. Content of all events would be appended to `result` and returned
     /// as [`DeEvent::Text`].
     ///
+    /// If the resulting text empty, this function returns None to avoid creating an empty Event.
+    ///
     /// [`Text`]: PayloadEvent::Text
     /// [`CData`]: PayloadEvent::CData
-    fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<DeEvent<'i>, DeError> {
+    fn drain_text(&mut self, mut result: Cow<'i, str>) -> Result<Option<DeEvent<'i>>, DeError> {
         loop {
             if self.current_event_is_last_text() {
                 break;
             }
-
             match self.next_impl()? {
                 PayloadEvent::Text(mut e) => {
                     if self.current_event_is_last_text() {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        e.inplace_trim_end();
+                        if self.reader.config().trim_text_end {
+                            e.inplace_trim_end();
+                        }
                     }
                     result
                         .to_mut()
@@ -2200,10 +2230,12 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
 
                 // SAFETY: current_event_is_last_text checks that event is Text or CData
-                _ => unreachable!("Only `Text` and `CData` events can come here"),
+                e => {
+                    unreachable!("Only `Text` and `CData` events can come here: {:?}", &e);
+                }
             }
         }
-        Ok(DeEvent::Text(Text { text: result }))
+        Ok(Some(DeEvent::Text(Text { text: result })))
     }
 
     /// Return an input-borrowing event.
@@ -2213,13 +2245,29 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
                 PayloadEvent::Text(mut e) => {
-                    if self.current_event_is_last_text() && e.inplace_trim_end() {
-                        // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        continue;
+                    if self.current_event_is_last_text() {
+                        if self.reader.config().trim_text_end && e.inplace_trim_end() {
+                            continue;
+                        }
                     }
-                    self.drain_text(e.unescape_with(|entity| self.entity_resolver.resolve(entity))?)
+
+                    match e
+                        .unescape_with(|entity| self.entity_resolver.resolve(entity))
+                        .map(|res| self.drain_text(res))
+                    {
+                        Ok(Ok(None)) => continue,
+                        Ok(Ok(Some(x))) => Ok(x),
+                        Ok(Err(x)) => Err(x),
+                        // failed to escape treat as binary blob.
+                        Err(_) => Ok(DeEvent::Binary(Binary {
+                            text: e.into_inner(),
+                        })),
+                    }
                 }
-                PayloadEvent::CData(e) => self.drain_text(e.decode()?),
+                PayloadEvent::CData(e) => match self.drain_text(e.decode()?).transpose() {
+                    None => continue,
+                    Some(x) => x,
+                },
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
                         .capture(e)
@@ -2293,6 +2341,16 @@ where
     T: DeserializeOwned,
 {
     let mut de = Deserializer::from_reader(reader);
+    T::deserialize(&mut de)
+}
+
+/// Deserialize from a custom reader.
+pub fn from_custom_reader<R, T>(reader: Reader<R>) -> Result<T, DeError>
+where
+    R: BufRead,
+    T: DeserializeOwned,
+{
+    let mut de = Deserializer::from_custom_reader(reader);
     T::deserialize(&mut de)
 }
 
@@ -2687,6 +2745,8 @@ where
     fn read_string_impl(&mut self, allow_start: bool) -> Result<Cow<'de, str>, DeError> {
         match self.next()? {
             DeEvent::Text(e) => Ok(e.text),
+            // SAFETY: Binary event should never be emitted for decoded strings.
+            DeEvent::Binary(e) => unreachable!("{:?}", e),
             // allow one nested level
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
@@ -2708,10 +2768,12 @@ where
                 // The matching tag name is guaranteed by the reader
                 DeEvent::End(_) => Ok(e.text),
                 // SAFETY: Cannot be two consequent Text events, they would be merged into one
-                DeEvent::Text(_) => unreachable!(),
+                DeEvent::Text(_) | DeEvent::Binary(_) => unreachable!(),
                 DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
                 DeEvent::Eof => Err(Error::missed_end(name, self.reader.decoder()).into()),
             },
+            // SAFETY: Binary event should never be emitted for decoded strings.
+            DeEvent::Binary(e) => unreachable!("{:?}", e),
             // We can get End event in case of `<tag></tag>` or `<tag/>` input
             // Return empty text in that case
             // The matching tag name is guaranteed by the reader
@@ -2827,6 +2889,30 @@ where
     }
 }
 
+impl<'de, R> Deserializer<'de, IoReader<R>>
+where
+    R: BufRead,
+{
+    /// Create new deserializer that will copy data from the specified reader
+    /// into internal buffer.
+    ///
+    /// If you already have a string use [`Self::from_str`] instead, because it
+    /// will borrow instead of copy. If you have `&[u8]` which is known to represent
+    /// UTF-8, you can decode it first before using [`from_str`].
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
+    pub fn from_custom_reader(reader: Reader<R>) -> Self {
+        Self::new(
+            IoReader {
+                reader,
+                start_trimmer: StartTrimmer::default(),
+                buf: Vec::new(),
+            },
+            PredefinedEntityResolver,
+        )
+    }
+}
+
 impl<'de, R, E> Deserializer<'de, IoReader<R>, E>
 where
     R: BufRead,
@@ -2884,6 +2970,10 @@ where
                 Cow::Borrowed(s) => visitor.visit_borrowed_str(s),
                 Cow::Owned(s) => visitor.visit_string(s),
             },
+            DeEvent::Binary(e) => match e.text {
+                Cow::Borrowed(s) => visitor.visit_borrowed_bytes(s),
+                Cow::Owned(s) => visitor.visit_byte_buf(s),
+            },
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
     }
@@ -2914,7 +3004,7 @@ where
                 self.read_to_end(s.name())?;
                 visitor.visit_unit()
             }
-            DeEvent::Text(_) => visitor.visit_unit(),
+            DeEvent::Text(_) | DeEvent::Binary(_) => visitor.visit_unit(),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
             // If we here, then out deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
@@ -3022,7 +3112,7 @@ impl StartTrimmer {
     /// Converts raw reader's event into a payload event.
     /// Returns `None`, if event should be skipped.
     #[inline(always)]
-    fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
+    fn trim<'a>(&mut self, event: Event<'a>, trim_text_start: bool) -> Option<PayloadEvent<'a>> {
         let (event, trim_next_event) = match event {
             Event::DocType(e) => (PayloadEvent::DocType(e), true),
             Event::Start(e) => (PayloadEvent::Start(e), true),
@@ -3033,7 +3123,10 @@ impl StartTrimmer {
             Event::CData(e) => (PayloadEvent::CData(e), false),
             Event::Text(mut e) => {
                 // If event is empty after trimming, skip it
-                if self.trim_start && e.inplace_trim_start() {
+                // Or if event is all white space, skip it regardless of trimming settings
+                if (trim_text_start && self.trim_start && e.inplace_trim_start())
+                    || e.is_all_whitespace()
+                {
                     return None;
                 }
                 (PayloadEvent::Text(e), false)
@@ -3071,6 +3164,9 @@ pub trait XmlRead<'i> {
 
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
+
+    /// Returns a reference to the reader config.
+    fn config(&self) -> &Config;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -3123,8 +3219,9 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         loop {
             self.buf.clear();
 
+            let trim_text_start = self.reader.config().trim_text_start;
             let event = self.reader.read_event_into(&mut self.buf)?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = self.start_trimmer.trim(event, trim_text_start) {
                 return Ok(event.into_owned());
             }
         }
@@ -3139,6 +3236,10 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
+    }
+
+    fn config(&self) -> &Config {
+        self.reader.config()
     }
 }
 
@@ -3189,7 +3290,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
             let event = self.reader.read_event()?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = self
+                .start_trimmer
+                .trim(event, self.config().trim_text_start)
+            {
                 return Ok(event);
             }
         }
@@ -3204,6 +3308,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
+    }
+
+    fn config(&self) -> &Config {
+        self.reader.config()
     }
 }
 
@@ -4363,7 +4471,7 @@ mod tests {
                 fn start() {
                     let mut de = make_de(" text <tag1><tag2>");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);

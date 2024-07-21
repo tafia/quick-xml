@@ -1,10 +1,12 @@
+use std::io::Cursor;
 use std::iter;
 
 use pretty_assertions::assert_eq;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event::*};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
-use tokio::io::BufReader;
+use quick_xml::utils::Bytes;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 
 // Import `small_buffers_tests!`
 #[macro_use]
@@ -86,6 +88,48 @@ mod read_to_end {
         );
         assert_eq!(r.read_event_into_async(&mut buf).await.unwrap(), Eof);
     }
+}
+
+#[tokio::test]
+async fn issue623() {
+    let mut buf = Vec::new();
+    let mut reader = Reader::from_reader(Cursor::new(
+        b"
+        <AppendedData>
+            _binary << data&>
+        </AppendedData>
+    ",
+    ));
+    reader.config_mut().trim_text(true);
+
+    assert_eq!(
+        (
+            reader.read_event_into_async(&mut buf).await.unwrap(),
+            reader.buffer_position()
+        ),
+        (Start(BytesStart::new("AppendedData")), 23)
+    );
+
+    let mut inner = reader.stream();
+    // Read to start of data marker
+    inner.read_until(b'_', &mut buf).await.unwrap();
+
+    // Read binary data. We somehow should known its size
+    let mut binary = [0u8; 16];
+    inner.read_exact(&mut binary).await.unwrap();
+    assert_eq!(Bytes(&binary), Bytes(b"binary << data&>"));
+    assert_eq!(inner.offset(), 53);
+    assert_eq!(reader.buffer_position(), 53);
+
+    assert_eq!(
+        (
+            reader.read_event_into_async(&mut buf).await.unwrap(),
+            reader.buffer_position()
+        ),
+        (End(BytesEnd::new("AppendedData")), 77)
+    );
+
+    assert_eq!(reader.read_event_into_async(&mut buf).await.unwrap(), Eof);
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/751

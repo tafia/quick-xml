@@ -26,7 +26,7 @@ pub enum QuoteTarget {
 
 /// Escapes atomic value that could be part of a `xs:list`. All whitespace characters
 /// additionally escaped
-fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
+pub(crate) fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
     use QuoteLevel::*;
     use QuoteTarget::*;
 
@@ -95,7 +95,7 @@ fn escape_item(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> 
 }
 
 /// Escapes XSD simple type value
-fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
+pub(crate) fn escape_list(value: &str, target: QuoteTarget, level: QuoteLevel) -> Cow<str> {
     use QuoteLevel::*;
     use QuoteTarget::*;
 
@@ -402,7 +402,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
 /// - CDATA content (`<...><![CDATA[cdata]]></...>`)
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
-pub struct SimpleTypeSerializer<'i, W: Write> {
+pub struct SimpleTypeSerializer<'i, W> {
     /// Writer to which this serializer writes content
     pub writer: W,
     /// Target for which element is serializing. Affects additional characters to escape.

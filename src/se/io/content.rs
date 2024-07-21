@@ -1,15 +1,5 @@
-//! Contains serializer for content of an XML element
-
-use crate::de::TEXT_KEY;
-use crate::errors::serialize::DeError;
-use crate::se::element::{ElementSerializer, Struct, Tuple};
-use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{Indent, QuoteLevel, XmlName};
-use serde::ser::{
-    Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
-};
-use serde::serde_if_integer128;
-use std::fmt::Write;
+use super::*;
+use serde::ser::Serializer;
 
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
@@ -74,6 +64,23 @@ pub struct ContentSerializer<'w, 'i, W> {
     // instead of `<element/>`.
     pub expand_empty_elements: bool,
     //TODO: add settings to disallow consequent serialization of primitives
+}
+
+impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
+    /// Turns this serializer into serializer of a text content
+    #[inline]
+    pub fn try_into_element_serializer(
+        self,
+        key: &'static str,
+    ) -> Result<ElementSerializer<'w, 'i, W>, DeError> {
+        Ok(self.into_element_serializer(XmlName::try_from(key)?))
+    }
+
+    /// Turns this serializer into serializer of a text content
+    #[inline]
+    pub(crate) fn into_element_serializer(self, key: XmlName<'i>) -> ElementSerializer<'w, 'i, W> {
+        ElementSerializer { ser: self, key }
+    }
 }
 
 impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
@@ -144,7 +151,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 
     pub(super) fn write_indent(&mut self) -> Result<(), DeError> {
         if self.write_indent {
-            self.indent.write_indent(&mut self.writer)?;
+            self.indent.write_io_indent(&mut self.writer)?;
             self.write_indent = false;
         }
         Ok(())
@@ -184,7 +191,12 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     write_primitive!(serialize_f64(f64));
 
     write_primitive!(serialize_char(char));
-    write_primitive!(serialize_bytes(&[u8]));
+
+    #[inline]
+    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
+        self.writer.write(v)?;
+        Ok(())
+    }
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
@@ -254,10 +266,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
             value.serialize(self.into_simple_type_serializer())?;
             Ok(())
         } else {
-            value.serialize(ElementSerializer {
-                key: XmlName::try_from(variant)?,
-                ser: self,
-            })
+            value.serialize(self.into_element_serializer(XmlName::try_from(variant)?))
         }
     }
 
@@ -301,10 +310,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
                 .serialize_tuple_struct(name, len)
                 .map(Tuple::Text)
         } else {
-            let ser = ElementSerializer {
-                key: XmlName::try_from(variant)?,
-                ser: self,
-            };
+            let ser = self.into_element_serializer(XmlName::try_from(variant)?);
             ser.serialize_tuple_struct(name, len).map(Tuple::Element)
         }
     }
@@ -349,10 +355,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
                 format!("cannot serialize `$text` struct variant of `{}` enum", name).into(),
             ))
         } else {
-            let ser = ElementSerializer {
-                key: XmlName::try_from(variant)?,
-                ser: self,
-            };
+            let ser = self.into_element_serializer(XmlName::try_from(variant)?);
             ser.serialize_struct(name, len)
         }
     }
@@ -542,7 +545,7 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
@@ -552,7 +555,7 @@ pub(super) mod tests {
                     };
 
                     $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(buffer, $expected.as_bytes());
                 }
             };
         }
@@ -563,7 +566,7 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
@@ -982,7 +985,7 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,
@@ -992,7 +995,7 @@ pub(super) mod tests {
                     };
 
                     $data.serialize(ser).unwrap();
-                    assert_eq!(buffer, $expected);
+                    assert_eq!(buffer, $expected.as_bytes());
                 }
             };
         }
@@ -1003,7 +1006,7 @@ pub(super) mod tests {
             ($name:ident: $data:expr => $kind:ident($reason:literal)) => {
                 #[test]
                 fn $name() {
-                    let mut buffer = String::new();
+                    let mut buffer = Vec::new();
                     let ser = ContentSerializer {
                         writer: &mut buffer,
                         level: QuoteLevel::Full,

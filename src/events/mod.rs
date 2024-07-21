@@ -53,7 +53,7 @@ use crate::escape::{
 use crate::name::{LocalName, QName};
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
-use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
+use crate::utils::{is_whitespace, name_len, trim_xml_end, trim_xml_start, write_cow_string};
 use attributes::{Attribute, Attributes};
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
@@ -621,6 +621,11 @@ impl<'a> BytesText<'a> {
     pub fn inplace_trim_end(&mut self) -> bool {
         self.content = trim_cow(replace(&mut self.content, Cow::Borrowed(b"")), trim_xml_end);
         self.content.is_empty()
+    }
+
+    /// Returns `true` if all characters are whitespace characters.
+    pub fn is_all_whitespace(&mut self) -> bool {
+        self.content.iter().all(|&x| is_whitespace(x))
     }
 }
 
