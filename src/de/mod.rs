@@ -2168,31 +2168,6 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = PredefinedEntityResolve
     entity_resolver: E,
 }
 
-fn trim_cow<'a, F>(value: Cow<'a, str>, trim: F) -> Cow<'a, str>
-where
-    F: FnOnce(&str) -> &str,
-{
-    match value {
-        Cow::Borrowed(bytes) => Cow::Borrowed(trim(bytes)),
-        Cow::Owned(mut bytes) => {
-            let trimmed = trim(&bytes);
-            if trimmed.len() != bytes.len() {
-                bytes = trimmed.to_string();
-            }
-            Cow::Owned(bytes)
-        }
-    }
-}
-
-/// Removes trailing XML whitespace bytes from text content.
-///
-/// Returns `true` if content is empty after that
-fn inplace_trim_end(mut s: &mut Cow<str>) -> bool {
-    let c: Cow<str> = replace(&mut s, Cow::Borrowed(""));
-    *s = trim_cow(c, str::trim_end);
-    s.is_empty()
-}
-
 impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     fn new(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
@@ -2366,6 +2341,16 @@ where
     T: DeserializeOwned,
 {
     let mut de = Deserializer::from_reader(reader);
+    T::deserialize(&mut de)
+}
+
+/// Deserialize from a custom reader.
+pub fn from_custom_reader<R, T>(reader: Reader<R>) -> Result<T, DeError>
+where
+    R: BufRead,
+    T: DeserializeOwned,
+{
+    let mut de = Deserializer::from_custom_reader(reader);
     T::deserialize(&mut de)
 }
 
@@ -2875,8 +2860,6 @@ where
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
         let mut reader = Reader::from_str(source);
         let config = reader.config_mut();
-        config.trim_text_start = true;
-        config.trim_text_end = true;
         config.expand_empty_elements = true;
 
         Self::new(
@@ -3129,7 +3112,7 @@ impl StartTrimmer {
     /// Converts raw reader's event into a payload event.
     /// Returns `None`, if event should be skipped.
     #[inline(always)]
-    fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
+    fn trim<'a>(&mut self, event: Event<'a>, trim_text_start: bool) -> Option<PayloadEvent<'a>> {
         let (event, trim_next_event) = match event {
             Event::DocType(e) => (PayloadEvent::DocType(e), true),
             Event::Start(e) => (PayloadEvent::Start(e), true),
@@ -3140,7 +3123,10 @@ impl StartTrimmer {
             Event::CData(e) => (PayloadEvent::CData(e), false),
             Event::Text(mut e) => {
                 // If event is empty after trimming, skip it
-                if self.trim_start && e.inplace_trim_start() {
+                // Or if event is all white space, skip it regardless of trimming settings
+                if (trim_text_start && self.trim_start && e.inplace_trim_start())
+                    || e.is_all_whitespace()
+                {
                     return None;
                 }
                 (PayloadEvent::Text(e), false)
@@ -3233,8 +3219,9 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
         loop {
             self.buf.clear();
 
+            let trim_text_start = self.reader.config().trim_text_start;
             let event = self.reader.read_event_into(&mut self.buf)?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = self.start_trimmer.trim(event, trim_text_start) {
                 return Ok(event.into_owned());
             }
         }
@@ -3303,7 +3290,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
             let event = self.reader.read_event()?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = self
+                .start_trimmer
+                .trim(event, self.config().trim_text_start)
+            {
                 return Ok(event);
             }
         }
@@ -4481,7 +4471,7 @@ mod tests {
                 fn start() {
                     let mut de = make_de(" text <tag1><tag2>");
                     // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
