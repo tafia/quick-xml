@@ -567,6 +567,68 @@ impl EncodingRef {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// A direct stream to the underlying [`Reader`]s reader which updates
+/// [`Reader::buffer_position()`] when read from it.
+#[derive(Debug)]
+#[must_use = "streams do nothing unless read or polled"]
+pub struct BinaryStream<'r, R> {
+    inner: &'r mut R,
+    offset: &'r mut u64,
+}
+
+impl<'r, R> BinaryStream<'r, R> {
+    /// Returns current position in bytes in the original source.
+    #[inline]
+    pub const fn offset(&self) -> u64 {
+        *self.offset
+    }
+
+    /// Gets a reference to the underlying reader.
+    #[inline]
+    pub const fn get_ref(&self) -> &R {
+        self.inner
+    }
+
+    /// Gets a mutable reference to the underlying reader.
+    ///
+    /// Avoid read from this reader because this will not update reader's position
+    /// and will lead to incorrect positions of errors. Read from this stream instead.
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut R {
+        self.inner
+    }
+}
+
+impl<'r, R> io::Read for BinaryStream<'r, R>
+where
+    R: io::Read,
+{
+    #[inline]
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let amt = self.inner.read(buf)?;
+        *self.offset += amt as u64;
+        Ok(amt)
+    }
+}
+
+impl<'r, R> io::BufRead for BinaryStream<'r, R>
+where
+    R: io::BufRead,
+{
+    #[inline]
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        self.inner.fill_buf()
+    }
+
+    #[inline]
+    fn consume(&mut self, amt: usize) {
+        self.inner.consume(amt);
+        *self.offset += amt as u64;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A low level encoding-agnostic XML event reader.
 ///
 /// Consumes bytes and streams XML [`Event`]s.
@@ -716,6 +778,12 @@ impl<R> Reader<R> {
     }
 
     /// Gets a mutable reference to the underlying reader.
+    ///
+    /// Avoid read from this reader because this will not update reader's position
+    /// and will lead to incorrect positions of errors. If you want to read, use
+    /// [`stream()`] instead.
+    ///
+    /// [`stream()`]: Self::stream
     pub fn get_mut(&mut self) -> &mut R {
         &mut self.reader
     }
@@ -758,6 +826,66 @@ impl<R> Reader<R> {
     #[inline]
     pub const fn decoder(&self) -> Decoder {
         self.state.decoder()
+    }
+
+    /// Get the direct access to the underlying reader, but tracks the amount of
+    /// read data and update [`Reader::buffer_position()`] accordingly.
+    ///
+    /// Note, that this method gives you access to the internal reader and read
+    /// data will not be returned in any subsequent events read by `read_event`
+    /// family of methods.
+    ///
+    /// # Example
+    ///
+    /// This example demonstrates how to read stream raw bytes from an XML document.
+    /// This could be used to implement streaming read of text, or to read raw binary
+    /// bytes embedded in an XML document. (Documents with embedded raw bytes are not
+    /// valid XML, but XML-derived file formats exist where such documents are valid).
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use std::io::{BufRead, Read};
+    /// use quick_xml::events::{BytesEnd, BytesStart, Event};
+    /// use quick_xml::reader::Reader;
+    ///
+    /// let mut reader = Reader::from_str("<tag>binary << data&></tag>");
+    /// //                                 ^    ^               ^     ^
+    /// //                                 0    5              21    27
+    ///
+    /// assert_eq!(
+    ///     (reader.read_event().unwrap(), reader.buffer_position()),
+    ///     // 5 - end of the `<tag>`
+    ///     (Event::Start(BytesStart::new("tag")), 5)
+    /// );
+    ///
+    /// // Reading directly from underlying reader will not update position
+    /// // let mut inner = reader.get_mut();
+    ///
+    /// // Reading from the stream() advances position
+    /// let mut inner = reader.stream();
+    ///
+    /// // Read binary data. We must know its size
+    /// let mut binary = [0u8; 16];
+    /// inner.read_exact(&mut binary).unwrap();
+    /// assert_eq!(&binary, b"binary << data&>");
+    /// // 21 - end of the `binary << data&>`
+    /// assert_eq!(inner.offset(), 21);
+    /// assert_eq!(reader.buffer_position(), 21);
+    ///
+    /// assert_eq!(
+    ///     (reader.read_event().unwrap(), reader.buffer_position()),
+    ///     // 27 - end of the `</tag>`
+    ///     (Event::End(BytesEnd::new("tag")), 27)
+    /// );
+    ///
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    #[inline]
+    pub fn stream(&mut self) -> BinaryStream<R> {
+        BinaryStream {
+            inner: &mut self.reader,
+            offset: &mut self.state.offset,
+        }
     }
 }
 
