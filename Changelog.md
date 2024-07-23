@@ -15,12 +15,17 @@
 
 ### New Features
 
-- [#623]: Added `Reader::stream()` that can be used to read arbitrary data
-  from the inner reader while track position for XML reader.
-
 ### Bug Fixes
 
 ### Misc Changes
+
+
+## 0.36.1 -- 2024-07-23
+
+### New Features
+
+- [#623]: Added `Reader::stream()` that can be used to read arbitrary data
+  from the inner reader while track position for XML reader.
 
 [#623]: https://github.com/tafia/quick-xml/issues/623
 
