@@ -494,3 +494,20 @@ fn issue683() {
         }
     );
 }
+
+#[test]
+fn issue785() {
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+    struct Identifier {
+        parent: Option<u64>,
+    }
+    let ident = Identifier {
+        parent: None,
+    };
+    let mut save_string = String::new();
+    let mut serializer = quick_xml::se::Serializer::new(&mut save_string);
+    serializer.indent(' ', 4);
+    ident.serialize(serializer).unwrap();
+    let res: Identifier = quick_xml::de::from_str(&save_string).unwrap();
+    assert_eq!(res, ident);
+}
