@@ -22,7 +22,7 @@ include = ["src/*", "LICENSE-MIT.md", "README.md"]
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 serde = { version = ">=1.0.139", optional = true }
-tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
+tokio = { version = "1", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
 arbitrary = { version = "1", features = ["derive"], optional = true }
 
@@ -34,7 +34,7 @@ regex = "1"
 # serde does not follow semver in numbering and their dependencies, so we specifying patch here
 serde_derive = { version = "1.0.79" }
 serde-value = "0.7"
-tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
+tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
 
 [lib]
