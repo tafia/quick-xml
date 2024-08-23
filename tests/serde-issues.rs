@@ -494,3 +494,43 @@ fn issue683() {
         }
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/591.
+mod issue591 {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    #[serde(rename = "p:sldLayoutId")]
+    struct CtSlideLayoutIdListEntry<'a> {
+        #[serde(rename = "@id")]
+        id_attr: &'a str,
+
+        #[serde(rename = "@r:id")]
+        r_id_attr: &'a str,
+    }
+
+    #[test]
+    fn de() {
+        assert_eq!(
+            from_str::<CtSlideLayoutIdListEntry>(r#"<p:sldLayoutId id="2147483649" r:id="rId1"/>"#)
+                .unwrap(),
+            CtSlideLayoutIdListEntry {
+                id_attr: "2147483649",
+                r_id_attr: "rId1",
+            }
+        );
+    }
+
+    #[test]
+    fn se() {
+        assert_eq!(
+            to_string(&CtSlideLayoutIdListEntry {
+                id_attr: "2147483649",
+                r_id_attr: "rId1",
+            })
+            .unwrap(),
+            r#"<p:sldLayoutId id="2147483649" r:id="rId1"/>"#
+        );
+    }
+}

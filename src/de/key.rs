@@ -41,7 +41,7 @@ fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, De
 ///   to the identifier
 /// - put the decoded [`local_name()`] of a name to the identifier
 ///
-/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding`
+/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding`, or `@r:id`
 /// (where `[]` means optional element).
 ///
 /// The deserializer also supports deserializing names as other primitive types:
@@ -86,7 +86,9 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
 
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
-        if name.as_namespace_binding().is_some() {
+        // https://github.com/tafia/quick-xml/issues/591
+        // Or any namespace prefix (e.g. r:id) map to `@r:id` instead of `@id`
+        if name.as_namespace_binding().is_some() || name.prefix().is_some()  {
             decoder.decode_into(name.into_inner(), key_buf)?;
         } else {
             let local = name.local_name();
