@@ -88,7 +88,7 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         // https://github.com/tafia/quick-xml/issues/591
         // Or any namespace prefix (e.g. r:id) map to `@r:id` instead of `@id`
-        if name.as_namespace_binding().is_some() || name.prefix().is_some()  {
+        if name.as_namespace_binding().is_some() || name.prefix().is_some() {
             decoder.decode_into(name.into_inner(), key_buf)?;
         } else {
             let local = name.local_name();
