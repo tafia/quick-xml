@@ -171,6 +171,24 @@ mod issue514 {
     }
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/590
+#[test]
+fn issue590() {
+    let mut reader = Reader::from_reader(BufReader::with_capacity(
+        16,
+        &b"<!DOCTYPE t [<!1><!2>]>"[..],
+        // 0      7       ^15    ^23
+        //[                ] = capacity
+    ));
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf).unwrap() {
+            Event::Eof => break,
+            _ => (),
+        }
+    }
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/604
 mod issue604 {
     use super::*;
@@ -476,4 +494,22 @@ fn issue776() {
         reader.read_event().unwrap(),
         Event::End(BytesEnd::new(r#"tag attr=">""#))
     );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/801
+/// Angle brackets are read in different buffer
+#[test]
+fn issue801() {
+    let xml = b"<!DOCTYPE X [<!-- --> <!ENTITY a \"a\">]>";
+    let reader = BufReader::with_capacity(2, &xml[..]);
+    let mut reader = Reader::from_reader(reader);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_event_into(&mut buf) {
+            Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+        }
+    }
 }

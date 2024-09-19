@@ -307,7 +307,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         // start with it.
         debug_assert_eq!(self[0], b'!');
 
-        let bang_type = BangType::new(self[1..].first().copied())?;
+        let mut bang_type = BangType::new(self[1..].first().copied())?;
 
         if let Some((bytes, i)) = bang_type.parse(&[], self) {
             *position += i as u64;

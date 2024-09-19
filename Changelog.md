@@ -17,7 +17,11 @@
 
 ### Bug Fixes
 
+- [#533]: Fix incorrect DocType closing bracket detection when parsing with buffered reader
+
 ### Misc Changes
+
+[#623]: https://github.com/tafia/quick-xml/issues/533
 
 
 ## 0.36.1 -- 2024-07-23
