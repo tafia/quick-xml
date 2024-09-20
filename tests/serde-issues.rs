@@ -3,11 +3,12 @@
 //! Name each module / test as `issue<GH number>` and keep sorted by issue number
 
 use pretty_assertions::assert_eq;
-use quick_xml::de::from_str;
+use quick_xml::de::{from_reader, from_str};
 use quick_xml::se::{to_string, to_string_with_root};
 use serde::de::{Deserializer, IgnoredAny};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::BufReader;
 
 /// Regression tests for https://github.com/tafia/quick-xml/issues/252.
 mod issue252 {
@@ -319,6 +320,17 @@ fn issue510() {
             ]),
         }
     );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/533.
+#[test]
+fn issue533() {
+    #[derive(Deserialize)]
+    struct X {}
+
+    let xml = "<!DOCTYPE X [<!-- -->]><X></X>";
+    let reader = BufReader::with_capacity(20, xml.as_bytes());
+    let _: X = from_reader(reader).unwrap();
 }
 
 /// Regression test for https://github.com/tafia/quick-xml/issues/537.

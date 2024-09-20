@@ -144,7 +144,7 @@ impl ReaderState {
             // https://www.w3.org/TR/xml11/#sec-prolog-dtd
             // HTML5 allows mixed case for doctype declarations:
             // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
-            BangType::DocType if uncased_starts_with(buf, b"!DOCTYPE") => {
+            BangType::DocType(0) if uncased_starts_with(buf, b"!DOCTYPE") => {
                 match buf[8..].iter().position(|&b| !is_whitespace(b)) {
                     Some(start) => Ok(Event::DocType(BytesText::wrap(
                         // Cut of `!DOCTYPE` and any number of spaces from start

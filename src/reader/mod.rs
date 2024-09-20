@@ -1019,8 +1019,8 @@ enum BangType {
     CData,
     /// <!--...-->
     Comment,
-    /// <!DOCTYPE...>
-    DocType,
+    /// <!DOCTYPE...>. Contains balance of '<' (+1) and '>' (-1)
+    DocType(i32),
 }
 impl BangType {
     #[inline(always)]
@@ -1028,7 +1028,7 @@ impl BangType {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
-            Some(b'D') | Some(b'd') => Self::DocType,
+            Some(b'D') | Some(b'd') => Self::DocType(0),
             _ => return Err(Error::Syntax(SyntaxError::InvalidBangMarkup)),
         })
     }
@@ -1040,7 +1040,7 @@ impl BangType {
     /// - `buf`: buffer with data consumed on previous iterations
     /// - `chunk`: data read on current iteration and not yet consumed from reader
     #[inline(always)]
-    fn parse<'b>(&self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
+    fn parse<'b>(&mut self, buf: &[u8], chunk: &'b [u8]) -> Option<(&'b [u8], usize)> {
         match self {
             Self::Comment => {
                 for i in memchr::memchr_iter(b'>', chunk) {
@@ -1085,14 +1085,15 @@ impl BangType {
                     }
                 }
             }
-            Self::DocType => {
-                for i in memchr::memchr_iter(b'>', chunk) {
-                    let content = &chunk[..i];
-                    let balance = memchr::memchr2_iter(b'<', b'>', content)
-                        .map(|p| if content[p] == b'<' { 1i32 } else { -1 })
-                        .sum::<i32>();
-                    if balance == 0 {
-                        return Some((content, i + 1)); // +1 for `>`
+            Self::DocType(ref mut balance) => {
+                for i in memchr::memchr2_iter(b'<', b'>', chunk) {
+                    if chunk[i] == b'<' {
+                        *balance += 1;
+                    } else {
+                        if *balance == 0 {
+                            return Some((&chunk[..i], i + 1)); // +1 for `>`
+                        }
+                        *balance -= 1;
                     }
                 }
             }
@@ -1104,7 +1105,7 @@ impl BangType {
         match self {
             Self::CData => Error::Syntax(SyntaxError::UnclosedCData),
             Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
-            Self::DocType => Error::Syntax(SyntaxError::UnclosedDoctype),
+            Self::DocType(_) => Error::Syntax(SyntaxError::UnclosedDoctype),
         }
     }
 }
@@ -1414,7 +1415,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType, Bytes(b"!DOCTYPE"))
+                                (BangType::DocType(0), Bytes(b"!DOCTYPE"))
                             );
                             assert_eq!(position, 10);
                         }
@@ -1488,7 +1489,7 @@ mod test {
                                 .unwrap();
                             assert_eq!(
                                 (ty, Bytes(bytes)),
-                                (BangType::DocType, Bytes(b"!doctype"))
+                                (BangType::DocType(0), Bytes(b"!doctype"))
                             );
                             assert_eq!(position, 10);
                         }
