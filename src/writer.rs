@@ -143,7 +143,7 @@ impl<W> Writer<W> {
     /// # }
     /// ```
     #[must_use]
-    pub fn create_element<'a, N>(&'a mut self, name: N) -> ElementWriter<W>
+    pub fn create_element<'a, N>(&'a mut self, name: N) -> ElementWriter<'a, W>
     where
         N: Into<Cow<'a, str>>,
     {
