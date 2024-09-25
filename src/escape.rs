@@ -301,7 +301,8 @@ where
 
 /// Normalize the line end, replace \r or \r\n with \n.
 #[inline]
-fn normalize_line_end(input: Cow<str>) -> Cow<str> {
+fn normalize_line_end<'a>(input: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
+    let input = input.into();
     let bytes = input.as_bytes();
     let mut normalized = None;
     let mut start = 0;
