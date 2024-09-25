@@ -1,6 +1,6 @@
 //! Manage xml character escapes
 
-use memchr::memchr2_iter;
+use memchr::{memchr2_iter, memchr_iter};
 use std::borrow::Cow;
 use std::num::ParseIntError;
 use std::ops::Range;
@@ -288,13 +288,42 @@ where
         }
     }
 
-    if let Some(mut unescaped) = unescaped {
+    let res = if let Some(mut unescaped) = unescaped {
         if let Some(raw) = raw.get(last_end..) {
             unescaped.push_str(raw);
         }
-        Ok(Cow::Owned(unescaped))
+        Cow::Owned(unescaped)
     } else {
-        Ok(Cow::Borrowed(raw))
+        Cow::Borrowed(raw)
+    };
+    Ok(normalize_line_end(res))
+}
+
+/// Normalize the line end, replace \r or \r\n with \n.
+#[inline]
+fn normalize_line_end(input: Cow<str>) -> Cow<str> {
+    let bytes = input.as_bytes();
+    let mut normalized = None;
+    let mut start = 0;
+    let iter = memchr_iter(b'\r', bytes);
+    for i in iter {
+        if normalized.is_none() {
+            normalized = Some(String::with_capacity(input.len()))
+        }
+        let normalized = normalized.as_mut().expect("initialized");
+        normalized.push_str(&input[start..i]);
+        normalized.push('\n');
+        start = i + 1;
+        if matches!(bytes.get(start), Some(&c) if c == b'\n') {
+            // \n right after \r, \r\n case, skip \n because we have already replaced \r with \n
+            start += 1;
+        }
+    }
+    if let Some(mut normalized) = normalized {
+        normalized.push_str(&input[start..]);
+        Cow::Owned(normalized)
+    } else {
+        input
     }
 }
 
