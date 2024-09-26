@@ -15,6 +15,11 @@
 
 ### New Features
 
+- [#806]: Added `normalize_line_end` that normalizes line end
+  from original XML data during unescape process.
+
+[#806]: https://github.com/tafia/quick-xml/issues/806
+
 ### Bug Fixes
 
 ### Misc Changes
