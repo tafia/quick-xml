@@ -266,7 +266,7 @@ where
                     unescaped = Some(String::with_capacity(raw.len()));
                 }
                 let unescaped = unescaped.as_mut().expect("initialized");
-                unescaped.push_str(&raw[last_end..start]);
+                unescaped.push_str(&normalize_line_end(&raw[last_end..start]));
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
@@ -288,20 +288,19 @@ where
         }
     }
 
-    let res = if let Some(mut unescaped) = unescaped {
+    if let Some(mut unescaped) = unescaped {
         if let Some(raw) = raw.get(last_end..) {
-            unescaped.push_str(raw);
+            unescaped.push_str(&normalize_line_end(raw));
         }
-        Cow::Owned(unescaped)
+        Ok(Cow::Owned(unescaped))
     } else {
-        Cow::Borrowed(raw)
-    };
-    Ok(normalize_line_end(res))
+        Ok(Cow::Borrowed(raw))
+    }
 }
 
 /// Normalize the line end, replace \r or \r\n with \n.
 #[inline]
-fn normalize_line_end(input: Cow<str>) -> Cow<str> {
+fn normalize_line_end(input: &str) -> Cow<str> {
     let bytes = input.as_bytes();
     let mut normalized = None;
     let mut start = 0;
@@ -323,7 +322,7 @@ fn normalize_line_end(input: Cow<str>) -> Cow<str> {
         normalized.push_str(&input[start..]);
         Cow::Owned(normalized)
     } else {
-        input
+        input.into()
     }
 }
 
