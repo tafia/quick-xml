@@ -1955,9 +1955,9 @@ mod with_root {
             <root>3</root>");
     serialize_as!(tuple:
         // Use to_string() to get owned type that is required for deserialization
-        ("<\"&'>".to_string(), "with\t\r\n spaces", 3usize)
+        ("<\"&'>".to_string(), "with\t\n spaces", 3usize)
         => "<root>&lt;\"&amp;'&gt;</root>\
-            <root>with\t\r\n spaces</root>\
+            <root>with\t\n spaces</root>\
             <root>3</root>");
     serialize_as!(tuple_struct:
         Tuple(42.0, "answer")
