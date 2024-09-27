@@ -294,7 +294,7 @@ where
         }
         Ok(Cow::Owned(unescaped))
     } else {
-        Ok(Cow::Borrowed(raw))
+        Ok(normalize_line_end(raw))
     }
 }
 
