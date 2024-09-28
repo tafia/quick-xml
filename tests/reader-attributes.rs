@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{
     BytesEnd,
-    Event::{self, *},
+    Event::*,
 };
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
