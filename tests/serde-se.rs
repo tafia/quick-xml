@@ -1955,6 +1955,7 @@ mod with_root {
             <root>3</root>");
     serialize_as!(tuple:
         // Use to_string() to get owned type that is required for deserialization
+        // Note: \r cannot include in whitespace character because we performs line end normalization.
         ("<\"&'>".to_string(), "with\t\n spaces", 3usize)
         => "<root>&lt;\"&amp;'&gt;</root>\
             <root>with\t\n spaces</root>\
