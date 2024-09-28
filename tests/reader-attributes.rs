@@ -184,7 +184,7 @@ fn line_ends() {
         event => panic!("Expected Start, found {:?}", event),
     }
     match reader.read_event().unwrap() {
-        Event::Text(event) => {
+        Text(event) => {
             assert_eq!(event.unescape().unwrap(), "\n\n\nvalue3\n\n\nvalue4\n\n\n")
         }
         event => panic!("Expected Text, found {:?}", event),
