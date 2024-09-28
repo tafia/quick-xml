@@ -1,4 +1,3 @@
-use quick_xml::errors::Error;
 use quick_xml::events::{BytesStart, BytesText, Event};
 use quick_xml::writer::Writer;
 
@@ -276,7 +275,7 @@ fn element_writer_nested() {
         .create_element("outer")
         .with_attribute(("attr1", "value1"))
         .with_attribute(("attr2", "value2"))
-        .write_inner_content::<_, Error>(|writer| {
+        .write_inner_content(|writer| {
             let fruits = ["apple", "orange", "banana"];
             for (quant, item) in fruits.iter().enumerate() {
                 writer
