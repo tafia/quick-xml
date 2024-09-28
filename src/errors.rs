@@ -318,6 +318,8 @@ pub mod serialize {
     pub enum DeError {
         /// Serde custom error
         Custom(String),
+        /// IO error from Writer
+        Io(Arc<IoError>),
         /// Xml parsing error
         InvalidXml(Error),
         /// Cannot parse to integer
@@ -368,6 +370,7 @@ pub mod serialize {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 DeError::Custom(s) => write!(f, "{}", s),
+                DeError::Io(e) => write!(f, "{}", e),
                 DeError::InvalidXml(e) => write!(f, "{}", e),
                 DeError::InvalidInt(e) => write!(f, "{}", e),
                 DeError::InvalidFloat(e) => write!(f, "{}", e),
@@ -406,6 +409,13 @@ pub mod serialize {
     impl serde::ser::Error for DeError {
         fn custom<T: fmt::Display>(msg: T) -> Self {
             DeError::Custom(msg.to_string())
+        }
+    }
+
+    impl From<IoError> for DeError {
+        #[inline]
+        fn from(e: IoError) -> Self {
+            Self::Io(Arc::new(e))
         }
     }
 
