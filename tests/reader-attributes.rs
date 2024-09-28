@@ -168,7 +168,7 @@ fn line_ends() {
     const XML: &str = "<root attribute=\"\r\r\n\nvalue1\r\r\n\nvalue2\r\r\n\n\">\r\r\n\nvalue3\r\r\n\nvalue4\r\r\n\n</root>";
     let mut reader = Reader::from_str(XML);
     match reader.read_event().unwrap() {
-        Event::Start(event) => {
+        Start(event) => {
             let mut iter = event.attributes();
             let a = iter.next().unwrap().unwrap();
             #[cfg(not(feature = "encoding"))]
