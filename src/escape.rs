@@ -313,7 +313,7 @@ fn normalize_line_end(input: &str) -> Cow<str> {
         normalized.push_str(&input[start..i]);
         normalized.push('\n');
         start = i + 1;
-        if matches!(bytes.get(start), Some(&c) if c == b'\n') {
+        if let Some(&'\n') = bytes.get(start) {
             // \n right after \r, \r\n case, skip \n because we have already replaced \r with \n
             start += 1;
         }
