@@ -1,7 +1,6 @@
 use quick_xml::de::from_str;
-use quick_xml::se::Serializer;
+use quick_xml::se::{SeError, Serializer};
 use quick_xml::utils::Bytes;
-use quick_xml::SeError;
 
 use serde::{serde_if_integer128, Deserialize, Serialize};
 use std::collections::BTreeMap;

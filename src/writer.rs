@@ -278,7 +278,7 @@ impl<W: Write> Writer<W> {
     /// # use serde::Serialize;
     /// # use quick_xml::events::{BytesStart, Event};
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::SeError;
+    /// # use quick_xml::se::SeError;
     /// # fn main() -> Result<(), SeError> {
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct MyData {

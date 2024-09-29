@@ -1,4 +1,4 @@
-use crate::errors::serialize::SeError;
+use crate::se::SeError;
 use serde::ser::{Impossible, Serialize, Serializer};
 use serde::serde_if_integer128;
 use std::fmt::Write;

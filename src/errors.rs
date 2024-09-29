@@ -467,9 +467,9 @@ pub mod serialize {
             match self {
                 SeError::Custom(s) => write!(f, "{}", s),
                 SeError::Io(e) => write!(f, "I/O error: {}", e),
-                SeError::Fmt(e) => write!(f, "Formatting error: {}", e),
-                SeError::Unsupported(s) => write!(f, "Unsupported value: {}", s),
-                SeError::NonEncodable(e) => write!(f, "Malformed UTF-8: {}", e),
+                SeError::Fmt(e) => write!(f, "formatting error: {}", e),
+                SeError::Unsupported(s) => write!(f, "unsupported value: {}", s),
+                SeError::NonEncodable(e) => write!(f, "malformed UTF-8: {}", e),
             }
         }
     }
