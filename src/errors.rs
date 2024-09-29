@@ -3,8 +3,7 @@
 use crate::encoding::Decoder;
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
-use crate::name::QName;
-use crate::utils::write_byte_string;
+use crate::name::{NamespaceError, QName};
 use std::fmt;
 use std::io::Error as IoError;
 use std::str::Utf8Error;
@@ -175,24 +174,8 @@ pub enum Error {
     InvalidAttr(AttrError),
     /// Escape error
     EscapeError(EscapeError),
-    /// Specified namespace prefix is unknown, cannot resolve namespace for it
-    UnknownPrefix(Vec<u8>),
-    /// Error for when a reserved namespace is set incorrectly.
-    ///
-    /// This error returned in following cases:
-    /// - the XML document attempts to bind `xml` prefix to something other than
-    ///   `http://www.w3.org/XML/1998/namespace`
-    /// - the XML document attempts to bind `xmlns` prefix
-    /// - the XML document attempts to bind some prefix (except `xml`) to
-    ///   `http://www.w3.org/XML/1998/namespace`
-    /// - the XML document attempts to bind some prefix to
-    ///   `http://www.w3.org/2000/xmlns/`
-    InvalidPrefixBind {
-        /// The prefix that is tried to be bound
-        prefix: Vec<u8>,
-        /// Namespace to which prefix tried to be bound
-        namespace: Vec<u8>,
-    },
+    /// Parsed XML has some namespace-related problems
+    Namespace(NamespaceError),
 }
 
 impl Error {
@@ -259,6 +242,13 @@ impl From<AttrError> for Error {
     }
 }
 
+impl From<NamespaceError> for Error {
+    #[inline]
+    fn from(error: NamespaceError) -> Self {
+        Self::Namespace(error)
+    }
+}
+
 /// A specialized `Result` type where the error is hard-wired to [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -272,18 +262,7 @@ impl fmt::Display for Error {
             Self::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Self::EscapeError(e) => e.fmt(f),
-            Self::UnknownPrefix(prefix) => {
-                f.write_str("Unknown namespace prefix '")?;
-                write_byte_string(f, prefix)?;
-                f.write_str("'")
-            }
-            Self::InvalidPrefixBind { prefix, namespace } => {
-                f.write_str("The namespace prefix '")?;
-                write_byte_string(f, prefix)?;
-                f.write_str("' cannot be bound to '")?;
-                write_byte_string(f, namespace)?;
-                f.write_str("'")
-            }
+            Self::Namespace(e) => e.fmt(f),
         }
     }
 }
@@ -297,6 +276,7 @@ impl std::error::Error for Error {
             Self::NonDecodable(Some(e)) => Some(e),
             Self::InvalidAttr(e) => Some(e),
             Self::EscapeError(e) => Some(e),
+            Self::Namespace(e) => Some(e),
             _ => None,
         }
     }
@@ -307,6 +287,7 @@ pub mod serialize {
     //! A module to handle serde (de)serialization errors
 
     use super::*;
+    use crate::utils::write_byte_string;
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;

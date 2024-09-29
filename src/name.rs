@@ -3,12 +3,57 @@
 //!
 //! [spec]: https://www.w3.org/TR/xml-names11
 
-use crate::errors::{Error, Result};
 use crate::events::attributes::Attribute;
 use crate::events::BytesStart;
 use crate::utils::write_byte_string;
 use memchr::memchr;
 use std::fmt::{self, Debug, Formatter};
+
+/// Some namespace was invalid
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NamespaceError {
+    /// Specified namespace prefix is unknown, cannot resolve namespace for it
+    UnknownPrefix(Vec<u8>),
+    /// Error for when a reserved namespace is set incorrectly.
+    ///
+    /// This error returned in following cases:
+    /// - the XML document attempts to bind `xml` prefix to something other than
+    ///   `http://www.w3.org/XML/1998/namespace`
+    /// - the XML document attempts to bind `xmlns` prefix
+    /// - the XML document attempts to bind some prefix (except `xml`) to
+    ///   `http://www.w3.org/XML/1998/namespace`
+    /// - the XML document attempts to bind some prefix to
+    ///   `http://www.w3.org/2000/xmlns/`
+    InvalidPrefixBind {
+        /// The prefix that is tried to be bound
+        prefix: Vec<u8>,
+        /// Namespace to which prefix tried to be bound
+        namespace: Vec<u8>,
+    },
+}
+
+impl fmt::Display for NamespaceError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::UnknownPrefix(prefix) => {
+                f.write_str("unknown namespace prefix '")?;
+                write_byte_string(f, prefix)?;
+                f.write_str("'")
+            }
+            Self::InvalidPrefixBind { prefix, namespace } => {
+                f.write_str("the namespace prefix '")?;
+                write_byte_string(f, prefix)?;
+                f.write_str("' cannot be bound to '")?;
+                write_byte_string(f, namespace)?;
+                f.write_str("'")
+            }
+        }
+    }
+}
+
+impl std::error::Error for NamespaceError {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A [qualified name] of an element or an attribute, including an optional
 /// namespace [prefix](Prefix) and a [local name](LocalName).
@@ -307,17 +352,17 @@ impl<'ns> Debug for ResolveResult<'ns> {
 }
 
 impl<'ns> TryFrom<ResolveResult<'ns>> for Option<Namespace<'ns>> {
-    type Error = Error;
+    type Error = NamespaceError;
 
     /// Try to convert this result to an optional namespace and returns
-    /// [`Error::UnknownPrefix`] if this result represents unknown prefix
-    fn try_from(result: ResolveResult<'ns>) -> Result<Self> {
+    /// [`NamespaceError::UnknownPrefix`] if this result represents unknown prefix
+    fn try_from(result: ResolveResult<'ns>) -> Result<Self, NamespaceError> {
         use ResolveResult::*;
 
         match result {
             Unbound => Ok(None),
             Bound(ns) => Ok(Some(ns)),
-            Unknown(p) => Err(Error::UnknownPrefix(p)),
+            Unknown(p) => Err(NamespaceError::UnknownPrefix(p)),
         }
     }
 }
@@ -456,7 +501,7 @@ impl NamespaceResolver {
     /// the specified start element.
     ///
     /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
-    pub fn push(&mut self, start: &BytesStart) -> Result<()> {
+    pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level += 1;
         let level = self.nesting_level;
         // adds new namespaces for attributes starting with 'xmlns:' and for the 'xmlns'
@@ -477,7 +522,7 @@ impl NamespaceResolver {
                     Some(PrefixDeclaration::Named(b"xml")) => {
                         if Namespace(&v) != RESERVED_NAMESPACE_XML.1 {
                             // error, `xml` prefix explicitly set to different value
-                            return Err(Error::InvalidPrefixBind {
+                            return Err(NamespaceError::InvalidPrefixBind {
                                 prefix: b"xml".to_vec(),
                                 namespace: v.to_vec(),
                             });
@@ -486,7 +531,7 @@ impl NamespaceResolver {
                     }
                     Some(PrefixDeclaration::Named(b"xmlns")) => {
                         // error, `xmlns` prefix explicitly set
-                        return Err(Error::InvalidPrefixBind {
+                        return Err(NamespaceError::InvalidPrefixBind {
                             prefix: b"xmlns".to_vec(),
                             namespace: v.to_vec(),
                         });
@@ -497,7 +542,7 @@ impl NamespaceResolver {
                         if ns == RESERVED_NAMESPACE_XML.1 || ns == RESERVED_NAMESPACE_XMLNS.1 {
                             // error, non-`xml` prefix set to xml uri
                             // error, non-`xmlns` prefix set to xmlns uri
-                            return Err(Error::InvalidPrefixBind {
+                            return Err(NamespaceError::InvalidPrefixBind {
                                 prefix: prefix.to_vec(),
                                 namespace: v.to_vec(),
                             });
@@ -984,7 +1029,7 @@ mod namespaces {
                     " xmlns:xml='not_correct_namespace'",
                     0,
                 )) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"xml");
                         assert_eq!(namespace, b"not_correct_namespace");
                     }
@@ -1002,7 +1047,7 @@ mod namespaces {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
                 match resolver.push(&BytesStart::from_content(" xmlns:xml=''", 0)) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"xml");
                         assert_eq!(namespace, b"");
                     }
@@ -1023,7 +1068,7 @@ mod namespaces {
                     " xmlns:not_xml='http://www.w3.org/XML/1998/namespace'",
                     0,
                 )) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"not_xml");
                         assert_eq!(namespace, b"http://www.w3.org/XML/1998/namespace");
                     }
@@ -1069,7 +1114,7 @@ mod namespaces {
                     " xmlns:xmlns='http://www.w3.org/2000/xmlns/'",
                     0,
                 )) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"xmlns");
                         assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
                     }
@@ -1090,7 +1135,7 @@ mod namespaces {
                     " xmlns:xmlns='not_correct_namespace'",
                     0,
                 )) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"xmlns");
                         assert_eq!(namespace, b"not_correct_namespace");
                     }
@@ -1108,7 +1153,7 @@ mod namespaces {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
                 match resolver.push(&BytesStart::from_content(" xmlns:xmlns=''", 0)) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"xmlns");
                         assert_eq!(namespace, b"");
                     }
@@ -1129,7 +1174,7 @@ mod namespaces {
                     " xmlns:not_xmlns='http://www.w3.org/2000/xmlns/'",
                     0,
                 )) {
-                    Err(Error::InvalidPrefixBind { prefix, namespace }) => {
+                    Err(NamespaceError::InvalidPrefixBind { prefix, namespace }) => {
                         assert_eq!(prefix, b"not_xmlns");
                         assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
                     }
