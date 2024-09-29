@@ -165,7 +165,7 @@ fn equal_sign_in_value() {
 
 #[test]
 fn line_ends() {
-    const XML: &str = "<root attribute=\"\r\r\n\nvalue1\r\r\n\nvalue2\r\r\n\n\">\r\r\n\nvalue3\r\r\n\nvalue4\r\r\n\n</root>";
+    const XML: &str = "<root attribute=\"\r\r\u{0085}\n\n\u{0085}\u{2028}value1\r\r\u{0085}\n\n\u{0085}\u{2028}value2\r\r\u{0085}\n\n\u{0085}\u{2028}\">\r\r\u{0085}\n\n\u{0085}\u{2028}value3\r\r\u{0085}\n\n\u{0085}\u{2028}value4\r\r\u{0085}\n\n\u{0085}\u{2028}</root>";
     let mut reader = Reader::from_str(XML);
     match reader.read_event().unwrap() {
         Start(event) => {
@@ -174,18 +174,18 @@ fn line_ends() {
             #[cfg(not(feature = "encoding"))]
             assert_eq!(
                 a.unescape_value().unwrap(),
-                "\n\n\nvalue1\n\n\nvalue2\n\n\n"
+                "\n\n\n\n\n\nvalue1\n\n\n\n\n\nvalue2\n\n\n\n\n\n"
             );
             assert_eq!(
                 a.decode_and_unescape_value(reader.decoder()).unwrap(),
-                "\n\n\nvalue1\n\n\nvalue2\n\n\n"
+                "\n\n\n\n\n\nvalue1\n\n\n\n\n\nvalue2\n\n\n\n\n\n"
             );
         }
         event => panic!("Expected Start, found {:?}", event),
     }
     match reader.read_event().unwrap() {
         Text(event) => {
-            assert_eq!(event.unescape().unwrap(), "\n\n\nvalue3\n\n\nvalue4\n\n\n")
+            assert_eq!(event.unescape().unwrap(), "\n\n\n\n\n\nvalue3\n\n\n\n\n\nvalue4\n\n\n\n\n\n")
         }
         event => panic!("Expected Text, found {:?}", event),
     }

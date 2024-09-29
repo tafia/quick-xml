@@ -94,6 +94,24 @@ fn unescape_line_end() {
         escape::unescape("\r\n&foo;\n"),
         Err(EscapeError::UnrecognizedEntity(3..6, "foo".into()))
     );
+
+    assert_eq!(
+        escape::unescape("&lt;&amp;test&apos;\u{0085}\r\r\u{0085}\u{2028}&quot;\r\n&gt;\r\n\r"),
+        Ok("<&test'\n\n\n\n\"\n>\n\n".into())
+    );
+    assert_eq!(
+        escape::unescape("&#x30;\r\r\n\u{0085}"),
+        Ok("0\n\n\n".into())
+    );
+    assert_eq!(
+        escape::unescape("\r&#48;\n\r\r\u{2028}"),
+        Ok("\n0\n\n\n\n".into())
+    );
+    assert_eq!(escape::unescape("\r\r\u{0085}\n\n"), Ok("\n\n\n\n".into()));
+    assert_eq!(
+        escape::unescape("\r\n&foo;\n\u{2028}"),
+        Err(EscapeError::UnrecognizedEntity(3..6, "foo".into()))
+    );
 }
 
 /// XML allows any number of leading zeroes. That is not explicitly mentioned

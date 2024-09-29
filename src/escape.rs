@@ -1,6 +1,6 @@
 //! Manage xml character escapes
 
-use memchr::{memchr2_iter, memchr_iter};
+use memchr::{memchr2_iter, memchr3_iter};
 use std::borrow::Cow;
 use std::num::ParseIntError;
 use std::ops::Range;
@@ -266,7 +266,9 @@ where
                     unescaped = Some(String::with_capacity(raw.len()));
                 }
                 let unescaped = unescaped.as_mut().expect("initialized");
-                unescaped.push_str(&normalize_line_end(&raw[last_end..start]));
+                for normalized in normalize_line_end_iter(&raw[last_end..start]) {
+                    unescaped.push_str(normalized);
+                }
 
                 // search for character correctness
                 let pat = &raw[start + 1..end];
@@ -290,40 +292,79 @@ where
 
     if let Some(mut unescaped) = unescaped {
         if let Some(raw) = raw.get(last_end..) {
-            unescaped.push_str(&normalize_line_end(raw));
+            for normalized in normalize_line_end_iter(raw) {
+                unescaped.push_str(normalized);
+            }
         }
         Ok(Cow::Owned(unescaped))
     } else {
-        Ok(normalize_line_end(raw))
+        let mut norm_iter = normalize_line_end_iter(raw);
+        let first = norm_iter.next();
+        match first {
+            Some(normalized) if normalized.len() != raw.len() => {
+                let mut s = String::with_capacity(raw.len());
+                s.push_str(normalized);
+                for normalized in normalize_line_end_iter(raw) {
+                    s.push_str(normalized);
+                }
+                Ok(s.into())
+            }
+            _ => Ok(raw.into()),
+        }
     }
 }
 
-/// Normalize the line end, replace \r or \r\n with \n.
+/// Normalize the line end in input, replace \r or \r\n with \n, return iterator that can given normalized str.
+/// link to [line end spec]https://www.w3.org/TR/xml11/#sec-line-ends somewhere near to the code that handles normalization also would be useful. Well, actually, it describes the 5 combinations of LOF characters, that should be normalized to \n:
+
+/// \r\n
+/// \r\u0085 (UTF-8: \r\xC2\x85)
+/// \r
+/// \u0085 (UTF-8: \xC2\x85)
+/// \u2028 (UTF-8: \xE2\x80\xA8)
+///
+/// The reason to use iterator is to avoid allocation during normalizing line end.
+/// If nothing to normalize of the input, it will give back whole input in the first iteration. Caller can know
+/// there is nothing to normalize, so that it needs not to do normalization thus avoid allocation.
 #[inline]
-fn normalize_line_end(input: &str) -> Cow<str> {
+fn normalize_line_end_iter(input: &str) -> impl Iterator<Item = &str> {
     let bytes = input.as_bytes();
-    let mut normalized = None;
-    let mut start = 0;
-    let iter = memchr_iter(b'\r', bytes);
-    for i in iter {
-        if normalized.is_none() {
-            normalized = Some(String::with_capacity(input.len()))
+    let len = input.len();
+    let mut cursor = 0;
+    let mut iter = memchr3_iter(b'\r', b'\xC2', b'\xE2', bytes);
+    let mut temp = None;
+    std::iter::from_fn(move || {
+        if let Some(v) = temp.take() {
+            return Some(v);
         }
-        let normalized = normalized.as_mut().expect("initialized");
-        normalized.push_str(&input[start..i]);
-        normalized.push('\n');
-        start = i + 1;
-        if let Some(&b'\n') = bytes.get(start) {
-            // \n right after \r, \r\n case, skip \n because we have already replaced \r with \n
-            start += 1;
+        loop {
+            if let Some(p) = iter.next() {
+                if p < cursor {
+                    // already normalized in previous iteration, this position is invalid
+                    continue;
+                }
+                let skips = match &bytes[p..] {
+                    [b'\r', b'\n', ..] => 2,
+                    [b'\r', b'\xC2', b'\x85', ..] => 3,
+                    [b'\r', ..] => 1,
+                    [b'\xC2', b'\x85', ..] => 2,
+                    [b'\xE2', b'\x80', b'\xA8', ..] => 3,
+                    _ => continue,
+                };
+                // normalized
+                temp = Some("\n");
+                let start = cursor;
+                cursor = p + skips;
+                break Some(&input[start..p]);
+            } else if cursor < len {
+                let start = cursor;
+                cursor = len;
+                break Some(&input[start..]);
+            } else {
+                break None;
+            }
         }
-    }
-    if let Some(mut normalized) = normalized {
-        normalized.push_str(&input[start..]);
-        Cow::Owned(normalized)
-    } else {
-        input.into()
-    }
+    })
 }
 
 /// Resolves predefined XML entities or all HTML5 entities depending on the feature
