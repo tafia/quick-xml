@@ -233,7 +233,7 @@ impl<'a> Reader<&'a [u8]> {
         let len = span.end - span.start;
         // SAFETY: `span` can only contain indexes up to usize::MAX because it
         // was created from offsets from a single &[u8] slice
-        self.decoder().decode(&buffer[0..len as usize])
+        Ok(self.decoder().decode(&buffer[0..len as usize])?)
     }
 }
 

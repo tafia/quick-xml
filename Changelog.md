@@ -22,7 +22,7 @@
 - [#227]: Split `SeError` from `DeError` in the `serialize` feature.
   Serialize functions and methods now return `SeError`.
 - [#810]: Return `std::io::Error` from `Writer` methods.
-- [#811]: Split `NamespaceError` from `Error`.
+- [#811]: Split `NamespaceError` and `EncodingError` from `Error`.
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#810]: https://github.com/tafia/quick-xml/pull/810

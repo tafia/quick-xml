@@ -1,13 +1,11 @@
 //! Error management module
 
-use crate::encoding::Decoder;
+use crate::encoding::{Decoder, EncodingError};
 use crate::escape::EscapeError;
 use crate::events::attributes::AttrError;
 use crate::name::{NamespaceError, QName};
 use std::fmt;
 use std::io::Error as IoError;
-use std::str::Utf8Error;
-use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 /// An error returned if parsed document does not correspond to the XML grammar,
@@ -165,13 +163,10 @@ pub enum Error {
     Syntax(SyntaxError),
     /// The document is not [well-formed](https://www.w3.org/TR/xml11/#dt-wellformed).
     IllFormed(IllFormedError),
-    /// Input decoding error. If [`encoding`] feature is disabled, contains `None`,
-    /// otherwise contains the UTF-8 decoding error
-    ///
-    /// [`encoding`]: index.html#encoding
-    NonDecodable(Option<Utf8Error>),
     /// Attribute parsing error
     InvalidAttr(AttrError),
+    /// Encoding error
+    Encoding(EncodingError),
     /// Escape error
     EscapeError(EscapeError),
     /// Parsed XML has some namespace-related problems
@@ -211,19 +206,11 @@ impl From<IllFormedError> for Error {
     }
 }
 
-impl From<Utf8Error> for Error {
-    /// Creates a new `Error::NonDecodable` from the given error
+impl From<EncodingError> for Error {
+    /// Creates a new `Error::EncodingError` from the given error
     #[inline]
-    fn from(error: Utf8Error) -> Error {
-        Self::NonDecodable(Some(error))
-    }
-}
-
-impl From<FromUtf8Error> for Error {
-    /// Creates a new `Error::Utf8` from the given error
-    #[inline]
-    fn from(error: FromUtf8Error) -> Error {
-        error.utf8_error().into()
+    fn from(error: EncodingError) -> Error {
+        Self::Encoding(error)
     }
 }
 
@@ -258,9 +245,8 @@ impl fmt::Display for Error {
             Self::Io(e) => write!(f, "I/O error: {}", e),
             Self::Syntax(e) => write!(f, "syntax error: {}", e),
             Self::IllFormed(e) => write!(f, "ill-formed document: {}", e),
-            Self::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
-            Self::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
+            Self::Encoding(e) => e.fmt(f),
             Self::EscapeError(e) => e.fmt(f),
             Self::Namespace(e) => e.fmt(f),
         }
@@ -273,11 +259,10 @@ impl std::error::Error for Error {
             Self::Io(e) => Some(e),
             Self::Syntax(e) => Some(e),
             Self::IllFormed(e) => Some(e),
-            Self::NonDecodable(Some(e)) => Some(e),
             Self::InvalidAttr(e) => Some(e),
+            Self::Encoding(e) => Some(e),
             Self::EscapeError(e) => Some(e),
             Self::Namespace(e) => Some(e),
-            _ => None,
         }
     }
 }
@@ -292,6 +277,7 @@ pub mod serialize {
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
     use std::num::{ParseFloatError, ParseIntError};
+    use std::str::Utf8Error;
 
     /// (De)serialization error
     #[derive(Clone, Debug)]
@@ -383,16 +369,9 @@ pub mod serialize {
         }
     }
 
-    impl From<Utf8Error> for DeError {
+    impl From<EncodingError> for DeError {
         #[inline]
-        fn from(e: Utf8Error) -> Self {
-            Self::InvalidXml(e.into())
-        }
-    }
-
-    impl From<FromUtf8Error> for DeError {
-        #[inline]
-        fn from(e: FromUtf8Error) -> Self {
+        fn from(e: EncodingError) -> Self {
             Self::InvalidXml(e.into())
         }
     }

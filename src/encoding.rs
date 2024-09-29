@@ -1,13 +1,10 @@
 //! A module for wrappers that encode / decode data.
 
 use std::borrow::Cow;
+use std::str::Utf8Error;
 
 #[cfg(feature = "encoding")]
 use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
-
-#[cfg(feature = "encoding")]
-use crate::Error;
-use crate::Result;
 
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-8.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
@@ -20,6 +17,48 @@ pub(crate) const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 #[cfg(feature = "encoding")]
 pub(crate) const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
+
+/// An error when decoding or encoding
+///
+/// If feature [`encoding`] is disabled, the [`EncodingError`] is always [`EncodingError::Utf8`]
+///
+/// [`encoding`]: ../index.html#encoding
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EncodingError {
+    /// Input was not valid UTF-8
+    Utf8(Utf8Error),
+    /// Input did not adhere to the given encoding
+    #[cfg(feature = "encoding")]
+    Other(&'static Encoding),
+}
+
+impl From<Utf8Error> for EncodingError {
+    #[inline]
+    fn from(e: Utf8Error) -> Self {
+        Self::Utf8(e)
+    }
+}
+
+impl std::error::Error for EncodingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Utf8(e) => Some(e),
+            #[cfg(feature = "encoding")]
+            Self::Other(_) => None,
+        }
+    }
+}
+
+impl std::fmt::Display for EncodingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Utf8(e) => write!(f, "cannot decode input using UTF-8: {}", e),
+            #[cfg(feature = "encoding")]
+            Self::Other(encoding) => write!(f, "cannot decode input using {}", encoding.name()),
+        }
+    }
+}
 
 /// Decoder of byte slices into strings.
 ///
@@ -79,7 +118,7 @@ impl Decoder {
     ///
     /// ----
     /// Returns an error in case of malformed sequences in the `bytes`.
-    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>> {
+    pub fn decode<'b>(&self, bytes: &'b [u8]) -> Result<Cow<'b, str>, EncodingError> {
         #[cfg(not(feature = "encoding"))]
         let decoded = Ok(Cow::Borrowed(std::str::from_utf8(bytes)?));
 
@@ -90,7 +129,7 @@ impl Decoder {
     }
 
     /// Like [`decode`][Self::decode] but using a pre-allocated buffer.
-    pub fn decode_into(&self, bytes: &[u8], buf: &mut String) -> Result<()> {
+    pub fn decode_into(&self, bytes: &[u8], buf: &mut String) -> Result<(), EncodingError> {
         #[cfg(not(feature = "encoding"))]
         buf.push_str(std::str::from_utf8(bytes)?);
 
@@ -101,7 +140,10 @@ impl Decoder {
     }
 
     /// Decodes the `Cow` buffer, preserves the lifetime
-    pub(crate) fn decode_cow<'b>(&self, bytes: &Cow<'b, [u8]>) -> Result<Cow<'b, str>> {
+    pub(crate) fn decode_cow<'b>(
+        &self,
+        bytes: &Cow<'b, [u8]>,
+    ) -> Result<Cow<'b, str>, EncodingError> {
         match bytes {
             Cow::Borrowed(bytes) => self.decode(bytes),
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
@@ -114,15 +156,22 @@ impl Decoder {
 ///
 /// Returns an error in case of malformed or non-representable sequences in the `bytes`.
 #[cfg(feature = "encoding")]
-pub fn decode<'b>(bytes: &'b [u8], encoding: &'static Encoding) -> Result<Cow<'b, str>> {
+pub fn decode<'b>(
+    bytes: &'b [u8],
+    encoding: &'static Encoding,
+) -> Result<Cow<'b, str>, EncodingError> {
     encoding
         .decode_without_bom_handling_and_without_replacement(bytes)
-        .ok_or(Error::NonDecodable(None))
+        .ok_or(EncodingError::Other(encoding))
 }
 
 /// Like [`decode`] but using a pre-allocated buffer.
 #[cfg(feature = "encoding")]
-pub fn decode_into(bytes: &[u8], encoding: &'static Encoding, buf: &mut String) -> Result<()> {
+pub fn decode_into(
+    bytes: &[u8],
+    encoding: &'static Encoding,
+    buf: &mut String,
+) -> Result<(), EncodingError> {
     if encoding == UTF_8 {
         buf.push_str(std::str::from_utf8(bytes)?);
         return Ok(());
@@ -142,7 +191,7 @@ pub fn decode_into(bytes: &[u8], encoding: &'static Encoding, buf: &mut String) 
             debug_assert_eq!(read, bytes.len());
             Ok(())
         }
-        DecoderResult::Malformed(_, _) => Err(Error::NonDecodable(None)),
+        DecoderResult::Malformed(_, _) => Err(EncodingError::Other(encoding)),
         // SAFETY: We allocate enough space above
         DecoderResult::OutputFull => unreachable!(),
     }

@@ -45,8 +45,8 @@ use std::mem::replace;
 use std::ops::Deref;
 use std::str::from_utf8;
 
-use crate::encoding::Decoder;
-use crate::errors::{Error, IllFormedError, Result};
+use crate::encoding::{Decoder, EncodingError};
+use crate::errors::{Error, IllFormedError};
 use crate::escape::{
     escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
 };
@@ -297,7 +297,7 @@ impl<'a> BytesStart<'a> {
     pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
         &'a self,
         attr_name: N,
-    ) -> Result<Option<Attribute<'a>>> {
+    ) -> Result<Option<Attribute<'a>>, Error> {
         for a in self.attributes().with_checks(false) {
             let a = a?;
             if a.key.as_ref() == attr_name.as_ref() {
@@ -583,7 +583,7 @@ impl<'a> BytesText<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn unescape(&self) -> Result<Cow<'a, str>> {
+    pub fn unescape(&self) -> Result<Cow<'a, str>, Error> {
         self.unescape_with(resolve_predefined_entity)
     }
 
@@ -594,7 +594,7 @@ impl<'a> BytesText<'a> {
     pub fn unescape_with<'entity>(
         &self,
         resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<'a, str>> {
+    ) -> Result<Cow<'a, str>, Error> {
         let decoded = self.decoder.decode_cow(&self.content)?;
 
         match unescape_with(&decoded, resolve_entity)? {
@@ -743,7 +743,7 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     /// | `'`       | `&apos;`
     /// | `"`       | `&quot;`
-    pub fn escape(self) -> Result<BytesText<'a>> {
+    pub fn escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match escape(&decoded) {
@@ -768,7 +768,7 @@ impl<'a> BytesCData<'a> {
     /// | `<`       | `&lt;`
     /// | `>`       | `&gt;`
     /// | `&`       | `&amp;`
-    pub fn partial_escape(self) -> Result<BytesText<'a>> {
+    pub fn partial_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match partial_escape(&decoded) {
@@ -792,7 +792,7 @@ impl<'a> BytesCData<'a> {
     /// | `&`       | `&amp;`
     ///
     /// [specification]: https://www.w3.org/TR/xml11/#syntax
-    pub fn minimal_escape(self) -> Result<BytesText<'a>> {
+    pub fn minimal_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
             match minimal_escape(&decoded) {
@@ -805,8 +805,8 @@ impl<'a> BytesCData<'a> {
     }
 
     /// Gets content of this text buffer in the specified encoding
-    pub(crate) fn decode(&self) -> Result<Cow<'a, str>> {
-        self.decoder.decode_cow(&self.content)
+    pub(crate) fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
+        Ok(self.decoder.decode_cow(&self.content)?)
     }
 }
 
@@ -1136,13 +1136,15 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn version(&self) -> Result<Cow<[u8]>> {
+    pub fn version(&self) -> Result<Cow<[u8]>, Error> {
         // The version *must* be the first thing in the declaration.
         match self.content.attributes().with_checks(false).next() {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
             // first attribute was not "version"
             Some(Ok(a)) => {
-                let found = from_utf8(a.key.as_ref())?.to_string();
+                let found = from_utf8(a.key.as_ref())
+                    .map_err(|_| IllFormedError::MissingDeclVersion(None))?
+                    .to_string();
                 Err(Error::IllFormed(IllFormedError::MissingDeclVersion(Some(
                     found,
                 ))))
@@ -1189,7 +1191,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<[u8]>>> {
+    pub fn encoding(&self) -> Option<Result<Cow<[u8]>, Error>> {
         self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
@@ -1231,7 +1233,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<[u8]>>> {
+    pub fn standalone(&self) -> Option<Result<Cow<[u8]>, Error>> {
         self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
