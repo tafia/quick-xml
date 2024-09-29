@@ -159,7 +159,7 @@ impl std::error::Error for IllFormedError {}
 /// The error type used by this crate.
 #[derive(Clone, Debug)]
 pub enum Error {
-    /// XML document cannot be read from or written to underlying source.
+    /// XML document cannot be read from underlying source.
     ///
     /// Contains the reference-counted I/O error to make the error type `Clone`able.
     Io(Arc<IoError>),
@@ -318,8 +318,6 @@ pub mod serialize {
     pub enum DeError {
         /// Serde custom error
         Custom(String),
-        /// IO error from Writer
-        Io(Arc<IoError>),
         /// Xml parsing error
         InvalidXml(Error),
         /// Cannot parse to integer
@@ -351,13 +349,6 @@ pub mod serialize {
         /// store at current position, for example, attempt to deserialize `struct`
         /// from attribute or attempt to deserialize binary data.
         ///
-        /// Serialized type cannot be represented in an XML due to violation of the
-        /// XML rules in the final XML document. For example, attempt to serialize
-        /// a `HashMap<{integer}, ...>` would cause this error because [XML name]
-        /// cannot start from a digit or a hyphen (minus sign). The same result
-        /// would occur if map key is a complex type that cannot be serialized as
-        /// a primitive type (i.e. string, char, bool, unit struct or unit variant).
-        ///
         /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
         Unsupported(Cow<'static, str>),
         /// Too many events were skipped while deserializing a sequence, event limit
@@ -370,7 +361,6 @@ pub mod serialize {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
                 DeError::Custom(s) => write!(f, "{}", s),
-                DeError::Io(e) => write!(f, "{}", e),
                 DeError::InvalidXml(e) => write!(f, "{}", e),
                 DeError::InvalidInt(e) => write!(f, "{}", e),
                 DeError::InvalidFloat(e) => write!(f, "{}", e),
@@ -403,19 +393,6 @@ pub mod serialize {
     impl serde::de::Error for DeError {
         fn custom<T: fmt::Display>(msg: T) -> Self {
             DeError::Custom(msg.to_string())
-        }
-    }
-
-    impl serde::ser::Error for DeError {
-        fn custom<T: fmt::Display>(msg: T) -> Self {
-            DeError::Custom(msg.to_string())
-        }
-    }
-
-    impl From<IoError> for DeError {
-        #[inline]
-        fn from(e: IoError) -> Self {
-            Self::Io(Arc::new(e))
         }
     }
 
@@ -472,6 +449,78 @@ pub mod serialize {
         #[inline]
         fn from(e: fmt::Error) -> Self {
             Self::Custom(e.to_string())
+        }
+    }
+
+    /// Serialization error
+    #[derive(Clone, Debug)]
+    pub enum SeError {
+        /// Serde custom error
+        Custom(String),
+        /// XML document cannot be written to underlying source.
+        ///
+        /// Contains the reference-counted I/O error to make the error type `Clone`able.
+        Io(Arc<IoError>),
+        /// Some value could not be formatted
+        Fmt(std::fmt::Error),
+        /// Serialized type cannot be represented in an XML due to violation of the
+        /// XML rules in the final XML document. For example, attempt to serialize
+        /// a `HashMap<{integer}, ...>` would cause this error because [XML name]
+        /// cannot start from a digit or a hyphen (minus sign). The same result
+        /// would occur if map key is a complex type that cannot be serialized as
+        /// a primitive type (i.e. string, char, bool, unit struct or unit variant).
+        ///
+        /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
+        Unsupported(Cow<'static, str>),
+        /// Some value could not be turned to UTF-8
+        NonEncodable(Utf8Error),
+    }
+
+    impl fmt::Display for SeError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                SeError::Custom(s) => write!(f, "{}", s),
+                SeError::Io(e) => write!(f, "I/O error: {}", e),
+                SeError::Fmt(e) => write!(f, "Formatting error: {}", e),
+                SeError::Unsupported(s) => write!(f, "Unsupported value: {}", s),
+                SeError::NonEncodable(e) => write!(f, "Malformed UTF-8: {}", e),
+            }
+        }
+    }
+
+    impl ::std::error::Error for SeError {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            match self {
+                SeError::Io(e) => Some(e),
+                _ => None,
+            }
+        }
+    }
+
+    impl serde::ser::Error for SeError {
+        fn custom<T: fmt::Display>(msg: T) -> Self {
+            SeError::Custom(msg.to_string())
+        }
+    }
+
+    impl From<IoError> for SeError {
+        #[inline]
+        fn from(e: IoError) -> Self {
+            Self::Io(Arc::new(e))
+        }
+    }
+
+    impl From<Utf8Error> for SeError {
+        #[inline]
+        fn from(e: Utf8Error) -> Self {
+            Self::NonEncodable(e)
+        }
+    }
+
+    impl From<fmt::Error> for SeError {
+        #[inline]
+        fn from(e: fmt::Error) -> Self {
+            Self::Fmt(e)
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::errors::serialize::DeError;
+use crate::errors::serialize::SeError;
 use serde::ser::{Impossible, Serialize, Serializer};
 use serde::serde_if_integer128;
 use std::fmt::Write;
@@ -18,14 +18,14 @@ pub struct QNameSerializer<W: Write> {
 
 impl<W: Write> QNameSerializer<W> {
     #[inline]
-    fn write_str(&mut self, value: &str) -> Result<(), DeError> {
+    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
         Ok(self.writer.write_str(value)?)
     }
 }
 
 impl<W: Write> Serializer for QNameSerializer<W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = Impossible<Self::Ok, Self::Error>;
     type SerializeTuple = Impossible<Self::Ok, Self::Error>;
@@ -45,7 +45,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     /// Because unit type can be represented only by empty string which is not
     /// a valid XML name, serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize unit type `()` as an XML tag name".into(),
         ))
     }
@@ -53,7 +53,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     /// Because unit struct can be represented only by empty string which is not
     /// a valid XML name, serialization of unit struct returns `Err(Unsupported)`
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("cannot serialize unit struct `{}` as an XML tag name", name).into(),
         ))
     }
@@ -66,8 +66,8 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         _variant_index: u32,
         variant: &'static str,
         _value: &T,
-    ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported(
+    ) -> Result<Self::Ok, SeError> {
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum newtype variant `{}::{}` as an XML tag name",
                 name, variant
@@ -77,13 +77,13 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize sequence as an XML tag name".into(),
         ))
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize tuple as an XML tag name".into(),
         ))
     }
@@ -93,7 +93,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize tuple struct `{}` as an XML tag name",
                 name
@@ -109,7 +109,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum tuple variant `{}::{}` as an XML tag name",
                 name, variant
@@ -119,7 +119,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize map as an XML tag name".into(),
         ))
     }
@@ -129,7 +129,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("cannot serialize struct `{}` as an XML tag name", name).into(),
         ))
     }
@@ -141,7 +141,7 @@ impl<W: Write> Serializer for QNameSerializer<W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum struct variant `{}::{}` as an XML tag name",
                 name, variant
@@ -214,7 +214,7 @@ mod tests {
                 };
 
                 match $data.serialize(ser).unwrap_err() {
-                    DeError::$kind(e) => assert_eq!(e, $reason),
+                    SeError::$kind(e) => assert_eq!(e, $reason),
                     e => panic!(
                         "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),

@@ -1,12 +1,11 @@
 //! Contains serializer for an XML element
 
 use crate::de::{TEXT_KEY, VALUE_KEY};
-use crate::errors::serialize::DeError;
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
-use crate::se::{Indent, XmlName};
+use crate::se::{Indent, SeError, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
@@ -53,7 +52,7 @@ macro_rules! write_primitive {
 ///   In particular, the empty map is serialized as `<key/>`;
 /// - enums:
 ///   - unit variants are serialized as `<key>variant</key>`;
-///   - other variants are not supported ([`DeError::Unsupported`] is returned);
+///   - other variants are not supported ([`SeError::Unsupported`] is returned);
 ///
 /// Usage of empty tags depends on the [`ContentSerializer::expand_empty_elements`] setting.
 pub struct ElementSerializer<'w, 'k, W: Write> {
@@ -65,7 +64,7 @@ pub struct ElementSerializer<'w, 'k, W: Write> {
 
 impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = Self;
     type SerializeTuple = Self;
@@ -162,7 +161,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         value.serialize(self)
     }
 
-    /// Always returns [`DeError::Unsupported`]. Newtype variants can be serialized
+    /// Always returns [`SeError::Unsupported`]. Newtype variants can be serialized
     /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_newtype_variant<T: ?Sized + Serialize>(
@@ -172,7 +171,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         _value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum newtype variant `{}::{}`",
                 name, variant
@@ -200,7 +199,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         self.serialize_tuple(len)
     }
 
-    /// Always returns [`DeError::Unsupported`]. Tuple variants can be serialized
+    /// Always returns [`SeError::Unsupported`]. Tuple variants can be serialized
     /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_tuple_variant(
@@ -210,7 +209,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum tuple variant `{}::{}`",
                 name, variant
@@ -243,7 +242,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         })
     }
 
-    /// Always returns [`DeError::Unsupported`]. Struct variants can be serialized
+    /// Always returns [`SeError::Unsupported`]. Struct variants can be serialized
     /// only in `$value` fields, which is serialized using [`ContentSerializer`].
     #[inline]
     fn serialize_struct_variant(
@@ -253,7 +252,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum struct variant `{}::{}`",
                 name, variant
@@ -265,7 +264,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -288,7 +287,7 @@ impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -306,7 +305,7 @@ impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeTupleStruct for ElementSerializer<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -336,7 +335,7 @@ pub enum Tuple<'w, 'k, W: Write> {
 
 impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -378,7 +377,7 @@ pub struct Struct<'w, 'k, W: Write> {
 
 impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     #[inline]
-    fn write_field<T>(&mut self, key: &str, value: &T) -> Result<(), DeError>
+    fn write_field<T>(&mut self, key: &str, value: &T) -> Result<(), SeError>
     where
         T: ?Sized + Serialize,
     {
@@ -393,7 +392,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
 
     /// Writes `value` as an attribute
     #[inline]
-    fn write_attribute<T>(&mut self, key: XmlName, value: &T) -> Result<(), DeError>
+    fn write_attribute<T>(&mut self, key: XmlName, value: &T) -> Result<(), SeError>
     where
         T: ?Sized + Serialize,
     {
@@ -426,7 +425,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     ///
     /// [simple type]: SimpleTypeSerializer
     /// [content]: ContentSerializer
-    fn write_element<T>(&mut self, key: &str, value: &T) -> Result<(), DeError>
+    fn write_element<T>(&mut self, key: &str, value: &T) -> Result<(), SeError>
     where
         T: ?Sized + Serialize,
     {
@@ -454,7 +453,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
     where
@@ -490,7 +489,7 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeStructVariant for Struct<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
@@ -516,7 +515,7 @@ pub struct Map<'w, 'k, W: Write> {
 }
 
 impl<'w, 'k, W: Write> Map<'w, 'k, W> {
-    fn make_key<T>(&mut self, key: &T) -> Result<String, DeError>
+    fn make_key<T>(&mut self, key: &T) -> Result<String, SeError>
     where
         T: ?Sized + Serialize,
     {
@@ -528,14 +527,14 @@ impl<'w, 'k, W: Write> Map<'w, 'k, W> {
 
 impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
         if let Some(_) = self.key.take() {
-            return Err(DeError::Custom(
+            return Err(SeError::Custom(
                 "calling `serialize_key` twice without `serialize_value`".to_string(),
             ));
         }
@@ -550,7 +549,7 @@ impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
         if let Some(key) = self.key.take() {
             return self.ser.write_field(&key, value);
         }
-        Err(DeError::Custom(
+        Err(SeError::Custom(
             "calling `serialize_value` without call of `serialize_key`".to_string(),
         ))
     }
@@ -566,7 +565,7 @@ impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
         if let Some(key) = self.key.take() {
-            return Err(DeError::Custom(format!(
+            return Err(SeError::Custom(format!(
                 "calling `end` without call of `serialize_value` for key `{key}`"
             )));
         }
@@ -649,7 +648,7 @@ mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
@@ -1352,7 +1351,7 @@ mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),

@@ -11,7 +11,7 @@ mod async_tokio;
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
 #[cfg(feature = "serialize")]
-use {crate::de::DeError, serde::Serialize};
+use {crate::se::SeError, serde::Serialize};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
@@ -278,8 +278,8 @@ impl<W: Write> Writer<W> {
     /// # use serde::Serialize;
     /// # use quick_xml::events::{BytesStart, Event};
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::DeError;
-    /// # fn main() -> Result<(), DeError> {
+    /// # use quick_xml::SeError;
+    /// # fn main() -> Result<(), SeError> {
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct MyData {
     ///     question: String,
@@ -318,7 +318,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         tag_name: &str,
         content: &T,
-    ) -> Result<(), DeError> {
+    ) -> Result<(), SeError> {
         use crate::se::{Indent, Serializer};
 
         self.write_indent()?;

@@ -3,9 +3,8 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::errors::serialize::DeError;
 use crate::escape::_escape;
-use crate::se::{Indent, QuoteLevel};
+use crate::se::{Indent, QuoteLevel, SeError};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct,
     SerializeTupleVariant, Serializer,
@@ -174,7 +173,7 @@ macro_rules! write_atomic {
 ///
 /// Identifiers represented as strings and serialized accordingly.
 ///
-/// Serialization of all other types returns [`Unsupported`][DeError::Unsupported] error.
+/// Serialization of all other types returns [`Unsupported`][SeError::Unsupported] error.
 ///
 /// This serializer returns `true` if something was written and `false` otherwise.
 ///
@@ -192,7 +191,7 @@ pub struct AtomicSerializer<'i, W: Write> {
 }
 
 impl<'i, W: Write> AtomicSerializer<'i, W> {
-    fn write_str(&mut self, value: &str) -> Result<(), DeError> {
+    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
         if let Some(indent) = self.indent.as_mut() {
             indent.write_indent(&mut self.writer)?;
         } else {
@@ -205,7 +204,7 @@ impl<'i, W: Write> AtomicSerializer<'i, W> {
 
 impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     type Ok = bool;
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = Impossible<Self::Ok, Self::Error>;
     type SerializeTuple = Impossible<Self::Ok, Self::Error>;
@@ -251,7 +250,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
 
     fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
         //TODO: Customization point - allow user to decide how to encode bytes
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "`serialize_bytes` not supported yet".into(),
         ))
     }
@@ -267,7 +266,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     /// We cannot store anything, so the absence of a unit and presence of it
     /// does not differ, so serialization of unit returns `Err(Unsupported)`
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize unit type `()` as an `xs:list` item".into(),
         ))
     }
@@ -275,7 +274,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     /// We cannot store anything, so the absence of a unit and presence of it
     /// does not differ, so serialization of unit returns `Err(Unsupported)`
     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize unit struct `{}` as an `xs:list` item",
                 name
@@ -309,8 +308,8 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
         _variant_index: u32,
         variant: &'static str,
         _value: &T,
-    ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported(
+    ) -> Result<Self::Ok, SeError> {
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum newtype variant `{}::{}` as an `xs:list` item",
                 name, variant
@@ -320,13 +319,13 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize sequence as an `xs:list` item".into(),
         ))
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize tuple as an `xs:list` item".into(),
         ))
     }
@@ -336,7 +335,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize tuple struct `{}` as an `xs:list` item",
                 name
@@ -352,7 +351,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum tuple variant `{}::{}` as an `xs:list` item",
                 name, variant
@@ -362,7 +361,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize map as an `xs:list` item".into(),
         ))
     }
@@ -372,7 +371,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("cannot serialize struct `{}` as an `xs:list` item", name).into(),
         ))
     }
@@ -384,7 +383,7 @@ impl<'i, W: Write> Serializer for AtomicSerializer<'i, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize enum struct variant `{}::{}` as an `xs:list` item",
                 name, variant
@@ -414,7 +413,7 @@ pub struct SimpleTypeSerializer<'i, W: Write> {
 }
 
 impl<'i, W: Write> SimpleTypeSerializer<'i, W> {
-    fn write_str(&mut self, value: &str) -> Result<(), DeError> {
+    fn write_str(&mut self, value: &str) -> Result<(), SeError> {
         self.indent.write_indent(&mut self.writer)?;
         Ok(self.writer.write_str(value)?)
     }
@@ -422,7 +421,7 @@ impl<'i, W: Write> SimpleTypeSerializer<'i, W> {
 
 impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = SimpleSeq<'i, W>;
     type SerializeTuple = SimpleSeq<'i, W>;
@@ -459,8 +458,8 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         _variant_index: u32,
         variant: &'static str,
         _value: &T,
-    ) -> Result<Self::Ok, DeError> {
-        Err(DeError::Unsupported(
+    ) -> Result<Self::Ok, SeError> {
+        Err(SeError::Unsupported(
             format!("cannot serialize enum newtype variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
@@ -497,13 +496,13 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("cannot serialize enum tuple variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "cannot serialize map as an attribute or text content value".into(),
         ))
     }
@@ -513,7 +512,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!(
                 "cannot serialize struct `{}` as an attribute or text content value",
                 name
@@ -529,7 +528,7 @@ impl<'i, W: Write> Serializer for SimpleTypeSerializer<'i, W> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("cannot serialize enum struct variant `{}::{}` as an attribute or text content value", name, variant).into(),
         ))
     }
@@ -548,7 +547,7 @@ pub struct SimpleSeq<'i, W: Write> {
 
 impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -579,7 +578,7 @@ impl<'i, W: Write> SerializeSeq for SimpleSeq<'i, W> {
 
 impl<'i, W: Write> SerializeTuple for SimpleSeq<'i, W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -597,7 +596,7 @@ impl<'i, W: Write> SerializeTuple for SimpleSeq<'i, W> {
 
 impl<'i, W: Write> SerializeTupleStruct for SimpleSeq<'i, W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -615,7 +614,7 @@ impl<'i, W: Write> SerializeTupleStruct for SimpleSeq<'i, W> {
 
 impl<'i, W: Write> SerializeTupleVariant for SimpleSeq<'i, W> {
     type Ok = W;
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -954,7 +953,7 @@ mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
@@ -1072,7 +1071,7 @@ mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),

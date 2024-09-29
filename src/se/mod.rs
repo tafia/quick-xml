@@ -39,7 +39,7 @@ macro_rules! write_primitive {
 
         fn serialize_bytes(self, _value: &[u8]) -> Result<Self::Ok, Self::Error> {
             //TODO: customization point - allow user to decide how to encode bytes
-            Err(DeError::Unsupported(
+            Err(Self::Error::Unsupported(
                 "`serialize_bytes` not supported yet".into(),
             ))
         }
@@ -82,7 +82,7 @@ mod text;
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
-use crate::errors::serialize::DeError;
+pub use crate::errors::serialize::SeError;
 use crate::writer::Indentation;
 use serde::ser::{self, Serialize};
 use serde::serde_if_integer128;
@@ -124,7 +124,7 @@ use std::str::from_utf8;
 ///     </Root>"
 /// );
 /// ```
-pub fn to_writer<W, T>(mut writer: W, value: &T) -> Result<(), DeError>
+pub fn to_writer<W, T>(mut writer: W, value: &T) -> Result<(), SeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -165,7 +165,7 @@ where
 ///     </Root>"
 /// );
 /// ```
-pub fn to_string<T>(value: &T) -> Result<String, DeError>
+pub fn to_string<T>(value: &T) -> Result<String, SeError>
 where
     T: ?Sized + Serialize,
 {
@@ -210,7 +210,7 @@ where
 /// ```
 ///
 /// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
-pub fn to_writer_with_root<W, T>(mut writer: W, root_tag: &str, value: &T) -> Result<(), DeError>
+pub fn to_writer_with_root<W, T>(mut writer: W, root_tag: &str, value: &T) -> Result<(), SeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -252,7 +252,7 @@ where
 /// ```
 ///
 /// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
-pub fn to_string_with_root<T>(root_tag: &str, value: &T) -> Result<String, DeError>
+pub fn to_string_with_root<T>(root_tag: &str, value: &T) -> Result<String, SeError>
 where
     T: ?Sized + Serialize,
 {
@@ -372,15 +372,15 @@ impl<'n> XmlName<'n> {
     /// Checks correctness of the XML name according to [XML 1.1 specification]
     ///
     /// [XML 1.1 specification]: https://www.w3.org/TR/xml11/#NT-Name
-    pub fn try_from(name: &'n str) -> Result<XmlName<'n>, DeError> {
+    pub fn try_from(name: &'n str) -> Result<XmlName<'n>, SeError> {
         //TODO: Customization point: allow user to decide if he want to reject or encode the name
         match name.chars().next() {
-            Some(ch) if !is_xml11_name_start_char(ch) => Err(DeError::Unsupported(
+            Some(ch) if !is_xml11_name_start_char(ch) => Err(SeError::Unsupported(
                 format!("character `{ch}` is not allowed at the start of an XML name `{name}`")
                     .into(),
             )),
             _ => match name.matches(|ch| !is_xml11_name_char(ch)).next() {
-                Some(s) => Err(DeError::Unsupported(
+                Some(s) => Err(SeError::Unsupported(
                     format!("character `{s}` is not allowed in an XML name `{name}`").into(),
                 )),
                 None => Ok(XmlName(name)),
@@ -426,7 +426,7 @@ impl<'i> Indent<'i> {
         }
     }
 
-    pub fn write_indent<W: std::fmt::Write>(&mut self, mut writer: W) -> Result<(), DeError> {
+    pub fn write_indent<W: std::fmt::Write>(&mut self, mut writer: W) -> Result<(), SeError> {
         match self {
             Self::None => {}
             Self::Owned(i) => {
@@ -522,7 +522,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// ```
     ///
     /// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
-    pub fn with_root(writer: &'w mut W, root_tag: Option<&'r str>) -> Result<Self, DeError> {
+    pub fn with_root(writer: &'w mut W, root_tag: Option<&'r str>) -> Result<Self, SeError> {
         Ok(Self {
             ser: ContentSerializer {
                 writer,
@@ -590,11 +590,11 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
 
     /// Creates actual serializer or returns an error if root tag is not defined.
     /// In that case `err` contains the name of type that cannot be serialized.
-    fn ser(self, err: &str) -> Result<ElementSerializer<'w, 'r, W>, DeError> {
+    fn ser(self, err: &str) -> Result<ElementSerializer<'w, 'r, W>, SeError> {
         if let Some(key) = self.root_tag {
             Ok(ElementSerializer { ser: self.ser, key })
         } else {
-            Err(DeError::Unsupported(
+            Err(SeError::Unsupported(
                 format!("cannot serialize {} without defined root tag", err).into(),
             ))
         }
@@ -603,7 +603,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
     /// Creates actual serializer using root tag or a specified `key` if root tag
     /// is not defined. Returns an error if root tag is not defined and a `key`
     /// does not conform [XML rules](XmlName::try_from) for names.
-    fn ser_name(self, key: &'static str) -> Result<ElementSerializer<'w, 'r, W>, DeError> {
+    fn ser_name(self, key: &'static str) -> Result<ElementSerializer<'w, 'r, W>, SeError> {
         Ok(ElementSerializer {
             ser: self.ser,
             key: match self.root_tag {
@@ -616,7 +616,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
 
 impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = ElementSerializer<'w, 'r, W>;
     type SerializeTuple = ElementSerializer<'w, 'r, W>;
@@ -650,19 +650,19 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     forward!(serialize_str(&str));
     forward!(serialize_bytes(&[u8]));
 
-    fn serialize_none(self) -> Result<Self::Ok, DeError> {
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         Ok(())
     }
 
-    fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, DeError> {
+    fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
         value.serialize(self)
     }
 
-    fn serialize_unit(self) -> Result<Self::Ok, DeError> {
+    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         self.ser("`()`")?.serialize_unit()
     }
 
-    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, DeError> {
+    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
         self.ser_name(name)?.serialize_unit_struct(name)
     }
 
@@ -671,10 +671,10 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-    ) -> Result<Self::Ok, DeError> {
+    ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
             // We should write some text but we don't known what text to write
-            Err(DeError::Unsupported(
+            Err(SeError::Unsupported(
                 format!(
                     "cannot serialize enum unit variant `{}::$text` as text content value",
                     name
@@ -691,7 +691,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         self,
         name: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, DeError> {
+    ) -> Result<Self::Ok, Self::Error> {
         self.ser_name(name)?.serialize_newtype_struct(name, value)
     }
 
@@ -701,7 +701,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         _variant_index: u32,
         variant: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, DeError> {
+    ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
             value.serialize(self.ser.into_simple_type_serializer())?;
             Ok(())
@@ -714,11 +714,11 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         }
     }
 
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, DeError> {
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         self.ser("sequence")?.serialize_seq(len)
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, DeError> {
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         self.ser("unnamed tuple")?.serialize_tuple(len)
     }
 
@@ -726,7 +726,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         self,
         name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleStruct, DeError> {
+    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
         self.ser_name(name)?.serialize_tuple_struct(name, len)
     }
 
@@ -736,7 +736,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         _variant_index: u32,
         variant: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleVariant, DeError> {
+    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         if variant == TEXT_KEY {
             self.ser
                 .into_simple_type_serializer()
@@ -751,7 +751,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         }
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, DeError> {
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         self.ser("map")?.serialize_map(len)
     }
 
@@ -759,7 +759,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         self,
         name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeStruct, DeError> {
+    ) -> Result<Self::SerializeStruct, Self::Error> {
         self.ser_name(name)?.serialize_struct(name, len)
     }
 
@@ -769,9 +769,9 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         _variant_index: u32,
         variant: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeStructVariant, DeError> {
+    ) -> Result<Self::SerializeStructVariant, Self::Error> {
         if variant == TEXT_KEY {
-            Err(DeError::Unsupported(
+            Err(SeError::Unsupported(
                 format!(
                     "cannot serialize enum struct variant `{}::$text` as text content value",
                     name
