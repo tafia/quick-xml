@@ -1,11 +1,9 @@
 //! Contains high-level interface for an events-based XML emitter.
 
 use std::borrow::Cow;
-use std::io::Write;
-use std::result::Result as StdResult;
+use std::io::{self, Write};
 
 use crate::encoding::UTF8_BOM;
-use crate::errors::{Error, Result};
 use crate::events::{attributes::Attribute, BytesCData, BytesPI, BytesStart, BytesText, Event};
 
 #[cfg(feature = "async-tokio")]
@@ -13,7 +11,7 @@ mod async_tokio;
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] or [`tokio::io::AsyncWrite`] implementor.
 #[cfg(feature = "serialize")]
-use {crate::de::DeError, serde::Serialize};
+use {crate::se::SeError, serde::Serialize};
 
 /// XML writer. Writes XML [`Event`]s to a [`std::io::Write`] implementor.
 ///
@@ -129,7 +127,7 @@ impl<W> Writer<W> {
     /// // writes <tag><fruit quantity="0">apple</fruit><fruit quantity="1">orange</fruit></tag>
     /// writer.create_element("tag")
     ///     // We need to provide error type, because it is not named somewhere explicitly
-    ///     .write_inner_content::<_, Error>(|writer| {
+    ///     .write_inner_content(|writer| {
     ///         let fruits = ["apple", "orange"];
     ///         for (quant, item) in fruits.iter().enumerate() {
     ///             writer
@@ -187,12 +185,12 @@ impl<W: Write> Writer<W> {
     /// # }
     /// ```
     /// [Byte-Order-Mark]: https://unicode.org/faq/utf_bom.html#BOM
-    pub fn write_bom(&mut self) -> Result<()> {
+    pub fn write_bom(&mut self) -> io::Result<()> {
         self.write(UTF8_BOM)
     }
 
     /// Writes the given event to the underlying writer.
-    pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> Result<()> {
+    pub fn write_event<'a, E: Into<Event<'a>>>(&mut self, event: E) -> io::Result<()> {
         let mut next_should_line_break = true;
         let result = match event.into() {
             Event::Start(e) => {
@@ -233,12 +231,12 @@ impl<W: Write> Writer<W> {
 
     /// Writes bytes
     #[inline]
-    pub(crate) fn write(&mut self, value: &[u8]) -> Result<()> {
+    pub(crate) fn write(&mut self, value: &[u8]) -> io::Result<()> {
         self.writer.write_all(value).map_err(Into::into)
     }
 
     #[inline]
-    fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> Result<()> {
+    fn write_wrapped(&mut self, before: &[u8], value: &[u8], after: &[u8]) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             if i.should_line_break {
                 self.writer.write_all(b"\n")?;
@@ -262,7 +260,7 @@ impl<W: Write> Writer<W> {
     /// [`Text`]: Event::Text
     /// [`Start`]: Event::Start
     /// [`new_with_indent`]: Self::new_with_indent
-    pub fn write_indent(&mut self) -> Result<()> {
+    pub fn write_indent(&mut self) -> io::Result<()> {
         if let Some(ref i) = self.indent {
             self.writer.write_all(b"\n")?;
             self.writer.write_all(i.current())?;
@@ -280,8 +278,8 @@ impl<W: Write> Writer<W> {
     /// # use serde::Serialize;
     /// # use quick_xml::events::{BytesStart, Event};
     /// # use quick_xml::writer::Writer;
-    /// # use quick_xml::DeError;
-    /// # fn main() -> Result<(), DeError> {
+    /// # use quick_xml::se::SeError;
+    /// # fn main() -> Result<(), SeError> {
     /// #[derive(Debug, PartialEq, Serialize)]
     /// struct MyData {
     ///     question: String,
@@ -320,7 +318,7 @@ impl<W: Write> Writer<W> {
         &mut self,
         tag_name: &str,
         content: &T,
-    ) -> std::result::Result<(), DeError> {
+    ) -> Result<(), SeError> {
         use crate::se::{Indent, Serializer};
 
         self.write_indent()?;
@@ -530,7 +528,7 @@ impl<'a, W> ElementWriter<'a, W> {
 
 impl<'a, W: Write> ElementWriter<'a, W> {
     /// Write some text inside the current element.
-    pub fn write_text_content(self, text: BytesText) -> Result<&'a mut Writer<W>> {
+    pub fn write_text_content(self, text: BytesText) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::Text(text))?;
@@ -540,7 +538,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write a CData event `<![CDATA[...]]>` inside the current element.
-    pub fn write_cdata_content(self, text: BytesCData) -> Result<&'a mut Writer<W>> {
+    pub fn write_cdata_content(self, text: BytesCData) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::CData(text))?;
@@ -550,7 +548,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write a processing instruction `<?...?>` inside the current element.
-    pub fn write_pi_content(self, pi: BytesPI) -> Result<&'a mut Writer<W>> {
+    pub fn write_pi_content(self, pi: BytesPI) -> io::Result<&'a mut Writer<W>> {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;
         self.writer.write_event(Event::PI(pi))?;
@@ -560,16 +558,15 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 
     /// Write an empty (self-closing) tag.
-    pub fn write_empty(self) -> Result<&'a mut Writer<W>> {
+    pub fn write_empty(self) -> io::Result<&'a mut Writer<W>> {
         self.writer.write_event(Event::Empty(self.start_tag))?;
         Ok(self.writer)
     }
 
     /// Create a new scope for writing XML inside the current element.
-    pub fn write_inner_content<F, E>(self, closure: F) -> StdResult<&'a mut Writer<W>, E>
+    pub fn write_inner_content<F>(self, closure: F) -> io::Result<&'a mut Writer<W>>
     where
-        F: FnOnce(&mut Writer<W>) -> StdResult<(), E>,
-        E: From<Error>,
+        F: FnOnce(&mut Writer<W>) -> io::Result<()>,
     {
         self.writer
             .write_event(Event::Start(self.start_tag.borrow()))?;

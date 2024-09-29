@@ -1,7 +1,6 @@
 use quick_xml::de::from_str;
-use quick_xml::se::Serializer;
+use quick_xml::se::{SeError, Serializer};
 use quick_xml::utils::Bytes;
-use quick_xml::DeError;
 
 use serde::{serde_if_integer128, Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -275,7 +274,7 @@ mod without_root {
                 let ser = Serializer::new(&mut buffer);
 
                 match $data.serialize(ser) {
-                    Err(DeError::$kind(e)) => assert_eq!(e, $reason),
+                    Err(SeError::$kind(e)) => assert_eq!(e, $reason),
                     e => panic!(
                         "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),
@@ -1324,7 +1323,7 @@ mod without_root {
                     let ser = Serializer::new(&mut buffer);
 
                     match $data.serialize(ser) {
-                        Err(DeError::$kind(e)) => assert_eq!(e, $reason),
+                        Err(SeError::$kind(e)) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
@@ -1883,7 +1882,7 @@ mod with_root {
                 let ser = Serializer::with_root(&mut buffer, Some("root")).unwrap();
 
                 match $data.serialize(ser) {
-                    Err(DeError::$kind(e)) => assert_eq!(e, $reason),
+                    Err(SeError::$kind(e)) => assert_eq!(e, $reason),
                     e => panic!(
                         "Expected `Err({}({}))`, but got `{:?}`",
                         stringify!($kind),

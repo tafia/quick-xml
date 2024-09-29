@@ -1,10 +1,9 @@
 //! Contains serializer for content of an XML element
 
 use crate::de::TEXT_KEY;
-use crate::errors::serialize::DeError;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{Indent, QuoteLevel, XmlName};
+use crate::se::{Indent, QuoteLevel, SeError, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -36,7 +35,7 @@ macro_rules! write_primitive {
 /// - units (`()`) and unit structs does not write anything;
 /// - sequences, tuples and tuple structs are serialized without delimiters.
 ///   `[1, 2, 3]` would be serialized as `123` (if not using indent);
-/// - structs and maps are not supported ([`DeError::Unsupported`] is returned);
+/// - structs and maps are not supported ([`SeError::Unsupported`] is returned);
 /// - enums:
 ///   - unit variants are serialized as self-closed `<variant/>`;
 ///   - newtype variants are serialized as inner value wrapped in `<variant>...</variant>`;
@@ -108,7 +107,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 
     /// Writes `name` as self-closed tag
     #[inline]
-    pub(super) fn write_empty(mut self, name: XmlName) -> Result<(), DeError> {
+    pub(super) fn write_empty(mut self, name: XmlName) -> Result<(), SeError> {
         self.write_indent()?;
         if self.expand_empty_elements {
             self.writer.write_char('<')?;
@@ -125,9 +124,9 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     }
 
     /// Writes simple type content between `name` tags
-    pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<(), DeError>
+    pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<(), SeError>
     where
-        S: for<'a> FnOnce(SimpleTypeSerializer<'i, &'a mut W>) -> Result<&'a mut W, DeError>,
+        S: for<'a> FnOnce(SimpleTypeSerializer<'i, &'a mut W>) -> Result<&'a mut W, SeError>,
     {
         self.write_indent()?;
         self.writer.write_char('<')?;
@@ -142,7 +141,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         Ok(())
     }
 
-    pub(super) fn write_indent(&mut self) -> Result<(), DeError> {
+    pub(super) fn write_indent(&mut self) -> Result<(), SeError> {
         if self.write_indent {
             self.indent.write_indent(&mut self.writer)?;
             self.write_indent = false;
@@ -153,7 +152,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 
 impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     type SerializeSeq = Self;
     type SerializeTuple = Self;
@@ -310,7 +309,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             "serialization of map types is not supported in `$value` field".into(),
         ))
     }
@@ -321,7 +320,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        Err(DeError::Unsupported(
+        Err(SeError::Unsupported(
             format!("serialization of struct `{name}` is not supported in `$value` field").into(),
         ))
     }
@@ -345,7 +344,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
         if variant == TEXT_KEY {
-            Err(DeError::Unsupported(
+            Err(SeError::Unsupported(
                 format!("cannot serialize `$text` struct variant of `{}` enum", name).into(),
             ))
         } else {
@@ -360,7 +359,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
 
 impl<'w, 'i, W: Write> SerializeSeq for ContentSerializer<'w, 'i, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -380,7 +379,7 @@ impl<'w, 'i, W: Write> SerializeSeq for ContentSerializer<'w, 'i, W> {
 
 impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -398,7 +397,7 @@ impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
 
 impl<'w, 'i, W: Write> SerializeTupleStruct for ContentSerializer<'w, 'i, W> {
     type Ok = ();
-    type Error = DeError;
+    type Error = SeError;
 
     #[inline]
     fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -573,7 +572,7 @@ pub(super) mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
@@ -1013,7 +1012,7 @@ pub(super) mod tests {
                     };
 
                     match $data.serialize(ser).unwrap_err() {
-                        DeError::$kind(e) => assert_eq!(e, $reason),
+                        SeError::$kind(e) => assert_eq!(e, $reason),
                         e => panic!(
                             "Expected `Err({}({}))`, but got `{:?}`",
                             stringify!($kind),
