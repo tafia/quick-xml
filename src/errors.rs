@@ -345,12 +345,6 @@ pub mod serialize {
         /// [`Event::Start`]: crate::events::Event::Start
         /// [`Event::End`]: crate::events::Event::End
         UnexpectedEof,
-        /// An attempt to deserialize to a type, that is not supported by the XML
-        /// store at current position, for example, attempt to deserialize `struct`
-        /// from attribute or attempt to deserialize binary data.
-        ///
-        /// [XML name]: https://www.w3.org/TR/xml11/#sec-common-syn
-        Unsupported(Cow<'static, str>),
         /// Too many events were skipped while deserializing a sequence, event limit
         /// exceeded. The limit was provided as an argument
         #[cfg(feature = "overlapped-lists")]
@@ -372,7 +366,6 @@ pub mod serialize {
                     f.write_str(")`")
                 }
                 DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
-                DeError::Unsupported(s) => write!(f, "Unsupported operation: {}", s),
                 #[cfg(feature = "overlapped-lists")]
                 DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),
             }
@@ -442,13 +435,6 @@ pub mod serialize {
         #[inline]
         fn from(e: ParseFloatError) -> Self {
             Self::InvalidFloat(e)
-        }
-    }
-
-    impl From<fmt::Error> for DeError {
-        #[inline]
-        fn from(e: fmt::Error) -> Self {
-            Self::Custom(e.to_string())
         }
     }
 
