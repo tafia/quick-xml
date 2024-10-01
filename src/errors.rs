@@ -168,7 +168,7 @@ pub enum Error {
     /// Encoding error
     Encoding(EncodingError),
     /// Escape error
-    EscapeError(EscapeError),
+    Escape(EscapeError),
     /// Parsed XML has some namespace-related problems
     Namespace(NamespaceError),
 }
@@ -218,7 +218,7 @@ impl From<EscapeError> for Error {
     /// Creates a new `Error::EscapeError` from the given error
     #[inline]
     fn from(error: EscapeError) -> Error {
-        Self::EscapeError(error)
+        Self::Escape(error)
     }
 }
 
@@ -247,7 +247,7 @@ impl fmt::Display for Error {
             Self::IllFormed(e) => write!(f, "ill-formed document: {}", e),
             Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
             Self::Encoding(e) => e.fmt(f),
-            Self::EscapeError(e) => e.fmt(f),
+            Self::Escape(e) => e.fmt(f),
             Self::Namespace(e) => e.fmt(f),
         }
     }
@@ -261,7 +261,7 @@ impl std::error::Error for Error {
             Self::IllFormed(e) => Some(e),
             Self::InvalidAttr(e) => Some(e),
             Self::Encoding(e) => Some(e),
-            Self::EscapeError(e) => Some(e),
+            Self::Escape(e) => Some(e),
             Self::Namespace(e) => Some(e),
         }
     }

@@ -23,6 +23,7 @@
   Serialize functions and methods now return `SeError`.
 - [#810]: Return `std::io::Error` from `Writer` methods.
 - [#811]: Split `NamespaceError` and `EncodingError` from `Error`.
+- [#811]: Renamed `Error::EscapeError` to `Error::Escape` to match other variants.
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#810]: https://github.com/tafia/quick-xml/pull/810
