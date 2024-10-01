@@ -6,7 +6,7 @@ use std::io;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, Result, SyntaxError};
+use crate::errors::{Error, SyntaxError};
 use crate::events::Event;
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
@@ -894,7 +894,7 @@ impl<R> Reader<R> {
     /// Read text into the given buffer, and return an event that borrows from
     /// either that buffer or from the input itself, based on the type of the
     /// reader.
-    fn read_event_impl<'i, B>(&mut self, mut buf: B) -> Result<Event<'i>>
+    fn read_event_impl<'i, B>(&mut self, mut buf: B) -> Result<Event<'i>, Error>
     where
         R: XmlSource<'i, B>,
     {
@@ -903,7 +903,7 @@ impl<R> Reader<R> {
 
     /// Private function to read until `>` is found. This function expects that
     /// it was called just after encounter a `<` symbol.
-    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>>
+    fn read_until_close<'i, B>(&mut self, buf: B) -> Result<Event<'i>, Error>
     where
         R: XmlSource<'i, B>,
     {
@@ -979,7 +979,7 @@ trait XmlSource<'r, B> {
     /// reader which provides bytes fed into the parser.
     ///
     /// [events]: crate::events::Event
-    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut u64) -> Result<&'r [u8]>
+    fn read_with<P>(&mut self, parser: P, buf: B, position: &mut u64) -> Result<&'r [u8], Error>
     where
         P: Parser;
 
@@ -998,7 +998,11 @@ trait XmlSource<'r, B> {
     /// - `position`: Will be increased by amount of bytes consumed
     ///
     /// [events]: crate::events::Event
-    fn read_bang_element(&mut self, buf: B, position: &mut u64) -> Result<(BangType, &'r [u8])>;
+    fn read_bang_element(
+        &mut self,
+        buf: B,
+        position: &mut u64,
+    ) -> Result<(BangType, &'r [u8]), Error>;
 
     /// Consume and discard all the whitespace until the next non-whitespace
     /// character or EOF.
@@ -1024,12 +1028,12 @@ enum BangType {
 }
 impl BangType {
     #[inline(always)]
-    const fn new(byte: Option<u8>) -> Result<Self> {
+    const fn new(byte: Option<u8>) -> Result<Self, SyntaxError> {
         Ok(match byte {
             Some(b'[') => Self::CData,
             Some(b'-') => Self::Comment,
             Some(b'D') | Some(b'd') => Self::DocType(0),
-            _ => return Err(Error::Syntax(SyntaxError::InvalidBangMarkup)),
+            _ => return Err(SyntaxError::InvalidBangMarkup),
         })
     }
 
@@ -1101,11 +1105,11 @@ impl BangType {
         None
     }
     #[inline]
-    const fn to_err(&self) -> Error {
+    const fn to_err(&self) -> SyntaxError {
         match self {
-            Self::CData => Error::Syntax(SyntaxError::UnclosedCData),
-            Self::Comment => Error::Syntax(SyntaxError::UnclosedComment),
-            Self::DocType(_) => Error::Syntax(SyntaxError::UnclosedDoctype),
+            Self::CData => SyntaxError::UnclosedCData,
+            Self::Comment => SyntaxError::UnclosedComment,
+            Self::DocType(_) => SyntaxError::UnclosedDoctype,
         }
     }
 }

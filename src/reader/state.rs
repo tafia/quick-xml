@@ -165,7 +165,7 @@ impl ReaderState {
                 //  ^^^^^ - `buf` does not contain `<` and `>`, but `self.offset` is after `>`.
                 // ^------- We report error at that position, so we need to subtract 2 and buf len
                 self.last_error_offset = self.offset - len as u64 - 2;
-                Err(bang_type.to_err())
+                Err(bang_type.to_err().into())
             }
         }
     }

@@ -316,7 +316,7 @@ impl<'a> XmlSource<'a, ()> for &'a [u8] {
         }
 
         *position += self.len() as u64;
-        Err(bang_type.to_err())
+        Err(bang_type.to_err().into())
     }
 
     #[inline]
