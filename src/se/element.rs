@@ -800,8 +800,6 @@ mod tests {
                 text!(char_amp:  '&' => "&amp;");
                 text!(char_apos: '\'' => "&apos;");
                 text!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 text!(char_space: ' ' => " ");
 
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -927,8 +925,6 @@ mod tests {
                 text!(char_amp:  '&' => "&amp;");
                 text!(char_apos: '\'' => "&apos;");
                 text!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 text!(char_space: ' ' => " ");
 
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1058,8 +1054,6 @@ mod tests {
                 value!(char_amp:  '&' => "&amp;");
                 value!(char_apos: '\'' => "&apos;");
                 value!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 value!(char_space: ' ' => " ");
 
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1164,8 +1158,6 @@ mod tests {
                 value!(char_amp:  '&' => "&amp;");
                 value!(char_apos: '\'' => "&apos;");
                 value!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 value!(char_space: ' ' => " ");
 
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1316,7 +1308,8 @@ mod tests {
         use crate::writer::Indentation;
         use pretty_assertions::assert_eq;
 
-        /// Checks that given `$data` successfully serialized as `$expected`
+        /// Checks that given `$data` successfully serialized as `$expected`.
+        /// Writes `$data` using [`ElementSerializer`] with indent of two spaces.
         macro_rules! serialize_as {
             ($name:ident: $data:expr => $expected:expr) => {
                 #[test]
@@ -1402,8 +1395,6 @@ mod tests {
         serialize_as!(char_amp:  '&' => "<root>&amp;</root>");
         serialize_as!(char_apos: '\'' => "<root>&apos;</root>");
         serialize_as!(char_quot: '"' => "<root>&quot;</root>");
-        //TODO: add a setting to escape leading/trailing spaces, in order to
-        // pretty-print does not change the content
         serialize_as!(char_space: ' ' => "<root> </root>");
 
         serialize_as!(str_non_escaped: "non-escaped string" => "<root>non-escaped string</root>");
@@ -1468,13 +1459,15 @@ mod tests {
                 macro_rules! text {
                     ($name:ident: $data:expr) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_map
                             BTreeMap::from([("$text", $data)])
                             => "<root/>");
                     };
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_map
                             BTreeMap::from([("$text", $data)])
-                            => concat!("<root>\n  ", $expected,"\n</root>"));
+                            => concat!("<root>", $expected,"</root>"));
                     };
                 }
 
@@ -1507,8 +1500,6 @@ mod tests {
                 text!(char_amp:  '&' => "&amp;");
                 text!(char_apos: '\'' => "&apos;");
                 text!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 text!(char_space: ' ' => " ");
 
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1590,29 +1581,18 @@ mod tests {
                 use pretty_assertions::assert_eq;
 
                 macro_rules! text {
-                    ($name:ident: $data:expr) => {
-                        serialize_as!($name:
-                            Text {
-                                before: "answer",
-                                content: $data,
-                                after: "answer",
-                            }
-                            => "<root>\n  \
-                                    <before>answer</before>\n  \
-                                    <after>answer</after>\n\
-                                </root>");
-                    };
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_struct
                             Text {
                                 before: "answer",
                                 content: $data,
                                 after: "answer",
                             }
                             => concat!(
-                                "<root>\n  <before>answer</before>\n  ",
+                                "<root>\n  <before>answer</before>",
                                 $expected,
-                                "\n  <after>answer</after>\n</root>",
+                                "<after>answer</after>\n</root>",
                             ));
                     };
                 }
@@ -1646,8 +1626,6 @@ mod tests {
                 text!(char_amp:  '&' => "&amp;");
                 text!(char_apos: '\'' => "&apos;");
                 text!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 text!(char_space: ' ' => " ");
 
                 text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1661,13 +1639,13 @@ mod tests {
                     }
                     => Unsupported("`serialize_bytes` not supported yet"));
 
-                text!(option_none: Option::<&str>::None);
+                text!(option_none: Option::<&str>::None => "");
                 text!(option_some: Some("non-escaped string") => "non-escaped string");
-                text!(option_some_empty_str: Some(""));
+                text!(option_some_empty_str: Some("") => "");
 
-                text!(unit: ());
-                text!(unit_struct: Unit);
-                text!(unit_struct_escaped: UnitEscaped);
+                text!(unit: () => "");
+                text!(unit_struct: Unit => "");
+                text!(unit_struct_escaped: UnitEscaped => "");
 
                 text!(enum_unit: Enum::Unit => "Unit");
                 text!(enum_unit_escaped: Enum::UnitEscaped => "&lt;&quot;&amp;&apos;&gt;");
@@ -1684,7 +1662,7 @@ mod tests {
 
                 // Sequences are serialized separated by spaces, all spaces inside are escaped
                 text!(seq: vec![1, 2, 3] => "1 2 3");
-                text!(seq_empty: Vec::<usize>::new());
+                text!(seq_empty: Vec::<usize>::new() => "");
                 text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                     => "&lt;&quot;&amp;&apos;&gt; \
                         with&#9;&#10;&#13;&#32;spaces \
@@ -1738,13 +1716,15 @@ mod tests {
                 macro_rules! value {
                     ($name:ident: $data:expr) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_map
                             BTreeMap::from([("$value", $data)])
                             => "<root/>");
                     };
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_map
                             BTreeMap::from([("$value", $data)])
-                            => concat!("<root>\n  ", $expected,"\n</root>"));
+                            => concat!("<root>", $expected,"</root>"));
                     };
                 }
 
@@ -1777,8 +1757,6 @@ mod tests {
                 value!(char_amp:  '&' => "&amp;");
                 value!(char_apos: '\'' => "&apos;");
                 value!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 value!(char_space: ' ' => " ");
 
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1796,24 +1774,25 @@ mod tests {
                 value!(unit_struct: Unit);
                 value!(unit_struct_escaped: UnitEscaped);
 
-                value!(enum_unit: Enum::Unit => "<Unit/>");
+                value!(enum_unit: Enum::Unit => "\n  <Unit/>\n");
                 err!(enum_unit_escaped:
                     BTreeMap::from([("$value", Enum::UnitEscaped)])
                     => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
 
                 value!(newtype: Newtype(42) => "42");
-                value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+                value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n");
 
-                value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
+                value!(seq: vec![1, 2, 3] => "123");
                 value!(seq_empty: Vec::<usize>::new());
                 value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\n  \
-                        with\t\n\r spaces\n  \
+                    => "&lt;&quot;&amp;&apos;&gt;\
+                        with\t\n\r spaces\
                         3");
-                value!(tuple_struct: Tuple("first", 42) => "first\n  42");
+                value!(tuple_struct: Tuple("first", 42) => "first42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
-                    => "<Tuple>first</Tuple>\n  \
-                        <Tuple>42</Tuple>");
+                    => "\n  \
+                        <Tuple>first</Tuple>\n  \
+                        <Tuple>42</Tuple>\n");
 
                 // We cannot wrap map or struct in any container and should not
                 // flatten it, so it is impossible to serialize maps and structs
@@ -1825,11 +1804,12 @@ mod tests {
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
-                    => "<Struct>\n    \
+                    => "\n  \
+                        <Struct>\n    \
                             <key>answer</key>\n    \
                             <val>42</val>\n    \
                             <val>42</val>\n  \
-                        </Struct>");
+                        </Struct>\n");
             }
 
             /// `$value` field inside a struct
@@ -1838,29 +1818,18 @@ mod tests {
                 use pretty_assertions::assert_eq;
 
                 macro_rules! value {
-                    ($name:ident: $data:expr) => {
-                        serialize_as!($name:
-                            Value {
-                                before: "answer",
-                                content: $data,
-                                after: "answer",
-                            }
-                            => "<root>\n  \
-                                    <before>answer</before>\n  \
-                                    <after>answer</after>\n\
-                                </root>");
-                    };
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
+                            // Serialization started from ElementSerializer::serialize_struct
                             Value {
                                 before: "answer",
                                 content: $data,
                                 after: "answer",
                             }
                             => concat!(
-                                "<root>\n  <before>answer</before>\n  ",
+                                "<root>\n  <before>answer</before>",
                                 $expected,
-                                "\n  <after>answer</after>\n</root>",
+                                "<after>answer</after>\n</root>",
                             ));
                     };
                 }
@@ -1894,8 +1863,6 @@ mod tests {
                 value!(char_amp:  '&' => "&amp;");
                 value!(char_apos: '\'' => "&apos;");
                 value!(char_quot: '"' => "&quot;");
-                //TODO: add a setting to escape leading/trailing spaces, in order to
-                // pretty-print does not change the content
                 value!(char_space: ' ' => " ");
 
                 value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1909,15 +1876,15 @@ mod tests {
                     }
                     => Unsupported("`serialize_bytes` not supported yet"));
 
-                value!(option_none: Option::<&str>::None);
+                value!(option_none: Option::<&str>::None => "");
                 value!(option_some: Some("non-escaped string") => "non-escaped string");
-                value!(option_some_empty_str: Some(""));
+                value!(option_some_empty_str: Some("") => "");
 
-                value!(unit: ());
-                value!(unit_struct: Unit);
-                value!(unit_struct_escaped: UnitEscaped);
+                value!(unit: () => "\n  ");
+                value!(unit_struct: Unit => "\n  ");
+                value!(unit_struct_escaped: UnitEscaped => "\n  ");
 
-                value!(enum_unit: Enum::Unit => "<Unit/>");
+                value!(enum_unit: Enum::Unit => "\n  <Unit/>\n  ");
                 err!(enum_unit_escaped:
                     Value {
                         before: "answer",
@@ -1927,19 +1894,20 @@ mod tests {
                     => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
 
                 value!(newtype: Newtype(42) => "42");
-                value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+                value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n  ");
 
                 // Note that sequences of primitives serialized without delimiters!
-                value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
-                value!(seq_empty: Vec::<usize>::new());
+                value!(seq: vec![1, 2, 3] => "123");
+                value!(seq_empty: Vec::<usize>::new() => "");
                 value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\n  \
-                        with\t\n\r spaces\n  \
+                    => "&lt;&quot;&amp;&apos;&gt;\
+                        with\t\n\r spaces\
                         3");
-                value!(tuple_struct: Tuple("first", 42) => "first\n  42");
+                value!(tuple_struct: Tuple("first", 42) => "first42");
                 value!(enum_tuple: Enum::Tuple("first", 42)
-                    => "<Tuple>first</Tuple>\n  \
-                        <Tuple>42</Tuple>");
+                    => "\n  \
+                        <Tuple>first</Tuple>\n  \
+                        <Tuple>42</Tuple>\n  ");
 
                 // We cannot wrap map or struct in any container and should not
                 // flatten it, so it is impossible to serialize maps and structs
@@ -1959,11 +1927,12 @@ mod tests {
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
-                    => "<Struct>\n    \
+                    => "\n  \
+                        <Struct>\n    \
                             <key>answer</key>\n    \
                             <val>42</val>\n    \
                             <val>42</val>\n  \
-                        </Struct>");
+                        </Struct>\n  ");
             }
         }
 

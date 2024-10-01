@@ -651,8 +651,6 @@ pub(super) mod tests {
         serialize_as!(char_amp:  '&' => "&amp;", SensitiveText);
         serialize_as!(char_apos: '\'' => "&apos;", SensitiveText);
         serialize_as!(char_quot: '"' => "&quot;", SensitiveText);
-        //TODO: add a setting to escape leading/trailing spaces, in order to
-        // pretty-print does not change the content
         serialize_as!(char_space: ' ' => " ", SensitiveText);
 
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string", SensitiveText);
@@ -781,8 +779,6 @@ pub(super) mod tests {
             text!(char_amp:  '&' => "&amp;");
             text!(char_apos: '\'' => "&apos;");
             text!(char_quot: '"' => "&quot;");
-            //TODO: add a setting to escape leading/trailing spaces, in order to
-            // pretty-print does not change the content
             text!(char_space: ' ' => " ");
 
             text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -908,8 +904,6 @@ pub(super) mod tests {
             value!(char_amp:  '&' => "&amp;");
             value!(char_apos: '\'' => "&apos;");
             value!(char_quot: '"' => "&quot;");
-            //TODO: add a setting to escape leading/trailing spaces, in order to
-            // pretty-print does not change the content
             value!(char_space: ' ' => " ");
 
             value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1094,8 +1088,6 @@ pub(super) mod tests {
         serialize_as!(char_amp:  '&' => "&amp;", SensitiveText);
         serialize_as!(char_apos: '\'' => "&apos;", SensitiveText);
         serialize_as!(char_quot: '"' => "&quot;", SensitiveText);
-        //TODO: add a setting to escape leading/trailing spaces, in order to
-        // pretty-print does not change the content
         serialize_as!(char_space: ' ' => " ", SensitiveText);
 
         serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string", SensitiveText);
@@ -1119,19 +1111,14 @@ pub(super) mod tests {
         serialize_as!(newtype: Newtype(42) => "42", Text);
         serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
-        // Note that sequences of primitives serialized without delimiters other that indent!
-        serialize_as!(seq: vec![1, 2, 3]
-            => "1\n\
-                2\n\
-                3", Text);
+        // Note that sequences of primitives serialized without delimiters!
+        serialize_as!(seq: vec![1, 2, 3] => "123", Text);
         serialize_as!(seq_empty: Vec::<usize>::new() => "", SensitiveNothing);
         serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
-            => "&lt;&quot;&amp;&apos;&gt;\n\
-                with\t\r\n spaces\n\
+            => "&lt;&quot;&amp;&apos;&gt;\
+                with\t\r\n spaces\
                 3", Text);
-        serialize_as!(tuple_struct: Tuple("first", 42)
-            => "first\n\
-                42", Text);
+        serialize_as!(tuple_struct: Tuple("first", 42) => "first42", Text);
         serialize_as!(enum_tuple: Enum::Tuple("first", 42)
             => "<Tuple>first</Tuple>\n\
                 <Tuple>42</Tuple>");
@@ -1170,9 +1157,7 @@ pub(super) mod tests {
                     after: "answer",
                 }
                 => "<Text>\n  \
-                        <before>answer</before>\n  \
-                        42 42\n  \
-                        <after>answer</after>\n\
+                        <before>answer</before>42 42<after>answer</after>\n\
                     </Text>");
         }
 
@@ -1182,18 +1167,6 @@ pub(super) mod tests {
             use pretty_assertions::assert_eq;
 
             macro_rules! text {
-                ($name:ident: $data:expr) => {
-                    serialize_as!($name:
-                        SpecialEnum::Text {
-                            before: "answer",
-                            content: $data,
-                            after: "answer",
-                        }
-                        => "<Text>\n  \
-                                <before>answer</before>\n  \
-                                <after>answer</after>\n\
-                            </Text>");
-                };
                 ($name:ident: $data:expr => $expected:literal) => {
                     serialize_as!($name:
                         SpecialEnum::Text {
@@ -1202,9 +1175,9 @@ pub(super) mod tests {
                             after: "answer",
                         }
                         => concat!(
-                            "<Text>\n  <before>answer</before>\n  ",
+                            "<Text>\n  <before>answer</before>",
                             $expected,
-                            "\n  <after>answer</after>\n</Text>",
+                            "<after>answer</after>\n</Text>",
                         ));
                 };
             }
@@ -1238,8 +1211,6 @@ pub(super) mod tests {
             text!(char_amp:  '&' => "&amp;");
             text!(char_apos: '\'' => "&apos;");
             text!(char_quot: '"' => "&quot;");
-            //TODO: add a setting to escape leading/trailing spaces, in order to
-            // pretty-print does not change the content
             text!(char_space: ' ' => " ");
 
             text!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1253,13 +1224,13 @@ pub(super) mod tests {
                 }
                 => Unsupported("`serialize_bytes` not supported yet"));
 
-            text!(option_none: Option::<&str>::None);
+            text!(option_none: Option::<&str>::None => "");
             text!(option_some: Some("non-escaped string") => "non-escaped string");
-            text!(option_some_empty_str: Some(""));
+            text!(option_some_empty_str: Some("") => "");
 
-            text!(unit: ());
-            text!(unit_struct: Unit);
-            text!(unit_struct_escaped: UnitEscaped);
+            text!(unit: () => "");
+            text!(unit_struct: Unit => "");
+            text!(unit_struct_escaped: UnitEscaped => "");
 
             text!(enum_unit: Enum::Unit => "Unit");
             text!(enum_unit_escaped: Enum::UnitEscaped => "&lt;&quot;&amp;&apos;&gt;");
@@ -1276,7 +1247,7 @@ pub(super) mod tests {
 
             // Sequences are serialized separated by spaces, all spaces inside are escaped
             text!(seq: vec![1, 2, 3] => "1 2 3");
-            text!(seq_empty: Vec::<usize>::new());
+            text!(seq_empty: Vec::<usize>::new() => "");
             text!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
                 => "&lt;&quot;&amp;&apos;&gt; \
                     with&#9;&#10;&#13;&#32;spaces \
@@ -1321,18 +1292,6 @@ pub(super) mod tests {
             use pretty_assertions::assert_eq;
 
             macro_rules! value {
-                ($name:ident: $data:expr) => {
-                    serialize_as!($name:
-                        SpecialEnum::Value {
-                            before: "answer",
-                            content: $data,
-                            after: "answer",
-                        }
-                        => "<Value>\n  \
-                                <before>answer</before>\n  \
-                                <after>answer</after>\n\
-                            </Value>");
-                };
                 ($name:ident: $data:expr => $expected:literal) => {
                     serialize_as!($name:
                         SpecialEnum::Value {
@@ -1341,9 +1300,9 @@ pub(super) mod tests {
                             after: "answer",
                         }
                         => concat!(
-                            "<Value>\n  <before>answer</before>\n  ",
+                            "<Value>\n  <before>answer</before>",
                             $expected,
-                            "\n  <after>answer</after>\n</Value>",
+                            "<after>answer</after>\n</Value>",
                         ));
                 };
             }
@@ -1377,8 +1336,6 @@ pub(super) mod tests {
             value!(char_amp:  '&' => "&amp;");
             value!(char_apos: '\'' => "&apos;");
             value!(char_quot: '"' => "&quot;");
-            //TODO: add a setting to escape leading/trailing spaces, in order to
-            // pretty-print does not change the content
             value!(char_space: ' ' => " ");
 
             value!(str_non_escaped: "non-escaped string" => "non-escaped string");
@@ -1392,15 +1349,15 @@ pub(super) mod tests {
                 }
                 => Unsupported("`serialize_bytes` not supported yet"));
 
-            value!(option_none: Option::<&str>::None);
+            value!(option_none: Option::<&str>::None => "");
             value!(option_some: Some("non-escaped string") => "non-escaped string");
-            value!(option_some_empty_str: Some(""));
+            value!(option_some_empty_str: Some("") => "");
 
-            value!(unit: ());
-            value!(unit_struct: Unit);
-            value!(unit_struct_escaped: UnitEscaped);
+            value!(unit: () => "\n  ");
+            value!(unit_struct: Unit => "\n  ");
+            value!(unit_struct_escaped: UnitEscaped => "\n  ");
 
-            value!(enum_unit: Enum::Unit => "<Unit/>");
+            value!(enum_unit: Enum::Unit => "\n  <Unit/>\n  ");
             err!(enum_unit_escaped:
                 SpecialEnum::Value {
                     before: "answer",
@@ -1410,19 +1367,20 @@ pub(super) mod tests {
                 => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
 
             value!(newtype: Newtype(42) => "42");
-            value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
+            value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n  ");
 
             // Note that sequences of primitives serialized without delimiters!
-            value!(seq: vec![1, 2, 3] => "1\n  2\n  3");
-            value!(seq_empty: Vec::<usize>::new());
+            value!(seq: vec![1, 2, 3] => "123");
+            value!(seq_empty: Vec::<usize>::new() => "");
             value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                => "&lt;&quot;&amp;&apos;&gt;\n  \
-                    with\t\n\r spaces\n  \
+                => "&lt;&quot;&amp;&apos;&gt;\
+                    with\t\n\r spaces\
                     3");
-            value!(tuple_struct: Tuple("first", 42) => "first\n  42");
+            value!(tuple_struct: Tuple("first", 42) => "first42");
             value!(enum_tuple: Enum::Tuple("first", 42)
-                => "<Tuple>first</Tuple>\n  \
-                    <Tuple>42</Tuple>");
+                => "\n  \
+                    <Tuple>first</Tuple>\n  \
+                    <Tuple>42</Tuple>\n  ");
 
             // We cannot wrap map or struct in any container and should not
             // flatten it, so it is impossible to serialize maps and structs
@@ -1442,11 +1400,12 @@ pub(super) mod tests {
                 => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
             value!(enum_struct:
                 Enum::Struct { key: "answer", val: (42, 42) }
-                => "<Struct>\n    \
+                => "\n  \
+                    <Struct>\n    \
                         <key>answer</key>\n    \
                         <val>42</val>\n    \
                         <val>42</val>\n  \
-                    </Struct>");
+                    </Struct>\n  ");
         }
 
         mod attributes {
