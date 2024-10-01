@@ -238,7 +238,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         self.ser.writer.write_char('<')?;
         self.ser.writer.write_str(self.key.0)?;
         Ok(Struct {
-            start_whitespace: None,
+            //start_whitespace: None,
             contains_non_attribute_keys: false,
             ser: self,
             children: String::new(),
@@ -371,7 +371,7 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
 ///   serializer
 pub struct Struct<'w, 'k, W: Write> {
     ser: ElementSerializer<'w, 'k, W>,
-    start_whitespace:Option<String>,
+    //start_whitespace:Option<String>,
     contains_non_attribute_keys:bool,
     /// Buffer to store serialized elements
     // TODO: Customization point: allow direct writing of elements, but all
@@ -499,7 +499,7 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
                 self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
             } else {
                 //inline $text|$value field
-                self.ser.ser.writer.write_str(&self.start_whitespace.unwrap())?;
+                // self.ser.ser.writer.write_str(&self.start_whitespace.unwrap())?;
                 self.ser.ser.writer.write_str(&self.children.trim_start())?;
             }
 
