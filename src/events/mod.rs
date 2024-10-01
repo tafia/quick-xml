@@ -54,7 +54,7 @@ use crate::name::{LocalName, QName};
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
-use attributes::{Attribute, Attributes};
+use attributes::{AttrError, Attribute, Attributes};
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
 ///
@@ -297,7 +297,7 @@ impl<'a> BytesStart<'a> {
     pub fn try_get_attribute<N: AsRef<[u8]> + Sized>(
         &'a self,
         attr_name: N,
-    ) -> Result<Option<Attribute<'a>>, Error> {
+    ) -> Result<Option<Attribute<'a>>, AttrError> {
         for a in self.attributes().with_checks(false) {
             let a = a?;
             if a.key.as_ref() == attr_name.as_ref() {
@@ -1191,7 +1191,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<[u8]>, Error>> {
+    pub fn encoding(&self) -> Option<Result<Cow<[u8]>, AttrError>> {
         self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
@@ -1233,7 +1233,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<[u8]>, Error>> {
+    pub fn standalone(&self) -> Option<Result<Cow<[u8]>, AttrError>> {
         self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
