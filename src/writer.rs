@@ -320,7 +320,7 @@ impl<W: Write> Writer<W> {
         content: &T,
     ) -> Result<(), SeError> {
         use crate::se::{Indent, Serializer};
-
+        
         self.write_indent()?;
         let mut fmt = ToFmtWrite(&mut self.writer);
         let mut serializer = Serializer::with_root(&mut fmt, Some(tag_name))?;
@@ -328,7 +328,6 @@ impl<W: Write> Writer<W> {
         if let Some(indent) = &mut self.indent {
             serializer.set_indent(Indent::Borrow(indent));
         }
-
         content.serialize(serializer)?;
 
         Ok(())

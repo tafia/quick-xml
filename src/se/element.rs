@@ -231,12 +231,15 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
+        
         self.ser.write_indent()?;
         self.ser.indent.increase();
 
         self.ser.writer.write_char('<')?;
         self.ser.writer.write_str(self.key.0)?;
         Ok(Struct {
+            start_whitespace: None,
+            contains_non_attribute_keys: false,
             ser: self,
             children: String::new(),
         })
@@ -368,6 +371,8 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
 ///   serializer
 pub struct Struct<'w, 'k, W: Write> {
     ser: ElementSerializer<'w, 'k, W>,
+    start_whitespace:Option<String>,
+    contains_non_attribute_keys:bool,
     /// Buffer to store serialized elements
     // TODO: Customization point: allow direct writing of elements, but all
     // attributes should be listed first. Fail, if attribute encountered after
@@ -436,20 +441,31 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             write_indent: true,
             expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
-
+        
         if key == TEXT_KEY {
             value.serialize(TextSerializer(ser.into_simple_type_serializer()))?;
+            
         } else if key == VALUE_KEY {
             value.serialize(ser)?;
         } else {
+            self.contains_non_attribute_keys = true;
             value.serialize(ElementSerializer {
                 key: XmlName::try_from(key)?,
                 ser,
             })?;
         }
+
+        if key == TEXT_KEY || key == VALUE_KEY {
+            //store whitespace at start of $text|$value
+            self.start_whitespace.get_or_insert(self.children.chars()
+                        .take_while(|x| x.is_whitespace())
+                        .collect());
+        }
+        
         Ok(())
     }
 }
+
 
 impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     type Ok = ();
@@ -463,6 +479,7 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     }
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
+
         self.ser.ser.indent.decrease();
 
         if self.children.is_empty() {
@@ -475,9 +492,16 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
             }
         } else {
             self.ser.ser.writer.write_char('>')?;
-            self.ser.ser.writer.write_str(&self.children)?;
-
-            self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
+            if self.contains_non_attribute_keys {
+                //$text|$value field with other fields.
+                self.ser.ser.writer.write_str(&self.children)?;
+    
+                self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
+            } else {
+                //inline $text|$value field
+                self.ser.ser.writer.write_str(&self.start_whitespace.unwrap())?;
+                self.ser.ser.writer.write_str(&self.children.trim_start())?;
+            }
 
             self.ser.ser.writer.write_str("</")?;
             self.ser.ser.writer.write_str(self.ser.key.0)?;
@@ -857,7 +881,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -984,7 +1008,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1096,7 +1120,7 @@ mod tests {
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
                 err!(struct_:
-                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
+                    BTreeMap::from([("$value", Enum::Struct { key: "answer", val: (42, 42) })])
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
@@ -1216,7 +1240,7 @@ mod tests {
                 err!(struct_:
                     Value {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
@@ -1563,7 +1587,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1702,7 +1726,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1813,7 +1837,7 @@ mod tests {
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
                 err!(struct_:
-                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
+                    BTreeMap::from([("$value", Enum::Struct { key: "answer", val: (42, 42) })])
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
@@ -1945,7 +1969,7 @@ mod tests {
                 err!(struct_:
                     Value {
                         before: "answer",
-                        content: Struct { key: "answer", val: (42, 42) },
+                        content: Enum::Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
