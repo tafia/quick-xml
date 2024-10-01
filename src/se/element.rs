@@ -238,7 +238,6 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         self.ser.writer.write_char('<')?;
         self.ser.writer.write_str(self.key.0)?;
         Ok(Struct {
-            //start_whitespace: None,
             contains_non_attribute_keys: false,
             ser: self,
             children: String::new(),
@@ -881,7 +880,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1008,7 +1007,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1120,7 +1119,7 @@ mod tests {
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
                 err!(struct_:
-                    BTreeMap::from([("$value", Enum::Struct { key: "answer", val: (42, 42) })])
+                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
@@ -1240,7 +1239,7 @@ mod tests {
                 err!(struct_:
                     Value {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
@@ -1587,7 +1586,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1726,7 +1725,7 @@ mod tests {
                 err!(struct_:
                     Text {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("cannot serialize struct `Struct` as text content value"));
@@ -1837,7 +1836,7 @@ mod tests {
                     BTreeMap::from([("$value", BTreeMap::from([("_1", 2), ("_3", 4)]))])
                     => Unsupported("serialization of map types is not supported in `$value` field"));
                 err!(struct_:
-                    BTreeMap::from([("$value", Enum::Struct { key: "answer", val: (42, 42) })])
+                    BTreeMap::from([("$value", Struct { key: "answer", val: (42, 42) })])
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
                 value!(enum_struct:
                     Enum::Struct { key: "answer", val: (42, 42) }
@@ -1969,7 +1968,7 @@ mod tests {
                 err!(struct_:
                     Value {
                         before: "answer",
-                        content: Enum::Struct { key: "answer", val: (42, 42) },
+                        content: Struct { key: "answer", val: (42, 42) },
                         after: "answer",
                     }
                     => Unsupported("serialization of struct `Struct` is not supported in `$value` field"));
