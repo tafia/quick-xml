@@ -457,9 +457,9 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
 
         if key == TEXT_KEY || key == VALUE_KEY {
             //store whitespace at start of $text|$value
-            self.start_whitespace.get_or_insert(self.children.chars()
-                        .take_while(|x| x.is_whitespace())
-                        .collect());
+            // self.start_whitespace.get_or_insert(self.children.chars()
+            //             .take_while(|x| x.is_whitespace())
+            //             .collect());
         }
         
         Ok(())
