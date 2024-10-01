@@ -371,7 +371,6 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
 ///   serializer
 pub struct Struct<'w, 'k, W: Write> {
     ser: ElementSerializer<'w, 'k, W>,
-    //start_whitespace:Option<String>,
     contains_non_attribute_keys:bool,
     /// Buffer to store serialized elements
     // TODO: Customization point: allow direct writing of elements, but all
@@ -434,6 +433,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
     where
         T: ?Sized + Serialize,
     {
+        let children_size = self.children.len();
         let ser = ContentSerializer {
             writer: &mut self.children,
             level: self.ser.ser.level,
@@ -448,18 +448,12 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
         } else if key == VALUE_KEY {
             value.serialize(ser)?;
         } else {
-            self.contains_non_attribute_keys = true;
             value.serialize(ElementSerializer {
                 key: XmlName::try_from(key)?,
                 ser,
             })?;
-        }
-
-        if key == TEXT_KEY || key == VALUE_KEY {
-            //store whitespace at start of $text|$value
-            // self.start_whitespace.get_or_insert(self.children.chars()
-            //             .take_while(|x| x.is_whitespace())
-            //             .collect());
+            //set true if ElementSerializer wrote to children
+            self.contains_non_attribute_keys |= children_size != self.children.len();
         }
         
         Ok(())
@@ -493,15 +487,20 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
         } else {
             self.ser.ser.writer.write_char('>')?;
             if self.contains_non_attribute_keys {
-                //$text|$value field with other fields.
                 self.ser.ser.writer.write_str(&self.children)?;
     
                 self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
             } else {
-                println!("'{}'", self.children);
-                //inline $text|$value field
-                // self.ser.ser.writer.write_str(&self.start_whitespace.unwrap())?;
-                self.ser.ser.writer.write_str(&self.children.trim_start())?;
+                //calculate indentation length
+                let mut indentation = String::new();
+                self.ser.ser.indent.increase();
+                self.ser.ser.indent.write_indent(&mut indentation)?;
+                self.ser.ser.indent.decrease();
+
+
+                let children = self.children.split_at(indentation.len()).1;
+
+                self.ser.ser.writer.write_str(children)?;
             }
 
             self.ser.ser.writer.write_str("</")?;
