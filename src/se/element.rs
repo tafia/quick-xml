@@ -498,6 +498,7 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     
                 self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
             } else {
+                println!("'{}'", self.children);
                 //inline $text|$value field
                 // self.ser.ser.writer.write_str(&self.start_whitespace.unwrap())?;
                 self.ser.ser.writer.write_str(&self.children.trim_start())?;
