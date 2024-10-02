@@ -17,9 +17,9 @@
 
 ### Bug Fixes
 
-- [#814]: Implemented change implementing "Keep specific element to single line while using indent with serde serializer#655"
+- [#655]: Keep specific element to single line while using indent with serde serializer
 
-[#814]: https://github.com/tafia/quick-xml/pull/814 
+[#655]: https://github.com/tafia/quick-xml/issues/655
 
 ### Misc Changes
 
