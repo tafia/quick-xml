@@ -231,7 +231,6 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        
         self.ser.write_indent()?;
         self.ser.indent.increase();
 
@@ -370,7 +369,8 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
 ///   serializer
 pub struct Struct<'w, 'k, W: Write> {
     ser: ElementSerializer<'w, 'k, W>,
-    contains_non_attribute_keys:bool,
+    ///keeps track of rather the child elements contain elements that are not (attributes or $text or $value or have a 0 bytes representation)
+    contains_non_attribute_keys: bool,
     /// Buffer to store serialized elements
     // TODO: Customization point: allow direct writing of elements, but all
     // attributes should be listed first. Fail, if attribute encountered after
@@ -440,10 +440,9 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             write_indent: true,
             expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
-        
+
         if key == TEXT_KEY {
             value.serialize(TextSerializer(ser.into_simple_type_serializer()))?;
-            
         } else if key == VALUE_KEY {
             value.serialize(ser)?;
         } else {
@@ -454,11 +453,10 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             //set true if ElementSerializer wrote to children
             self.contains_non_attribute_keys |= children_size != self.children.len();
         }
-        
+
         Ok(())
     }
 }
-
 
 impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     type Ok = ();
@@ -472,7 +470,6 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
     }
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
-
         self.ser.ser.indent.decrease();
 
         if self.children.is_empty() {
@@ -487,7 +484,7 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
             self.ser.ser.writer.write_char('>')?;
             if self.contains_non_attribute_keys {
                 self.ser.ser.writer.write_str(&self.children)?;
-    
+
                 self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
             } else {
                 //calculate indentation length
@@ -495,7 +492,6 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
                 self.ser.ser.indent.increase();
                 self.ser.ser.indent.write_indent(&mut indentation)?;
                 self.ser.ser.indent.decrease();
-
 
                 let children = self.children.split_at(indentation.len()).1;
 
@@ -1489,7 +1485,7 @@ mod tests {
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
                             BTreeMap::from([("$text", $data)])
-                            => concat!("<root>\n  ", $expected,"\n</root>"));
+                            => concat!("<root>", $expected,"</root>"));
                     };
                 }
 
@@ -1759,7 +1755,7 @@ mod tests {
                     ($name:ident: $data:expr => $expected:literal) => {
                         serialize_as!($name:
                             BTreeMap::from([("$value", $data)])
-                            => concat!("<root>\n  ", $expected,"\n</root>"));
+                            => concat!("<root>", $expected,"</root>"));
                     };
                 }
 

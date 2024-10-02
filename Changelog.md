@@ -17,6 +17,10 @@
 
 ### Bug Fixes
 
+- [#814]: Implemented change implementing "Keep specific element to single line while using indent with serde serializer#655"
+
+[#814]: https://github.com/tafia/quick-xml/pull/814 
+
 ### Misc Changes
 
 - [#227]: Split `SeError` from `DeError` in the `serialize` feature.
