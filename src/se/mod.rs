@@ -337,6 +337,14 @@ pub enum WriteResult {
     SensitiveNothing,
 }
 
+impl WriteResult {
+    /// Returns `true` if indent should be written after the object (if configured) and `false` otherwise.
+    #[inline]
+    pub fn allow_indent(&self) -> bool {
+        matches!(self, Self::Element | Self::Nothing)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Implements serialization method by forwarding it to the serializer created by

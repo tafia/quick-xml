@@ -69,7 +69,7 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     /// child serializers should have access to the actual state of indentation.
     pub(super) indent: Indent<'i>,
     /// If `true`, then current indent will be written before writing the content,
-    /// but only if content is not empty.
+    /// but only if content is not empty. This flag is reset after writing indent.
     pub write_indent: bool,
     // If `true`, then empty elements will be serialized as `<element></element>`
     // instead of `<element/>`.
@@ -86,11 +86,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             writer: self.writer,
             target: QuoteTarget::Text,
             level: self.level,
-            indent: if self.write_indent {
-                self.indent
-            } else {
-                Indent::None
-            },
+            indent: Indent::None,
         }
     }
 
@@ -396,8 +392,8 @@ impl<'w, 'i, W: Write> SerializeSeq for Seq<'w, 'i, W> {
         T: ?Sized + Serialize,
     {
         self.last = value.serialize(self.ser.new_seq_element_serializer())?;
-        // Write indent for next element
-        self.ser.write_indent = true;
+        // Write indent for next element if indents are used
+        self.ser.write_indent = self.last.allow_indent();
         Ok(())
     }
 

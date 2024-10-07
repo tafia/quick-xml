@@ -241,6 +241,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
         Ok(Struct {
             ser: self,
             children: String::new(),
+            write_indent: true,
         })
     }
 
@@ -379,6 +380,8 @@ pub struct Struct<'w, 'k, W: Write> {
     // attributes should be listed first. Fail, if attribute encountered after
     // element. Use feature to configure
     children: String,
+    /// Whether need to write indent after the last written field
+    write_indent: bool,
 }
 
 impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
@@ -439,19 +442,25 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             writer: &mut self.children,
             level: self.ser.ser.level,
             indent: self.ser.ser.indent.borrow(),
-            write_indent: true,
+            // If previous field does not require indent, do not write it
+            write_indent: self.write_indent,
             expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
 
         if key == TEXT_KEY {
             value.serialize(TextSerializer(ser.into_simple_type_serializer()))?;
+            // Text was written so we don't need to indent next field
+            self.write_indent = false;
         } else if key == VALUE_KEY {
-            value.serialize(ser)?;
+            // If element was written then we need to indent next field unless it is a text field
+            self.write_indent = value.serialize(ser)?.allow_indent();
         } else {
             value.serialize(ElementSerializer {
                 key: XmlName::try_from(key)?,
                 ser,
             })?;
+            // Element was written so we need to indent next field unless it is a text field
+            self.write_indent = true;
         }
         Ok(())
     }
@@ -483,7 +492,9 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
             self.ser.ser.writer.write_char('>')?;
             self.ser.ser.writer.write_str(&self.children)?;
 
-            self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
+            if self.write_indent {
+                self.ser.ser.indent.write_indent(&mut self.ser.ser.writer)?;
+            }
 
             self.ser.ser.writer.write_str("</")?;
             self.ser.ser.writer.write_str(self.ser.key.0)?;
