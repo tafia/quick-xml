@@ -3,7 +3,7 @@
 use crate::de::TEXT_KEY;
 use crate::se::element::{ElementSerializer, Struct, Tuple};
 use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-use crate::se::{Indent, QuoteLevel, SeError, XmlName};
+use crate::se::{Indent, QuoteLevel, SeError, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeSeq, SerializeTuple, SerializeTupleStruct, Serializer,
 };
@@ -15,7 +15,7 @@ macro_rules! write_primitive {
         #[inline]
         fn $method(self, value: $ty) -> Result<Self::Ok, Self::Error> {
             self.into_simple_type_serializer().$method(value)?;
-            Ok(())
+            Ok(WriteResult::Text)
         }
     };
 }
@@ -24,7 +24,9 @@ macro_rules! write_primitive {
 
 /// A serializer used to serialize content of an element. It does not write
 /// surrounding tags. Unlike the [`ElementSerializer`], this serializer serializes
-/// enums using variant names as tag names, i. e. as `<variant>...</variant>`
+/// enums using variant names as tag names, i. e. as `<variant>...</variant>`.
+///
+/// Returns the classification of the last written type.
 ///
 /// This serializer does the following:
 /// - numbers converted to a decimal representation and serialized as naked strings;
@@ -107,7 +109,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 
     /// Writes `name` as self-closed tag
     #[inline]
-    pub(super) fn write_empty(mut self, name: XmlName) -> Result<(), SeError> {
+    pub(super) fn write_empty(mut self, name: XmlName) -> Result<WriteResult, SeError> {
         self.write_indent()?;
         if self.expand_empty_elements {
             self.writer.write_char('<')?;
@@ -120,11 +122,15 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
             self.writer.write_str(name.0)?;
             self.writer.write_str("/>")?;
         }
-        Ok(())
+        Ok(WriteResult::Element)
     }
 
     /// Writes simple type content between `name` tags
-    pub(super) fn write_wrapped<S>(mut self, name: XmlName, serialize: S) -> Result<(), SeError>
+    pub(super) fn write_wrapped<S>(
+        mut self,
+        name: XmlName,
+        serialize: S,
+    ) -> Result<WriteResult, SeError>
     where
         S: for<'a> FnOnce(SimpleTypeSerializer<'i, &'a mut W>) -> Result<&'a mut W, SeError>,
     {
@@ -138,7 +144,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         writer.write_str("</")?;
         writer.write_str(name.0)?;
         writer.write_char('>')?;
-        Ok(())
+        Ok(WriteResult::Element)
     }
 
     pub(super) fn write_indent(&mut self) -> Result<(), SeError> {
@@ -151,12 +157,12 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
 }
 
 impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
-    type SerializeSeq = Self;
-    type SerializeTuple = Self;
-    type SerializeTupleStruct = Self;
+    type SerializeSeq = Seq<'w, 'i, W>;
+    type SerializeTuple = Seq<'w, 'i, W>;
+    type SerializeTupleStruct = Seq<'w, 'i, W>;
     type SerializeTupleVariant = Tuple<'w, 'i, W>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
@@ -182,21 +188,29 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     write_primitive!(serialize_f32(f32));
     write_primitive!(serialize_f64(f64));
 
-    write_primitive!(serialize_char(char));
     write_primitive!(serialize_bytes(&[u8]));
+
+    #[inline]
+    fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
+        self.into_simple_type_serializer().serialize_char(value)?;
+        Ok(WriteResult::SensitiveText)
+    }
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
             self.into_simple_type_serializer().serialize_str(value)?;
         }
-        Ok(())
+        Ok(WriteResult::SensitiveText)
     }
 
     /// Does not write anything
     #[inline]
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        // Classify `None` as sensitive to whitespaces, because this can be `Option<String>`.
+        // Unfortunately, we do not known what the type the option contains, so have no chance
+        // to adapt our behavior to it. The safe variant is assume sensitiviness
+        Ok(WriteResult::SensitiveNothing)
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
@@ -206,13 +220,13 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     /// Does not write anything
     #[inline]
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        Ok(WriteResult::Nothing)
     }
 
     /// Does not write anything
     #[inline]
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        Ok(WriteResult::Nothing)
     }
 
     /// If `variant` is a special `$text` variant, then do nothing, otherwise
@@ -224,7 +238,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
-            Ok(())
+            Ok(WriteResult::Nothing)
         } else {
             let name = XmlName::try_from(variant)?;
             self.write_empty(name)
@@ -251,18 +265,24 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
             value.serialize(self.into_simple_type_serializer())?;
-            Ok(())
+            Ok(WriteResult::SensitiveText)
         } else {
             value.serialize(ElementSerializer {
                 key: XmlName::try_from(variant)?,
                 ser: self,
-            })
+            })?;
+            Ok(WriteResult::Element)
         }
     }
 
     #[inline]
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        Ok(self)
+        Ok(Seq {
+            ser: self,
+            // If sequence if empty, nothing will be serialized. Because sequence can be of `Option`s
+            // we need to assume that writing indent may change the data and do not write anything
+            last: WriteResult::SensitiveNothing,
+        })
     }
 
     #[inline]
@@ -357,28 +377,38 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
     }
 }
 
-impl<'w, 'i, W: Write> SerializeSeq for ContentSerializer<'w, 'i, W> {
-    type Ok = ();
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Helper struct which remembers the classification of the last serialized element
+/// and reports it when the sequence ends
+pub struct Seq<'w, 'k, W: Write> {
+    ser: ContentSerializer<'w, 'k, W>,
+    /// Classification of the result of the last serialized element.
+    last: WriteResult,
+}
+
+impl<'w, 'i, W: Write> SerializeSeq for Seq<'w, 'i, W> {
+    type Ok = WriteResult;
     type Error = SeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
     where
         T: ?Sized + Serialize,
     {
-        value.serialize(self.new_seq_element_serializer())?;
+        self.last = value.serialize(self.ser.new_seq_element_serializer())?;
         // Write indent for next element
-        self.write_indent = true;
+        self.ser.write_indent = true;
         Ok(())
     }
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        Ok(self.last)
     }
 }
 
-impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
-    type Ok = ();
+impl<'w, 'i, W: Write> SerializeTuple for Seq<'w, 'i, W> {
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -395,8 +425,8 @@ impl<'w, 'i, W: Write> SerializeTuple for ContentSerializer<'w, 'i, W> {
     }
 }
 
-impl<'w, 'i, W: Write> SerializeTupleStruct for ContentSerializer<'w, 'i, W> {
-    type Ok = ();
+impl<'w, 'i, W: Write> SerializeTupleStruct for Seq<'w, 'i, W> {
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -422,6 +452,7 @@ pub(super) mod tests {
     use crate::utils::Bytes;
     use serde::Serialize;
     use std::collections::BTreeMap;
+    use WriteResult::*;
 
     #[derive(Debug, Serialize, PartialEq)]
     pub struct Unit;
@@ -539,6 +570,9 @@ pub(super) mod tests {
         /// Checks that given `$data` successfully serialized as `$expected`
         macro_rules! serialize_as {
             ($name:ident: $data:expr => $expected:expr) => {
+                serialize_as!($name: $data => $expected, WriteResult::Element);
+            };
+            ($name:ident: $data:expr => $expected:expr, $result:expr) => {
                 #[test]
                 fn $name() {
                     let mut buffer = String::new();
@@ -550,8 +584,9 @@ pub(super) mod tests {
                         expand_empty_elements: false,
                     };
 
-                    $data.serialize(ser).unwrap();
+                    let result = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(result, $result);
                 }
             };
         }
@@ -587,51 +622,51 @@ pub(super) mod tests {
         }
 
         // Primitives is serialized in the same way as for SimpleTypeSerializer
-        serialize_as!(false_: false => "false");
-        serialize_as!(true_:  true  => "true");
+        serialize_as!(false_: false => "false", Text);
+        serialize_as!(true_:  true  => "true", Text);
 
-        serialize_as!(i8_:    -42i8                => "-42");
-        serialize_as!(i16_:   -4200i16             => "-4200");
-        serialize_as!(i32_:   -42000000i32         => "-42000000");
-        serialize_as!(i64_:   -42000000000000i64   => "-42000000000000");
-        serialize_as!(isize_: -42000000000000isize => "-42000000000000");
+        serialize_as!(i8_:    -42i8                => "-42", Text);
+        serialize_as!(i16_:   -4200i16             => "-4200", Text);
+        serialize_as!(i32_:   -42000000i32         => "-42000000", Text);
+        serialize_as!(i64_:   -42000000000000i64   => "-42000000000000", Text);
+        serialize_as!(isize_: -42000000000000isize => "-42000000000000", Text);
 
-        serialize_as!(u8_:    42u8                => "42");
-        serialize_as!(u16_:   4200u16             => "4200");
-        serialize_as!(u32_:   42000000u32         => "42000000");
-        serialize_as!(u64_:   42000000000000u64   => "42000000000000");
-        serialize_as!(usize_: 42000000000000usize => "42000000000000");
+        serialize_as!(u8_:    42u8                => "42", Text);
+        serialize_as!(u16_:   4200u16             => "4200", Text);
+        serialize_as!(u32_:   42000000u32         => "42000000", Text);
+        serialize_as!(u64_:   42000000000000u64   => "42000000000000", Text);
+        serialize_as!(usize_: 42000000000000usize => "42000000000000", Text);
 
         serde_if_integer128! {
-            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
-            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000", Text);
+            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000", Text);
         }
 
-        serialize_as!(f32_: 4.2f32 => "4.2");
-        serialize_as!(f64_: 4.2f64 => "4.2");
+        serialize_as!(f32_: 4.2f32 => "4.2", Text);
+        serialize_as!(f64_: 4.2f64 => "4.2", Text);
 
-        serialize_as!(char_non_escaped: 'h' => "h");
-        serialize_as!(char_lt:   '<' => "&lt;");
-        serialize_as!(char_gt:   '>' => "&gt;");
-        serialize_as!(char_amp:  '&' => "&amp;");
-        serialize_as!(char_apos: '\'' => "&apos;");
-        serialize_as!(char_quot: '"' => "&quot;");
+        serialize_as!(char_non_escaped: 'h' => "h", SensitiveText);
+        serialize_as!(char_lt:   '<' => "&lt;", SensitiveText);
+        serialize_as!(char_gt:   '>' => "&gt;", SensitiveText);
+        serialize_as!(char_amp:  '&' => "&amp;", SensitiveText);
+        serialize_as!(char_apos: '\'' => "&apos;", SensitiveText);
+        serialize_as!(char_quot: '"' => "&quot;", SensitiveText);
         //TODO: add a setting to escape leading/trailing spaces, in order to
         // pretty-print does not change the content
-        serialize_as!(char_space: ' ' => " ");
+        serialize_as!(char_space: ' ' => " ", SensitiveText);
 
-        serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
-        serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+        serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string", SensitiveText);
+        serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;", SensitiveText);
 
         err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
-        serialize_as!(option_none: Option::<Enum>::None => "");
-        serialize_as!(option_some: Some("non-escaped string") => "non-escaped string");
-        serialize_as!(option_some_empty_str: Some("") => "");
+        serialize_as!(option_none: Option::<Enum>::None => "", SensitiveNothing);
+        serialize_as!(option_some: Some("non-escaped string") => "non-escaped string", SensitiveText);
+        serialize_as!(option_some_empty_str: Some("") => "", SensitiveText);
 
-        serialize_as!(unit: () => "");
-        serialize_as!(unit_struct: Unit => "");
-        serialize_as!(unit_struct_escaped: UnitEscaped => "");
+        serialize_as!(unit: () => "", Nothing);
+        serialize_as!(unit_struct: Unit => "", Nothing);
+        serialize_as!(unit_struct_escaped: UnitEscaped => "", Nothing);
 
         // Unlike SimpleTypeSerializer, enumeration values serialized as tags
         serialize_as!(enum_unit: Enum::Unit => "<Unit/>");
@@ -639,19 +674,19 @@ pub(super) mod tests {
             => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
 
         // Newtypes recursively applies ContentSerializer
-        serialize_as!(newtype: Newtype(42) => "42");
+        serialize_as!(newtype: Newtype(42) => "42", Text);
         serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
         // Note that sequences of primitives serialized without delimiters!
-        serialize_as!(seq: vec![1, 2, 3] => "123");
-        serialize_as!(seq_empty: Vec::<usize>::new() => "");
+        serialize_as!(seq: vec![1, 2, 3] => "123", Text);
+        serialize_as!(seq_empty: Vec::<usize>::new() => "", SensitiveNothing);
         serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
             => "&lt;&quot;&amp;&apos;&gt;\
                 with\t\r\n spaces\
-                3");
+                3", Text);
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "first\
-                42");
+                42", Text);
         serialize_as!(enum_tuple: Enum::Tuple("first", 42)
             => "<Tuple>first</Tuple>\
                 <Tuple>42</Tuple>");
@@ -979,6 +1014,9 @@ pub(super) mod tests {
         /// Checks that given `$data` successfully serialized as `$expected`
         macro_rules! serialize_as {
             ($name:ident: $data:expr => $expected:expr) => {
+                serialize_as!($name: $data => $expected, WriteResult::Element);
+            };
+            ($name:ident: $data:expr => $expected:expr, $result:expr) => {
                 #[test]
                 fn $name() {
                     let mut buffer = String::new();
@@ -990,8 +1028,9 @@ pub(super) mod tests {
                         expand_empty_elements: false,
                     };
 
-                    $data.serialize(ser).unwrap();
+                    let result = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(result, $result);
                 }
             };
         }
@@ -1026,50 +1065,50 @@ pub(super) mod tests {
             };
         }
 
-        serialize_as!(false_: false => "false");
-        serialize_as!(true_:  true  => "true");
+        serialize_as!(false_: false => "false", Text);
+        serialize_as!(true_:  true  => "true", Text);
 
-        serialize_as!(i8_:    -42i8                => "-42");
-        serialize_as!(i16_:   -4200i16             => "-4200");
-        serialize_as!(i32_:   -42000000i32         => "-42000000");
-        serialize_as!(i64_:   -42000000000000i64   => "-42000000000000");
-        serialize_as!(isize_: -42000000000000isize => "-42000000000000");
+        serialize_as!(i8_:    -42i8                => "-42", Text);
+        serialize_as!(i16_:   -4200i16             => "-4200", Text);
+        serialize_as!(i32_:   -42000000i32         => "-42000000", Text);
+        serialize_as!(i64_:   -42000000000000i64   => "-42000000000000", Text);
+        serialize_as!(isize_: -42000000000000isize => "-42000000000000", Text);
 
-        serialize_as!(u8_:    42u8                => "42");
-        serialize_as!(u16_:   4200u16             => "4200");
-        serialize_as!(u32_:   42000000u32         => "42000000");
-        serialize_as!(u64_:   42000000000000u64   => "42000000000000");
-        serialize_as!(usize_: 42000000000000usize => "42000000000000");
+        serialize_as!(u8_:    42u8                => "42", Text);
+        serialize_as!(u16_:   4200u16             => "4200", Text);
+        serialize_as!(u32_:   42000000u32         => "42000000", Text);
+        serialize_as!(u64_:   42000000000000u64   => "42000000000000", Text);
+        serialize_as!(usize_: 42000000000000usize => "42000000000000", Text);
 
         serde_if_integer128! {
-            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000");
-            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000");
+            serialize_as!(i128_: -420000000000000000000000000000i128 => "-420000000000000000000000000000", Text);
+            serialize_as!(u128_:  420000000000000000000000000000u128 => "420000000000000000000000000000", Text);
         }
 
-        serialize_as!(f32_: 4.2f32 => "4.2");
-        serialize_as!(f64_: 4.2f64 => "4.2");
+        serialize_as!(f32_: 4.2f32 => "4.2", Text);
+        serialize_as!(f64_: 4.2f64 => "4.2", Text);
 
-        serialize_as!(char_non_escaped: 'h' => "h");
-        serialize_as!(char_lt:   '<' => "&lt;");
-        serialize_as!(char_gt:   '>' => "&gt;");
-        serialize_as!(char_amp:  '&' => "&amp;");
-        serialize_as!(char_apos: '\'' => "&apos;");
-        serialize_as!(char_quot: '"' => "&quot;");
+        serialize_as!(char_non_escaped: 'h' => "h", SensitiveText);
+        serialize_as!(char_lt:   '<' => "&lt;", SensitiveText);
+        serialize_as!(char_gt:   '>' => "&gt;", SensitiveText);
+        serialize_as!(char_amp:  '&' => "&amp;", SensitiveText);
+        serialize_as!(char_apos: '\'' => "&apos;", SensitiveText);
+        serialize_as!(char_quot: '"' => "&quot;", SensitiveText);
         //TODO: add a setting to escape leading/trailing spaces, in order to
         // pretty-print does not change the content
-        serialize_as!(char_space: ' ' => " ");
+        serialize_as!(char_space: ' ' => " ", SensitiveText);
 
-        serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string");
-        serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;");
+        serialize_as!(str_non_escaped: "non-escaped string" => "non-escaped string", SensitiveText);
+        serialize_as!(str_escaped: "<\"escaped & string'>" => "&lt;&quot;escaped &amp; string&apos;&gt;", SensitiveText);
 
         err!(bytes: Bytes(b"<\"escaped & bytes'>") => Unsupported("`serialize_bytes` not supported yet"));
 
-        serialize_as!(option_none: Option::<Enum>::None => "");
+        serialize_as!(option_none: Option::<Enum>::None => "", SensitiveNothing);
         serialize_as!(option_some: Some(Enum::Unit) => "<Unit/>");
 
-        serialize_as!(unit: () => "");
-        serialize_as!(unit_struct: Unit => "");
-        serialize_as!(unit_struct_escaped: UnitEscaped => "");
+        serialize_as!(unit: () => "", Nothing);
+        serialize_as!(unit_struct: Unit => "", Nothing);
+        serialize_as!(unit_struct_escaped: UnitEscaped => "", Nothing);
 
         // Unlike SimpleTypeSerializer, enumeration values serialized as tags
         serialize_as!(enum_unit: Enum::Unit => "<Unit/>");
@@ -1077,22 +1116,22 @@ pub(super) mod tests {
             => Unsupported("character `<` is not allowed at the start of an XML name `<\"&'>`"));
 
         // Newtypes recursively applies ContentSerializer
-        serialize_as!(newtype: Newtype(42) => "42");
+        serialize_as!(newtype: Newtype(42) => "42", Text);
         serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
         // Note that sequences of primitives serialized without delimiters other that indent!
         serialize_as!(seq: vec![1, 2, 3]
             => "1\n\
                 2\n\
-                3");
-        serialize_as!(seq_empty: Vec::<usize>::new() => "");
+                3", Text);
+        serialize_as!(seq_empty: Vec::<usize>::new() => "", SensitiveNothing);
         serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
             => "&lt;&quot;&amp;&apos;&gt;\n\
                 with\t\r\n spaces\n\
-                3");
+                3", Text);
         serialize_as!(tuple_struct: Tuple("first", 42)
             => "first\n\
-                42");
+                42", Text);
         serialize_as!(enum_tuple: Enum::Tuple("first", 42)
             => "<Tuple>first</Tuple>\n\
                 <Tuple>42</Tuple>");

@@ -5,7 +5,7 @@ use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
-use crate::se::{Indent, SeError, XmlName};
+use crate::se::{Indent, SeError, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
@@ -27,6 +27,8 @@ macro_rules! write_primitive {
 /// A serializer used to serialize element with specified name. Unlike the [`ContentSerializer`],
 /// this serializer never uses variant names of enum variants, and because of that
 /// it is unable to serialize any enum values, except unit variants.
+///
+/// Returns the classification of the last written type.
 ///
 /// This serializer is used for an ordinary fields in structs, which are not special
 /// fields named `$text` ([`TEXT_KEY`]) or `$value` ([`VALUE_KEY`]). `$text` field
@@ -63,7 +65,7 @@ pub struct ElementSerializer<'w, 'k, W: Write> {
 }
 
 impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     type SerializeSeq = Self;
@@ -263,7 +265,7 @@ impl<'w, 'k, W: Write> Serializer for ElementSerializer<'w, 'k, W> {
 }
 
 impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -281,12 +283,12 @@ impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
 
     #[inline]
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        Ok(WriteResult::Element)
     }
 }
 
 impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -304,7 +306,7 @@ impl<'w, 'k, W: Write> SerializeTuple for ElementSerializer<'w, 'k, W> {
 }
 
 impl<'w, 'k, W: Write> SerializeTupleStruct for ElementSerializer<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -334,7 +336,7 @@ pub enum Tuple<'w, 'k, W: Write> {
 }
 
 impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -352,7 +354,9 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
     fn end(self) -> Result<Self::Ok, Self::Error> {
         match self {
             Self::Element(ser) => SerializeTuple::end(ser),
-            Self::Text(ser) => SerializeTuple::end(ser).map(|_| ()),
+            // Do not write indent after `$text` fields because it may be interpreted as
+            // part of content when deserialize
+            Self::Text(ser) => SerializeTuple::end(ser).map(|_| WriteResult::SensitiveText),
         }
     }
 }
@@ -361,6 +365,8 @@ impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
 
 /// A serializer for struct variants, which serializes the struct contents inside
 /// of wrapping tags (`<${tag}>...</${tag}>`).
+///
+/// Returns the classification of the last written type.
 ///
 /// Serialization of each field depends on it representation:
 /// - attributes written directly to the higher serializer
@@ -452,7 +458,7 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
 }
 
 impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
@@ -483,12 +489,12 @@ impl<'w, 'k, W: Write> SerializeStruct for Struct<'w, 'k, W> {
             self.ser.ser.writer.write_str(self.ser.key.0)?;
             self.ser.ser.writer.write_char('>')?;
         }
-        Ok(())
+        Ok(WriteResult::Element)
     }
 }
 
 impl<'w, 'k, W: Write> SerializeStructVariant for Struct<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     #[inline]
@@ -526,7 +532,7 @@ impl<'w, 'k, W: Write> Map<'w, 'k, W> {
 }
 
 impl<'w, 'k, W: Write> SerializeMap for Map<'w, 'k, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
@@ -623,8 +629,9 @@ mod tests {
                         key: XmlName("root"),
                     };
 
-                    $data.serialize(ser).unwrap();
+                    let result = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(result, WriteResult::Element);
                 }
             };
         }
@@ -1326,8 +1333,9 @@ mod tests {
                         key: XmlName("root"),
                     };
 
-                    $data.serialize(ser).unwrap();
+                    let result = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(result, WriteResult::Element);
                 }
             };
         }
@@ -2059,8 +2067,9 @@ mod tests {
                         key: XmlName("root"),
                     };
 
-                    $data.serialize(ser).unwrap();
+                    let result = $data.serialize(ser).unwrap();
                     assert_eq!(buffer, $expected);
+                    assert_eq!(result, WriteResult::Element);
                 }
             };
         }

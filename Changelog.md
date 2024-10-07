@@ -26,10 +26,12 @@
 - [#811]: Renamed `Error::EscapeError` to `Error::Escape` to match other variants.
 - [#811]: Narrow down error return type from `Error` where only one variant is ever returned:
   attribute related methods on `BytesStart` and `BytesDecl` returns `AttrError`
+- [#820]: Classify output of the `Serializer` by returning an enumeration with kind of written data
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#810]: https://github.com/tafia/quick-xml/pull/810
 [#811]: https://github.com/tafia/quick-xml/pull/811
+[#820]: https://github.com/tafia/quick-xml/pull/820
 
 
 ## 0.36.2 -- 2024-09-20
