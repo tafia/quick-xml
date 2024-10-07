@@ -5,7 +5,7 @@ use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
-use crate::se::{Indent, SeError, WriteResult, XmlName};
+use crate::se::{SeError, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Serializer,
@@ -333,7 +333,7 @@ pub enum Tuple<'w, 'k, W: Write> {
     /// Serialize each tuple field as an element
     Element(ElementSerializer<'w, 'k, W>),
     /// Serialize tuple as an `xs:list`: space-delimited content of fields
-    Text(SimpleSeq<'k, &'w mut W>),
+    Text(SimpleSeq<&'w mut W>),
 }
 
 impl<'w, 'k, W: Write> SerializeTupleVariant for Tuple<'w, 'k, W> {
@@ -416,7 +416,6 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             writer: &mut self.ser.ser.writer,
             target: QuoteTarget::DoubleQAttr,
             level: self.ser.ser.level,
-            indent: Indent::None,
         })?;
         self.ser.ser.writer.write_char('"')?;
 

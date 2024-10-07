@@ -791,7 +791,7 @@ impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
 mod tests {
     use super::*;
     use crate::se::simple_type::{QuoteTarget, SimpleTypeSerializer};
-    use crate::se::{Indent, QuoteLevel};
+    use crate::se::QuoteLevel;
     use crate::utils::{ByteBuf, Bytes};
     use serde::de::IgnoredAny;
     use serde::{Deserialize, Serialize};
@@ -828,7 +828,6 @@ mod tests {
                         writer: String::new(),
                         target: QuoteTarget::Text,
                         level: QuoteLevel::Full,
-                        indent: Indent::None,
                     })
                     .unwrap(),
                     xml
@@ -943,7 +942,7 @@ mod tests {
                             writer: &mut buffer,
                             target: QuoteTarget::Text,
                             level: QuoteLevel::Full,
-                            indent: Some(Indent::None),
+                            write_delimiter: false,
                         })
                         .unwrap();
                     assert_eq!(buffer, $input);

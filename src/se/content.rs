@@ -80,13 +80,12 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
 impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     /// Turns this serializer into serializer of a text content
     #[inline]
-    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<'i, &'w mut W> {
+    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<&'w mut W> {
         //TODO: Customization point: choose between CDATA and Text representation
         SimpleTypeSerializer {
             writer: self.writer,
             target: QuoteTarget::Text,
             level: self.level,
-            indent: Indent::None,
         }
     }
 
@@ -128,7 +127,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         serialize: S,
     ) -> Result<WriteResult, SeError>
     where
-        S: for<'a> FnOnce(SimpleTypeSerializer<'i, &'a mut W>) -> Result<&'a mut W, SeError>,
+        S: for<'a> FnOnce(SimpleTypeSerializer<&'a mut W>) -> Result<&'a mut W, SeError>,
     {
         self.write_indent()?;
         self.writer.write_char('<')?;
