@@ -358,16 +358,16 @@ pub mod serialize {
                 DeError::InvalidXml(e) => write!(f, "{}", e),
                 DeError::InvalidInt(e) => write!(f, "{}", e),
                 DeError::InvalidFloat(e) => write!(f, "{}", e),
-                DeError::InvalidBoolean(v) => write!(f, "Invalid boolean value '{}'", v),
-                DeError::KeyNotRead => write!(f, "Invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
+                DeError::InvalidBoolean(v) => write!(f, "invalid boolean value '{}'", v),
+                DeError::KeyNotRead => write!(f, "invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
-                    f.write_str("Unexpected `Event::Start(")?;
+                    f.write_str("unexpected `Event::Start(")?;
                     write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
-                DeError::UnexpectedEof => write!(f, "Unexpected `Event::Eof`"),
+                DeError::UnexpectedEof => write!(f, "unexpected `Event::Eof`"),
                 #[cfg(feature = "overlapped-lists")]
-                DeError::TooManyEvents(s) => write!(f, "Deserializer buffers {} events, limit exceeded", s),
+                DeError::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
             }
         }
     }
