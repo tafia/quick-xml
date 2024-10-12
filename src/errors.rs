@@ -123,15 +123,14 @@ impl fmt::Display for IllFormedError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::MissingDeclVersion(None) => {
-                write!(f, "an XML declaration does not contain `version` attribute")
+                f.write_str("an XML declaration does not contain `version` attribute")
             }
             Self::MissingDeclVersion(Some(attr)) => {
                 write!(f, "an XML declaration must start with `version` attribute, but in starts with `{}`", attr)
             }
-            Self::MissingDoctypeName => write!(
-                f,
-                "`<!DOCTYPE>` declaration does not contain a name of a document type"
-            ),
+            Self::MissingDoctypeName => {
+                f.write_str("`<!DOCTYPE>` declaration does not contain a name of a document type")
+            }
             Self::MissingEndTag(tag) => write!(
                 f,
                 "start tag not closed: `</{}>` not found before end of input",
@@ -146,7 +145,7 @@ impl fmt::Display for IllFormedError {
                 expected, found,
             ),
             Self::DoubleHyphenInComment => {
-                write!(f, "forbidden string `--` was found in a comment")
+                f.write_str("forbidden string `--` was found in a comment")
             }
         }
     }
@@ -272,7 +271,7 @@ impl fmt::Display for Error {
             Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
             Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
             Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
-            Error::EscapeError(e) => write!(f, "{}", e),
+            Error::EscapeError(e) => e.fmt(f),
             Error::UnknownPrefix(prefix) => {
                 f.write_str("Unknown namespace prefix '")?;
                 write_byte_string(f, prefix)?;
@@ -354,25 +353,25 @@ pub mod serialize {
     impl fmt::Display for DeError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                DeError::Custom(s) => write!(f, "{}", s),
-                DeError::InvalidXml(e) => write!(f, "{}", e),
-                DeError::InvalidInt(e) => write!(f, "{}", e),
-                DeError::InvalidFloat(e) => write!(f, "{}", e),
+                DeError::Custom(s) => f.write_str(s),
+                DeError::InvalidXml(e) => e.fmt(f),
+                DeError::InvalidInt(e) => write!(f, "invalid integral value: {}", e),
+                DeError::InvalidFloat(e) => write!(f, "invalid floating-point value: {}", e),
                 DeError::InvalidBoolean(v) => write!(f, "invalid boolean value '{}'", v),
-                DeError::KeyNotRead => write!(f, "invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
+                DeError::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 DeError::UnexpectedStart(e) => {
                     f.write_str("unexpected `Event::Start(")?;
                     write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
-                DeError::UnexpectedEof => write!(f, "unexpected `Event::Eof`"),
+                DeError::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
                 #[cfg(feature = "overlapped-lists")]
                 DeError::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
             }
         }
     }
 
-    impl ::std::error::Error for DeError {
+    impl std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
                 DeError::InvalidXml(e) => Some(e),
@@ -465,7 +464,7 @@ pub mod serialize {
     impl fmt::Display for SeError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                SeError::Custom(s) => write!(f, "{}", s),
+                SeError::Custom(s) => f.write_str(s),
                 SeError::Io(e) => write!(f, "I/O error: {}", e),
                 SeError::Fmt(e) => write!(f, "formatting error: {}", e),
                 SeError::Unsupported(s) => write!(f, "unsupported value: {}", s),
