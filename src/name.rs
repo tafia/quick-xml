@@ -1040,18 +1040,15 @@ mod namespaces {
             fn rebound_to_incorrect_ns() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(
-                    " xmlns:xml='not_correct_namespace'",
-                    0,
-                )) {
-                    Err(NamespaceError::InvalidXmlPrefixBind(namespace)) => {
-                        assert_eq!(namespace, b"not_correct_namespace");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns:xml='not_correct_namespace'",
+                        0,
+                    )),
+                    Err(NamespaceError::InvalidXmlPrefixBind(
+                        b"not_correct_namespace".to_vec()
+                    )),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
 
@@ -1060,15 +1057,10 @@ mod namespaces {
             fn unbound() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(" xmlns:xml=''", 0)) {
-                    Err(NamespaceError::InvalidXmlPrefixBind(namespace)) => {
-                        assert_eq!(namespace, b"");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(" xmlns:xml=''", 0)),
+                    Err(NamespaceError::InvalidXmlPrefixBind(b"".to_vec())),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
 
@@ -1077,18 +1069,13 @@ mod namespaces {
             fn other_prefix_bound_to_xml_namespace() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(
-                    " xmlns:not_xml='http://www.w3.org/XML/1998/namespace'",
-                    0,
-                )) {
-                    Err(NamespaceError::InvalidPrefixForXml(prefix)) => {
-                        assert_eq!(prefix, b"not_xml");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns:not_xml='http://www.w3.org/XML/1998/namespace'",
+                        0,
+                    )),
+                    Err(NamespaceError::InvalidPrefixForXml(b"not_xml".to_vec())),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
         }
@@ -1122,18 +1109,15 @@ mod namespaces {
             fn rebound_to_correct_ns() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(
-                    " xmlns:xmlns='http://www.w3.org/2000/xmlns/'",
-                    0,
-                )) {
-                    Err(NamespaceError::InvalidXmlnsPrefixBind(namespace)) => {
-                        assert_eq!(namespace, b"http://www.w3.org/2000/xmlns/");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns:xmlns='http://www.w3.org/2000/xmlns/'",
+                        0,
+                    )),
+                    Err(NamespaceError::InvalidXmlnsPrefixBind(
+                        b"http://www.w3.org/2000/xmlns/".to_vec()
+                    )),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
 
@@ -1142,18 +1126,15 @@ mod namespaces {
             fn rebound_to_incorrect_ns() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(
-                    " xmlns:xmlns='not_correct_namespace'",
-                    0,
-                )) {
-                    Err(NamespaceError::InvalidXmlnsPrefixBind(namespace)) => {
-                        assert_eq!(namespace, b"not_correct_namespace");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns:xmlns='not_correct_namespace'",
+                        0,
+                    )),
+                    Err(NamespaceError::InvalidXmlnsPrefixBind(
+                        b"not_correct_namespace".to_vec()
+                    )),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
 
@@ -1162,15 +1143,10 @@ mod namespaces {
             fn unbound() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(" xmlns:xmlns=''", 0)) {
-                    Err(NamespaceError::InvalidXmlnsPrefixBind(namespace)) => {
-                        assert_eq!(namespace, b"");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(" xmlns:xmlns=''", 0)),
+                    Err(NamespaceError::InvalidXmlnsPrefixBind(b"".to_vec())),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
 
@@ -1179,18 +1155,13 @@ mod namespaces {
             fn other_prefix_bound_to_xmlns_namespace() {
                 let mut resolver = NamespaceResolver::default();
                 let s = resolver.buffer.len();
-                match resolver.push(&BytesStart::from_content(
-                    " xmlns:not_xmlns='http://www.w3.org/2000/xmlns/'",
-                    0,
-                )) {
-                    Err(NamespaceError::InvalidPrefixForXmlns(prefix)) => {
-                        assert_eq!(prefix, b"not_xmlns");
-                    }
-                    x => panic!(
-                        "Expected `Err(InvalidPrefixBind {{ .. }})`, but got `{:?}`",
-                        x
-                    ),
-                }
+                assert_eq!(
+                    resolver.push(&BytesStart::from_content(
+                        " xmlns:not_xmlns='http://www.w3.org/2000/xmlns/'",
+                        0,
+                    )),
+                    Err(NamespaceError::InvalidPrefixForXmlns(b"not_xmlns".to_vec())),
+                );
                 assert_eq!(&resolver.buffer[s..], b"");
             }
         }
