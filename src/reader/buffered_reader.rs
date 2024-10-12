@@ -192,7 +192,7 @@ macro_rules! impl_buffered_source {
             }
 
             *position += read;
-            Err(bang_type.to_err())
+            Err(bang_type.to_err().into())
         }
 
         #[inline]

@@ -90,7 +90,10 @@ impl Translation {
                 })
             } else {
                 dbg!("Expected Event::Start for Text, got: {:?}", &event);
-                let name_string = reader.decoder().decode(name.as_ref())?;
+                let name_string = reader
+                    .decoder()
+                    .decode(name.as_ref())
+                    .map_err(quick_xml::Error::Encoding)?;
                 Err(AppError::NoText(name_string.into()))
             }
         } else {

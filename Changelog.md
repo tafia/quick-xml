@@ -22,9 +22,14 @@
 - [#227]: Split `SeError` from `DeError` in the `serialize` feature.
   Serialize functions and methods now return `SeError`.
 - [#810]: Return `std::io::Error` from `Writer` methods.
+- [#811]: Split `NamespaceError` and `EncodingError` from `Error`.
+- [#811]: Renamed `Error::EscapeError` to `Error::Escape` to match other variants.
+- [#811]: Narrow down error return type from `Error` where only one variant is ever returned:
+  attribute related methods on `BytesStart` and `BytesDecl` returns `AttrError`
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#810]: https://github.com/tafia/quick-xml/pull/810
+[#811]: https://github.com/tafia/quick-xml/pull/811
 
 
 ## 0.36.2 -- 2024-09-20
