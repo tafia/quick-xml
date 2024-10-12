@@ -55,15 +55,15 @@ pub enum EscapeError {
 impl std::fmt::Display for EscapeError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            EscapeError::UnrecognizedEntity(rge, res) => {
+            Self::UnrecognizedEntity(rge, res) => {
                 write!(f, "at {:?}: unrecognized entity `{}`", rge, res)
             }
-            EscapeError::UnterminatedEntity(e) => write!(
+            Self::UnterminatedEntity(e) => write!(
                 f,
                 "Error while escaping character at range {:?}: Cannot find ';' after '&'",
                 e
             ),
-            EscapeError::InvalidCharRef(e) => {
+            Self::InvalidCharRef(e) => {
                 write!(f, "invalid character reference: {}", e)
             }
         }

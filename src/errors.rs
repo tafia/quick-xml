@@ -208,7 +208,7 @@ impl From<IoError> for Error {
     /// Creates a new `Error::Io` from the given error
     #[inline]
     fn from(error: IoError) -> Error {
-        Error::Io(Arc::new(error))
+        Self::Io(Arc::new(error))
     }
 }
 
@@ -232,7 +232,7 @@ impl From<Utf8Error> for Error {
     /// Creates a new `Error::NonDecodable` from the given error
     #[inline]
     fn from(error: Utf8Error) -> Error {
-        Error::NonDecodable(Some(error))
+        Self::NonDecodable(Some(error))
     }
 }
 
@@ -248,14 +248,14 @@ impl From<EscapeError> for Error {
     /// Creates a new `Error::EscapeError` from the given error
     #[inline]
     fn from(error: EscapeError) -> Error {
-        Error::EscapeError(error)
+        Self::EscapeError(error)
     }
 }
 
 impl From<AttrError> for Error {
     #[inline]
     fn from(error: AttrError) -> Self {
-        Error::InvalidAttr(error)
+        Self::InvalidAttr(error)
     }
 }
 
@@ -265,19 +265,19 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::Io(e) => write!(f, "I/O error: {}", e),
-            Error::Syntax(e) => write!(f, "syntax error: {}", e),
-            Error::IllFormed(e) => write!(f, "ill-formed document: {}", e),
-            Error::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
-            Error::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
-            Error::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
-            Error::EscapeError(e) => e.fmt(f),
-            Error::UnknownPrefix(prefix) => {
+            Self::Io(e) => write!(f, "I/O error: {}", e),
+            Self::Syntax(e) => write!(f, "syntax error: {}", e),
+            Self::IllFormed(e) => write!(f, "ill-formed document: {}", e),
+            Self::NonDecodable(None) => write!(f, "Malformed input, decoding impossible"),
+            Self::NonDecodable(Some(e)) => write!(f, "Malformed UTF-8 input: {}", e),
+            Self::InvalidAttr(e) => write!(f, "error while parsing attribute: {}", e),
+            Self::EscapeError(e) => e.fmt(f),
+            Self::UnknownPrefix(prefix) => {
                 f.write_str("Unknown namespace prefix '")?;
                 write_byte_string(f, prefix)?;
                 f.write_str("'")
             }
-            Error::InvalidPrefixBind { prefix, namespace } => {
+            Self::InvalidPrefixBind { prefix, namespace } => {
                 f.write_str("The namespace prefix '")?;
                 write_byte_string(f, prefix)?;
                 f.write_str("' cannot be bound to '")?;
@@ -291,12 +291,12 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::Io(e) => Some(e),
-            Error::Syntax(e) => Some(e),
-            Error::IllFormed(e) => Some(e),
-            Error::NonDecodable(Some(e)) => Some(e),
-            Error::InvalidAttr(e) => Some(e),
-            Error::EscapeError(e) => Some(e),
+            Self::Io(e) => Some(e),
+            Self::Syntax(e) => Some(e),
+            Self::IllFormed(e) => Some(e),
+            Self::NonDecodable(Some(e)) => Some(e),
+            Self::InvalidAttr(e) => Some(e),
+            Self::EscapeError(e) => Some(e),
             _ => None,
         }
     }
@@ -353,20 +353,20 @@ pub mod serialize {
     impl fmt::Display for DeError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                DeError::Custom(s) => f.write_str(s),
-                DeError::InvalidXml(e) => e.fmt(f),
-                DeError::InvalidInt(e) => write!(f, "invalid integral value: {}", e),
-                DeError::InvalidFloat(e) => write!(f, "invalid floating-point value: {}", e),
-                DeError::InvalidBoolean(v) => write!(f, "invalid boolean value '{}'", v),
-                DeError::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
-                DeError::UnexpectedStart(e) => {
+                Self::Custom(s) => f.write_str(s),
+                Self::InvalidXml(e) => e.fmt(f),
+                Self::InvalidInt(e) => write!(f, "invalid integral value: {}", e),
+                Self::InvalidFloat(e) => write!(f, "invalid floating-point value: {}", e),
+                Self::InvalidBoolean(v) => write!(f, "invalid boolean value '{}'", v),
+                Self::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
+                Self::UnexpectedStart(e) => {
                     f.write_str("unexpected `Event::Start(")?;
                     write_byte_string(f, e)?;
                     f.write_str(")`")
                 }
-                DeError::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
+                Self::UnexpectedEof => f.write_str("unexpected `Event::Eof`"),
                 #[cfg(feature = "overlapped-lists")]
-                DeError::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
+                Self::TooManyEvents(s) => write!(f, "deserializer buffered {} events, limit exceeded", s),
             }
         }
     }
@@ -374,9 +374,9 @@ pub mod serialize {
     impl std::error::Error for DeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                DeError::InvalidXml(e) => Some(e),
-                DeError::InvalidInt(e) => Some(e),
-                DeError::InvalidFloat(e) => Some(e),
+                Self::InvalidXml(e) => Some(e),
+                Self::InvalidInt(e) => Some(e),
+                Self::InvalidFloat(e) => Some(e),
                 _ => None,
             }
         }
@@ -384,7 +384,7 @@ pub mod serialize {
 
     impl serde::de::Error for DeError {
         fn custom<T: fmt::Display>(msg: T) -> Self {
-            DeError::Custom(msg.to_string())
+            Self::Custom(msg.to_string())
         }
     }
 
@@ -464,11 +464,11 @@ pub mod serialize {
     impl fmt::Display for SeError {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                SeError::Custom(s) => f.write_str(s),
-                SeError::Io(e) => write!(f, "I/O error: {}", e),
-                SeError::Fmt(e) => write!(f, "formatting error: {}", e),
-                SeError::Unsupported(s) => write!(f, "unsupported value: {}", s),
-                SeError::NonEncodable(e) => write!(f, "malformed UTF-8: {}", e),
+                Self::Custom(s) => f.write_str(s),
+                Self::Io(e) => write!(f, "I/O error: {}", e),
+                Self::Fmt(e) => write!(f, "formatting error: {}", e),
+                Self::Unsupported(s) => write!(f, "unsupported value: {}", s),
+                Self::NonEncodable(e) => write!(f, "malformed UTF-8: {}", e),
             }
         }
     }
@@ -476,7 +476,7 @@ pub mod serialize {
     impl ::std::error::Error for SeError {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                SeError::Io(e) => Some(e),
+                Self::Io(e) => Some(e),
                 _ => None,
             }
         }
@@ -484,7 +484,7 @@ pub mod serialize {
 
     impl serde::ser::Error for SeError {
         fn custom<T: fmt::Display>(msg: T) -> Self {
-            SeError::Custom(msg.to_string())
+            Self::Custom(msg.to_string())
         }
     }
 
