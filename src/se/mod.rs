@@ -91,6 +91,8 @@ use std::str::from_utf8;
 
 /// Serialize struct into a `Write`r.
 ///
+/// Returns the classification of the last written type.
+///
 /// # Examples
 ///
 /// ```
@@ -124,7 +126,7 @@ use std::str::from_utf8;
 ///     </Root>"
 /// );
 /// ```
-pub fn to_writer<W, T>(mut writer: W, value: &T) -> Result<(), SeError>
+pub fn to_writer<W, T>(mut writer: W, value: &T) -> Result<WriteResult, SeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -177,6 +179,8 @@ where
 /// Serialize struct into a `Write`r using specified root tag name.
 /// `root_tag` should be valid [XML name], otherwise error is returned.
 ///
+/// Returns the classification of the last written type.
+///
 /// # Examples
 ///
 /// ```
@@ -210,7 +214,11 @@ where
 /// ```
 ///
 /// [XML name]: https://www.w3.org/TR/xml11/#NT-Name
-pub fn to_writer_with_root<W, T>(mut writer: W, root_tag: &str, value: &T) -> Result<(), SeError>
+pub fn to_writer_with_root<W, T>(
+    mut writer: W,
+    root_tag: &str,
+    value: &T,
+) -> Result<WriteResult, SeError>
 where
     W: Write,
     T: ?Sized + Serialize,
@@ -307,6 +315,34 @@ pub enum QuoteLevel {
     /// `<`      | `&lt;`
     /// `&`      | `&amp;`
     Minimal,
+}
+
+/// Classification of the type written by the serializer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WriteResult {
+    /// Text with insignificant spaces was written, for example a number. Adding indent to the
+    /// serialized data does not change meaning of the data.
+    Text,
+    /// The XML tag was written. Adding indent to the serialized data does not change meaning of the data.
+    Element,
+    /// Nothing was written (i. e. serialized type not represented in XML a all). Adding indent to the
+    /// serialized data does not change meaning of the data. This is returned for units, unit structs
+    /// and unit variants.
+    Nothing,
+    /// Text with significant spaces was written, for example a string. Adding indent to the
+    /// serialized data may change meaning of the data.
+    SensitiveText,
+    /// `None` was serialized and nothing was written. `None` does not represented in XML,
+    /// but adding indent after it may change meaning of the data.
+    SensitiveNothing,
+}
+
+impl WriteResult {
+    /// Returns `true` if indent should be written after the object (if configured) and `false` otherwise.
+    #[inline]
+    pub fn allow_indent(&self) -> bool {
+        matches!(self, Self::Element | Self::Nothing)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -444,7 +480,9 @@ impl<'i> Indent<'i> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A Serializer
+/// A Serializer.
+///
+/// Returns the classification of the last written type.
 pub struct Serializer<'w, 'r, W: Write> {
     ser: ContentSerializer<'w, 'r, W>,
     /// Name of the root tag. If not specified, deduced from the structure name
@@ -615,7 +653,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
 }
 
 impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
-    type Ok = ();
+    type Ok = WriteResult;
     type Error = SeError;
 
     type SerializeSeq = ElementSerializer<'w, 'r, W>;
@@ -651,7 +689,11 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     forward!(serialize_bytes(&[u8]));
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        // Do not write indent after `Option` field with `None` value, because
+        // this can be `Option<String>`. Unfortunately, we do not known what the
+        // type the option contains, so have no chance to adapt our behavior to it.
+        // The safe variant is not to write indent
+        Ok(WriteResult::SensitiveNothing)
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Self::Ok, Self::Error> {
@@ -704,7 +746,9 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
             value.serialize(self.ser.into_simple_type_serializer())?;
-            Ok(())
+            // Do not write indent after `$text` variant because it may be interpreted as
+            // part of content when deserialize
+            Ok(WriteResult::SensitiveText)
         } else {
             let ser = ElementSerializer {
                 ser: self.ser,
