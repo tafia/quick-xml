@@ -24,7 +24,7 @@
 //! - [Enum Representations](#enum-representations)
 //!   - [Normal enum variant](#normal-enum-variant)
 //!   - [`$text` enum variant](#text-enum-variant)
-//! - [Difference between `$text` and `$value` special names](#difference-between-text-and-value-special-names)
+//! - [`$text` and `$value` special names](#text-and-value-special-names)
 //!   - [`$text`](#text)
 //!   - [`$value`](#value)
 //!     - [Primitives and sequences of primitives](#primitives-and-sequences-of-primitives)
@@ -1421,8 +1421,8 @@
 //!
 //!
 //!
-//! Difference between `$text` and `$value` special names
-//! =====================================================
+//! `$text` and `$value` special names
+//! ==================================
 //!
 //! quick-xml supports two special names for fields -- `$text` and `$value`.
 //! Although they may seem the same, there is a distinction. Two different
@@ -1554,7 +1554,9 @@
 //! ### Primitives and sequences of primitives
 //!
 //! Sequences serialized to a list of elements. Note, that types that does not
-//! produce their own tag (i. e. primitives) are written as is, without delimiters:
+//! produce their own tag (i. e. primitives) will produce [`SeError::Unsupported`]
+//! if they contains more that one element, because such sequence cannot be
+//! deserialized to the same value:
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
@@ -1568,9 +1570,8 @@
 //! }
 //!
 //! let obj = AnyName { field: vec![1, 2, 3] };
-//! let xml = to_string(&obj).unwrap();
-//! // Note, that types that does not produce their own tag are written as is!
-//! assert_eq!(xml, "<AnyName>123</AnyName>");
+//! // If this object were serialized, it would be represented as "<AnyName>123</AnyName>"
+//! to_string(&obj).unwrap_err();
 //!
 //! let object: AnyName = from_str("<AnyName>123</AnyName>").unwrap();
 //! assert_eq!(object, AnyName { field: vec![123] });
@@ -1822,6 +1823,7 @@
 //! [#497]: https://github.com/tafia/quick-xml/issues/497
 //! [`Serializer::serialize_unit_variant`]: serde::Serializer::serialize_unit_variant
 //! [`Deserializer::deserialize_enum`]: serde::Deserializer::deserialize_enum
+//! [`SeError::Unsupported`]: crate::errors::serialize::SeError::Unsupported
 //! [Tagged enums]: https://serde.rs/enum-representations.html#internally-tagged
 //! [serde#1183]: https://github.com/serde-rs/serde/issues/1183
 //! [serde#1495]: https://github.com/serde-rs/serde/issues/1495

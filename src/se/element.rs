@@ -274,7 +274,7 @@ impl<'w, 'k, W: Write> SerializeSeq for ElementSerializer<'w, 'k, W> {
         T: ?Sized + Serialize,
     {
         value.serialize(ElementSerializer {
-            ser: self.ser.new_seq_element_serializer(),
+            ser: self.ser.new_seq_element_serializer(true),
             key: self.key,
         })?;
         // Write indent for the next element
@@ -443,11 +443,12 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
             indent: self.ser.ser.indent.borrow(),
             // If previous field does not require indent, do not write it
             write_indent: self.write_indent,
+            allow_primitive: true,
             expand_empty_elements: self.ser.ser.expand_empty_elements,
         };
 
         if key == TEXT_KEY {
-            value.serialize(TextSerializer(ser.into_simple_type_serializer()))?;
+            value.serialize(TextSerializer(ser.into_simple_type_serializer()?))?;
             // Text was written so we don't need to indent next field
             self.write_indent = false;
         } else if key == VALUE_KEY {
@@ -634,6 +635,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            allow_primitive: true,
                             expand_empty_elements: false,
                         },
                         key: XmlName("root"),
@@ -659,6 +661,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            allow_primitive: true,
                             expand_empty_elements: false,
                         },
                         key: XmlName("root"),
@@ -1090,13 +1093,16 @@ mod tests {
                 value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
                 // Note that sequences of primitives serialized without delimiters!
-                value!(seq: vec![1, 2, 3] => "123");
+                err!(seq:
+                    BTreeMap::from([("$value", vec![1, 2, 3])])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\n\r spaces\
-                        3");
-                value!(tuple_struct: Tuple("first", 42) => "first42");
+                err!(tuple:
+                    BTreeMap::from([("$value", ("<\"&'>", "with\t\n\r spaces", 3usize))])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+                err!(tuple_struct:
+                    BTreeMap::from([("$value", Tuple("first", 42))])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(enum_tuple: Enum::Tuple("first", 42)
                     => "<Tuple>first</Tuple>\
                         <Tuple>42</Tuple>");
@@ -1202,13 +1208,28 @@ mod tests {
                 value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
                 // Note that sequences of primitives serialized without delimiters!
-                value!(seq: vec![1, 2, 3] => "123");
+                err!(seq:
+                    Value {
+                        before: "answer",
+                        content: vec![1, 2, 3],
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(seq_empty: Vec::<usize>::new() => "");
-                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\n\r spaces\
-                        3");
-                value!(tuple_struct: Tuple("first", 42) => "first42");
+                err!(tuple:
+                    Value {
+                        before: "answer",
+                        content: ("<\"&'>", "with\t\n\r spaces", 3usize),
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+                err!(tuple_struct:
+                    Value {
+                        before: "answer",
+                        content: Tuple("first", 42),
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(enum_tuple: Enum::Tuple("first", 42)
                     => "<Tuple>first</Tuple>\
                         <Tuple>42</Tuple>");
@@ -1331,6 +1352,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            allow_primitive: true,
                             expand_empty_elements: false,
                         },
                         key: XmlName("root"),
@@ -1356,6 +1378,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::Owned(Indentation::new(b' ', 2)),
                             write_indent: false,
+                            allow_primitive: true,
                             expand_empty_elements: false,
                         },
                         key: XmlName("root"),
@@ -1792,13 +1815,16 @@ mod tests {
                 value!(newtype: Newtype(42) => "42");
                 value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n");
 
-                value!(seq: vec![1, 2, 3] => "123");
+                err!(seq:
+                    BTreeMap::from([("$value", vec![1, 2, 3])])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(seq_empty: Vec::<usize>::new());
-                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\n\r spaces\
-                        3");
-                value!(tuple_struct: Tuple("first", 42) => "first42");
+                err!(tuple:
+                    BTreeMap::from([("$value", ("<\"&'>", "with\t\n\r spaces", 3usize))])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+                err!(tuple_struct:
+                    BTreeMap::from([("$value", Tuple("first", 42))])
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(enum_tuple: Enum::Tuple("first", 42)
                     => "\n  \
                         <Tuple>first</Tuple>\n  \
@@ -1906,14 +1932,28 @@ mod tests {
                 value!(newtype: Newtype(42) => "42");
                 value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n  ");
 
-                // Note that sequences of primitives serialized without delimiters!
-                value!(seq: vec![1, 2, 3] => "123");
+                err!(seq:
+                    Value {
+                        before: "answer",
+                        content: vec![1, 2, 3],
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(seq_empty: Vec::<usize>::new() => "");
-                value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                    => "&lt;&quot;&amp;&apos;&gt;\
-                        with\t\n\r spaces\
-                        3");
-                value!(tuple_struct: Tuple("first", 42) => "first42");
+                err!(tuple:
+                    Value {
+                        before: "answer",
+                        content: ("<\"&'>", "with\t\n\r spaces", 3usize),
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+                err!(tuple_struct:
+                    Value {
+                        before: "answer",
+                        content: Tuple("first", 42),
+                        after: "answer",
+                    }
+                    => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
                 value!(enum_tuple: Enum::Tuple("first", 42)
                     => "\n  \
                         <Tuple>first</Tuple>\n  \
@@ -2041,6 +2081,7 @@ mod tests {
                             level: QuoteLevel::Full,
                             indent: Indent::None,
                             write_indent: false,
+                            allow_primitive: true,
                             expand_empty_elements: true,
                         },
                         key: XmlName("root"),
