@@ -343,6 +343,12 @@ impl WriteResult {
     pub fn allow_indent(&self) -> bool {
         matches!(self, Self::Element | Self::Nothing)
     }
+
+    /// Returns `true` if self is `Text` or `SensitiveText`.
+    #[inline]
+    pub fn is_text(&self) -> bool {
+        matches!(self, Self::Text | Self::SensitiveText)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -502,6 +508,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                allow_primitive: true,
                 expand_empty_elements: false,
             },
             root_tag: None,
@@ -567,6 +574,7 @@ impl<'w, 'r, W: Write> Serializer<'w, 'r, W> {
                 level: QuoteLevel::Partial,
                 indent: Indent::None,
                 write_indent: false,
+                allow_primitive: true,
                 expand_empty_elements: false,
             },
             root_tag: root_tag.map(|tag| XmlName::try_from(tag)).transpose()?,
@@ -745,7 +753,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
-            value.serialize(self.ser.into_simple_type_serializer())?;
+            value.serialize(self.ser.into_simple_type_serializer()?)?;
             // Do not write indent after `$text` variant because it may be interpreted as
             // part of content when deserialize
             Ok(WriteResult::SensitiveText)
@@ -783,7 +791,7 @@ impl<'w, 'r, W: Write> ser::Serializer for Serializer<'w, 'r, W> {
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         if variant == TEXT_KEY {
             self.ser
-                .into_simple_type_serializer()
+                .into_simple_type_serializer()?
                 .serialize_tuple_struct(name, len)
                 .map(Tuple::Text)
         } else {

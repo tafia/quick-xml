@@ -30,12 +30,15 @@
 - [#811]: Narrow down error return type from `Error` where only one variant is ever returned:
   attribute related methods on `BytesStart` and `BytesDecl` returns `AttrError`
 - [#820]: Classify output of the `Serializer` by returning an enumeration with kind of written data
+- [#823]: Do not allow serialization of consequent primitives, for example `Vec<usize>` or
+  `Vec<String>` in `$value` fields. They cannot be deserialized back with the same result
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
 [#810]: https://github.com/tafia/quick-xml/pull/810
 [#811]: https://github.com/tafia/quick-xml/pull/811
 [#820]: https://github.com/tafia/quick-xml/pull/820
+[#823]: https://github.com/tafia/quick-xml/pull/823
 
 
 ## 0.36.2 -- 2024-09-20

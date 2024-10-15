@@ -1568,9 +1568,8 @@
 //! }
 //!
 //! let obj = AnyName { field: vec![1, 2, 3] };
-//! let xml = to_string(&obj).unwrap();
-//! // Note, that types that does not produce their own tag are written as is!
-//! assert_eq!(xml, "<AnyName>123</AnyName>");
+//! // If this object were serialized, it would be represented as "<AnyName>123</AnyName>"
+//! to_string(&obj).unwrap_err();
 //!
 //! let object: AnyName = from_str("<AnyName>123</AnyName>").unwrap();
 //! assert_eq!(object, AnyName { field: vec![123] });

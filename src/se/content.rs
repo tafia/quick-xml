@@ -14,7 +14,7 @@ macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         #[inline]
         fn $method(self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.into_simple_type_serializer().$method(value)?;
+            self.into_simple_type_serializer()?.$method(value)?;
             Ok(WriteResult::Text)
         }
     };
@@ -71,16 +71,23 @@ pub struct ContentSerializer<'w, 'i, W: Write> {
     /// If `true`, then current indent will be written before writing the content,
     /// but only if content is not empty. This flag is reset after writing indent.
     pub write_indent: bool,
+    /// If `true`, then primitive types that serializes to a text content without
+    /// surrounding tag will be allowed, otherwise the [`SeError::Unsupported`]
+    /// will be returned.
+    ///
+    /// This method protects from the situation when two consequent values serialized
+    /// as a text that makes it impossible to distinguish between them during
+    /// deserialization. Instead of ambiguous serialization the error is returned.
+    pub allow_primitive: bool,
     // If `true`, then empty elements will be serialized as `<element></element>`
     // instead of `<element/>`.
     pub expand_empty_elements: bool,
-    //TODO: add settings to disallow consequent serialization of primitives
 }
 
 impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     /// Turns this serializer into serializer of a text content
     #[inline]
-    pub fn into_simple_type_serializer(self) -> SimpleTypeSerializer<&'w mut W> {
+    pub fn into_simple_type_serializer_impl(self) -> SimpleTypeSerializer<&'w mut W> {
         //TODO: Customization point: choose between CDATA and Text representation
         SimpleTypeSerializer {
             writer: self.writer,
@@ -89,15 +96,27 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         }
     }
 
+    /// Turns this serializer into serializer of a text content if that is allowed,
+    /// otherwise error is returned
+    #[inline]
+    pub fn into_simple_type_serializer(self) -> Result<SimpleTypeSerializer<&'w mut W>, SeError> {
+        if self.allow_primitive {
+            Ok(self.into_simple_type_serializer_impl())
+        } else {
+            Err(SeError::Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back".into()))
+        }
+    }
+
     /// Creates new serializer that shares state with this serializer and
     /// writes to the same underlying writer
     #[inline]
-    pub fn new_seq_element_serializer(&mut self) -> ContentSerializer<W> {
+    pub fn new_seq_element_serializer(&mut self, allow_primitive: bool) -> ContentSerializer<W> {
         ContentSerializer {
             writer: self.writer,
             level: self.level,
             indent: self.indent.borrow(),
             write_indent: self.write_indent,
+            allow_primitive,
             expand_empty_elements: self.expand_empty_elements,
         }
     }
@@ -134,7 +153,7 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
         self.writer.write_str(name.0)?;
         self.writer.write_char('>')?;
 
-        let writer = serialize(self.into_simple_type_serializer())?;
+        let writer = serialize(self.into_simple_type_serializer_impl())?;
 
         writer.write_str("</")?;
         writer.write_str(name.0)?;
@@ -187,14 +206,14 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
 
     #[inline]
     fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-        self.into_simple_type_serializer().serialize_char(value)?;
+        self.into_simple_type_serializer()?.serialize_char(value)?;
         Ok(WriteResult::SensitiveText)
     }
 
     #[inline]
     fn serialize_str(self, value: &str) -> Result<Self::Ok, Self::Error> {
         if !value.is_empty() {
-            self.into_simple_type_serializer().serialize_str(value)?;
+            self.into_simple_type_serializer()?.serialize_str(value)?;
         }
         Ok(WriteResult::SensitiveText)
     }
@@ -259,7 +278,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
         if variant == TEXT_KEY {
-            value.serialize(self.into_simple_type_serializer())?;
+            value.serialize(self.into_simple_type_serializer()?)?;
             Ok(WriteResult::SensitiveText)
         } else {
             value.serialize(ElementSerializer {
@@ -311,7 +330,7 @@ impl<'w, 'i, W: Write> Serializer for ContentSerializer<'w, 'i, W> {
         len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
         if variant == TEXT_KEY {
-            self.into_simple_type_serializer()
+            self.into_simple_type_serializer()?
                 .serialize_tuple_struct(name, len)
                 .map(Tuple::Text)
         } else {
@@ -390,7 +409,7 @@ impl<'w, 'i, W: Write> SerializeSeq for Seq<'w, 'i, W> {
     where
         T: ?Sized + Serialize,
     {
-        self.last = value.serialize(self.ser.new_seq_element_serializer())?;
+        self.last = value.serialize(self.ser.new_seq_element_serializer(self.last.is_text()))?;
         // Write indent for next element if indents are used
         self.ser.write_indent = self.last.allow_indent();
         Ok(())
@@ -576,6 +595,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        allow_primitive: true,
                         expand_empty_elements: false,
                     };
 
@@ -598,6 +618,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::None,
                         write_indent: false,
+                        allow_primitive: true,
                         expand_empty_elements: false,
                     };
 
@@ -671,15 +692,13 @@ pub(super) mod tests {
         serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
         // Note that sequences of primitives serialized without delimiters!
-        serialize_as!(seq: vec![1, 2, 3] => "123", Text);
+        err!(seq: vec![1, 2, 3]
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
         serialize_as!(seq_empty: Vec::<usize>::new() => "", SensitiveNothing);
-        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
-            => "&lt;&quot;&amp;&apos;&gt;\
-                with\t\r\n spaces\
-                3", Text);
-        serialize_as!(tuple_struct: Tuple("first", 42)
-            => "first\
-                42", Text);
+        err!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+        err!(tuple_struct: Tuple("first", 42)
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
         serialize_as!(enum_tuple: Enum::Tuple("first", 42)
             => "<Tuple>first</Tuple>\
                 <Tuple>42</Tuple>");
@@ -933,13 +952,28 @@ pub(super) mod tests {
             value!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
             // Note that sequences of primitives serialized without delimiters!
-            value!(seq: vec![1, 2, 3] => "123");
+            err!(seq:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: vec![1, 2, 3],
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
             value!(seq_empty: Vec::<usize>::new() => "");
-            value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                => "&lt;&quot;&amp;&apos;&gt;\
-                    with\t\n\r spaces\
-                    3");
-            value!(tuple_struct: Tuple("first", 42) => "first42");
+            err!(tuple:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: ("<\"&'>", "with\t\n\r spaces", 3usize),
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+            err!(tuple_struct:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Tuple("first", 42),
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
             value!(enum_tuple: Enum::Tuple("first", 42)
                 => "<Tuple>first</Tuple>\
                     <Tuple>42</Tuple>");
@@ -1014,6 +1048,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        allow_primitive: true,
                         expand_empty_elements: false,
                     };
 
@@ -1036,6 +1071,7 @@ pub(super) mod tests {
                         level: QuoteLevel::Full,
                         indent: Indent::Owned(Indentation::new(b' ', 2)),
                         write_indent: false,
+                        allow_primitive: true,
                         expand_empty_elements: false,
                     };
 
@@ -1106,14 +1142,13 @@ pub(super) mod tests {
         serialize_as!(newtype: Newtype(42) => "42", Text);
         serialize_as!(enum_newtype: Enum::Newtype(42) => "<Newtype>42</Newtype>");
 
-        // Note that sequences of primitives serialized without delimiters!
-        serialize_as!(seq: vec![1, 2, 3] => "123", Text);
+        err!(seq: vec![1, 2, 3]
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
         serialize_as!(seq_empty: Vec::<usize>::new() => "", SensitiveNothing);
-        serialize_as!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
-            => "&lt;&quot;&amp;&apos;&gt;\
-                with\t\r\n spaces\
-                3", Text);
-        serialize_as!(tuple_struct: Tuple("first", 42) => "first42", Text);
+        err!(tuple: ("<\"&'>", "with\t\r\n spaces", 3usize)
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+        err!(tuple_struct: Tuple("first", 42)
+            => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
         serialize_as!(enum_tuple: Enum::Tuple("first", 42)
             => "<Tuple>first</Tuple>\n\
                 <Tuple>42</Tuple>");
@@ -1365,13 +1400,28 @@ pub(super) mod tests {
             value!(enum_newtype: Enum::Newtype(42) => "\n  <Newtype>42</Newtype>\n  ");
 
             // Note that sequences of primitives serialized without delimiters!
-            value!(seq: vec![1, 2, 3] => "123");
+            err!(seq:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: vec![1, 2, 3],
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
             value!(seq_empty: Vec::<usize>::new() => "");
-            value!(tuple: ("<\"&'>", "with\t\n\r spaces", 3usize)
-                => "&lt;&quot;&amp;&apos;&gt;\
-                    with\t\n\r spaces\
-                    3");
-            value!(tuple_struct: Tuple("first", 42) => "first42");
+            err!(tuple:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: ("<\"&'>", "with\t\n\r spaces", 3usize),
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
+            err!(tuple_struct:
+                SpecialEnum::Value {
+                    before: "answer",
+                    content: Tuple("first", 42),
+                    after: "answer",
+                }
+                => Unsupported("consequent primitives would be serialized without delimiter and cannot be deserialized back"));
             value!(enum_tuple: Enum::Tuple("first", 42)
                 => "\n  \
                     <Tuple>first</Tuple>\n  \
