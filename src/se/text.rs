@@ -23,16 +23,16 @@ macro_rules! write_primitive {
 /// This serializer a very similar to [`SimpleTypeSerializer`], but different
 /// from it in how it processes unit enum variants. Unlike [`SimpleTypeSerializer`]
 /// this serializer does not write anything for the unit variant.
-pub struct TextSerializer<'i, W: Write>(pub SimpleTypeSerializer<'i, W>);
+pub struct TextSerializer<W: Write>(pub SimpleTypeSerializer<W>);
 
-impl<'i, W: Write> Serializer for TextSerializer<'i, W> {
+impl<W: Write> Serializer for TextSerializer<W> {
     type Ok = W;
     type Error = SeError;
 
-    type SerializeSeq = SimpleSeq<'i, W>;
-    type SerializeTuple = SimpleSeq<'i, W>;
-    type SerializeTupleStruct = SimpleSeq<'i, W>;
-    type SerializeTupleVariant = SimpleSeq<'i, W>;
+    type SerializeSeq = SimpleSeq<W>;
+    type SerializeTuple = SimpleSeq<W>;
+    type SerializeTupleStruct = SimpleSeq<W>;
+    type SerializeTupleVariant = SimpleSeq<W>;
     type SerializeMap = Impossible<Self::Ok, Self::Error>;
     type SerializeStruct = Impossible<Self::Ok, Self::Error>;
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;

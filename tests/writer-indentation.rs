@@ -222,9 +222,7 @@ fn serializable() {
             <bat>43</bat>
         </element>
         <list>first element</list>
-        <list>second element</list>
-        text
-        <val>foo</val>
+        <list>second element</list>text<val>foo</val>
     </foo_element>
 </paired>"#
     );
