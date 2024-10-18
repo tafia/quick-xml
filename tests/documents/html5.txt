@@ -5,6 +5,8 @@ StartElement(a, attr-error: position 7: attribute value must be enclosed in `"` 
 Characters(Hey)
 EndElement(a)
 Characters(
- 
+)
+Reference(nbsp)
+Characters(
 )
 EndDocument

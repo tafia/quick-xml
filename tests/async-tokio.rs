@@ -29,18 +29,19 @@ async fn test_sample() {
     loop {
         reads += 1;
         assert!(
-            reads <= 5245,
+            reads <= 10000,
             "too many events, possible infinity loop: {reads}"
         );
-        match reader.read_event_into_async(&mut buf).await.unwrap() {
-            Start(_) => count += 1,
-            Decl(e) => assert_eq!(e.version().unwrap(), b"1.0".as_ref()),
-            Eof => break,
-            _ => (),
+        match reader.read_event_into_async(&mut buf).await {
+            Ok(Start(_)) => count += 1,
+            Ok(Decl(e)) => assert_eq!(e.version().unwrap(), b"1.0".as_ref()),
+            Ok(Eof) => break,
+            Ok(_) => (),
+            Err(e) => panic!("{} at {}", e, reader.error_position()),
         }
         buf.clear();
     }
-    assert_eq!((count, reads), (1247, 5245));
+    assert_eq!((count, reads), (1247, 5457));
 }
 
 /// This tests checks that read_to_end() correctly returns span even when
