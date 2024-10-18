@@ -4,7 +4,7 @@
 
 use pretty_assertions::assert_eq;
 use quick_xml::de::{from_reader, from_str};
-use quick_xml::se::{to_string, to_string_with_root};
+use quick_xml::se::{to_string, to_string_with_root, Serializer};
 use serde::de::{Deserializer, IgnoredAny};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -472,6 +472,53 @@ fn issue580() {
         Seq {
             items: vec![Wrapper(Item), Wrapper(Item)],
         }
+    );
+}
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/655
+#[test]
+fn issue655() {
+    #[derive(Deserialize, Serialize, Debug)]
+    pub struct TextureCoordinates {
+        #[serde(rename = "@dimension")]
+        pub dimension: String,
+        #[serde(rename = "@channel")]
+        pub channel: String,
+        #[serde(rename = "$value")]
+        pub elements: String,
+    }
+    #[derive(Deserialize, Serialize, Debug)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct VertexBuffer {
+        pub positions: String,
+        pub normals: String,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        pub texture_coordinates: Option<TextureCoordinates>,
+    }
+
+    let mut buffer = String::new();
+    let mut ser = Serializer::with_root(&mut buffer, None).unwrap();
+    ser.indent(' ', 2);
+    ser.expand_empty_elements(true);
+
+    let obj = VertexBuffer {
+        positions: "319.066 -881.28705 7.71589".into(),
+        normals: "-0.0195154 -0.21420999 0.976593".into(),
+        texture_coordinates: Some(TextureCoordinates {
+            dimension: "2D".into(),
+            channel: "0".into(),
+            elements: "752494 0.201033,0.773967 0.201033".into(),
+        }),
+    };
+    obj.serialize(ser).unwrap();
+    assert_eq!(
+        buffer,
+        "\
+<VertexBuffer>
+  <Positions>319.066 -881.28705 7.71589</Positions>
+  <Normals>-0.0195154 -0.21420999 0.976593</Normals>
+  <TextureCoordinates dimension=\"2D\" channel=\"0\">752494 0.201033,0.773967 0.201033</TextureCoordinates>
+</VertexBuffer>"
     );
 }
 

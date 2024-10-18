@@ -1380,9 +1380,7 @@ mod without_root {
                 float: 42.0,
                 string: "answer"
             }
-            => "<Text>\n  \
-                    42\n  \
-                    <string>answer</string>\n\
+            => "<Text>42<string>answer</string>\n\
                 </Text>");
 
         mod enum_ {
@@ -1439,9 +1437,7 @@ mod without_root {
                         float: 42.0,
                         string: "answer"
                     }
-                    => "<Text>\n  \
-                            42\n  \
-                            <string>answer</string>\n\
+                    => "<Text>42<string>answer</string>\n\
                         </Text>");
 
                 /// Test serialization of the specially named variant `$text`
@@ -1544,9 +1540,7 @@ mod without_root {
                         string: "answer"
                     }
                     => "<InternallyTagged>\n  \
-                            <tag>Text</tag>\n  \
-                            42\n  \
-                            <string>answer</string>\n\
+                            <tag>Text</tag>42<string>answer</string>\n\
                         </InternallyTagged>");
             }
 
@@ -1624,9 +1618,7 @@ mod without_root {
                     }
                     => "<AdjacentlyTagged>\n  \
                             <tag>Text</tag>\n  \
-                            <content>\n    \
-                                42\n    \
-                                <string>answer</string>\n  \
+                            <content>42<string>answer</string>\n  \
                             </content>\n\
                         </AdjacentlyTagged>");
             }
@@ -1676,9 +1668,7 @@ mod without_root {
                         float: 42.0,
                         string: "answer"
                     }
-                    => "<Untagged>\n  \
-                            42\n  \
-                            <string>answer</string>\n\
+                    => "<Untagged>42<string>answer</string>\n\
                         </Untagged>");
             }
         }
