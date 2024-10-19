@@ -2067,6 +2067,22 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
+impl<'a> From<String> for Text<'a> {
+    #[inline]
+    fn from(text: String) -> Self {
+        Self {
+            text: Cow::Owned(text),
+        }
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for Text<'a> {
+    #[inline]
+    fn from(text: Cow<'a, str>) -> Self {
+        Self { text }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Simplified event which contains only these variants that used by deserializer

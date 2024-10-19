@@ -15,6 +15,8 @@
 
 ### New Features
 
+- [#826]: Implement `From<String>` and `From<Cow<str>>` for `quick_xml::de::Text`.
+
 ### Bug Fixes
 
 - [#655]: Do not write indent before and after `$text` fields and those `$value` fields
