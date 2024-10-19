@@ -2000,6 +2000,7 @@ mod var;
 
 pub use crate::errors::serialize::DeError;
 pub use resolver::{EntityResolver, PredefinedEntityResolver};
+pub use simple_type::SimpleTypeDeserializer;
 
 use crate::{
     de::map::ElementMapAccess,
