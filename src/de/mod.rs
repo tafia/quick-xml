@@ -2309,32 +2309,6 @@ where
     }
 }
 
-fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
-where
-    V: Visitor<'de>,
-{
-    #[cfg(feature = "encoding")]
-    {
-        let value = decoder.decode(value)?;
-        // No need to unescape because valid boolean representations cannot be escaped
-        str2bool(value.as_ref(), visitor)
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    {
-        // No need to unescape because valid boolean representations cannot be escaped
-        match value {
-            b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                visitor.visit_bool(true)
-            }
-            b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                visitor.visit_bool(false)
-            }
-            e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
-        }
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// A structure that deserializes XML into Rust values.

@@ -3,7 +3,7 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::{deserialize_bool, str2bool, Text};
+use crate::de::{str2bool, Text};
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
@@ -16,7 +16,8 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 macro_rules! deserialize_num {
-    ($method:ident, $visit:ident) => {
+    ($method:ident => $visit:ident) => {
+        #[inline]
         fn $method<V>(self, visitor: V) -> Result<V::Value, Self::Error>
         where
             V: Visitor<'de>,
@@ -24,13 +25,19 @@ macro_rules! deserialize_num {
             visitor.$visit(self.content.as_str().parse()?)
         }
     };
-    ($method:ident => $visit:ident) => {
+}
+
+macro_rules! deserialize_primitive {
+    ($method:ident) => {
         fn $method<V>(self, visitor: V) -> Result<V::Value, Self::Error>
         where
             V: Visitor<'de>,
         {
-            let string = self.decode()?;
-            visitor.$visit(string.as_str().parse()?)
+            let de = AtomicDeserializer {
+                content: self.decode()?,
+                escaped: self.escaped,
+            };
+            de.$method(visitor)
         }
     };
 }
@@ -86,28 +93,7 @@ impl<'de, 'a> Content<'de, 'a> {
     }
 
     /// Supply to the visitor a borrowed string, a string slice, or an owned
-    /// string depending on the kind of input. Unlike [`Self::deserialize_item`],
-    /// the whole [`Self::Owned`] string will be passed to the visitor.
-    ///
-    /// Calls
-    /// - `visitor.visit_borrowed_str` if data borrowed from the input
-    /// - `visitor.visit_str` if data borrowed from another source
-    /// - `visitor.visit_string` if data owned by this type
-    #[inline]
-    fn deserialize_all<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        match self {
-            Content::Input(s) => visitor.visit_borrowed_str(s),
-            Content::Slice(s) => visitor.visit_str(s),
-            Content::Owned(s, _) => visitor.visit_string(s),
-        }
-    }
-
-    /// Supply to the visitor a borrowed string, a string slice, or an owned
-    /// string depending on the kind of input. Unlike [`Self::deserialize_all`],
-    /// only part of [`Self::Owned`] string will be passed to the visitor.
+    /// string depending on the kind of input.
     ///
     /// Calls
     /// - `visitor.visit_borrowed_str` if data borrowed from the input
@@ -177,23 +163,23 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         str2bool(self.content.as_str(), visitor)
     }
 
-    deserialize_num!(deserialize_i8, visit_i8);
-    deserialize_num!(deserialize_i16, visit_i16);
-    deserialize_num!(deserialize_i32, visit_i32);
-    deserialize_num!(deserialize_i64, visit_i64);
+    deserialize_num!(deserialize_i8  => visit_i8);
+    deserialize_num!(deserialize_i16 => visit_i16);
+    deserialize_num!(deserialize_i32 => visit_i32);
+    deserialize_num!(deserialize_i64 => visit_i64);
 
-    deserialize_num!(deserialize_u8, visit_u8);
-    deserialize_num!(deserialize_u16, visit_u16);
-    deserialize_num!(deserialize_u32, visit_u32);
-    deserialize_num!(deserialize_u64, visit_u64);
+    deserialize_num!(deserialize_u8  => visit_u8);
+    deserialize_num!(deserialize_u16 => visit_u16);
+    deserialize_num!(deserialize_u32 => visit_u32);
+    deserialize_num!(deserialize_u64 => visit_u64);
 
     serde_if_integer128! {
-        deserialize_num!(deserialize_i128, visit_i128);
-        deserialize_num!(deserialize_u128, visit_u128);
+        deserialize_num!(deserialize_i128 => visit_i128);
+        deserialize_num!(deserialize_u128 => visit_u128);
     }
 
-    deserialize_num!(deserialize_f32, visit_f32);
-    deserialize_num!(deserialize_f64, visit_f64);
+    deserialize_num!(deserialize_f32 => visit_f32);
+    deserialize_num!(deserialize_f64 => visit_f64);
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -586,30 +572,27 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        deserialize_bool(&self.content, self.decoder, visitor)
-    }
+    deserialize_primitive!(deserialize_bool);
 
-    deserialize_num!(deserialize_i8  => visit_i8);
-    deserialize_num!(deserialize_i16 => visit_i16);
-    deserialize_num!(deserialize_i32 => visit_i32);
-    deserialize_num!(deserialize_i64 => visit_i64);
+    deserialize_primitive!(deserialize_i8);
+    deserialize_primitive!(deserialize_i16);
+    deserialize_primitive!(deserialize_i32);
+    deserialize_primitive!(deserialize_i64);
 
-    deserialize_num!(deserialize_u8  => visit_u8);
-    deserialize_num!(deserialize_u16 => visit_u16);
-    deserialize_num!(deserialize_u32 => visit_u32);
-    deserialize_num!(deserialize_u64 => visit_u64);
+    deserialize_primitive!(deserialize_u8);
+    deserialize_primitive!(deserialize_u16);
+    deserialize_primitive!(deserialize_u32);
+    deserialize_primitive!(deserialize_u64);
 
     serde_if_integer128! {
-        deserialize_num!(deserialize_i128 => visit_i128);
-        deserialize_num!(deserialize_u128 => visit_u128);
+        deserialize_primitive!(deserialize_i128);
+        deserialize_primitive!(deserialize_u128);
     }
 
-    deserialize_num!(deserialize_f32 => visit_f32);
-    deserialize_num!(deserialize_f64 => visit_f64);
+    deserialize_primitive!(deserialize_f32);
+    deserialize_primitive!(deserialize_f64);
+
+    deserialize_primitive!(deserialize_str);
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
     #[inline]
@@ -618,21 +601,6 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         self.deserialize_str(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        let content = self.decode()?;
-        if self.escaped {
-            match unescape(content.as_str())? {
-                Cow::Borrowed(_) => content.deserialize_all(visitor),
-                Cow::Owned(s) => visitor.visit_string(s),
-            }
-        } else {
-            content.deserialize_all(visitor)
-        }
     }
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
