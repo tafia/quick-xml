@@ -2287,7 +2287,7 @@ where
 }
 
 /// Deserialize from a reader. This method will do internal copies of data
-/// readed from `reader`. If you want have a `&str` input and want to borrow
+/// read from `reader`. If you want have a `&str` input and want to borrow
 /// as much as possible, use [`from_str`].
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
@@ -2298,19 +2298,13 @@ where
     T::deserialize(&mut de)
 }
 
-// TODO: According to the https://www.w3.org/TR/xmlschema11-2/#boolean,
-// valid boolean representations are only "true", "false", "1", and "0"
 fn str2bool<'de, V>(value: &str, visitor: V) -> Result<V::Value, DeError>
 where
     V: de::Visitor<'de>,
 {
     match value {
-        "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-            visitor.visit_bool(true)
-        }
-        "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-            visitor.visit_bool(false)
-        }
+        "true" | "1" => visitor.visit_bool(true),
+        "false" | "0" => visitor.visit_bool(false),
         _ => Err(DeError::InvalidBoolean(value.into())),
     }
 }

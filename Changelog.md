@@ -19,6 +19,13 @@
 
 - [#655]: Do not write indent before and after `$text` fields and those `$value` fields
   that are serialized as a text (for example, `usize` or `String`).
+- [#826]: Handle only those boolean representations that are allowed by [Xml Schema]
+  which is only `"true"`, `"1"`, `"false"`, and `"0"`. Previously the following values
+  also was accepted:
+  |`bool` |XML content
+  |-------|-------------------------------------------------------------
+  |`true` |`"True"`,  `"TRUE"`,  `"t"`, `"Yes"`, `"YES"`, `"yes"`, `"y"`
+  |`false`|`"False"`, `"FALSE"`, `"f"`, `"No"`,  `"NO"`,  `"no"`,  `"n"`
 
 ### Misc Changes
 
@@ -41,7 +48,9 @@
 [#811]: https://github.com/tafia/quick-xml/pull/811
 [#820]: https://github.com/tafia/quick-xml/pull/820
 [#823]: https://github.com/tafia/quick-xml/pull/823
+[#826]: https://github.com/tafia/quick-xml/pull/826
 [#827]: https://github.com/tafia/quick-xml/pull/827
+[Xml Schema]: https://www.w3.org/TR/xmlschema11-2/#boolean
 
 
 ## 0.36.2 -- 2024-09-20

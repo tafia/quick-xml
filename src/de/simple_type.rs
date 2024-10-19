@@ -169,12 +169,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
 
     /// According to the <https://www.w3.org/TR/xmlschema11-2/#boolean>,
     /// valid boolean representations are only `"true"`, `"false"`, `"1"`,
-    /// and `"0"`. But this method also handles following:
-    ///
-    /// |`bool` |XML content
-    /// |-------|-------------------------------------------------------------
-    /// |`true` |`"True"`,  `"TRUE"`,  `"t"`, `"Yes"`, `"YES"`, `"yes"`, `"y"`
-    /// |`false`|`"False"`, `"FALSE"`, `"f"`, `"No"`,  `"NO"`,  `"no"`,  `"n"`
+    /// and `"0"`.
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
