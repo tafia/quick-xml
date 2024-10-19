@@ -1834,7 +1834,7 @@
 // Also, macros should be imported before using them
 use serde::serde_if_integer128;
 
-macro_rules! deserialize_type {
+macro_rules! deserialize_num {
     ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
         fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1851,23 +1851,23 @@ macro_rules! deserialize_type {
 /// byte arrays, booleans and identifiers.
 macro_rules! deserialize_primitives {
     ($($mut:tt)?) => {
-        deserialize_type!(deserialize_i8 => visit_i8, $($mut)?);
-        deserialize_type!(deserialize_i16 => visit_i16, $($mut)?);
-        deserialize_type!(deserialize_i32 => visit_i32, $($mut)?);
-        deserialize_type!(deserialize_i64 => visit_i64, $($mut)?);
+        deserialize_num!(deserialize_i8 => visit_i8, $($mut)?);
+        deserialize_num!(deserialize_i16 => visit_i16, $($mut)?);
+        deserialize_num!(deserialize_i32 => visit_i32, $($mut)?);
+        deserialize_num!(deserialize_i64 => visit_i64, $($mut)?);
 
-        deserialize_type!(deserialize_u8 => visit_u8, $($mut)?);
-        deserialize_type!(deserialize_u16 => visit_u16, $($mut)?);
-        deserialize_type!(deserialize_u32 => visit_u32, $($mut)?);
-        deserialize_type!(deserialize_u64 => visit_u64, $($mut)?);
+        deserialize_num!(deserialize_u8 => visit_u8, $($mut)?);
+        deserialize_num!(deserialize_u16 => visit_u16, $($mut)?);
+        deserialize_num!(deserialize_u32 => visit_u32, $($mut)?);
+        deserialize_num!(deserialize_u64 => visit_u64, $($mut)?);
 
         serde_if_integer128! {
-            deserialize_type!(deserialize_i128 => visit_i128, $($mut)?);
-            deserialize_type!(deserialize_u128 => visit_u128, $($mut)?);
+            deserialize_num!(deserialize_i128 => visit_i128, $($mut)?);
+            deserialize_num!(deserialize_u128 => visit_u128, $($mut)?);
         }
 
-        deserialize_type!(deserialize_f32 => visit_f32, $($mut)?);
-        deserialize_type!(deserialize_f64 => visit_f64, $($mut)?);
+        deserialize_num!(deserialize_f32 => visit_f32, $($mut)?);
+        deserialize_num!(deserialize_f64 => visit_f64, $($mut)?);
 
         fn deserialize_bool<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
