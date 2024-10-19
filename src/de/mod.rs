@@ -2019,7 +2019,9 @@ use crate::{
     reader::Reader,
     utils::CowRef,
 };
-use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
+use serde::de::{
+    self, Deserialize, DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor,
+};
 use std::borrow::Cow;
 #[cfg(feature = "overlapped-lists")]
 use std::collections::VecDeque;
@@ -2987,6 +2989,19 @@ where
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
         }
+    }
+}
+
+impl<'de, 'a, R, E> IntoDeserializer<'de, DeError> for &'a mut Deserializer<'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Deserializer = Self;
+
+    #[inline]
+    fn into_deserializer(self) -> Self {
+        self
     }
 }
 

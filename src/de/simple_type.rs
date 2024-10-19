@@ -10,7 +10,9 @@ use crate::escape::unescape;
 use crate::utils::CowRef;
 use memchr::memchr;
 use serde::de::value::UnitDeserializer;
-use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
+use serde::de::{
+    DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
+};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
@@ -767,6 +769,15 @@ impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
     {
         let name = seed.deserialize(self)?;
         Ok((name, UnitOnly))
+    }
+}
+
+impl<'de, 'a> IntoDeserializer<'de, DeError> for SimpleTypeDeserializer<'de, 'a> {
+    type Deserializer = Self;
+
+    #[inline]
+    fn into_deserializer(self) -> Self {
+        self
     }
 }
 

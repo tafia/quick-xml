@@ -17,6 +17,7 @@
 
 - [#826]: Implement `From<String>` and `From<Cow<str>>` for `quick_xml::de::Text`.
 - [#826]: Make `SimpleTypeDeserializer` and `SimpleTypeSerializer` public.
+- [#826]: Implement `IntoDeserializer` for `&mut Deserializer`.
 
 ### Bug Fixes
 
