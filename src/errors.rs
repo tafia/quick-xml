@@ -276,7 +276,6 @@ pub mod serialize {
     use std::borrow::Cow;
     #[cfg(feature = "overlapped-lists")]
     use std::num::NonZeroUsize;
-    use std::num::{ParseFloatError, ParseIntError};
     use std::str::Utf8Error;
 
     /// (De)serialization error
@@ -286,12 +285,6 @@ pub mod serialize {
         Custom(String),
         /// Xml parsing error
         InvalidXml(Error),
-        /// Cannot parse to integer
-        InvalidInt(ParseIntError),
-        /// Cannot parse to float
-        InvalidFloat(ParseFloatError),
-        /// Cannot parse specified value to boolean
-        InvalidBoolean(String),
         /// This error indicates an error in the [`Deserialize`](serde::Deserialize)
         /// implementation when read a map or a struct: `MapAccess::next_value[_seed]`
         /// was called before `MapAccess::next_key[_seed]`.
@@ -322,9 +315,6 @@ pub mod serialize {
             match self {
                 Self::Custom(s) => f.write_str(s),
                 Self::InvalidXml(e) => e.fmt(f),
-                Self::InvalidInt(e) => write!(f, "invalid integral value: {}", e),
-                Self::InvalidFloat(e) => write!(f, "invalid floating-point value: {}", e),
-                Self::InvalidBoolean(v) => write!(f, "invalid boolean value '{}'", v),
                 Self::KeyNotRead => f.write_str("invalid `Deserialize` implementation: `MapAccess::next_value[_seed]` was called before `MapAccess::next_key[_seed]`"),
                 Self::UnexpectedStart(e) => {
                     f.write_str("unexpected `Event::Start(")?;
@@ -342,8 +332,6 @@ pub mod serialize {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
                 Self::InvalidXml(e) => Some(e),
-                Self::InvalidInt(e) => Some(e),
-                Self::InvalidFloat(e) => Some(e),
                 _ => None,
             }
         }
@@ -380,20 +368,6 @@ pub mod serialize {
         #[inline]
         fn from(e: AttrError) -> Self {
             Self::InvalidXml(e.into())
-        }
-    }
-
-    impl From<ParseIntError> for DeError {
-        #[inline]
-        fn from(e: ParseIntError) -> Self {
-            Self::InvalidInt(e)
-        }
-    }
-
-    impl From<ParseFloatError> for DeError {
-        #[inline]
-        fn from(e: ParseFloatError) -> Self {
-            Self::InvalidFloat(e)
         }
     }
 

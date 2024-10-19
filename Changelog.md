@@ -41,6 +41,9 @@
   `Vec<String>` in `$value` fields. They cannot be deserialized back with the same result
 - [#827]: Make `escape` and it variants take a `impl Into<Cow<str>>` argument and implement
   `From<(&'a str, Cow<'a, str>)>` on `Attribute`
+- [#826]: Removed `DeError::InvalidInt`, `DeError::InvalidFloat` and `DeError::InvalidBoolean`.
+  Now the responsibility for returning the error lies with the visitor of the type.
+  See rationale in https://github.com/serde-rs/serde/pull/2811
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655

@@ -113,6 +113,25 @@ impl<'i, 's> CowRef<'i, 's, str> {
             Self::Owned(s) => visitor.visit_string(s),
         }
     }
+
+    /// Calls [`Visitor::visit_bool`] with `true` or `false` if text contains
+    /// [valid] boolean representation, otherwise calls [`Self::deserialize_str`].
+    ///
+    /// The valid boolean representations are only `"true"`, `"false"`, `"1"`, and `"0"`.
+    ///
+    /// [valid]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    #[cfg(feature = "serialize")]
+    pub fn deserialize_bool<V, E>(self, visitor: V) -> Result<V::Value, E>
+    where
+        V: Visitor<'i>,
+        E: Error,
+    {
+        match self.as_ref() {
+            "1" | "true" => visitor.visit_bool(true),
+            "0" | "false" => visitor.visit_bool(false),
+            _ => self.deserialize_str(visitor),
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

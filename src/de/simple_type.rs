@@ -3,7 +3,7 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::{str2bool, Text};
+use crate::de::Text;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
@@ -23,7 +23,10 @@ macro_rules! deserialize_num {
             V: Visitor<'de>,
         {
             let text: &str = self.content.as_ref();
-            visitor.$visit(text.parse()?)
+            match text.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => self.content.deserialize_str(visitor),
+            }
         }
     };
 }
@@ -141,7 +144,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        str2bool(self.content.as_ref(), visitor)
+        self.content.deserialize_bool(visitor)
     }
 
     deserialize_num!(deserialize_i8  => visit_i8);
@@ -460,10 +463,16 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - mixed text / CDATA content (`<...>text<![CDATA[cdata]]></...>`)
 ///
 /// This deserializer processes items as following:
-/// - numbers are parsed from a text content using [`FromStr`];
+/// - numbers are parsed from a text content using [`FromStr`]; in case of error
+///   [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`], or [`Visitor::visit_string`]
+///   is called; it is responsibility of the type to return an error if it does
+///   not able to process passed data;
 /// - booleans converted from the text according to the XML [specification]:
 ///   - `"true"` and `"1"` converted to `true`;
 ///   - `"false"` and `"0"` converted to `false`;
+///   - everything else calls [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`],
+///     or [`Visitor::visit_string`]; it is responsibility of the type to return
+///     an error if it does not able to process passed data;
 /// - strings returned as is;
 /// - characters also returned as strings. If string contain more than one character
 ///   or empty, it is responsibility of a type to return an error;
@@ -476,7 +485,9 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - sequences, tuples and tuple structs are deserialized as `xs:list`s. Only
 ///   sequences of primitive types is possible to deserialize this way and they
 ///   should be delimited by a space (` `, `\t`, `\r`, or `\n`);
-/// - structs and maps delegates to [`Self::deserialize_str`];
+/// - structs and maps delegates to [`Self::deserialize_str`] which calls
+///   [`Visitor::visit_borrowed_str`] or [`Visitor::visit_string`]; it is responsibility
+///   of the type to return an error if it does not able to process passed data;
 /// - enums:
 ///   - unit variants: just return `()`;
 ///   - newtype variants: deserialize from [`UnitDeserializer`];

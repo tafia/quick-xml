@@ -1842,7 +1842,13 @@ macro_rules! deserialize_num {
         {
             // No need to unescape because valid integer representations cannot be escaped
             let text = self.read_string()?;
-            visitor.$visit(text.parse()?)
+            match text.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => match text {
+                    Cow::Borrowed(t) => visitor.visit_str(t),
+                    Cow::Owned(t) => visitor.visit_string(t),
+                }
+            }
         }
     };
 }
@@ -1873,9 +1879,11 @@ macro_rules! deserialize_primitives {
         where
             V: Visitor<'de>,
         {
-            let text = self.read_string()?;
-
-            str2bool(&text, visitor)
+            let text = match self.read_string()? {
+                Cow::Borrowed(s) => CowRef::Input(s),
+                Cow::Owned(s) => CowRef::Owned(s),
+            };
+            text.deserialize_bool(visitor)
         }
 
         /// Character represented as [strings](#method.deserialize_str).
@@ -2008,6 +2016,7 @@ use crate::{
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
     reader::Reader,
+    utils::CowRef,
 };
 use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
 use std::borrow::Cow;
@@ -2296,17 +2305,6 @@ where
 {
     let mut de = Deserializer::from_reader(reader);
     T::deserialize(&mut de)
-}
-
-fn str2bool<'de, V>(value: &str, visitor: V) -> Result<V::Value, DeError>
-where
-    V: de::Visitor<'de>,
-{
-    match value {
-        "true" | "1" => visitor.visit_bool(true),
-        "false" | "0" => visitor.visit_bool(false),
-        _ => Err(DeError::InvalidBoolean(value.into())),
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

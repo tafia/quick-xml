@@ -1,5 +1,4 @@
 use crate::de::simple_type::UnitOnly;
-use crate::de::str2bool;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::name::QName;
@@ -14,7 +13,10 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            visitor.$visit(self.name.parse()?)
+            match self.name.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => self.name.deserialize_str(visitor),
+            }
         }
     };
 }
@@ -139,7 +141,7 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'de, 'd> {
     where
         V: Visitor<'de>,
     {
-        str2bool(self.name.as_ref(), visitor)
+        self.name.deserialize_bool(visitor)
     }
 
     deserialize_num!(deserialize_i8, visit_i8);
