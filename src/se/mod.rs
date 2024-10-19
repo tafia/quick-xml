@@ -82,12 +82,14 @@ mod text;
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
-pub use crate::errors::serialize::SeError;
 use crate::writer::Indentation;
 use serde::ser::{self, Serialize};
 use serde::serde_if_integer128;
 use std::fmt::Write;
 use std::str::from_utf8;
+
+pub use self::simple_type::SimpleTypeSerializer;
+pub use crate::errors::serialize::SeError;
 
 /// Serialize struct into a `Write`r.
 ///

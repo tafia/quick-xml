@@ -479,7 +479,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - `Option` always deserialized as `Some` using the same deserializer.
 ///   If attribute or text content is missed, then the deserializer even wouldn't
 ///   be used, so if it is used, then the value should be;
-/// - units (`()`) and unit structs always deserialized successfully;
+/// - units (`()`) and unit structs always deserialized successfully, the content is ignored;
 /// - newtype structs forwards deserialization to the inner type using the same
 ///   deserializer;
 /// - sequences, tuples and tuple structs are deserialized as `xs:list`s. Only
@@ -489,9 +489,11 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 ///   [`Visitor::visit_borrowed_str`] or [`Visitor::visit_string`]; it is responsibility
 ///   of the type to return an error if it does not able to process passed data;
 /// - enums:
-///   - unit variants: just return `()`;
-///   - newtype variants: deserialize from [`UnitDeserializer`];
-///   - tuple and struct variants: call [`Visitor::visit_unit`];
+///   - the variant name is deserialized using the same deserializer;
+///   - the content is deserialized using the deserializer that always returns unit (`()`):
+///     - unit variants: just return `()`;
+///     - newtype variants: deserialize from [`UnitDeserializer`];
+///     - tuple and struct variants: call [`Visitor::visit_unit`];
 /// - identifiers are deserialized as strings.
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
@@ -509,7 +511,9 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
 }
 
 impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
-    /// Creates a deserializer from a value, that possible borrowed from input
+    /// Creates a deserializer from a value, that possible borrowed from input.
+    ///
+    /// It is assumed that `text` does not have entities.
     pub fn from_text(text: Cow<'de, str>) -> Self {
         let content = match text {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
@@ -517,14 +521,20 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         };
         Self::new(content, false, Decoder::utf8())
     }
-    /// Creates a deserializer from a value, that possible borrowed from input
+    /// Creates a deserializer from an XML text node, that possible borrowed from input.
+    ///
+    /// It is assumed that `text` does not have entities.
+    ///
+    /// This constructor used internally to deserialize from text nodes.
     pub fn from_text_content(value: Text<'de>) -> Self {
         Self::from_text(value.text)
     }
 
-    /// Creates a deserializer from a part of value at specified range
+    /// Creates a deserializer from a part of value at specified range.
+    ///
+    /// This constructor used internally to deserialize from attribute values.
     #[allow(clippy::ptr_arg)]
-    pub fn from_part(
+    pub(crate) fn from_part(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
         escaped: bool,

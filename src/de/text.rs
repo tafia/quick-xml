@@ -34,7 +34,7 @@ use std::borrow::Cow;
 /// - `Option`:
 ///   - empty text is deserialized as `None`;
 ///   - everything else is deserialized as `Some` using the same deserializer;
-/// - units (`()`) and unit structs always deserialized successfully;
+/// - units (`()`) and unit structs always deserialized successfully, the content is ignored;
 /// - newtype structs forwards deserialization to the inner type using the same
 ///   deserializer;
 /// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]

@@ -2006,8 +2006,9 @@ mod simple_type;
 mod text;
 mod var;
 
+pub use self::resolver::{EntityResolver, PredefinedEntityResolver};
+pub use self::simple_type::SimpleTypeDeserializer;
 pub use crate::errors::serialize::DeError;
-pub use resolver::{EntityResolver, PredefinedEntityResolver};
 
 use crate::{
     de::map::ElementMapAccess,
