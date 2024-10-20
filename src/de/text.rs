@@ -1,7 +1,8 @@
 use crate::{
     de::simple_type::SimpleTypeDeserializer,
-    de::{str2bool, Text, TEXT_KEY},
+    de::{Text, TEXT_KEY},
     errors::serialize::DeError,
+    utils::CowRef,
 };
 use serde::de::value::BorrowedStrDeserializer;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, VariantAccess, Visitor};
@@ -17,17 +18,23 @@ use std::borrow::Cow;
 /// over tags / text within it's parent tag.
 ///
 /// This deserializer processes items as following:
-/// - numbers are parsed from a text content using [`FromStr`];
+/// - numbers are parsed from a text content using [`FromStr`]; in case of error
+///   [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`], or [`Visitor::visit_string`]
+///   is called; it is responsibility of the type to return an error if it does
+///   not able to process passed data;
 /// - booleans converted from the text according to the XML [specification]:
 ///   - `"true"` and `"1"` converted to `true`;
 ///   - `"false"` and `"0"` converted to `false`;
+///   - everything else calls [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`],
+///     or [`Visitor::visit_string`]; it is responsibility of the type to return
+///     an error if it does not able to process passed data;
 /// - strings returned as is;
 /// - characters also returned as strings. If string contain more than one character
 ///   or empty, it is responsibility of a type to return an error;
 /// - `Option`:
 ///   - empty text is deserialized as `None`;
 ///   - everything else is deserialized as `Some` using the same deserializer;
-/// - units (`()`) and unit structs always deserialized successfully;
+/// - units (`()`) and unit structs always deserialized successfully, the content is ignored;
 /// - newtype structs forwards deserialization to the inner type using the same
 ///   deserializer;
 /// - sequences, tuples and tuple structs are deserialized using [`SimpleTypeDeserializer`]

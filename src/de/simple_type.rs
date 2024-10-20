@@ -3,34 +3,47 @@
 //! [simple types]: https://www.w3schools.com/xml/el_simpletype.asp
 //! [as defined]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 
-use crate::de::{deserialize_bool, str2bool, Text};
+use crate::de::Text;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::escape::unescape;
 use crate::utils::CowRef;
 use memchr::memchr;
 use serde::de::value::UnitDeserializer;
-use serde::de::{DeserializeSeed, Deserializer, EnumAccess, SeqAccess, VariantAccess, Visitor};
+use serde::de::{
+    DeserializeSeed, Deserializer, EnumAccess, IntoDeserializer, SeqAccess, VariantAccess, Visitor,
+};
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
 
 macro_rules! deserialize_num {
-    ($method:ident, $visit:ident) => {
+    ($method:ident => $visit:ident) => {
+        #[inline]
         fn $method<V>(self, visitor: V) -> Result<V::Value, Self::Error>
         where
             V: Visitor<'de>,
         {
-            visitor.$visit(self.content.as_str().parse()?)
+            let text: &str = self.content.as_ref();
+            match text.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => self.content.deserialize_str(visitor),
+            }
         }
     };
-    ($method:ident => $visit:ident) => {
+}
+
+macro_rules! deserialize_primitive {
+    ($method:ident) => {
         fn $method<V>(self, visitor: V) -> Result<V::Value, Self::Error>
         where
             V: Visitor<'de>,
         {
-            let string = self.decode()?;
-            visitor.$visit(string.as_str().parse()?)
+            let de = AtomicDeserializer {
+                content: self.decode()?,
+                escaped: self.escaped,
+            };
+            de.$method(visitor)
         }
     };
 }
@@ -84,47 +97,6 @@ impl<'de, 'a> Content<'de, 'a> {
             Content::Owned(s, offset) => s.split_at(*offset).1,
         }
     }
-
-    /// Supply to the visitor a borrowed string, a string slice, or an owned
-    /// string depending on the kind of input. Unlike [`Self::deserialize_item`],
-    /// the whole [`Self::Owned`] string will be passed to the visitor.
-    ///
-    /// Calls
-    /// - `visitor.visit_borrowed_str` if data borrowed from the input
-    /// - `visitor.visit_str` if data borrowed from another source
-    /// - `visitor.visit_string` if data owned by this type
-    #[inline]
-    fn deserialize_all<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        match self {
-            Content::Input(s) => visitor.visit_borrowed_str(s),
-            Content::Slice(s) => visitor.visit_str(s),
-            Content::Owned(s, _) => visitor.visit_string(s),
-        }
-    }
-
-    /// Supply to the visitor a borrowed string, a string slice, or an owned
-    /// string depending on the kind of input. Unlike [`Self::deserialize_all`],
-    /// only part of [`Self::Owned`] string will be passed to the visitor.
-    ///
-    /// Calls
-    /// - `visitor.visit_borrowed_str` if data borrowed from the input
-    /// - `visitor.visit_str` if data borrowed from another source
-    /// - `visitor.visit_string` if data owned by this type
-    #[inline]
-    fn deserialize_item<V>(self, visitor: V) -> Result<V::Value, DeError>
-    where
-        V: Visitor<'de>,
-    {
-        match self {
-            Content::Input(s) => visitor.visit_borrowed_str(s),
-            Content::Slice(s) => visitor.visit_str(s),
-            Content::Owned(s, 0) => visitor.visit_string(s),
-            Content::Owned(s, offset) => visitor.visit_str(s.split_at(offset).1),
-        }
-    }
 }
 
 /// A deserializer that handles ordinary [simple type definition][item] with
@@ -151,7 +123,7 @@ impl<'de, 'a> Content<'de, 'a> {
 /// [simple type]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 struct AtomicDeserializer<'de, 'a> {
     /// Content of the attribute value, text content or CDATA content
-    content: Content<'de, 'a>,
+    content: CowRef<'de, 'a, str>,
     /// If `true`, `content` in an escaped form and should be unescaped before use
     escaped: bool,
 }
@@ -169,36 +141,31 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
 
     /// According to the <https://www.w3.org/TR/xmlschema11-2/#boolean>,
     /// valid boolean representations are only `"true"`, `"false"`, `"1"`,
-    /// and `"0"`. But this method also handles following:
-    ///
-    /// |`bool` |XML content
-    /// |-------|-------------------------------------------------------------
-    /// |`true` |`"True"`,  `"TRUE"`,  `"t"`, `"Yes"`, `"YES"`, `"yes"`, `"y"`
-    /// |`false`|`"False"`, `"FALSE"`, `"f"`, `"No"`,  `"NO"`,  `"no"`,  `"n"`
+    /// and `"0"`.
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        str2bool(self.content.as_str(), visitor)
+        self.content.deserialize_bool(visitor)
     }
 
-    deserialize_num!(deserialize_i8, visit_i8);
-    deserialize_num!(deserialize_i16, visit_i16);
-    deserialize_num!(deserialize_i32, visit_i32);
-    deserialize_num!(deserialize_i64, visit_i64);
+    deserialize_num!(deserialize_i8  => visit_i8);
+    deserialize_num!(deserialize_i16 => visit_i16);
+    deserialize_num!(deserialize_i32 => visit_i32);
+    deserialize_num!(deserialize_i64 => visit_i64);
 
-    deserialize_num!(deserialize_u8, visit_u8);
-    deserialize_num!(deserialize_u16, visit_u16);
-    deserialize_num!(deserialize_u32, visit_u32);
-    deserialize_num!(deserialize_u64, visit_u64);
+    deserialize_num!(deserialize_u8  => visit_u8);
+    deserialize_num!(deserialize_u16 => visit_u16);
+    deserialize_num!(deserialize_u32 => visit_u32);
+    deserialize_num!(deserialize_u64 => visit_u64);
 
     serde_if_integer128! {
-        deserialize_num!(deserialize_i128, visit_i128);
-        deserialize_num!(deserialize_u128, visit_u128);
+        deserialize_num!(deserialize_i128 => visit_i128);
+        deserialize_num!(deserialize_u128 => visit_u128);
     }
 
-    deserialize_num!(deserialize_f32, visit_f32);
-    deserialize_num!(deserialize_f64, visit_f64);
+    deserialize_num!(deserialize_f32 => visit_f32);
+    deserialize_num!(deserialize_f64 => visit_f64);
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -223,12 +190,12 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         if self.escaped {
-            match unescape(self.content.as_str())? {
-                Cow::Borrowed(_) => self.content.deserialize_item(visitor),
+            match unescape(self.content.as_ref())? {
+                Cow::Borrowed(_) => self.content.deserialize_str(visitor),
                 Cow::Owned(s) => visitor.visit_string(s),
             }
         } else {
-            self.content.deserialize_item(visitor)
+            self.content.deserialize_str(visitor)
         }
     }
 
@@ -245,7 +212,8 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        if self.content.as_str().is_empty() {
+        let text: &str = self.content.as_ref();
+        if text.is_empty() {
             visitor.visit_none()
         } else {
             visitor.visit_some(self)
@@ -402,10 +370,24 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                 }
                 return match memchr(DELIMITER, string.as_bytes()) {
                     // No delimiters in the `content`, deserialize it as a whole atomic
-                    None => seed.deserialize(AtomicDeserializer {
-                        content,
-                        escaped: self.escaped,
-                    }),
+                    None => match content {
+                        Content::Input(s) => seed.deserialize(AtomicDeserializer {
+                            content: CowRef::Input(s),
+                            escaped: self.escaped,
+                        }),
+                        Content::Slice(s) => seed.deserialize(AtomicDeserializer {
+                            content: CowRef::Slice(s),
+                            escaped: self.escaped,
+                        }),
+                        Content::Owned(s, 0) => seed.deserialize(AtomicDeserializer {
+                            content: CowRef::Owned(s),
+                            escaped: self.escaped,
+                        }),
+                        Content::Owned(s, offset) => seed.deserialize(AtomicDeserializer {
+                            content: CowRef::Slice(s.split_at(offset).1),
+                            escaped: self.escaped,
+                        }),
+                    },
                     // `content` started with a space, skip them all
                     Some(0) => {
                         // Skip all spaces
@@ -432,7 +414,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                             self.content = Some(Content::Input(rest));
 
                             seed.deserialize(AtomicDeserializer {
-                                content: Content::Input(item),
+                                content: CowRef::Input(item),
                                 escaped: self.escaped,
                             })
                         }
@@ -441,7 +423,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                             self.content = Some(Content::Slice(rest));
 
                             seed.deserialize(AtomicDeserializer {
-                                content: Content::Slice(item),
+                                content: CowRef::Slice(item),
                                 escaped: self.escaped,
                             })
                         }
@@ -450,7 +432,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                         Content::Owned(s, skip) => {
                             let item = s.split_at(skip + end).0;
                             let result = seed.deserialize(AtomicDeserializer {
-                                content: Content::Slice(item),
+                                content: CowRef::Slice(item),
                                 escaped: self.escaped,
                             });
 
@@ -483,27 +465,37 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 /// - mixed text / CDATA content (`<...>text<![CDATA[cdata]]></...>`)
 ///
 /// This deserializer processes items as following:
-/// - numbers are parsed from a text content using [`FromStr`];
+/// - numbers are parsed from a text content using [`FromStr`]; in case of error
+///   [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`], or [`Visitor::visit_string`]
+///   is called; it is responsibility of the type to return an error if it does
+///   not able to process passed data;
 /// - booleans converted from the text according to the XML [specification]:
 ///   - `"true"` and `"1"` converted to `true`;
 ///   - `"false"` and `"0"` converted to `false`;
+///   - everything else calls [`Visitor::visit_borrowed_str`], [`Visitor::visit_str`],
+///     or [`Visitor::visit_string`]; it is responsibility of the type to return
+///     an error if it does not able to process passed data;
 /// - strings returned as is;
 /// - characters also returned as strings. If string contain more than one character
 ///   or empty, it is responsibility of a type to return an error;
 /// - `Option` always deserialized as `Some` using the same deserializer.
 ///   If attribute or text content is missed, then the deserializer even wouldn't
 ///   be used, so if it is used, then the value should be;
-/// - units (`()`) and unit structs always deserialized successfully;
+/// - units (`()`) and unit structs always deserialized successfully, the content is ignored;
 /// - newtype structs forwards deserialization to the inner type using the same
 ///   deserializer;
 /// - sequences, tuples and tuple structs are deserialized as `xs:list`s. Only
 ///   sequences of primitive types is possible to deserialize this way and they
 ///   should be delimited by a space (` `, `\t`, `\r`, or `\n`);
-/// - structs and maps delegates to [`Self::deserialize_str`];
+/// - structs and maps delegates to [`Self::deserialize_str`] which calls
+///   [`Visitor::visit_borrowed_str`] or [`Visitor::visit_string`]; it is responsibility
+///   of the type to return an error if it does not able to process passed data;
 /// - enums:
-///   - unit variants: just return `()`;
-///   - newtype variants: deserialize from [`UnitDeserializer`];
-///   - tuple and struct variants: call [`Visitor::visit_unit`];
+///   - the variant name is deserialized using the same deserializer;
+///   - the content is deserialized using the deserializer that always returns unit (`()`):
+///     - unit variants: just return `()`;
+///     - newtype variants: deserialize from [`UnitDeserializer`];
+///     - tuple and struct variants: call [`Visitor::visit_unit`];
 /// - identifiers are deserialized as strings.
 ///
 /// [simple types]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
@@ -521,7 +513,9 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
 }
 
 impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
-    /// Creates a deserializer from a value, that possible borrowed from input
+    /// Creates a deserializer from a value, that possible borrowed from input.
+    ///
+    /// It is assumed that `text` does not have entities.
     pub fn from_text(text: Cow<'de, str>) -> Self {
         let content = match text {
             Cow::Borrowed(slice) => CowRef::Input(slice.as_bytes()),
@@ -529,14 +523,20 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
         };
         Self::new(content, false, Decoder::utf8())
     }
-    /// Creates a deserializer from a value, that possible borrowed from input
+    /// Creates a deserializer from an XML text node, that possible borrowed from input.
+    ///
+    /// It is assumed that `text` does not have entities.
+    ///
+    /// This constructor used internally to deserialize from text nodes.
     pub fn from_text_content(value: Text<'de>) -> Self {
         Self::from_text(value.text)
     }
 
-    /// Creates a deserializer from a part of value at specified range
+    /// Creates a deserializer from a part of value at specified range.
+    ///
+    /// This constructor used internally to deserialize from attribute values.
     #[allow(clippy::ptr_arg)]
-    pub fn from_part(
+    pub(crate) fn from_part(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
         escaped: bool,
@@ -562,19 +562,19 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     /// Decodes raw bytes using the encoding specified.
     /// The method will borrow if has the UTF-8 compatible representation.
     #[inline]
-    fn decode<'b>(&'b self) -> Result<Content<'de, 'b>, DeError> {
+    fn decode<'b>(&'b self) -> Result<CowRef<'de, 'b, str>, DeError> {
         Ok(match self.content {
             CowRef::Input(content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Input(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
+                Cow::Borrowed(content) => CowRef::Input(content),
+                Cow::Owned(content) => CowRef::Owned(content),
             },
             CowRef::Slice(content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Slice(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
+                Cow::Borrowed(content) => CowRef::Slice(content),
+                Cow::Owned(content) => CowRef::Owned(content),
             },
             CowRef::Owned(ref content) => match self.decoder.decode(content)? {
-                Cow::Borrowed(content) => Content::Slice(content),
-                Cow::Owned(content) => Content::Owned(content, 0),
+                Cow::Borrowed(content) => CowRef::Slice(content),
+                Cow::Owned(content) => CowRef::Owned(content),
             },
         })
     }
@@ -591,30 +591,27 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        deserialize_bool(&self.content, self.decoder, visitor)
-    }
+    deserialize_primitive!(deserialize_bool);
 
-    deserialize_num!(deserialize_i8  => visit_i8);
-    deserialize_num!(deserialize_i16 => visit_i16);
-    deserialize_num!(deserialize_i32 => visit_i32);
-    deserialize_num!(deserialize_i64 => visit_i64);
+    deserialize_primitive!(deserialize_i8);
+    deserialize_primitive!(deserialize_i16);
+    deserialize_primitive!(deserialize_i32);
+    deserialize_primitive!(deserialize_i64);
 
-    deserialize_num!(deserialize_u8  => visit_u8);
-    deserialize_num!(deserialize_u16 => visit_u16);
-    deserialize_num!(deserialize_u32 => visit_u32);
-    deserialize_num!(deserialize_u64 => visit_u64);
+    deserialize_primitive!(deserialize_u8);
+    deserialize_primitive!(deserialize_u16);
+    deserialize_primitive!(deserialize_u32);
+    deserialize_primitive!(deserialize_u64);
 
     serde_if_integer128! {
-        deserialize_num!(deserialize_i128 => visit_i128);
-        deserialize_num!(deserialize_u128 => visit_u128);
+        deserialize_primitive!(deserialize_i128);
+        deserialize_primitive!(deserialize_u128);
     }
 
-    deserialize_num!(deserialize_f32 => visit_f32);
-    deserialize_num!(deserialize_f64 => visit_f64);
+    deserialize_primitive!(deserialize_f32);
+    deserialize_primitive!(deserialize_f64);
+
+    deserialize_primitive!(deserialize_str);
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
     #[inline]
@@ -623,21 +620,6 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         self.deserialize_str(visitor)
-    }
-
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: Visitor<'de>,
-    {
-        let content = self.decode()?;
-        if self.escaped {
-            match unescape(content.as_str())? {
-                Cow::Borrowed(_) => content.deserialize_all(visitor),
-                Cow::Owned(s) => visitor.visit_string(s),
-            }
-        } else {
-            content.deserialize_all(visitor)
-        }
     }
 
     /// Forwards deserialization to the [`Self::deserialize_str`]
@@ -710,8 +692,13 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
+        let content = match self.decode()? {
+            CowRef::Input(s) => Content::Input(s),
+            CowRef::Slice(s) => Content::Slice(s),
+            CowRef::Owned(s) => Content::Owned(s, 0),
+        };
         visitor.visit_seq(ListIter {
-            content: Some(self.decode()?),
+            content: Some(content),
             escaped: self.escaped,
         })
     }
@@ -782,6 +769,15 @@ impl<'de, 'a> EnumAccess<'de> for SimpleTypeDeserializer<'de, 'a> {
     {
         let name = seed.deserialize(self)?;
         Ok((name, UnitOnly))
+    }
+}
+
+impl<'de, 'a> IntoDeserializer<'de, DeError> for SimpleTypeDeserializer<'de, 'a> {
+    type Deserializer = Self;
+
+    #[inline]
+    fn into_deserializer(self) -> Self {
+        self
     }
 }
 
@@ -904,6 +900,7 @@ mod tests {
         use super::*;
         use crate::se::simple_type::AtomicSerializer;
         use pretty_assertions::assert_eq;
+        use std::ops::Deref;
 
         /// Checks that given `$input` successfully deserializing into given `$result`
         macro_rules! deserialized_to_only {
@@ -911,7 +908,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let de = AtomicDeserializer {
-                        content: Content::Input($input),
+                        content: CowRef::Input($input),
                         escaped: true,
                     };
                     let data: $type = Deserialize::deserialize(de).unwrap();
@@ -928,7 +925,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let de = AtomicDeserializer {
-                        content: Content::Input($input),
+                        content: CowRef::Input($input),
                         escaped: true,
                     };
                     let data: $type = Deserialize::deserialize(de).unwrap();
@@ -958,7 +955,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let de = AtomicDeserializer {
-                        content: Content::Input($input),
+                        content: CowRef::Input($input),
                         escaped: true,
                     };
                     let err = <$type as Deserialize>::deserialize(de).unwrap_err();
@@ -1054,13 +1051,13 @@ mod tests {
         #[cfg(feature = "encoding")]
         fn owned_data() {
             let de = AtomicDeserializer {
-                content: Content::Owned("string slice".into(), 7),
+                content: CowRef::Owned("string slice".into()),
                 escaped: true,
             };
-            assert_eq!(de.content.as_str(), "slice");
+            assert_eq!(de.content.deref(), "string slice");
 
             let data: String = Deserialize::deserialize(de).unwrap();
-            assert_eq!(data, "slice");
+            assert_eq!(data, "string slice");
         }
 
         /// Checks that deserialization from a content borrowed from some
@@ -1068,10 +1065,10 @@ mod tests {
         #[test]
         fn borrowed_from_deserializer() {
             let de = AtomicDeserializer {
-                content: Content::Slice("string slice"),
+                content: CowRef::Slice("string slice"),
                 escaped: true,
             };
-            assert_eq!(de.content.as_str(), "string slice");
+            assert_eq!(de.content.deref(), "string slice");
 
             let data: String = Deserialize::deserialize(de).unwrap();
             assert_eq!(data, "string slice");

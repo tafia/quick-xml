@@ -15,10 +15,21 @@
 
 ### New Features
 
+- [#826]: Implement `From<String>` and `From<Cow<str>>` for `quick_xml::de::Text`.
+- [#826]: Make `SimpleTypeDeserializer` and `SimpleTypeSerializer` public.
+- [#826]: Implement `IntoDeserializer` for `&mut Deserializer`.
+
 ### Bug Fixes
 
 - [#655]: Do not write indent before and after `$text` fields and those `$value` fields
   that are serialized as a text (for example, `usize` or `String`).
+- [#826]: Handle only those boolean representations that are allowed by [Xml Schema]
+  which is only `"true"`, `"1"`, `"false"`, and `"0"`. Previously the following values
+  also was accepted:
+  |`bool` |XML content
+  |-------|-------------------------------------------------------------
+  |`true` |`"True"`,  `"TRUE"`,  `"t"`, `"Yes"`, `"YES"`, `"yes"`, `"y"`
+  |`false`|`"False"`, `"FALSE"`, `"f"`, `"No"`,  `"NO"`,  `"no"`,  `"n"`
 
 ### Misc Changes
 
@@ -34,6 +45,9 @@
   `Vec<String>` in `$value` fields. They cannot be deserialized back with the same result
 - [#827]: Make `escape` and it variants take a `impl Into<Cow<str>>` argument and implement
   `From<(&'a str, Cow<'a, str>)>` on `Attribute`
+- [#826]: Removed `DeError::InvalidInt`, `DeError::InvalidFloat` and `DeError::InvalidBoolean`.
+  Now the responsibility for returning the error lies with the visitor of the type.
+  See rationale in https://github.com/serde-rs/serde/pull/2811
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
@@ -41,7 +55,9 @@
 [#811]: https://github.com/tafia/quick-xml/pull/811
 [#820]: https://github.com/tafia/quick-xml/pull/820
 [#823]: https://github.com/tafia/quick-xml/pull/823
+[#826]: https://github.com/tafia/quick-xml/pull/826
 [#827]: https://github.com/tafia/quick-xml/pull/827
+[Xml Schema]: https://www.w3.org/TR/xmlschema11-2/#boolean
 
 
 ## 0.36.2 -- 2024-09-20

@@ -1,5 +1,4 @@
 use crate::de::simple_type::UnitOnly;
-use crate::de::str2bool;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
 use crate::name::QName;
@@ -14,7 +13,10 @@ macro_rules! deserialize_num {
         where
             V: Visitor<'de>,
         {
-            visitor.$visit(self.name.parse()?)
+            match self.name.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => self.name.deserialize_str(visitor),
+            }
         }
     };
 }
@@ -134,17 +136,12 @@ impl<'de, 'd> Deserializer<'de> for QNameDeserializer<'de, 'd> {
 
     /// According to the <https://www.w3.org/TR/xmlschema11-2/#boolean>,
     /// valid boolean representations are only `"true"`, `"false"`, `"1"`,
-    /// and `"0"`. But this method also handles following:
-    ///
-    /// |`bool` |XML content
-    /// |-------|-------------------------------------------------------------
-    /// |`true` |`"True"`,  `"TRUE"`,  `"t"`, `"Yes"`, `"YES"`, `"yes"`, `"y"`
-    /// |`false`|`"False"`, `"FALSE"`, `"f"`, `"No"`,  `"NO"`,  `"no"`,  `"n"`
+    /// and `"0"`.
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: Visitor<'de>,
     {
-        str2bool(self.name.as_ref(), visitor)
+        self.name.deserialize_bool(visitor)
     }
 
     deserialize_num!(deserialize_i8, visit_i8);

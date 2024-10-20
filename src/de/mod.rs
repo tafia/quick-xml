@@ -1834,7 +1834,7 @@
 // Also, macros should be imported before using them
 use serde::serde_if_integer128;
 
-macro_rules! deserialize_type {
+macro_rules! deserialize_num {
     ($deserialize:ident => $visit:ident, $($mut:tt)?) => {
         fn $deserialize<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
@@ -1842,7 +1842,13 @@ macro_rules! deserialize_type {
         {
             // No need to unescape because valid integer representations cannot be escaped
             let text = self.read_string()?;
-            visitor.$visit(text.parse()?)
+            match text.parse() {
+                Ok(number) => visitor.$visit(number),
+                Err(_) => match text {
+                    Cow::Borrowed(t) => visitor.visit_str(t),
+                    Cow::Owned(t) => visitor.visit_string(t),
+                }
+            }
         }
     };
 }
@@ -1851,31 +1857,33 @@ macro_rules! deserialize_type {
 /// byte arrays, booleans and identifiers.
 macro_rules! deserialize_primitives {
     ($($mut:tt)?) => {
-        deserialize_type!(deserialize_i8 => visit_i8, $($mut)?);
-        deserialize_type!(deserialize_i16 => visit_i16, $($mut)?);
-        deserialize_type!(deserialize_i32 => visit_i32, $($mut)?);
-        deserialize_type!(deserialize_i64 => visit_i64, $($mut)?);
+        deserialize_num!(deserialize_i8 => visit_i8, $($mut)?);
+        deserialize_num!(deserialize_i16 => visit_i16, $($mut)?);
+        deserialize_num!(deserialize_i32 => visit_i32, $($mut)?);
+        deserialize_num!(deserialize_i64 => visit_i64, $($mut)?);
 
-        deserialize_type!(deserialize_u8 => visit_u8, $($mut)?);
-        deserialize_type!(deserialize_u16 => visit_u16, $($mut)?);
-        deserialize_type!(deserialize_u32 => visit_u32, $($mut)?);
-        deserialize_type!(deserialize_u64 => visit_u64, $($mut)?);
+        deserialize_num!(deserialize_u8 => visit_u8, $($mut)?);
+        deserialize_num!(deserialize_u16 => visit_u16, $($mut)?);
+        deserialize_num!(deserialize_u32 => visit_u32, $($mut)?);
+        deserialize_num!(deserialize_u64 => visit_u64, $($mut)?);
 
         serde_if_integer128! {
-            deserialize_type!(deserialize_i128 => visit_i128, $($mut)?);
-            deserialize_type!(deserialize_u128 => visit_u128, $($mut)?);
+            deserialize_num!(deserialize_i128 => visit_i128, $($mut)?);
+            deserialize_num!(deserialize_u128 => visit_u128, $($mut)?);
         }
 
-        deserialize_type!(deserialize_f32 => visit_f32, $($mut)?);
-        deserialize_type!(deserialize_f64 => visit_f64, $($mut)?);
+        deserialize_num!(deserialize_f32 => visit_f32, $($mut)?);
+        deserialize_num!(deserialize_f64 => visit_f64, $($mut)?);
 
         fn deserialize_bool<V>($($mut)? self, visitor: V) -> Result<V::Value, DeError>
         where
             V: Visitor<'de>,
         {
-            let text = self.read_string()?;
-
-            str2bool(&text, visitor)
+            let text = match self.read_string()? {
+                Cow::Borrowed(s) => CowRef::Input(s),
+                Cow::Owned(s) => CowRef::Owned(s),
+            };
+            text.deserialize_bool(visitor)
         }
 
         /// Character represented as [strings](#method.deserialize_str).
@@ -1998,8 +2006,9 @@ mod simple_type;
 mod text;
 mod var;
 
+pub use self::resolver::{EntityResolver, PredefinedEntityResolver};
+pub use self::simple_type::SimpleTypeDeserializer;
 pub use crate::errors::serialize::DeError;
-pub use resolver::{EntityResolver, PredefinedEntityResolver};
 
 use crate::{
     de::map::ElementMapAccess,
@@ -2008,8 +2017,11 @@ use crate::{
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
     reader::Reader,
+    utils::CowRef,
 };
-use serde::de::{self, Deserialize, DeserializeOwned, DeserializeSeed, SeqAccess, Visitor};
+use serde::de::{
+    self, Deserialize, DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor,
+};
 use std::borrow::Cow;
 #[cfg(feature = "overlapped-lists")]
 use std::collections::VecDeque;
@@ -2055,6 +2067,22 @@ impl<'a> From<&'a str> for Text<'a> {
         Self {
             text: Cow::Borrowed(text),
         }
+    }
+}
+
+impl<'a> From<String> for Text<'a> {
+    #[inline]
+    fn from(text: String) -> Self {
+        Self {
+            text: Cow::Owned(text),
+        }
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for Text<'a> {
+    #[inline]
+    fn from(text: Cow<'a, str>) -> Self {
+        Self { text }
     }
 }
 
@@ -2287,7 +2315,7 @@ where
 }
 
 /// Deserialize from a reader. This method will do internal copies of data
-/// readed from `reader`. If you want have a `&str` input and want to borrow
+/// read from `reader`. If you want have a `&str` input and want to borrow
 /// as much as possible, use [`from_str`].
 pub fn from_reader<R, T>(reader: R) -> Result<T, DeError>
 where
@@ -2296,49 +2324,6 @@ where
 {
     let mut de = Deserializer::from_reader(reader);
     T::deserialize(&mut de)
-}
-
-// TODO: According to the https://www.w3.org/TR/xmlschema11-2/#boolean,
-// valid boolean representations are only "true", "false", "1", and "0"
-fn str2bool<'de, V>(value: &str, visitor: V) -> Result<V::Value, DeError>
-where
-    V: de::Visitor<'de>,
-{
-    match value {
-        "true" | "1" | "True" | "TRUE" | "t" | "Yes" | "YES" | "yes" | "y" => {
-            visitor.visit_bool(true)
-        }
-        "false" | "0" | "False" | "FALSE" | "f" | "No" | "NO" | "no" | "n" => {
-            visitor.visit_bool(false)
-        }
-        _ => Err(DeError::InvalidBoolean(value.into())),
-    }
-}
-
-fn deserialize_bool<'de, V>(value: &[u8], decoder: Decoder, visitor: V) -> Result<V::Value, DeError>
-where
-    V: Visitor<'de>,
-{
-    #[cfg(feature = "encoding")]
-    {
-        let value = decoder.decode(value)?;
-        // No need to unescape because valid boolean representations cannot be escaped
-        str2bool(value.as_ref(), visitor)
-    }
-
-    #[cfg(not(feature = "encoding"))]
-    {
-        // No need to unescape because valid boolean representations cannot be escaped
-        match value {
-            b"true" | b"1" | b"True" | b"TRUE" | b"t" | b"Yes" | b"YES" | b"yes" | b"y" => {
-                visitor.visit_bool(true)
-            }
-            b"false" | b"0" | b"False" | b"FALSE" | b"f" | b"No" | b"NO" | b"no" | b"n" => {
-                visitor.visit_bool(false)
-            }
-            e => Err(DeError::InvalidBoolean(decoder.decode(e)?.into())),
-        }
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3004,6 +2989,19 @@ where
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
         }
+    }
+}
+
+impl<'de, 'a, R, E> IntoDeserializer<'de, DeError> for &'a mut Deserializer<'de, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Deserializer = Self;
+
+    #[inline]
+    fn into_deserializer(self) -> Self {
+        self
     }
 }
 
