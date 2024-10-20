@@ -746,9 +746,8 @@ impl<'a> BytesCData<'a> {
     pub fn escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
-            match escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
+            match escape(decoded) {
+                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
                 Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
             },
             Decoder::utf8(),
@@ -771,9 +770,8 @@ impl<'a> BytesCData<'a> {
     pub fn partial_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
-            match partial_escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
+            match partial_escape(decoded) {
+                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
                 Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
             },
             Decoder::utf8(),
@@ -795,9 +793,8 @@ impl<'a> BytesCData<'a> {
     pub fn minimal_escape(self) -> Result<BytesText<'a>, EncodingError> {
         let decoded = self.decode()?;
         Ok(BytesText::wrap(
-            match minimal_escape(&decoded) {
-                // Because result is borrowed, no replacements was done and we can use original content
-                Cow::Borrowed(_) => self.content,
+            match minimal_escape(decoded) {
+                Cow::Borrowed(escaped) => Cow::Borrowed(escaped.as_bytes()),
                 Cow::Owned(escaped) => Cow::Owned(escaped.into_bytes()),
             },
             Decoder::utf8(),
