@@ -32,6 +32,8 @@
 - [#820]: Classify output of the `Serializer` by returning an enumeration with kind of written data
 - [#823]: Do not allow serialization of consequent primitives, for example `Vec<usize>` or
   `Vec<String>` in `$value` fields. They cannot be deserialized back with the same result
+- [#827]: Make `escape` and it variants take a `impl Into<Cow<str>>` argument and implement
+  `From<(&'a str, Cow<'a, str>)>` on `Attribute`
 
 [#227]: https://github.com/tafia/quick-xml/issues/227
 [#655]: https://github.com/tafia/quick-xml/issues/655
@@ -39,6 +41,7 @@
 [#811]: https://github.com/tafia/quick-xml/pull/811
 [#820]: https://github.com/tafia/quick-xml/pull/820
 [#823]: https://github.com/tafia/quick-xml/pull/823
+[#827]: https://github.com/tafia/quick-xml/pull/827
 
 
 ## 0.36.2 -- 2024-09-20
@@ -979,7 +982,7 @@ serde >= 1.0.181
 
 ## 0.16.0
 - feat: (breaking change) set failure and encoding_rs crates as optional.
-You should now use respectively `use-failure` and `encoding` features to get the old behavior
+  You should now use respectively `use-failure` and `encoding` features to get the old behavior
 - perf: improve perf using memchr3 iterator. Reading is 18% better on benches
 
 ## 0.15.0

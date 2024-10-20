@@ -153,6 +153,31 @@ impl<'a> From<(&'a str, &'a str)> for Attribute<'a> {
     }
 }
 
+impl<'a> From<(&'a str, Cow<'a, str>)> for Attribute<'a> {
+    /// Creates new attribute from text representation.
+    /// Key is stored as-is, but the value will be escaped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::borrow::Cow;
+    /// use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let features = Attribute::from(("features", Cow::Borrowed("Bells & whistles")));
+    /// assert_eq!(features.value, "Bells &amp; whistles".as_bytes());
+    /// ```
+    fn from(val: (&'a str, Cow<'a, str>)) -> Attribute<'a> {
+        Attribute {
+            key: QName(val.0.as_bytes()),
+            value: match escape(val.1) {
+                Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+                Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+            },
+        }
+    }
+}
+
 impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
     #[inline]
     fn from(attr: Attr<&'a [u8]>) -> Self {

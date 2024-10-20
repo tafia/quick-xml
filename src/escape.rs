@@ -101,7 +101,7 @@ impl std::error::Error for EscapeError {
 /// | `&`       | `&amp;`
 /// | `'`       | `&apos;`
 /// | `"`       | `&quot;`
-pub fn escape(raw: &str) -> Cow<str> {
+pub fn escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&' | b'\'' | b'\"'))
 }
 
@@ -126,7 +126,7 @@ pub fn escape(raw: &str) -> Cow<str> {
 /// | `<`       | `&lt;`
 /// | `>`       | `&gt;`
 /// | `&`       | `&amp;`
-pub fn partial_escape(raw: &str) -> Cow<str> {
+pub fn partial_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'>' | b'&'))
 }
 
@@ -143,13 +143,17 @@ pub fn partial_escape(raw: &str) -> Cow<str> {
 /// | `&`       | `&amp;`
 ///
 /// [requires]: https://www.w3.org/TR/xml11/#syntax
-pub fn minimal_escape(raw: &str) -> Cow<str> {
+pub fn minimal_escape<'a>(raw: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     _escape(raw, |ch| matches!(ch, b'<' | b'&'))
 }
 
 /// Escapes an `&str` and replaces a subset of xml special characters (`<`, `>`,
 /// `&`, `'`, `"`) with their corresponding xml escaped value.
-pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str> {
+pub(crate) fn _escape<'a, F: Fn(u8) -> bool>(
+    raw: impl Into<Cow<'a, str>>,
+    escape_chars: F,
+) -> Cow<'a, str> {
+    let raw = raw.into();
     let bytes = raw.as_bytes();
     let mut escaped = None;
     let mut iter = bytes.iter();
@@ -192,7 +196,7 @@ pub(crate) fn _escape<F: Fn(u8) -> bool>(raw: &str, escape_chars: F) -> Cow<str>
         // if unsafe code will be allowed
         Cow::Owned(String::from_utf8(escaped).unwrap())
     } else {
-        Cow::Borrowed(raw)
+        raw
     }
 }
 
