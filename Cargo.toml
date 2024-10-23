@@ -19,12 +19,12 @@ rust-version = "1.56"
 include = ["src/*", "LICENSE-MIT.md", "README.md"]
 
 [dependencies]
+arbitrary = { version = "1", features = ["derive"], optional = true }
 document-features = { version = "0.2", optional = true }
 encoding_rs = { version = "0.8", optional = true }
 serde = { version = ">=1.0.139", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
-arbitrary = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = "0.4"
@@ -197,6 +197,11 @@ all-features = true
 # will be resolved
 
 [[test]]
+name = "async-tokio"
+required-features = ["async-tokio"]
+path = "tests/async-tokio.rs"
+
+[[test]]
 name = "encodings"
 required-features = ["encoding"]
 path = "tests/encodings.rs"
@@ -240,11 +245,6 @@ path = "tests/serde-migrated.rs"
 name = "serde-issues"
 required-features = ["serialize"]
 path = "tests/serde-issues.rs"
-
-[[test]]
-name = "async-tokio"
-required-features = ["async-tokio"]
-path = "tests/async-tokio.rs"
 
 [[example]]
 name = "read_nodes_serde"
