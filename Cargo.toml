@@ -202,6 +202,11 @@ required-features = ["encoding"]
 path = "tests/encodings.rs"
 
 [[test]]
+name = "html"
+required-features = ["escape-html"]
+path = "tests/html.rs"
+
+[[test]]
 name = "serde_roundtrip"
 required-features = ["serialize"]
 path = "tests/serde_roundtrip.rs"

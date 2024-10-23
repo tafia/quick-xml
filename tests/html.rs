@@ -6,7 +6,6 @@ use quick_xml::name::{QName, ResolveResult};
 use quick_xml::reader::NsReader;
 use std::str::from_utf8;
 
-#[cfg(feature = "escape-html")]
 #[test]
 fn html5() {
     test(
@@ -16,7 +15,6 @@ fn html5() {
     );
 }
 
-#[cfg(feature = "escape-html")]
 #[test]
 fn escaped_characters_html() {
     test(
