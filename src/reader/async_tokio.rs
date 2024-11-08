@@ -86,7 +86,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     ///
     /// // This explicitly uses `from_reader("...".as_bytes())` to use a buffered
     /// // reader instead of relying on the zero-copy optimizations for reading
-    /// // from byte slices, which is provides the sync interface anyway.
+    /// // from byte slices, which provides the sync interface anyway.
     /// let mut reader = Reader::from_reader(r#"
     ///     <tag1 att1 = "test">
     ///        <tag2><!--Test comment-->Test</tag2>
