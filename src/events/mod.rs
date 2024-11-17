@@ -41,6 +41,7 @@ pub mod attributes;
 use encoding_rs::Encoding;
 use std::borrow::Cow;
 use std::fmt::{self, Debug, Formatter};
+use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Deref;
 use std::str::from_utf8;
@@ -53,7 +54,7 @@ use crate::escape::{
 use crate::name::{LocalName, QName};
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
-use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string};
+use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
 use attributes::{AttrError, Attribute, Attributes};
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
@@ -700,10 +701,51 @@ impl<'a> BytesCData<'a> {
     ///
     /// # Warning
     ///
-    /// `content` must not contain the `]]>` sequence.
+    /// `content` must not contain the `]]>` sequence. You can use
+    /// [`BytesCData::escaped`] to escape the content instead.
     #[inline]
     pub fn new<C: Into<Cow<'a, str>>>(content: C) -> Self {
         Self::wrap(str_cow_to_bytes(content), Decoder::utf8())
+    }
+
+    /// Creates an iterator of `BytesCData` from a string.
+    ///
+    /// If a string contains `]]>`, it needs to be split into multiple `CDATA`
+    /// sections, splitting the `]]` and `>` characters, because the CDATA closing
+    /// sequence cannot be escaped. This iterator yields a `BytesCData` instance
+    /// for each of those sections.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use quick_xml::events::BytesCData;
+    /// # use pretty_assertions::assert_eq;
+    /// let content = "";
+    /// let cdata = BytesCData::escaped(content).collect::<Vec<_>>();
+    /// assert_eq!(cdata, &[BytesCData::new("")]);
+    ///
+    /// let content = "Certain tokens like ]]> can be difficult and <invalid>";
+    /// let cdata = BytesCData::escaped(content).collect::<Vec<_>>();
+    /// assert_eq!(cdata, &[
+    ///     BytesCData::new("Certain tokens like ]]"),
+    ///     BytesCData::new("> can be difficult and <invalid>"),
+    /// ]);
+    ///
+    /// let content = "foo]]>bar]]>baz]]>quux";
+    /// let cdata = BytesCData::escaped(content).collect::<Vec<_>>();
+    /// assert_eq!(cdata, &[
+    ///     BytesCData::new("foo]]"),
+    ///     BytesCData::new(">bar]]"),
+    ///     BytesCData::new(">baz]]"),
+    ///     BytesCData::new(">quux"),
+    /// ]);
+    /// ```
+    #[inline]
+    pub fn escaped(content: &'a str) -> CDataIterator<'a> {
+        CDataIterator {
+            unprocessed: content.as_bytes(),
+            finished: false,
+        }
     }
 
     /// Ensures that all data is owned to extend the object's lifetime if
@@ -832,6 +874,49 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesCData<'a> {
         return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }
 }
+
+/// Iterator over `CDATA` sections in a string.
+///
+/// This iterator is created by the [`BytesCData::escaped`] method.
+#[derive(Clone)]
+pub struct CDataIterator<'a> {
+    /// The unprocessed data which should be emitted as `BytesCData` events.
+    /// At each iteration, the processed data is cut from this slice.
+    unprocessed: &'a [u8],
+    finished: bool,
+}
+
+impl<'a> Debug for CDataIterator<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("CDataIterator")
+            .field("unprocessed", &Bytes(self.unprocessed))
+            .field("finished", &self.finished)
+            .finish()
+    }
+}
+
+impl<'a> Iterator for CDataIterator<'a> {
+    type Item = BytesCData<'a>;
+
+    fn next(&mut self) -> Option<BytesCData<'a>> {
+        if self.finished {
+            return None;
+        }
+
+        for gt in memchr::memchr_iter(b'>', self.unprocessed) {
+            if self.unprocessed[..gt].ends_with(b"]]") {
+                let (slice, rest) = self.unprocessed.split_at(gt);
+                self.unprocessed = rest;
+                return Some(BytesCData::wrap(slice, Decoder::utf8()));
+            }
+        }
+
+        self.finished = true;
+        Some(BytesCData::wrap(self.unprocessed, Decoder::utf8()))
+    }
+}
+
+impl FusedIterator for CDataIterator<'_> {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
