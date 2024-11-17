@@ -15,11 +15,16 @@
 
 ### New Features
 
-- [#831]: Add `BytesCData::escaped()` fn to construct CDATA events from arbitrary user input.
-
 ### Bug Fixes
 
 ### Misc Changes
+
+
+## 0.37.1 -- 2024-11-17
+
+### New Features
+
+- [#831]: Add `BytesCData::escaped()` fn to construct CDATA events from arbitrary user input.
 
 [#831]: https://github.com/tafia/quick-xml/issues/831
 
