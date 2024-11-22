@@ -2792,83 +2792,20 @@ mod variable_name {
                 }
             }
 
-            /// Tests are ignored, but exists to show a problem.
-            /// May be it will be solved in the future
-            mod choice_and_choice {
-                use super::*;
-                use pretty_assertions::assert_eq;
-
-                #[derive(Debug, PartialEq, Deserialize)]
-                struct Pair {
-                    #[serde(rename = "$value")]
-                    item: [Choice; 3],
-                    // Actually, we cannot rename both fields to `$value`, which is now
-                    // required to indicate, that field accepts elements with any name
-                    #[serde(rename = "$value")]
-                    element: [Choice2; 2],
-                }
-
-                #[test]
-                #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
-                fn splitted() {
-                    let data: Pair = from_str(
-                        r#"
-                        <root>
-                            <first/>
-                            <second/>
-                            <one/>
-                            <two/>
-                            <three/>
-                        </root>
-                        "#,
-                    )
-                    .unwrap();
-
-                    assert_eq!(
-                        data,
-                        Pair {
-                            item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                            element: [Choice2::First, Choice2::Second],
-                        }
-                    );
-                }
-
-                #[test]
-                #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
-                fn overlapped() {
-                    let data = from_str::<Pair>(
-                        r#"
-                        <root>
-                            <one/>
-                            <first/>
-                            <two/>
-                            <second/>
-                            <three/>
-                        </root>
-                        "#,
-                    );
-
-                    #[cfg(feature = "overlapped-lists")]
-                    assert_eq!(
-                        data.unwrap(),
-                        Pair {
-                            item: [Choice::One, Choice::Two, Choice::Other("three".into())],
-                            element: [Choice2::First, Choice2::Second],
-                        }
-                    );
-
-                    #[cfg(not(feature = "overlapped-lists"))]
-                    match data {
-                        Err(DeError::Custom(e)) => {
-                            assert_eq!(e, "invalid length 1, expected an array of length 3")
-                        }
-                        e => panic!(
-                            r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
-                            e
-                        ),
-                    }
-                }
-            }
+            // choice_and_choice struct like
+            //
+            //      #[derive(Deserialize)]
+            //      struct Pair {
+            //          #[serde(rename = "$value")]
+            //          item: [Choice; 2],
+            //
+            //          #[serde(rename = "$value")]
+            //          element: [Choice2; 3],
+            //      }
+            //
+            // cannot be implemented because both fields should be renamed to the
+            // same name $value. Derived implementation will never try to deserialize
+            // `element`
         }
 
         /// Deserialization of primitives slightly differs from deserialization
@@ -3932,83 +3869,20 @@ mod variable_name {
                 }
             }
 
-            /// Tests are ignored, but exists to show a problem.
-            /// May be it will be solved in the future
-            mod choice_and_choice {
-                use super::*;
-                use pretty_assertions::assert_eq;
-
-                #[derive(Debug, PartialEq, Deserialize)]
-                struct Pair {
-                    #[serde(rename = "$value")]
-                    item: Vec<Choice>,
-                    // Actually, we cannot rename both fields to `$value`, which is now
-                    // required to indicate, that field accepts elements with any name
-                    #[serde(rename = "$value")]
-                    element: Vec<Choice2>,
-                }
-
-                #[test]
-                #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
-                fn splitted() {
-                    let data: Pair = from_str(
-                        r#"
-                        <root>
-                            <first/>
-                            <second/>
-                            <one/>
-                            <two/>
-                            <three/>
-                        </root>
-                        "#,
-                    )
-                    .unwrap();
-
-                    assert_eq!(
-                        data,
-                        Pair {
-                            item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
-                            element: vec![Choice2::First, Choice2::Second],
-                        }
-                    );
-                }
-
-                #[test]
-                #[ignore = "There is no way to associate XML elements with `item` or `element` without extra knowledge from type"]
-                fn overlapped() {
-                    let data = from_str::<Pair>(
-                        r#"
-                        <root>
-                            <one/>
-                            <first/>
-                            <two/>
-                            <second/>
-                            <three/>
-                        </root>
-                        "#,
-                    );
-
-                    #[cfg(feature = "overlapped-lists")]
-                    assert_eq!(
-                        data.unwrap(),
-                        Pair {
-                            item: vec![Choice::One, Choice::Two, Choice::Other("three".into())],
-                            element: vec![Choice2::First, Choice2::Second],
-                        }
-                    );
-
-                    #[cfg(not(feature = "overlapped-lists"))]
-                    match data {
-                        Err(DeError::Custom(e)) => {
-                            assert_eq!(e, "invalid length 1, expected an array of length 3")
-                        }
-                        e => panic!(
-                            r#"Expected `Err(Custom("invalid length 1, expected an array of length 3"))`, but got `{:?}`"#,
-                            e
-                        ),
-                    }
-                }
-            }
+            // choice_and_choice struct like
+            //
+            //      #[derive(Deserialize)]
+            //      struct Pair {
+            //          #[serde(rename = "$value")]
+            //          item: Vec<Choice>,
+            //
+            //          #[serde(rename = "$value")]
+            //          element: Vec<Choice2>,
+            //      }
+            //
+            // cannot be implemented because both fields should be renamed to the
+            // same name $value. Derived implementation will never try to deserialize
+            // `element`
         }
 
         /// Deserialization of primitives slightly differs from deserialization
