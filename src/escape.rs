@@ -1820,7 +1820,7 @@ pub const fn resolve_html5_entity(entity: &str) -> Option<&'static str> {
     Some(s)
 }
 
-fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
+pub(crate) fn parse_number(num: &str) -> Result<char, ParseCharRefError> {
     let code = if let Some(hex) = num.strip_prefix('x') {
         from_str_radix(hex, 16)?
     } else {
