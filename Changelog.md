@@ -15,8 +15,6 @@
 
 ### New Features
 
-- [#836]: Add `se::to_utf8_io_writer()` helper compatible with `std::io::Write` and restricted to UTF-8 encoding.
-
 ### Bug Fixes
 
 ### Misc Changes
