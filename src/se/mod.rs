@@ -82,7 +82,7 @@ mod text;
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};
 use crate::de::TEXT_KEY;
-use crate::writer::Indentation;
+use crate::writer::{Indentation, ToFmtWrite};
 use serde::ser::{self, Serialize};
 use serde::serde_if_integer128;
 use std::fmt::Write;
@@ -134,6 +134,54 @@ where
     T: ?Sized + Serialize,
 {
     value.serialize(Serializer::new(&mut writer))
+}
+
+/// Serialize struct into a `io::Write`r restricted to utf-8 encoding.
+///
+/// Returns the classification of the last written type.
+///
+/// # Examples
+///
+/// ```
+/// # use quick_xml::se::to_utf8_io_writer;
+/// # use serde::Serialize;
+/// # use pretty_assertions::assert_eq;
+/// # use std::io::BufWriter;
+/// # use std::str;
+/// #[derive(Serialize)]
+/// struct Root<'a> {
+///     #[serde(rename = "@attribute")]
+///     attribute: &'a str,
+///     element: &'a str,
+///     #[serde(rename = "$text")]
+///     text: &'a str,
+/// }
+///
+/// let data = Root {
+///     attribute: "attribute content",
+///     element: "element content",
+///     text: "text content",
+/// };
+///
+/// let mut buffer = Vec::new();
+/// to_utf8_io_writer(&mut BufWriter::new(&mut buffer), &data).unwrap();
+///
+/// assert_eq!(
+///     str::from_utf8(&buffer).unwrap(),
+///     // The root tag name is automatically deduced from the struct name
+///     // This will not work for other types or struct with #[serde(flatten)] fields
+///     "<Root attribute=\"attribute content\">\
+///         <element>element content</element>\
+///         text content\
+///     </Root>"
+/// );
+/// ```
+pub fn to_utf8_io_writer<W, T>(writer: W, value: &T) -> Result<WriteResult, SeError>
+where
+    W: std::io::Write,
+    T: ?Sized + Serialize,
+{
+    value.serialize(Serializer::new(&mut ToFmtWrite(writer)))
 }
 
 /// Serialize struct into a `String`.
