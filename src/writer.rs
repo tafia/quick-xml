@@ -577,7 +577,7 @@ impl<'a, W: Write> ElementWriter<'a, W> {
     }
 }
 #[cfg(feature = "serialize")]
-struct ToFmtWrite<T>(pub T);
+pub(crate) struct ToFmtWrite<T>(pub T);
 
 #[cfg(feature = "serialize")]
 impl<T> std::fmt::Write for ToFmtWrite<T>
