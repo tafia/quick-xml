@@ -21,6 +21,13 @@
 
 ### Misc Changes
 
+
+## 0.37.2 -- 2024-12-29
+
+### New Features
+
+- [#836]: Add `se::to_utf8_io_writer()` helper compatible with `std::io::Write` and restricted to UTF-8 encoding.
+
 [#836]: https://github.com/tafia/quick-xml/pull/836
 
 
