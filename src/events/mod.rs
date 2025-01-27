@@ -51,11 +51,16 @@ use crate::errors::{Error, IllFormedError};
 use crate::escape::{
     escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
 };
+#[cfg(feature = "serialize")]
+use crate::name::Namespace;
 use crate::name::{LocalName, QName};
 #[cfg(feature = "serialize")]
 use crate::utils::CowRef;
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
 use attributes::{AttrError, Attribute, Attributes};
+
+#[cfg(feature = "serialize")]
+const XSI_NAMESPACE_URL: Namespace = Namespace(b"http://www.w3.org/2001/XMLSchema-instance");
 
 /// Opening tag data (`Event::Start`), with optional attributes: `<name attr="value">`.
 ///
@@ -232,6 +237,34 @@ impl<'a> BytesStart<'a> {
             Cow::Owned(ref o) => CowRef::Slice(&o[..self.name_len]),
         }
     }
+
+    /// This method checks if the current tag has a `xsi::nil` attribute
+    ///
+    /// This attribute should be used for deciding if the value is not set
+    /// according to https://www.w3.org/TR/xmlschema-1/#xsi_nil
+    #[cfg(feature = "serialize")]
+    pub(crate) fn has_nil_attr(&self, reader: &dyn crate::de::XmlRead) -> bool {
+        use crate::name::ResolveResult;
+
+        let default_ns = reader.default_namespace();
+        self.attributes().any(|attr| {
+            if let Ok(attr) = attr {
+                let value_is_true = &*attr.value == b"true" || &*attr.value == b"1";
+                let might_be_nil_attr = attr.key.0.ends_with(b"nil");
+                if value_is_true && might_be_nil_attr {
+                    let (res, local_name) = reader.resolve_attribute(attr.key);
+                    (matches!(res, ResolveResult::Bound(XSI_NAMESPACE_URL))
+                        || (matches!(res, ResolveResult::Unbound)
+                            && default_ns == Some(XSI_NAMESPACE_URL)))
+                        && local_name.as_ref() == b"nil"
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    }
 }
 
 /// Attribute-related methods
@@ -278,7 +311,7 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes {
+    pub fn attributes<'b>(&'b self) -> Attributes<'b> {
         Attributes::wrap(&self.buf, self.name_len, false)
     }
 

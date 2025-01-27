@@ -1639,3 +1639,134 @@ mod xml_prolog {
         );
     }
 }
+
+mod nil {
+    use quick_xml::DeError;
+
+    #[derive(Debug, serde::Deserialize, PartialEq)]
+    struct Foo {
+        tag: String,
+    }
+
+    #[derive(Debug, serde::Deserialize, PartialEq)]
+    struct Bar {
+        foo: Option<Foo>,
+    }
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    struct Helper {
+        #[serde(rename = "@attr")]
+        attr: String,
+        #[serde(rename = "$value")]
+        inner: Option<Foo>,
+    }
+
+    #[derive(Debug, PartialEq, serde::Deserialize)]
+    struct BarWithHelper {
+        foo: Helper,
+    }
+
+    macro_rules! assert_error_matches {
+        ($res: expr, $err: pat) => {
+            assert!(
+                matches!($res, Err($err)),
+                concat!("Expected `", stringify!($err), "`, but got `{:?}`"),
+                $res
+            );
+        };
+    }
+
+    #[test]
+    fn true_() {
+        let data = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true"/>"#;
+
+        let res = quick_xml::de::from_str::<Option<Foo>>(data).unwrap();
+        assert_eq!(res, None);
+
+        let data = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" attr="value"/>"#;
+        let res = quick_xml::de::from_str::<Helper>(data).unwrap();
+        assert_eq!(
+            res,
+            Helper {
+                attr: String::from("value"),
+                inner: None
+            }
+        );
+
+        let data = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true"><tag>Foo</tag></foo>"#;
+        let res = quick_xml::de::from_str::<Option<Foo>>(data).unwrap();
+        assert_eq!(res, None);
+    }
+
+    #[test]
+    fn false_() {
+        let data =
+            r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="false"/>"#;
+        let res = quick_xml::de::from_str::<Option<Foo>>(data);
+        assert_error_matches!(res, DeError::Custom(_));
+        let data = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="false" attr="value"/>"#;
+        let res = quick_xml::de::from_str::<Option<Foo>>(data);
+        assert_error_matches!(res, DeError::Custom(_));
+        let data = r#"<foo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="false"><tag>Foo</tag></foo>"#;
+        let res = quick_xml::de::from_str::<Option<Foo>>(data).unwrap();
+        assert_eq!(
+            res,
+            Some(Foo {
+                tag: String::from("Foo")
+            })
+        );
+    }
+
+    #[test]
+    fn nested_nil_true() {
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="true"/></bar>"#;
+        let res = quick_xml::de::from_str::<Bar>(data).unwrap();
+        assert_eq!(res, Bar { foo: None });
+
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="true" attr="value"/></bar>"#;
+        let res = quick_xml::de::from_str::<BarWithHelper>(data).unwrap();
+        assert_eq!(
+            res,
+            BarWithHelper {
+                foo: Helper {
+                    attr: String::from("value"),
+                    inner: None
+                }
+            }
+        );
+
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="true"><tag>Foo</tag></foo></bar>"#;
+        let res = quick_xml::de::from_str::<Bar>(data).unwrap();
+        assert_eq!(res, Bar { foo: None });
+    }
+
+    #[test]
+    fn nested_nil_false() {
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="false"/></bar>"#;
+        let res = quick_xml::de::from_str::<Bar>(data);
+        assert_error_matches!(res, DeError::Custom(_));
+
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="false" attr="value"/></bar>"#;
+        let res = quick_xml::de::from_str::<BarWithHelper>(data).unwrap();
+        assert_eq!(
+            res,
+            BarWithHelper {
+                foo: Helper {
+                    attr: String::from("value"),
+                    inner: None
+                }
+            }
+        );
+
+        let data = r#"<bar xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><foo xsi:nil="false"><tag>Foo</tag></foo></bar>"#;
+        let res = quick_xml::de::from_str::<Bar>(data).unwrap();
+        assert_eq!(
+            res,
+            Bar {
+                foo: Some(Foo {
+                    tag: String::from("Foo")
+                })
+            }
+        );
+    }
+}
