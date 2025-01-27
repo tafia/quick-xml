@@ -215,6 +215,21 @@ where
             has_value_field: fields.contains(&VALUE_KEY),
         })
     }
+
+    /// Determines if subtree started with the specified event shoould be skipped.
+    ///
+    /// Used to map elements with `xsi:nil` attribute set to true to `None` in optional contexts.
+    ///
+    /// We need to handle two attributes:
+    /// - on parent element: <map xsi:nil="true"><foo/></map>
+    /// - on this element:   <map><foo xsi:nil="true"/></map>
+    ///
+    /// We check parent element too because `xsi:nil` affects only nested elements of the
+    /// tag where it is defined. We can map structure with fields mapped to attributes to
+    /// the `<map>` element and set to `None` all its optional elements.
+    fn should_skip_subtree(&self, start: &BytesStart) -> bool {
+        self.de.reader.reader.has_nil_attr(&self.start) || self.de.reader.reader.has_nil_attr(start)
+    }
 }
 
 impl<'de, 'd, R, E> MapAccess<'de> for ElementMapAccess<'de, 'd, R, E>
@@ -540,8 +555,14 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
+        // We cannot use result of `peek()` directly because of borrow checker
+        let _ = self.map.de.peek()?;
+        match self.map.de.last_peeked() {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Start(start) if self.map.should_skip_subtree(start) => {
+                self.map.de.skip_next_tree()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
