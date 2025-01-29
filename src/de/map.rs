@@ -540,8 +540,16 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.map.de.peek()? {
+        let _ = self.map.de.peek()?;
+        match self.map.de.readable_peek().expect("This exists as we called peek before") {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
+            DeEvent::Start(start)
+                // if the `xsi:nil` attribute is set to true we got a none value
+                if start.has_nil_attr(&self.map.de.reader.reader) =>
+            {
+                self.map.de.skip_nil_tag()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
