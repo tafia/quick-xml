@@ -362,7 +362,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         if let Some(mut content) = self.content.take() {
             // NOTE: when normalization will be implemented, it may be enough
             // to check only b' ', because all whitespaces will be normalized
-            const DELIMETERS: [u8; 4] = [b' ', b'\t', b'\r', b'\n']; 
+            const DELIMETERS: &str = " \t\r\n";
 
             loop {
                 let string = content.as_str();
@@ -370,7 +370,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                     return Ok(None);
                 }
 
-                let first_delimiter = string.as_bytes().iter().position(|c| DELIMETERS.contains(c));
+                let first_delimiter = string.find(|c| DELIMETERS.contains(c));
 
                 return match first_delimiter {
                     // No delimiters in the `content`, deserialize it as a whole atomic
@@ -395,7 +395,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                     // `content` started with a space, skip them all
                     Some(0) => {
                         // Skip all spaces
-                        let start = string.as_bytes().iter().position(|c| !DELIMETERS.contains(c));
+                        let start = string.find(|c| !DELIMETERS.contains(c));
                         content = match (start, content) {
                             // We cannot find any non-space character, so string contains only spaces
                             (None, _) => return Ok(None),
