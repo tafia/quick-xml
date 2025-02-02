@@ -360,6 +360,8 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
         T: DeserializeSeed<'de>,
     {
         if let Some(mut content) = self.content.take() {
+            // NOTE: when normalization will be implemented, it may be enough
+            // to check only b' ', because all whitespaces will be normalized
             const DELIMETERS: [u8; 4] = [b' ', b'\t', b'\r', b'\n']; 
 
             loop {
