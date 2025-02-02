@@ -1172,6 +1172,23 @@ mod tests {
             assert_eq!(seq.next_element::<()>().unwrap(), None);
             assert_eq!(seq.next_element::<()>().unwrap(), None);
         }
+
+        #[test]
+        fn mixed_whitespace_delimiters() {
+            let mut seq = ListIter {
+                content: Some(Content::Input("one two\nthree\rfour\tfive six")),
+                escaped: true,
+            };
+
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("one"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("two"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("three"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("four"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("five"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), Some("six"));
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+            assert_eq!(seq.next_element::<&str>().unwrap(), None);
+        }
     }
 
     mod utf8 {
