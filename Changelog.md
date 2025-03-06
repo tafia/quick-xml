@@ -13,11 +13,30 @@
 
 ## Unreleased
 
+### Significant changes
+
+Now references to entities (as predefined, such as `&lt;`, as user-defined) reported as a new
+`Event::GeneralRef`.
+Caller can parse the content of the entity and stream events from it as it is required by the
+XML specification. See the updated `custom_entities` example!
+
 ### New Features
+
+- [#766]: Allow to parse resolved entities as XML fragments and stream events from them.
+- [#766]: Added new event `Event::GeneralRef` with content of [general entity].
+- [#766]: Added new configuration option `allow_dangling_amp` which allows to have
+  a `&` not followed by `;` in the textual data which is required for some applications
+  for compatibility reasons.
 
 ### Bug Fixes
 
 ### Misc Changes
+
+- [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
+  Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
+
+[#766]: https://github.com/tafia/quick-xml/pull/766
+[general entity]: https://www.w3.org/TR/xml11/#gen-entity
 
 
 ## 0.37.2 -- 2024-12-29
