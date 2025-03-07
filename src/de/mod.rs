@@ -2033,6 +2033,8 @@ use std::ops::Deref;
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
+/// Data serializeded as CDATA node.
+pub(crate) const CDATA_KEY: &str = "$cdata";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
 

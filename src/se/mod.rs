@@ -78,6 +78,7 @@ mod element;
 pub(crate) mod key;
 pub(crate) mod simple_type;
 mod text;
+mod cdata;
 
 use self::content::ContentSerializer;
 use self::element::{ElementSerializer, Map, Struct, Tuple};
@@ -385,6 +386,9 @@ pub enum WriteResult {
     /// `None` was serialized and nothing was written. `None` does not represented in XML,
     /// but adding indent after it may change meaning of the data.
     SensitiveNothing,
+    /// CDATA section was written. Adding indent to the serialized data does not change meaning
+    /// of the data, but it's sensitive content that should be escaped differently.
+    CData,
 }
 
 impl WriteResult {
@@ -397,7 +401,7 @@ impl WriteResult {
     /// Returns `true` if self is `Text` or `SensitiveText`.
     #[inline]
     pub fn is_text(&self) -> bool {
-        matches!(self, Self::Text | Self::SensitiveText)
+        matches!(self, Self::Text | Self::SensitiveText | Self::CData)
     }
 }
 
