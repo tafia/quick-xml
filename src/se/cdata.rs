@@ -10,8 +10,23 @@ use std::fmt::Write;
 macro_rules! write_primitive {
     ($method:ident ( $ty:ty )) => {
         #[inline]
-        fn $method(self, value: $ty) -> Result<Self::Ok, Self::Error> {
-            self.0.$method(value)
+        fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
+            self.0.writer.write_str("<![CDATA[")?;
+            write!(self.0.writer, "{}", value)?;
+            self.0.writer.write_str("]]>")?;
+            Ok(self.0.writer)
+        }
+    };
+}
+
+macro_rules! write_primitive_debug {
+    ($method:ident ( $ty:ty )) => {
+        #[inline]
+        fn $method(mut self, value: $ty) -> Result<Self::Ok, Self::Error> {
+            self.0.writer.write_str("<![CDATA[")?;
+            write!(self.0.writer, "{:?}", value)?;
+            self.0.writer.write_str("]]>")?;
+            Ok(self.0.writer)
         }
     };
 }
@@ -58,21 +73,8 @@ impl<W: Write> Serializer for CDataSerializer<W> {
     write_primitive!(serialize_f64(f64));
 
     write_primitive!(serialize_char(char));
-    // write_primitive!(serialize_str(&str));
-    write_primitive!(serialize_bytes(&[u8]));
-
-    fn serialize_str(mut self, v: &str) -> Result<Self::Ok, Self::Error> {
-        // Записываем открывающий тег CDATA
-        self.0.writer.write_str("<![CDATA[")?;
-
-        // Записываем строку без экранирования
-        self.0.writer.write_str(v)?;
-
-        // Записываем закрывающий тег CDATA
-        self.0.writer.write_str("]]>")?;
-
-        Ok(self.0.writer)
-    }
+    write_primitive!(serialize_str(&str));
+    write_primitive_debug!(serialize_bytes(&[u8]));
 
     #[inline]
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {

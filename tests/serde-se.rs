@@ -55,6 +55,13 @@ struct Text {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
+struct CData {
+    #[serde(rename = "$cdata")]
+    float: f64,
+    string: &'static str,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 enum ExternallyTagged {
     Unit,
     Newtype(bool),
@@ -75,6 +82,12 @@ enum ExternallyTagged {
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
+        float: f64,
+        string: &'static str,
+    },
+    /// `float` field serialized as cdata content instead of a tag
+    CData {
+        #[serde(rename = "$cdata")]
         float: f64,
         string: &'static str,
     },
@@ -111,6 +124,12 @@ enum InternallyTagged {
         float: f64,
         string: &'static str,
     },
+    /// `float` field serialized as cdata content instead of a tag
+    CData {
+        #[serde(rename = "$cdata")]
+        float: f64,
+        string: &'static str,
+    },
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
@@ -143,6 +162,12 @@ enum AdjacentlyTagged {
         float: f64,
         string: &'static str,
     },
+    /// `float` field serialized as textual content instead of a tag
+    CData {
+        #[serde(rename = "$cdata")]
+        float: f64,
+        string: &'static str,
+    },
     Empty {},
     EmptyWithAttribute {
         #[serde(rename = "@attr")]
@@ -172,6 +197,12 @@ enum Untagged {
     /// `float` field serialized as textual content instead of a tag
     Text {
         #[serde(rename = "$text")]
+        float: f64,
+        string: &'static str,
+    },
+    /// `float` field serialized as textual content instead of a tag
+    CData {
+        #[serde(rename = "$cdata")]
         float: f64,
         string: &'static str,
     },
@@ -342,7 +373,15 @@ mod without_root {
                 42\
                 <string>answer</string>\
             </Text>");
-
+    serialize_as!(cdata:
+        CData {
+            float: 42.0,
+            string: "answer",
+        }
+        => "<CData>\
+                <![CDATA[42]]>\
+                <string>answer</string>\
+            </CData>");
     mod enum_ {
         use super::*;
 
@@ -416,7 +455,15 @@ mod without_root {
                         42\
                         <string>answer</string>\
                     </Text>");
-
+            serialize_as!(cdata:
+                ExternallyTagged::CData {
+                    float: 42.0,
+                    string: "answer",
+                }
+                => "<CData>\
+                        <![CDATA[42]]>\
+                        <string>answer</string>\
+                    </CData>");
             /// Test serialization of the specially named variant `$text`.
             ///
             /// Enum representation:
