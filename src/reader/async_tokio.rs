@@ -119,7 +119,8 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         mut buf: &'b mut Vec<u8>,
     ) -> Result<Event<'b>> {
         read_event_impl!(
-            self, buf,
+            self,
+            buf,
             TokioAdapter(&mut self.reader),
             read_until_close_async,
             await
@@ -181,7 +182,16 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
         end: QName<'n>,
         buf: &mut Vec<u8>,
     ) -> Result<Span> {
-        Ok(read_to_end!(self, end, buf, read_event_into_async, { buf.clear(); }, await))
+        Ok(read_to_end!(
+            self,
+            end,
+            buf,
+            read_event_into_async,
+            {
+                buf.clear();
+            },
+            await
+        ))
     }
 
     /// Private function to read until `>` is found. This function expects that
@@ -410,7 +420,8 @@ mod test {
         read_until_close_async,
         TokioAdapter,
         &mut Vec::new(),
-        async, await
+        async,
+        await
     );
 
     #[test]
