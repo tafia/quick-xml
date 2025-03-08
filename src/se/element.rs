@@ -1,10 +1,11 @@
 //! Contains serializer for an XML element
 
-use crate::de::{TEXT_KEY, VALUE_KEY};
+use crate::de::{TEXT_KEY, CDATA_KEY, VALUE_KEY};
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
 use crate::se::text::TextSerializer;
+use crate::se::cdata::CDataSerializer;
 use crate::se::{SeError, WriteResult, XmlName};
 use serde::ser::{
     Impossible, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
@@ -450,6 +451,11 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
         if key == TEXT_KEY {
             value.serialize(TextSerializer(ser.into_simple_type_serializer()?))?;
             // Text was written so we don't need to indent next field
+            self.write_indent = false;
+        } else if key == CDATA_KEY {
+            // Новый блок для CDATA
+            value.serialize(CDataSerializer(ser.into_simple_type_serializer()?))?;
+            // CDATA was written, no indent needed
             self.write_indent = false;
         } else if key == VALUE_KEY {
             // If element was written then we need to indent next field unless it is a text field

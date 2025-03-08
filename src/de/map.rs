@@ -5,7 +5,7 @@ use crate::{
     de::resolver::EntityResolver,
     de::simple_type::SimpleTypeDeserializer,
     de::text::TextDeserializer,
-    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
+    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, CDATA_KEY, VALUE_KEY},
     encoding::Decoder,
     errors::serialize::DeError,
     errors::Error,
@@ -186,6 +186,13 @@ where
     /// List of field names of the struct. It is empty for maps
     fields: &'static [&'static str],
     /// If `true`, then the deserialized struct has a field with a special name:
+    /// [`CDATA_KEY`]. That field should be deserialized same as $text
+    ///
+    /// ```xml
+    /// <tag><![CDATA[Some data]]><tag>
+    /// ```
+    has_cdata_field: bool,
+    /// If `true`, then the deserialized struct has a field with a special name:
     /// [`VALUE_KEY`]. That field should be deserialized from the whole content
     /// of an XML node, including tag name:
     ///
@@ -212,6 +219,7 @@ where
             start,
             source: ValueSource::Unknown,
             fields,
+            has_cdata_field: fields.contains(&CDATA_KEY),
             has_value_field: fields.contains(&VALUE_KEY),
         })
     }
@@ -254,6 +262,14 @@ where
                     // that value should be taken from the text content of the
                     // XML node
                     let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
+                    seed.deserialize(de).map(Some)
+                }
+                DeEvent::Text(_) if self.has_cdata_field => {
+                    self.source = ValueSource::Text;
+                    // Deserialize `key` from special attribute name which means
+                    // that value should be taken from the text content of the
+                    // XML node
+                    let de = BorrowedStrDeserializer::<DeError>::new(CDATA_KEY);
                     seed.deserialize(de).map(Some)
                 }
                 DeEvent::Text(_) => {
