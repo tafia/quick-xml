@@ -6,7 +6,7 @@ use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
 use crate::name::QName;
-use crate::utils::{is_whitespace, write_byte_string, write_cow_string, Bytes};
+use crate::utils::{is_whitespace, Bytes};
 
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
@@ -100,11 +100,10 @@ impl<'a> Attribute<'a> {
 
 impl<'a> Debug for Attribute<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ key: ")?;
-        write_byte_string(f, self.key.as_ref())?;
-        write!(f, ", value: ")?;
-        write_cow_string(f, &self.value)?;
-        write!(f, " }}")
+        f.debug_struct("Attribute")
+            .field("key", &Bytes(self.key.as_ref()))
+            .field("value", &Bytes(&self.value))
+            .finish()
     }
 }
 
@@ -196,7 +195,7 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// [`with_checks(false)`]: Self::with_checks
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Attributes<'a> {
     /// Slice of `BytesStart` corresponding to attributes
     bytes: &'a [u8],
@@ -233,6 +232,15 @@ impl<'a> Attributes<'a> {
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.state.check_duplicates = val;
         self
+    }
+}
+
+impl<'a> Debug for Attributes<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("Attributes")
+            .field("bytes", &Bytes(&self.bytes))
+            .field("state", &self.state)
+            .finish()
     }
 }
 
