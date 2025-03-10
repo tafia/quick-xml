@@ -2010,14 +2010,15 @@ pub use self::resolver::{EntityResolver, PredefinedEntityResolver};
 pub use self::simple_type::SimpleTypeDeserializer;
 pub use crate::errors::serialize::DeError;
 
+use crate::name::{LocalName, Namespace, PrefixDeclaration, ResolveResult};
 use crate::{
     de::map::ElementMapAccess,
     encoding::Decoder,
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Reader,
     utils::CowRef,
+    NsReader,
 };
 use serde::de::{
     self, Deserialize, DeserializeOwned, DeserializeSeed, IntoDeserializer, SeqAccess, Visitor,
@@ -2534,6 +2535,17 @@ where
         }
     }
 
+    fn readable_peek(&self) -> Option<&DeEvent<'de>> {
+        #[cfg(not(feature = "overlapped-lists"))]
+        {
+            self.peek.as_ref()
+        }
+        #[cfg(feature = "overlapped-lists")]
+        {
+            self.read.front()
+        }
+    }
+
     fn next(&mut self) -> Result<DeEvent<'de>, DeError> {
         // Replay skipped or peeked events
         #[cfg(feature = "overlapped-lists")]
@@ -2764,6 +2776,14 @@ where
         }
         self.reader.read_to_end(name)
     }
+
+    fn skip_nil_tag(&mut self) -> Result<(), DeError> {
+        let DeEvent::Start(start) = self.next()? else {
+            unreachable!("Only call this if the next event is a start event")
+        };
+        let name = start.name();
+        self.read_to_end(name)
+    }
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
@@ -2783,7 +2803,7 @@ where
     /// Create new deserializer that will borrow data from the specified string
     /// and use specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
-        let mut reader = Reader::from_str(source);
+        let mut reader = NsReader::from_str(source);
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -2826,7 +2846,7 @@ where
     /// will borrow instead of copy. If you have `&[u8]` which is known to represent
     /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
-        let mut reader = Reader::from_reader(reader);
+        let mut reader = NsReader::from_reader(reader);
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -2945,9 +2965,17 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.peek()? {
+        let _ = self.peek()?;
+        match self.readable_peek().expect("This exists as we called peek before") {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
+            DeEvent::Start(start)
+                // if the `xsi:nil` attribute is set to true we got a none value
+                if start.has_nil_attr(&self.reader.reader) =>
+            {
+                self.skip_nil_tag()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
@@ -3071,6 +3099,14 @@ pub trait XmlRead<'i> {
 
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
+
+    /// Resolves a potentially qualified **attribute name** into _(namespace name, local name)_.
+    ///
+    /// See [`NsReader::resolve_attribute`] for details
+    fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>);
+
+    /// Get the current default namespace
+    fn default_namespace(&self) -> Option<Namespace<'_>>;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -3078,7 +3114,7 @@ pub trait XmlRead<'i> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
-    reader: Reader<R>,
+    reader: NsReader<R>,
     start_trimmer: StartTrimmer,
     buf: Vec<u8>,
 }
@@ -3113,7 +3149,7 @@ impl<R: BufRead> IoReader<R> {
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &Reader<R> {
+    pub const fn get_ref(&self) -> &NsReader<R> {
         &self.reader
     }
 }
@@ -3140,6 +3176,20 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
     }
+
+    fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+        self.reader.resolve_attribute(name)
+    }
+
+    fn default_namespace(&self) -> Option<Namespace<'_>> {
+        self.reader.prefixes().find_map(|(key, value)| {
+            if PrefixDeclaration::Default == key {
+                Some(value)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 /// XML input source that reads from a slice of bytes and can borrow from it.
@@ -3147,7 +3197,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
-    reader: Reader<&'de [u8]>,
+    reader: NsReader<&'de [u8]>,
     start_trimmer: StartTrimmer,
 }
 
@@ -3180,7 +3230,7 @@ impl<'de> SliceReader<'de> {
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &Reader<&'de [u8]> {
+    pub const fn get_ref(&self) -> &NsReader<&'de [u8]> {
         &self.reader
     }
 }
@@ -3204,6 +3254,20 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
+    }
+
+    fn resolve_attribute<'n>(&self, name: QName<'n>) -> (ResolveResult, LocalName<'n>) {
+        self.reader.resolve_attribute(name)
+    }
+
+    fn default_namespace(&self) -> Option<Namespace<'_>> {
+        self.reader.prefixes().find_map(|(key, value)| {
+            if PrefixDeclaration::Default == key {
+                Some(value)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -3781,12 +3845,12 @@ mod tests {
         "#;
 
         let mut reader1 = IoReader {
-            reader: Reader::from_reader(s.as_bytes()),
+            reader: NsReader::from_reader(s.as_bytes()),
             start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
-            reader: Reader::from_str(s),
+            reader: NsReader::from_str(s),
             start_trimmer: StartTrimmer::default(),
         };
 
@@ -3812,7 +3876,7 @@ mod tests {
         "#;
 
         let mut reader = SliceReader {
-            reader: Reader::from_str(s),
+            reader: NsReader::from_str(s),
             start_trimmer: StartTrimmer::default(),
         };
 
