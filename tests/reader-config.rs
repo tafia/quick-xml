@@ -6,8 +6,74 @@
 //! Please keep tests sorted (exceptions are allowed if options are tightly related).
 
 use quick_xml::errors::{Error, IllFormedError};
-use quick_xml::events::{BytesCData, BytesEnd, BytesPI, BytesStart, BytesText, Event};
+use quick_xml::events::{BytesCData, BytesEnd, BytesPI, BytesRef, BytesStart, BytesText, Event};
 use quick_xml::reader::Reader;
+
+mod allow_dangling_amp {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn false_() {
+        let mut reader = Reader::from_str("&&&lt;&");
+        reader.config_mut().allow_dangling_amp = false;
+
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::UnclosedReference);
+            }
+            x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
+        }
+        assert_eq!(reader.error_position()..reader.buffer_position(), 0..1);
+
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::UnclosedReference);
+            }
+            x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
+        }
+        assert_eq!(reader.error_position()..reader.buffer_position(), 1..2);
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::GeneralRef(BytesRef::new("lt"))
+        );
+        match reader.read_event() {
+            Err(Error::IllFormed(cause)) => {
+                assert_eq!(cause, IllFormedError::UnclosedReference);
+            }
+            x => panic!("Expected `Err(Syntax(_))`, but got `{:?}`", x),
+        }
+        assert_eq!(reader.error_position()..reader.buffer_position(), 6..7);
+
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+        assert_eq!(reader.error_position()..reader.buffer_position(), 6..7);
+    }
+
+    #[test]
+    fn true_() {
+        let mut reader = Reader::from_str("&&&lt;&");
+        reader.config_mut().allow_dangling_amp = true;
+
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::from_escaped("&"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::from_escaped("&"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::GeneralRef(BytesRef::new("lt"))
+        );
+        assert_eq!(
+            reader.read_event().unwrap(),
+            Event::Text(BytesText::from_escaped("&"))
+        );
+        assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    }
+}
 
 mod allow_unmatched_ends {
     use super::*;
