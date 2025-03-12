@@ -683,7 +683,7 @@ where
 /// ```
 ///
 /// [`NsReader`]: crate::reader::NsReader
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Reader<R> {
     /// Source of data for parse
     reader: R,
