@@ -96,6 +96,42 @@ impl<'a> Attribute<'a> {
             Cow::Owned(s) => Ok(s.into()),
         }
     }
+
+    /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
+    ///
+    /// The valid boolean representations are only `"true"`, `"false"`, `"1"`, and `"0"`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let attr = Attribute::from(("attr", "false"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "0"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "true"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "1"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "bot bool"));
+    /// assert_eq!(attr.as_bool(), None);
+    /// ```
+    ///
+    /// [represents]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self.value.as_ref() {
+            b"1" | b"true" => Some(true),
+            b"0" | b"false" => Some(false),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> Debug for Attribute<'a> {

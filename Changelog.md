@@ -15,9 +15,13 @@
 
 ### New Features
 
+- [#850]: Add `Attribute::as_bool()` method to get an attribute value as a boolean.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#850]: https://github.com/tafia/quick-xml/pull/850
 
 
 ## 0.37.2 -- 2024-12-29
