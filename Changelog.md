@@ -16,6 +16,7 @@
 ### New Features
 
 - [#850]: Add `Attribute::as_bool()` method to get an attribute value as a boolean.
+- [#850]: Add `Attributes::has_nil()` method to check if attributes has `xsi:nil` attribute set to `true`.
 
 ### Bug Fixes
 
