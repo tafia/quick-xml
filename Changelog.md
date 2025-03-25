@@ -15,9 +15,16 @@
 
 ### New Features
 
+- [#850]: Add `Attribute::as_bool()` method to get an attribute value as a boolean.
+- [#850]: Add `Attributes::has_nil()` method to check if attributes has `xsi:nil` attribute set to `true`.
+- [#497]: Handle `xsi:nil` attribute in serde Deserializer to better process optional fields.
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#497]: https://github.com/tafia/quick-xml/issues/497
+[#850]: https://github.com/tafia/quick-xml/pull/850
 
 
 ## 0.37.2 -- 2024-12-29

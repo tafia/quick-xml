@@ -19,6 +19,7 @@
 //!   - [Optional attributes and elements](#optional-attributes-and-elements)
 //!   - [Choices (`xs:choice` XML Schema type)](#choices-xschoice-xml-schema-type)
 //!   - [Sequences (`xs:all` and `xs:sequence` XML Schema types)](#sequences-xsall-and-xssequence-xml-schema-types)
+//! - [Mapping of `xsi:nil`](#mapping-of-xsinil)
 //! - [Generate Rust types from XML](#generate-rust-types-from-xml)
 //! - [Composition Rules](#composition-rules)
 //! - [Enum Representations](#enum-representations)
@@ -413,6 +414,13 @@
 //! <any-tag optional=""/>   <!-- Some("") -->
 //! <any-tag/>               <!-- None -->
 //! ```
+//! <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+//!
+//! NOTE: The behaviour is not symmetric by default. `None` will be serialized as
+//! `optional=""`. This behaviour is consistent across serde crates. You should add
+//! `#[serde(skip_serializing_if = "Option::is_none")]` attribute to the field to
+//! skip `None`s.
+//! </div>
 //! </td>
 //! </tr>
 //! <!-- 7 ===================================================================================== -->
@@ -454,9 +462,15 @@
 //! When the XML element is present, type `T` will be deserialized from an
 //! element (which is a string or a multi-mapping -- i.e. mapping which can have
 //! duplicated keys).
-//! <div style="background:rgba(80, 240, 100, 0.20);padding:0.75em;">
+//! <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
 //!
-//! Currently some edge cases exists described in the issue [#497].
+//! NOTE: The behaviour is not symmetric by default. `None` will be serialized as
+//! `<optional/>`. This behaviour is consistent across serde crates. You should add
+//! `#[serde(skip_serializing_if = "Option::is_none")]` attribute to the field to
+//! skip `None`s.
+//!
+//! NOTE: Deserializer will automatically handle a [`xsi:nil`] attribute and set field to `None`.
+//! For more info see [Mapping of `xsi:nil`](#mapping-of-xsinil).
 //! </div>
 //! </td>
 //! </tr>
@@ -1312,6 +1326,65 @@
 //! </table>
 //!
 //!
+//! Mapping of `xsi:nil`
+//! ====================
+//!
+//! quick-xml supports handling of [`xsi:nil`] special attribute. When field of optional
+//! type is mapped to the XML element which have `xsi:nil="true"` set, or if that attribute
+//! is placed on parent XML element, the deserializer will call [`Visitor::visit_none`]
+//! and skip XML element corresponding to a field.
+//!
+//! Examples:
+//!
+//! ```
+//! # use pretty_assertions::assert_eq;
+//! # use serde::Deserialize;
+//! #[derive(Deserialize, Debug, PartialEq)]
+//! struct TypeWithOptionalField {
+//!   element: Option<String>,
+//! }
+//!
+//! assert_eq!(
+//!   TypeWithOptionalField {
+//!     element: None,
+//!   },
+//!   quick_xml::de::from_str("
+//!     <any-tag xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
+//!       <element xsi:nil='true'>Content is skiped because of xsi:nil='true'</element>
+//!     </any-tag>
+//!   ").unwrap(),
+//! );
+//! ```
+//!
+//! You can capture attributes from the optional type, because ` xsi:nil="true"` elements can have
+//! attributes:
+//! ```
+//! # use pretty_assertions::assert_eq;
+//! # use serde::Deserialize;
+//! #[derive(Deserialize, Debug, PartialEq)]
+//! struct TypeWithOptionalField {
+//!   #[serde(rename = "@attribute")]
+//!   attribute: usize,
+//!
+//!   element: Option<String>,
+//!   non_optional: String,
+//! }
+//!
+//! assert_eq!(
+//!   TypeWithOptionalField {
+//!     attribute: 42,
+//!     element: None,
+//!     non_optional: "Note, that non-optional fields will be deserialized as usual".to_string(),
+//!   },
+//!   quick_xml::de::from_str("
+//!     <any-tag attribute='42' xsi:nil='true' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
+//!       <element>Content is skiped because of xsi:nil='true'</element>
+//!       <non_optional>Note, that non-optional fields will be deserialized as usual</non_optional>
+//!     </any-tag>
+//!   ").unwrap(),
+//! );
+//! ```
+//!
 //! Generate Rust types from XML
 //! ============================
 //!
@@ -1820,7 +1893,7 @@
 //! [`overlapped-lists`]: ../index.html#overlapped-lists
 //! [specification]: https://www.w3.org/TR/xmlschema11-1/#Simple_Type_Definition
 //! [`deserialize_with`]: https://serde.rs/field-attrs.html#deserialize_with
-//! [#497]: https://github.com/tafia/quick-xml/issues/497
+//! [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
 //! [`Serializer::serialize_unit_variant`]: serde::Serializer::serialize_unit_variant
 //! [`Deserializer::deserialize_enum`]: serde::Deserializer::deserialize_enum
 //! [`SeError::Unsupported`]: crate::errors::serialize::SeError::Unsupported
@@ -2016,7 +2089,7 @@ use crate::{
     errors::Error,
     events::{BytesCData, BytesEnd, BytesStart, BytesText, Event},
     name::QName,
-    reader::Reader,
+    reader::NsReader,
     utils::CowRef,
 };
 use serde::de::{
@@ -2415,7 +2488,7 @@ where
     /// # use pretty_assertions::assert_eq;
     /// use serde::Deserialize;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::Reader;
+    /// use quick_xml::NsReader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -2432,7 +2505,7 @@ where
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &Reader<_> = de.get_ref().get_ref();
+    /// let reader: &NsReader<_> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
@@ -2531,6 +2604,22 @@ where
             // TODO: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
             // if unsafe code will be allowed
             None => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn last_peeked(&self) -> &DeEvent<'de> {
+        #[cfg(feature = "overlapped-lists")]
+        {
+            self.read
+                .front()
+                .expect("`Deserializer::peek()` should be called")
+        }
+        #[cfg(not(feature = "overlapped-lists"))]
+        {
+            self.peek
+                .as_ref()
+                .expect("`Deserializer::peek()` should be called")
         }
     }
 
@@ -2764,6 +2853,14 @@ where
         }
         self.reader.read_to_end(name)
     }
+
+    fn skip_next_tree(&mut self) -> Result<(), DeError> {
+        let DeEvent::Start(start) = self.next()? else {
+            unreachable!("Only call this if the next event is a start event")
+        };
+        let name = start.name();
+        self.read_to_end(name)
+    }
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
@@ -2783,7 +2880,7 @@ where
     /// Create new deserializer that will borrow data from the specified string
     /// and use specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
-        let mut reader = Reader::from_str(source);
+        let mut reader = NsReader::from_str(source);
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -2826,7 +2923,7 @@ where
     /// will borrow instead of copy. If you have `&[u8]` which is known to represent
     /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
-        let mut reader = Reader::from_reader(reader);
+        let mut reader = NsReader::from_reader(reader);
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -2945,9 +3042,16 @@ where
     where
         V: Visitor<'de>,
     {
-        match self.peek()? {
+        // We cannot use result of `peek()` directly because of borrow checker
+        let _ = self.peek()?;
+        match self.last_peeked() {
             DeEvent::Text(t) if t.is_empty() => visitor.visit_none(),
             DeEvent::Eof => visitor.visit_none(),
+            // if the `xsi:nil` attribute is set to true we got a none value
+            DeEvent::Start(start) if self.reader.reader.has_nil_attr(&start) => {
+                self.skip_next_tree()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
@@ -3071,6 +3175,12 @@ pub trait XmlRead<'i> {
 
     /// A copy of the reader's decoder used to decode strings.
     fn decoder(&self) -> Decoder;
+
+    /// Checks if the `start` tag has a [`xsi:nil`] attribute. This method ignores
+    /// any errors in attributes.
+    ///
+    /// [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
+    fn has_nil_attr(&self, start: &BytesStart) -> bool;
 }
 
 /// XML input source that reads from a std::io input stream.
@@ -3078,7 +3188,7 @@ pub trait XmlRead<'i> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
-    reader: Reader<R>,
+    reader: NsReader<R>,
     start_trimmer: StartTrimmer,
     buf: Vec<u8>,
 }
@@ -3091,7 +3201,7 @@ impl<R: BufRead> IoReader<R> {
     /// use serde::Deserialize;
     /// use std::io::Cursor;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::Reader;
+    /// use quick_xml::NsReader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -3108,12 +3218,12 @@ impl<R: BufRead> IoReader<R> {
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &Reader<Cursor<&str>> = de.get_ref().get_ref();
+    /// let reader: &NsReader<Cursor<&str>> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &Reader<R> {
+    pub const fn get_ref(&self) -> &NsReader<R> {
         &self.reader
     }
 }
@@ -3140,6 +3250,10 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
     }
+
+    fn has_nil_attr(&self, start: &BytesStart) -> bool {
+        start.attributes().has_nil(&self.reader)
+    }
 }
 
 /// XML input source that reads from a slice of bytes and can borrow from it.
@@ -3147,7 +3261,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// You cannot create it, it is created automatically when you call
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
-    reader: Reader<&'de [u8]>,
+    reader: NsReader<&'de [u8]>,
     start_trimmer: StartTrimmer,
 }
 
@@ -3158,7 +3272,7 @@ impl<'de> SliceReader<'de> {
     /// # use pretty_assertions::assert_eq;
     /// use serde::Deserialize;
     /// use quick_xml::de::Deserializer;
-    /// use quick_xml::Reader;
+    /// use quick_xml::NsReader;
     ///
     /// #[derive(Deserialize)]
     /// struct SomeStruct {
@@ -3175,12 +3289,12 @@ impl<'de> SliceReader<'de> {
     /// let err = SomeStruct::deserialize(&mut de);
     /// assert!(err.is_err());
     ///
-    /// let reader: &Reader<&[u8]> = de.get_ref().get_ref();
+    /// let reader: &NsReader<&[u8]> = de.get_ref().get_ref();
     ///
     /// assert_eq!(reader.error_position(), 28);
     /// assert_eq!(reader.buffer_position(), 41);
     /// ```
-    pub const fn get_ref(&self) -> &Reader<&'de [u8]> {
+    pub const fn get_ref(&self) -> &NsReader<&'de [u8]> {
         &self.reader
     }
 }
@@ -3204,6 +3318,10 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 
     fn decoder(&self) -> Decoder {
         self.reader.decoder()
+    }
+
+    fn has_nil_attr(&self, start: &BytesStart) -> bool {
+        start.attributes().has_nil(&self.reader)
     }
 }
 
@@ -3781,12 +3899,12 @@ mod tests {
         "#;
 
         let mut reader1 = IoReader {
-            reader: Reader::from_reader(s.as_bytes()),
+            reader: NsReader::from_reader(s.as_bytes()),
             start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
-            reader: Reader::from_str(s),
+            reader: NsReader::from_str(s),
             start_trimmer: StartTrimmer::default(),
         };
 
@@ -3812,7 +3930,7 @@ mod tests {
         "#;
 
         let mut reader = SliceReader {
-            reader: Reader::from_str(s),
+            reader: NsReader::from_str(s),
             start_trimmer: StartTrimmer::default(),
         };
 

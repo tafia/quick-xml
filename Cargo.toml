@@ -232,6 +232,11 @@ required-features = ["serialize"]
 path = "tests/serde-de-seq.rs"
 
 [[test]]
+name = "serde-de-xsi"
+required-features = ["serialize"]
+path = "tests/serde-de-xsi.rs"
+
+[[test]]
 name = "serde-se"
 required-features = ["serialize"]
 path = "tests/serde-se.rs"
