@@ -5,8 +5,9 @@
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
 use crate::escape::{escape, resolve_predefined_entity, unescape_with};
-use crate::name::QName;
-use crate::utils::{is_whitespace, write_byte_string, write_cow_string, Bytes};
+use crate::name::{LocalName, Namespace, QName};
+use crate::reader::NsReader;
+use crate::utils::{is_whitespace, Bytes};
 
 use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::FusedIterator;
@@ -96,15 +97,50 @@ impl<'a> Attribute<'a> {
             Cow::Owned(s) => Ok(s.into()),
         }
     }
+
+    /// If attribute value [represents] valid boolean values, returns `Some`, otherwise returns `None`.
+    ///
+    /// The valid boolean representations are only `"true"`, `"false"`, `"1"`, and `"0"`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::attributes::Attribute;
+    ///
+    /// let attr = Attribute::from(("attr", "false"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "0"));
+    /// assert_eq!(attr.as_bool(), Some(false));
+    ///
+    /// let attr = Attribute::from(("attr", "true"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "1"));
+    /// assert_eq!(attr.as_bool(), Some(true));
+    ///
+    /// let attr = Attribute::from(("attr", "bot bool"));
+    /// assert_eq!(attr.as_bool(), None);
+    /// ```
+    ///
+    /// [represents]: https://www.w3.org/TR/xmlschema11-2/#boolean
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self.value.as_ref() {
+            b"1" | b"true" => Some(true),
+            b"0" | b"false" => Some(false),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> Debug for Attribute<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Attribute {{ key: ")?;
-        write_byte_string(f, self.key.as_ref())?;
-        write!(f, ", value: ")?;
-        write_cow_string(f, &self.value)?;
-        write!(f, " }}")
+        f.debug_struct("Attribute")
+            .field("key", &Bytes(self.key.as_ref()))
+            .field("value", &Bytes(&self.value))
+            .finish()
     }
 }
 
@@ -196,7 +232,7 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
 /// [`with_checks(false)`]: Self::with_checks
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Attributes<'a> {
     /// Slice of `BytesStart` corresponding to attributes
     bytes: &'a [u8],
@@ -233,6 +269,90 @@ impl<'a> Attributes<'a> {
     pub fn with_checks(&mut self, val: bool) -> &mut Attributes<'a> {
         self.state.check_duplicates = val;
         self
+    }
+
+    /// Checks if the current tag has a [`xsi:nil`] attribute. This method ignores any errors in
+    /// attributes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::events::Event;
+    /// use quick_xml::name::QName;
+    /// use quick_xml::reader::NsReader;
+    ///
+    /// let mut reader = NsReader::from_str("
+    ///     <root xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
+    ///         <true xsi:nil='true'/>
+    ///         <false xsi:nil='false'/>
+    ///         <none/>
+    ///         <non-xsi xsi:nil='true' xmlns:xsi='namespace'/>
+    ///         <unbound-nil nil='true' xmlns='http://www.w3.org/2001/XMLSchema-instance'/>
+    ///         <another-xmlns f:nil='true' xmlns:f='http://www.w3.org/2001/XMLSchema-instance'/>
+    ///     </root>
+    /// ");
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// macro_rules! check {
+    ///     ($reader:expr, $name:literal, $value:literal) => {
+    ///         let event = match $reader.read_event().unwrap() {
+    ///             Event::Empty(e) => e,
+    ///             e => panic!("Unexpected event {:?}", e),
+    ///         };
+    ///         assert_eq!(
+    ///             (event.name(), event.attributes().has_nil(&$reader)),
+    ///             (QName($name.as_bytes()), $value),
+    ///         );
+    ///     };
+    /// }
+    ///
+    /// let root = match reader.read_event().unwrap() {
+    ///     Event::Start(e) => e,
+    ///     e => panic!("Unexpected event {:?}", e),
+    /// };
+    /// assert_eq!(root.attributes().has_nil(&reader), false);
+    ///
+    /// // definitely true
+    /// check!(reader, "true",          true);
+    /// // definitely false
+    /// check!(reader, "false",         false);
+    /// // absence of the attribute means that attribute is not set
+    /// check!(reader, "none",          false);
+    /// // attribute not bound to the correct namespace
+    /// check!(reader, "non-xsi",       false);
+    /// // attributes without prefix not bound to any namespace
+    /// check!(reader, "unbound-nil",   false);
+    /// // prefix can be any while it is bound to the correct namespace
+    /// check!(reader, "another-xmlns", true);
+    /// ```
+    ///
+    /// [`xsi:nil`]: https://www.w3.org/TR/xmlschema-1/#xsi_nil
+    pub fn has_nil<R>(&mut self, reader: &NsReader<R>) -> bool {
+        use crate::name::ResolveResult::*;
+
+        self.any(|attr| {
+            if let Ok(attr) = attr {
+                match reader.resolve_attribute(attr.key) {
+                    (
+                        Bound(Namespace(b"http://www.w3.org/2001/XMLSchema-instance")),
+                        LocalName(b"nil"),
+                    ) => attr.as_bool().unwrap_or_default(),
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        })
+    }
+}
+
+impl<'a> Debug for Attributes<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("Attributes")
+            .field("bytes", &Bytes(&self.bytes))
+            .field("state", &self.state)
+            .finish()
     }
 }
 

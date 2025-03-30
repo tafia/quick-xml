@@ -1,6 +1,6 @@
 [package]
 name = "quick-xml"
-version = "0.37.2"
+version = "0.37.3"
 description = "High performance xml reader and writer"
 edition = "2021"
 
@@ -230,6 +230,11 @@ path = "tests/serde-de-enum.rs"
 name = "serde-de-seq"
 required-features = ["serialize"]
 path = "tests/serde-de-seq.rs"
+
+[[test]]
+name = "serde-de-xsi"
+required-features = ["serialize"]
+path = "tests/serde-de-xsi.rs"
 
 [[test]]
 name = "serde-se"

@@ -200,7 +200,7 @@ impl<'a> AsRef<[u8]> for QName<'a> {
 /// [local (unqualified) name]: https://www.w3.org/TR/xml-names11/#dt-localname
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
-pub struct LocalName<'a>(&'a [u8]);
+pub struct LocalName<'a>(pub(crate) &'a [u8]);
 impl<'a> LocalName<'a> {
     /// Converts this name to an internal slice representation.
     #[inline(always)]

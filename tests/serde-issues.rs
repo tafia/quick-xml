@@ -218,6 +218,23 @@ fn issue429() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/497.
+#[test]
+fn issue497() {
+    #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+    struct Player {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spawn_forced: Option<bool>,
+    }
+    let data = Player { spawn_forced: None };
+
+    let deserialize_buffer = to_string(&data).unwrap();
+    dbg!(&deserialize_buffer);
+
+    let p: Player = from_reader(deserialize_buffer.as_bytes()).unwrap();
+    assert_eq!(p, data);
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/500.
 #[test]
 fn issue500() {
