@@ -19,7 +19,7 @@
 
 ### Misc Changes
 
-- [#850]: Add Debug impl for `NsReader` and `Reader` and Clone impl for `NsReader`
+- [#852]: Add `Debug` impl for `NsReader` and `Reader` and `Clone` impl for `NsReader`
 
 [#852]: https://github.com/tafia/quick-xml/pull/852
 
