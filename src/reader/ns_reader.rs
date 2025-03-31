@@ -18,6 +18,7 @@ use crate::reader::{Config, Reader, Span, XmlSource};
 /// A low level encoding-agnostic XML event reader that performs namespace resolution.
 ///
 /// Consumes a [`BufRead`] and streams XML `Event`s.
+#[derive(Debug, Clone)]
 pub struct NsReader<R> {
     /// An XML reader
     pub(super) reader: Reader<R>,
