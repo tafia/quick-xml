@@ -21,7 +21,12 @@ fn escaped_characters_html() {
         r#"<e attr="&planck;&Egrave;&ell;&#x1D55D;&bigodot;">&boxDR;&boxDL;&#x02554;&#x02557;&#9556;&#9559;</e>"#,
         r#"
             |StartElement(e [attr="ℏÈℓ𝕝⨀"])
-            |Characters(╔╗╔╗╔╗)
+            |Reference(boxDR)
+            |Reference(boxDL)
+            |Reference(#x02554)
+            |Reference(#x02557)
+            |Reference(#9556)
+            |Reference(#9559)
             |EndElement(e)
             |EndDocument
         "#,
@@ -84,6 +89,10 @@ fn test_bytes(input: &[u8], output: &[u8], trim: bool) {
             Ok((_, Event::CData(e))) => format!("CData({})", decoder.decode(&e).unwrap()),
             Ok((_, Event::Text(e))) => match unescape(&decoder.decode(&e).unwrap()) {
                 Ok(c) => format!("Characters({})", &c),
+                Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
+            },
+            Ok((_, Event::GeneralRef(e))) => match unescape(&decoder.decode(&e).unwrap()) {
+                Ok(c) => format!("Reference({})", &c),
                 Err(err) => format!("FailedUnescape({:?}; {})", e.as_ref(), err),
             },
             Ok((_, Event::Eof)) => "EndDocument".to_string(),
