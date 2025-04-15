@@ -2225,6 +2225,38 @@ impl<'a> PayloadEvent<'a> {
     }
 }
 
+/// Configuration for the XML deserializer.
+///
+/// When `trim_text` is `true` (the default), the deserializer will trim text nodes.
+/// Setting it to `false` will preserve whitespace exactly as found in the XML.
+#[derive(Clone, Debug)]
+pub struct DeConfig {
+    /// If true, whitespace at the start of text nodes is trimmed (default). If false, whitespace is preserved.
+    pub trim_text_start: bool,
+    /// If true, whitespace at the end of text nodes is trimmed (default). If false, whitespace is preserved.
+    pub trim_text_end: bool,
+}
+
+impl Default for DeConfig {
+    fn default() -> Self {
+        Self {
+            trim_text_start: true,
+            trim_text_end: true,
+        }
+    }
+}
+
+impl DeConfig {
+    fn trim_text(&mut self, value: bool) {
+        self.trim_text_start = value;
+        self.trim_text_end = value;
+    }
+}
+
+// TODO: Recall that StartTrimmer trims the starts and converts raw data into PayLoadEvents,
+// which are an intermediate representation. This is where the end is trimmed, and the
+// ultimate DeEvent is made. We can probably pass our config to XmlReader.
+
 /// An intermediate reader that consumes [`PayloadEvent`]s and produces final [`DeEvent`]s.
 /// [`PayloadEvent::Text`] events, that followed by any event except
 /// [`PayloadEvent::Text`] or [`PayloadEvent::CData`], are trimmed from the end.
@@ -2242,8 +2274,11 @@ struct XmlReader<'i, R: XmlRead<'i>, E: EntityResolver = PredefinedEntityResolve
     ///
     /// [`EscapeError::UnrecognizedEntity`]: crate::escape::EscapeError::UnrecognizedEntity
     entity_resolver: E,
+
+    de_config: DeConfig,
 }
 
+// NOTE: This is where the end trimming happens (see maintainer FIXMEs)
 impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
     fn new(mut reader: R, entity_resolver: E) -> Self {
         // Lookahead by one event immediately, so we do not need to check in the
@@ -2254,6 +2289,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             reader,
             lookahead,
             entity_resolver,
+            de_config: DeConfig::default(),
         }
     }
 
@@ -2294,6 +2330,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Text(mut e) => {
                     if self.current_event_is_last_text() {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
+                        // TODO: Check the config -- should we be trimming?
                         e.inplace_trim_end();
                     }
                     result
@@ -2316,6 +2353,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
                 PayloadEvent::Text(mut e) => {
+                    // TODO: Check the config -- should we be trimming
                     if self.current_event_is_last_text() && e.inplace_trim_end() {
                         // FIXME: Actually, we should trim after decoding text, but now we trim before
                         continue;
@@ -2445,6 +2483,9 @@ where
     R: XmlRead<'de>,
     E: EntityResolver,
 {
+    // TODO: We need to pass our DeConfig to the XmlReader, as that is where the end
+    // trimming occurs. XmlReader will need to own it.
+
     /// Create an XML deserializer from one of the possible quick_xml input sources.
     ///
     /// Typically it is more convenient to use one of these methods instead:
@@ -2467,6 +2508,17 @@ where
 
             key_buf: String::new(),
         }
+    }
+
+    /// Returns a mutable reference to the deserializer configuration.
+    ///
+    /// This allows client code to adjust deserialization behavior, for example:
+    ///
+    /// ```
+    /// de.config_mut().trim_text(false);
+    /// ```
+    pub fn config_mut(&mut self) -> &mut DeConfig {
+        &mut self.reader.de_config
     }
 
     /// Returns `true` if all events was consumed.
@@ -2877,6 +2929,12 @@ impl<'de, E> Deserializer<'de, SliceReader<'de>, E>
 where
     E: EntityResolver,
 {
+    // TODO: Here is where we initialize SliceReader. We can read our config
+    // and initialize SliceReader without a start_trimmer if it's not needed.
+    // Edit: This approach is no good, since this function is part of the constructor
+    // chain. We can't read our config because it's not made yet. We need to
+    // interpret the config at read time, not initialization time.
+
     /// Create new deserializer that will borrow data from the specified string
     /// and use specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
@@ -2916,6 +2974,10 @@ where
     R: BufRead,
     E: EntityResolver,
 {
+    // TODO: Here is where we initialize IoReader. We can read our config
+    // and initialize IoReader without a start_trimmer if it's not needed.
+    // Note: See note on SliceReader.
+
     /// Create new deserializer that will copy data from the specified reader
     /// into internal buffer and use specified entity resolver.
     ///
@@ -3120,6 +3182,8 @@ struct StartTrimmer {
     /// except [`Event::Text`] and [`Event::CData`], so [`Event::Text`] events
     /// read right after them does not trimmed.
     trim_start: bool,
+    // TODO: We can pass a reference to XmlReader.de_config and trim/not trim
+    // based on that.
 }
 
 impl StartTrimmer {
@@ -3232,7 +3296,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
     fn next(&mut self) -> Result<PayloadEvent<'static>, DeError> {
         loop {
             self.buf.clear();
-
             let event = self.reader.read_event_into(&mut self.buf)?;
             if let Some(event) = self.start_trimmer.trim(event) {
                 return Ok(event.into_owned());
@@ -3328,12 +3391,30 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::errors::IllFormedError;
     use pretty_assertions::assert_eq;
 
     fn make_de<'de>(source: &'de str) -> Deserializer<'de, SliceReader<'de>> {
         dbg!(source);
         Deserializer::from_str(source)
+    }
+
+    mod config {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        #[test]
+        fn preserve_whitespace() {
+            let mut de = make_de(r#"<tag>   Some text with extra   whitespace   </tag>"#);
+            de.config_mut().trim_text(false);
+            assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
+            assert_eq!(
+                de.next().unwrap(),
+                DeEvent::Text("   Some text with extra   whitespace   ".into())
+            );
+            assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
+        }
     }
 
     #[cfg(feature = "overlapped-lists")]
