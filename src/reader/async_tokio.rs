@@ -215,7 +215,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// 
     /// [`Start`]: Event::Start
     /// [`decoder`]: Self::decoder()
-    async fn read_text_into_async<'n, W>(
+    pub async fn read_text_into_async<'n, W>(
         &mut self,
         end: QName<'n>,
         buf: &mut Vec<u8>,
@@ -466,6 +466,33 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ) -> Result<(ResolveResult<'ns>, Event<'b>)> {
         let event = self.read_event_into_async(buf).await;
         self.resolve_event(event)
+    }
+
+    /// Reads  the content between start and end tags, including any markup. This 
+    /// function is supposed to be called after you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements havce the _literally_
+    /// same name.
+    ///
+    /// This method does not unescape read data, instead it writes the content 
+    /// of the XML document "as is". This is because it has no idea what text it
+    /// reads, and if, for example, it contains CDATA section, attempt ot unescape 
+    /// it content will spoil data.
+    ///
+    /// Any text will be decoded using the XML current [`decoder`].
+    /// 
+    /// [`Start`]: Event::Start
+    /// [`decoder`]: Self::decoder()
+    async fn read_text_into_async<'n, W>(
+        &mut self,
+        end: QName<'n>,
+        buf: &mut Vec<u8>,
+        out: &mut W,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        self.reader.read_text_into_async(end, buf, out).await
     }
 }
 
