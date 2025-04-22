@@ -5,7 +5,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
+use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::errors::{Error, Result, SyntaxError};
 use crate::events::Event;
@@ -198,6 +198,66 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// it was called just after encounter a `<` symbol.
     async fn read_until_close_async<'b>(&mut self, buf: &'b mut Vec<u8>) -> Result<Event<'b>> {
         read_until_close!(self, buf, TokioAdapter(&mut self.reader), await)
+    }
+
+    /// Reads  the content between start and end tags, including any markup. This 
+    /// function is supposed to be called after you already read a [`Start`] event.
+    ///
+    /// Manages nested cases where parent and child elements havce the _literally_
+    /// same name.
+    ///
+    /// This method does not unescape read data, instead it writes the content 
+    /// of the XML document "as is". This is because it has no idea what text it
+    /// reads, and if, for example, it contains CDATA section, attempt ot unescape 
+    /// it content will spoil data.
+    ///
+    /// Any text will be decoded using the XML current [`decoder`].
+    /// 
+    /// [`Start`]: Event::Start
+    /// [`decoder`]: Self::decoder()
+    async fn read_text_into_async<'n, W>(
+        &mut self,
+        end: QName<'n>,
+        buf: &mut Vec<u8>,
+        out: &mut W,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        let writer = crate::Writer::new(out);
+        let config = self.config_mut();
+        let trim = config.trim_text_start;
+        config.trim_text_start = false;
+        let mut depth = 0;
+        loop {
+            buf.clear();
+            match self.read_event_into_async(&mut buf).await {
+                Err(e) => {
+                    self.config_mut().trim_text_start = trim;
+                    Err(e)?;
+                }
+
+                Ok(Event::Start(e)) if e.name() == end_name => {
+                    writer.write_event_async(Event::Start(e)).await?;
+                    depth += 1;
+                }
+                Ok(Event::End(e)) if e.name() == end_name => {
+                    if depth == 0 {
+                        self.config_mut().trim_text_start = trim;
+                        break Ok(());
+                    }
+                    depth -= 1;
+                    writer.write_event_async(Event::End(e)).await?;
+                }
+                Ok(Event::Eof) => {
+                    self.config_mut().trim_text_start = trim;
+                    break Err(Error::missed_end(end, self.decoder()));
+                }
+                Ok(e) => {
+                    writer.write_event_async(e).await?;
+                }
+            }
+        }
     }
 }
 
