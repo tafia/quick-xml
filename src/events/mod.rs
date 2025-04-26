@@ -843,8 +843,13 @@ impl<'a> BytesCData<'a> {
         ))
     }
 
-    /// Gets content of this text buffer in the specified encoding
-    pub(crate) fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
+    /// Decodes the raw input byte content of the CDATA section into a string,
+    /// without performing XML entity escaping.
+    ///
+    /// When this event produced by the XML reader, it uses the encoding information
+    /// associated with that reader to interpret the raw bytes contained within this
+    /// CDATA event.
+    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         Ok(self.decoder.decode_cow(&self.content)?)
     }
 }
