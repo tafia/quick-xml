@@ -15,11 +15,16 @@
 
 ### New Features
 
-- [#857]: Add `BytesCData::decode()`.
-
 ### Bug Fixes
 
 ### Misc Changes
+
+
+## 0.37.5 -- 2025-04-27
+
+### New Features
+
+- [#857]: Add `BytesCData::decode()`.
 
 [#857]: https://github.com/tafia/quick-xml/pull/857
 
