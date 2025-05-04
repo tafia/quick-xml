@@ -2594,16 +2594,9 @@ where
     }
     #[cfg(not(feature = "overlapped-lists"))]
     fn peek(&mut self) -> Result<&DeEvent<'de>, DeError> {
-        if self.peek.is_none() {
-            self.peek = Some(self.reader.next()?);
-        }
-        match self.peek.as_ref() {
-            Some(v) => Ok(v),
-            // SAFETY: a `None` variant for `self.peek` would have been replaced
-            // by a `Some` variant in the code above.
-            // TODO: Can be replaced with `unsafe { std::hint::unreachable_unchecked() }`
-            // if unsafe code will be allowed
-            None => unreachable!(),
+        match &mut self.peek {
+            Some(event) => Ok(event),
+            empty_peek @ None => Ok(empty_peek.insert(self.reader.next()?)),
         }
     }
 
