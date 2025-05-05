@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
 use quick_xml::events::attributes::Attribute;
-use quick_xml::events::{BytesEnd, Event::*};
+use quick_xml::events::{
+    BytesEnd,
+    Event::*,
+};
 use quick_xml::name::QName;
 use quick_xml::reader::Reader;
 
@@ -157,5 +160,33 @@ fn equal_sign_in_value() {
             assert_eq!(attrs.next(), None);
         }
         e => panic!("Expecting Empty event, got {:?}", e),
+    }
+}
+
+#[test]
+fn line_ends() {
+    const XML: &str = "<root attribute=\"\r\r\u{0085}\n\n\u{0085}\u{2028}value1\r\r\u{0085}\n\n\u{0085}\u{2028}value2\r\r\u{0085}\n\n\u{0085}\u{2028}\">\r\r\u{0085}\n\n\u{0085}\u{2028}value3\r\r\u{0085}\n\n\u{0085}\u{2028}value4\r\r\u{0085}\n\n\u{0085}\u{2028}</root>";
+    let mut reader = Reader::from_str(XML);
+    match reader.read_event().unwrap() {
+        Start(event) => {
+            let mut iter = event.attributes();
+            let a = iter.next().unwrap().unwrap();
+            #[cfg(not(feature = "encoding"))]
+            assert_eq!(
+                a.unescape_value().unwrap(),
+                "\n\n\n\n\n\nvalue1\n\n\n\n\n\nvalue2\n\n\n\n\n\n"
+            );
+            assert_eq!(
+                a.decode_and_unescape_value(reader.decoder()).unwrap(),
+                "\n\n\n\n\n\nvalue1\n\n\n\n\n\nvalue2\n\n\n\n\n\n"
+            );
+        }
+        event => panic!("Expected Start, found {:?}", event),
+    }
+    match reader.read_event().unwrap() {
+        Text(event) => {
+            assert_eq!(event.unescape().unwrap(), "\n\n\n\n\n\nvalue3\n\n\n\n\n\nvalue4\n\n\n\n\n\n")
+        }
+        event => panic!("Expected Text, found {:?}", event),
     }
 }
