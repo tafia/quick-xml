@@ -2072,6 +2072,7 @@ macro_rules! deserialize_primitives {
     };
 }
 
+mod attributes;
 mod key;
 mod map;
 mod resolver;
@@ -2079,6 +2080,7 @@ mod simple_type;
 mod text;
 mod var;
 
+pub use self::attributes::AttributesDeserializer;
 pub use self::resolver::{EntityResolver, PredefinedEntityResolver};
 pub use self::simple_type::SimpleTypeDeserializer;
 pub use crate::errors::serialize::DeError;
