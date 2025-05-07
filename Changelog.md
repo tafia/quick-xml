@@ -15,6 +15,10 @@
 
 ### New Features
 
+- [#863]: Add `Attributes::into_map_access(&str)` and `Attributes::into_deserializer()` when `serialize`
+  feature is enabled. This will allow do deserialize serde types right from attributes. Both methods
+  returns the same type which implements serde's `Deserializer` and `MapAccess` traits.
+
 ### Bug Fixes
 
 ### Misc Changes

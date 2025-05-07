@@ -231,7 +231,10 @@ impl<'a> From<Attr<&'a [u8]>> for Attribute<'a> {
 /// Yields `Result<Attribute>`. An `Err` will be yielded if an attribute is malformed or duplicated.
 /// The duplicate check can be turned off by calling [`with_checks(false)`].
 ///
+/// When [`serialize`] feature is enabled, can be converted to serde's deserializer.
+///
 /// [`with_checks(false)`]: Self::with_checks
+/// [`serialize`]: ../../index.html#serialize
 #[derive(Clone)]
 pub struct Attributes<'a> {
     /// Slice of `BytesStart` corresponding to attributes
