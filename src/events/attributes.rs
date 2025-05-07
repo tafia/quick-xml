@@ -238,26 +238,29 @@ pub struct Attributes<'a> {
     bytes: &'a [u8],
     /// Iterator state, independent from the actual source of bytes
     state: IterState,
+    /// Encoding used for `bytes`
+    decoder: Decoder,
 }
 
 impl<'a> Attributes<'a> {
     /// Internal constructor, used by `BytesStart`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(buf: &'a [u8], pos: usize, html: bool) -> Self {
+    pub(crate) const fn wrap(buf: &'a [u8], pos: usize, html: bool, decoder: Decoder) -> Self {
         Self {
             bytes: buf,
             state: IterState::new(pos, html),
+            decoder,
         }
     }
 
     /// Creates a new attribute iterator from a buffer.
     pub const fn new(buf: &'a str, pos: usize) -> Self {
-        Self::wrap(buf.as_bytes(), pos, false)
+        Self::wrap(buf.as_bytes(), pos, false, Decoder::utf8())
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
     pub const fn html(buf: &'a str, pos: usize) -> Self {
-        Self::wrap(buf.as_bytes(), pos, true)
+        Self::wrap(buf.as_bytes(), pos, true, Decoder::utf8())
     }
 
     /// Changes whether attributes should be checked for uniqueness.
@@ -345,6 +348,22 @@ impl<'a> Attributes<'a> {
             }
         })
     }
+
+    /// Get the decoder, used to decode bytes, read by the reader which produces
+    /// this iterator, to the strings.
+    ///
+    /// When iterator was created manually or get from a manually created [`BytesStart`],
+    /// encoding is UTF-8.
+    ///
+    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
+    ///
+    /// [`BytesStart`]: crate::events::BytesStart
+    /// [`encoding`]: ../index.html#encoding
+    #[inline]
+    pub const fn decoder(&self) -> Decoder {
+        self.decoder
+    }
 }
 
 impl<'a> Debug for Attributes<'a> {
@@ -352,6 +371,7 @@ impl<'a> Debug for Attributes<'a> {
         f.debug_struct("Attributes")
             .field("bytes", &Bytes(&self.bytes))
             .field("state", &self.state)
+            .field("decoder", &self.decoder)
             .finish()
     }
 }

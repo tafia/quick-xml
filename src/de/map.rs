@@ -6,7 +6,6 @@ use crate::{
     de::simple_type::SimpleTypeDeserializer,
     de::text::TextDeserializer,
     de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
-    encoding::Decoder,
     errors::serialize::DeError,
     errors::Error,
     events::attributes::IterState,
@@ -247,7 +246,7 @@ where
 
         // FIXME: There error positions counted from the start of tag name - need global position
         let slice = &self.start.buf;
-        let decoder = self.de.reader.decoder();
+        let decoder = self.start.decoder();
 
         if let Some(a) = self.iter.next(slice).transpose()? {
             // try getting map from attributes (key= "value")
@@ -300,7 +299,7 @@ where
                 // }
                 // TODO: This should be handled by #[serde(flatten)]
                 // See https://github.com/serde-rs/serde/issues/1905
-                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e, decoder)? => {
+                DeEvent::Start(e) if self.has_value_field && not_in(self.fields, e)? => {
                     self.source = ValueSource::Content;
 
                     let de = BorrowedStrDeserializer::<DeError>::new(VALUE_KEY);
@@ -309,7 +308,7 @@ where
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
 
-                    let de = QNameDeserializer::from_elem(e.raw_name(), decoder)?;
+                    let de = QNameDeserializer::from_elem(e.raw_name(), e.decoder())?;
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
@@ -323,7 +322,9 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.start`
-                DeEvent::Eof => Err(Error::missed_end(self.start.name(), decoder).into()),
+                DeEvent::Eof => {
+                    Err(Error::missed_end(self.start.name(), self.start.decoder()).into())
+                }
             }
         }
     }
@@ -336,7 +337,7 @@ where
             ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_part(
                 &self.start.buf,
                 value,
-                self.de.reader.decoder(),
+                self.start.decoder(),
             )),
             // This arm processes the following XML shape:
             // <any-tag>
@@ -687,10 +688,9 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
         let (name, is_text) = match self.map.de.peek()? {
             DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), decoder)?)?,
+                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), e.decoder())?)?,
                 false,
             ),
             DeEvent::Text(_) => (
@@ -810,12 +810,8 @@ where
 /// get a string representation of a tag.
 ///
 /// Returns `true`, if `start` is not in the `fields` list and `false` otherwise.
-fn not_in(
-    fields: &'static [&'static str],
-    start: &BytesStart,
-    decoder: Decoder,
-) -> Result<bool, DeError> {
-    let tag = decoder.decode(start.local_name().into_inner())?;
+fn not_in(fields: &'static [&'static str], start: &BytesStart) -> Result<bool, DeError> {
+    let tag = start.decoder().decode(start.local_name().into_inner())?;
 
     Ok(fields.iter().all(|&field| field != tag.as_ref()))
 }
@@ -862,10 +858,10 @@ enum TagFilter<'de> {
 }
 
 impl<'de> TagFilter<'de> {
-    fn is_suitable(&self, start: &BytesStart, decoder: Decoder) -> Result<bool, DeError> {
+    fn is_suitable(&self, start: &BytesStart) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
-            Self::Exclude(fields) => not_in(fields, start, decoder),
+            Self::Exclude(fields) => not_in(fields, start),
         }
     }
 }
@@ -941,18 +937,17 @@ where
     where
         T: DeserializeSeed<'de>,
     {
-        let decoder = self.map.de.reader.decoder();
         loop {
             break match self.map.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => {
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => {
                     self.map.de.skip()?;
                     continue;
                 }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
-                DeEvent::Start(e) if !self.filter.is_suitable(e, decoder)? => Ok(None),
+                DeEvent::Start(e) if !self.filter.is_suitable(e)? => Ok(None),
 
                 // Stop iteration after reaching a closing tag
                 // The matching tag name is guaranteed by the reader
@@ -962,7 +957,9 @@ where
                 }
                 // We cannot get `Eof` legally, because we always inside of the
                 // opened tag `self.map.start`
-                DeEvent::Eof => Err(Error::missed_end(self.map.start.name(), decoder).into()),
+                DeEvent::Eof => {
+                    Err(Error::missed_end(self.map.start.name(), self.map.start.decoder()).into())
+                }
 
                 DeEvent::Text(_) => match self.map.de.next()? {
                     DeEvent::Text(e) => seed.deserialize(TextDeserializer(e)).map(Some),
@@ -1157,7 +1154,7 @@ where
     {
         let name = seed.deserialize(QNameDeserializer::from_elem(
             self.start.raw_name(),
-            self.de.reader.decoder(),
+            self.start.decoder(),
         )?)?;
         Ok((name, self))
     }
@@ -1211,27 +1208,18 @@ fn test_not_in() {
 
     let tag = BytesStart::new("tag");
 
-    assert_eq!(not_in(&[], &tag, Decoder::utf8()).unwrap(), true);
-    assert_eq!(
-        not_in(&["no", "such", "tags"], &tag, Decoder::utf8()).unwrap(),
-        true
-    );
-    assert_eq!(
-        not_in(&["some", "tag", "included"], &tag, Decoder::utf8()).unwrap(),
-        false
-    );
+    assert_eq!(not_in(&[], &tag).unwrap(), true);
+    assert_eq!(not_in(&["no", "such", "tags"], &tag).unwrap(), true);
+    assert_eq!(not_in(&["some", "tag", "included"], &tag).unwrap(), false);
 
     let tag_ns = BytesStart::new("ns1:tag");
+    assert_eq!(not_in(&["no", "such", "tags"], &tag_ns).unwrap(), true);
     assert_eq!(
-        not_in(&["no", "such", "tags"], &tag_ns, Decoder::utf8()).unwrap(),
-        true
-    );
-    assert_eq!(
-        not_in(&["some", "tag", "included"], &tag_ns, Decoder::utf8()).unwrap(),
+        not_in(&["some", "tag", "included"], &tag_ns).unwrap(),
         false
     );
     assert_eq!(
-        not_in(&["some", "namespace", "ns1:tag"], &tag_ns, Decoder::utf8()).unwrap(),
+        not_in(&["some", "namespace", "ns1:tag"], &tag_ns).unwrap(),
         true
     );
 }
