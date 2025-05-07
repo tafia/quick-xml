@@ -539,14 +539,13 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     pub(crate) fn from_part(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
-        escaped: bool,
         decoder: Decoder,
     ) -> Self {
         let content = match value {
             Cow::Borrowed(slice) => CowRef::Input(&slice[range]),
             Cow::Owned(slice) => CowRef::Slice(&slice[range]),
         };
-        Self::new(content, escaped, decoder)
+        Self::new(content, true, decoder)
     }
 
     /// Constructor for tests
