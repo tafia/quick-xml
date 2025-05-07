@@ -83,9 +83,6 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
         decoder: Decoder,
         key_buf: &'d mut String,
     ) -> Result<Self, DeError> {
-        key_buf.clear();
-        key_buf.push('@');
-
         // https://github.com/tafia/quick-xml/issues/537
         // Namespace bindings (xmlns:xxx) map to `@xmlns:xxx` instead of `@xxx`
         if name.as_namespace_binding().is_some() {

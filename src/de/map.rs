@@ -254,6 +254,11 @@ where
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
 
+            // Attributes in mapping starts from @ prefix
+            // TODO: Customization point - may customize prefix
+            self.de.key_buf.clear();
+            self.de.key_buf.push('@');
+
             let de =
                 QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
