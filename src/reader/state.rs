@@ -251,7 +251,7 @@ impl ReaderState {
             let len = content.len();
 
             if content.starts_with(b"xml") && (len == 3 || is_whitespace(content[3])) {
-                let event = BytesDecl::from_start(BytesStart::wrap(content, 3));
+                let event = BytesDecl::from_start(BytesStart::wrap(content, 3, self.decoder()));
 
                 // Try getting encoding from the declaration event
                 #[cfg(feature = "encoding")]
@@ -263,7 +263,11 @@ impl ReaderState {
 
                 Ok(Event::Decl(event))
             } else {
-                Ok(Event::PI(BytesPI::wrap(content, name_len(content))))
+                Ok(Event::PI(BytesPI::wrap(
+                    content,
+                    name_len(content),
+                    self.decoder(),
+                )))
             }
         } else {
             // <?....EOF
@@ -281,7 +285,7 @@ impl ReaderState {
     pub fn emit_start<'b>(&mut self, content: &'b [u8]) -> Event<'b> {
         if let Some(content) = content.strip_suffix(b"/") {
             // This is self-closed tag `<something/>`
-            let event = BytesStart::wrap(content, name_len(content));
+            let event = BytesStart::wrap(content, name_len(content), self.decoder());
 
             if self.config.expand_empty_elements {
                 self.state = ParseState::InsideEmpty;
@@ -292,7 +296,7 @@ impl ReaderState {
                 Event::Empty(event)
             }
         } else {
-            let event = BytesStart::wrap(content, name_len(content));
+            let event = BytesStart::wrap(content, name_len(content), self.decoder());
 
             // #514: Always store names event when .check_end_names == false,
             // because checks can be temporary disabled and when they would be

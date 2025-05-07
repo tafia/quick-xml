@@ -19,6 +19,11 @@
 
 ### Misc Changes
 
+- [#863]: Remove `From<QName<'a>> for BytesStart<'a>` because now `BytesStart` stores the
+  encoding in which its data is encoded, but `QName` is a simple wrapper around byte slice.
+
+[#863]: https://github.com/tafia/quick-xml/pull/863
+
 
 ## 0.37.5 -- 2025-04-27
 

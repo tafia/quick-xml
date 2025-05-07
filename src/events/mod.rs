@@ -95,15 +95,18 @@ pub struct BytesStart<'a> {
     pub(crate) buf: Cow<'a, [u8]>,
     /// end of the element name, the name starts at that the start of `buf`
     pub(crate) name_len: usize,
+    /// Encoding used for `buf`
+    decoder: Decoder,
 }
 
 impl<'a> BytesStart<'a> {
     /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], name_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], name_len: usize, decoder: Decoder) -> Self {
         BytesStart {
             buf: Cow::Borrowed(content),
             name_len,
+            decoder,
         }
     }
 
@@ -118,6 +121,7 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             name_len: buf.len(),
             buf,
+            decoder: Decoder::utf8(),
         }
     }
 
@@ -133,6 +137,7 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: str_cow_to_bytes(content),
             name_len,
+            decoder: Decoder::utf8(),
         }
     }
 
@@ -141,6 +146,7 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Owned(self.buf.into_owned()),
             name_len: self.name_len,
+            decoder: self.decoder,
         }
     }
 
@@ -149,6 +155,7 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Owned(self.buf.clone().into_owned()),
             name_len: self.name_len,
+            decoder: self.decoder,
         }
     }
 
@@ -181,6 +188,7 @@ impl<'a> BytesStart<'a> {
         BytesStart {
             buf: Cow::Borrowed(&self.buf),
             name_len: self.name_len,
+            decoder: self.decoder,
         }
     }
 
@@ -188,6 +196,20 @@ impl<'a> BytesStart<'a> {
     #[inline]
     pub fn to_end(&self) -> BytesEnd {
         BytesEnd::from(self.name())
+    }
+
+    /// Get the decoder, used to decode bytes, read by the reader which produces
+    /// this event, to the strings.
+    ///
+    /// When event was created manually, encoding is UTF-8.
+    ///
+    /// If [`encoding`] feature is enabled and no encoding is specified in declaration,
+    /// defaults to UTF-8.
+    ///
+    /// [`encoding`]: ../index.html#encoding
+    #[inline]
+    pub const fn decoder(&self) -> Decoder {
+        self.decoder
     }
 
     /// Gets the undecoded raw tag name, as present in the input stream.
@@ -279,12 +301,12 @@ impl<'a> BytesStart<'a> {
 
     /// Returns an iterator over the attributes of this tag.
     pub fn attributes(&self) -> Attributes {
-        Attributes::wrap(&self.buf, self.name_len, false)
+        Attributes::wrap(&self.buf, self.name_len, false, self.decoder)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
     pub fn html_attributes(&self) -> Attributes {
-        Attributes::wrap(&self.buf, self.name_len, true)
+        Attributes::wrap(&self.buf, self.name_len, true, self.decoder)
     }
 
     /// Gets the undecoded raw string with the attributes of this tag as a `&[u8]`,
@@ -345,14 +367,6 @@ impl<'a> Deref for BytesStart<'a> {
     }
 }
 
-impl<'a> From<QName<'a>> for BytesStart<'a> {
-    #[inline]
-    fn from(name: QName<'a>) -> Self {
-        let name = name.into_inner();
-        Self::wrap(name, name.len())
-    }
-}
-
 #[cfg(feature = "arbitrary")]
 impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
@@ -369,6 +383,7 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesStart<'a> {
         return <&str as arbitrary::Arbitrary>::size_hint(depth);
     }
 }
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Closing tag data (`Event::End`): `</name>`.
@@ -956,9 +971,9 @@ pub struct BytesPI<'a> {
 impl<'a> BytesPI<'a> {
     /// Creates a new `BytesPI` from a byte sequence in the specified encoding.
     #[inline]
-    pub(crate) const fn wrap(content: &'a [u8], target_len: usize) -> Self {
+    pub(crate) const fn wrap(content: &'a [u8], target_len: usize, decoder: Decoder) -> Self {
         Self {
-            content: BytesStart::wrap(content, target_len),
+            content: BytesStart::wrap(content, target_len, decoder),
         }
     }
 
@@ -972,7 +987,11 @@ impl<'a> BytesPI<'a> {
         let buf = str_cow_to_bytes(content);
         let name_len = name_len(&buf);
         Self {
-            content: BytesStart { buf, name_len },
+            content: BytesStart {
+                buf,
+                name_len,
+                decoder: Decoder::utf8(),
+            },
         }
     }
 

@@ -81,7 +81,7 @@ pub struct Decoder {
 }
 
 impl Decoder {
-    pub(crate) fn utf8() -> Self {
+    pub(crate) const fn utf8() -> Self {
         Decoder {
             #[cfg(feature = "encoding")]
             encoding: UTF_8,
@@ -89,7 +89,7 @@ impl Decoder {
     }
 
     #[cfg(all(test, feature = "encoding", feature = "serialize"))]
-    pub(crate) fn utf16() -> Self {
+    pub(crate) const fn utf16() -> Self {
         Decoder { encoding: UTF_16LE }
     }
 }
