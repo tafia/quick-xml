@@ -1,6 +1,7 @@
 use crate::de::simple_type::UnitOnly;
 use crate::encoding::Decoder;
 use crate::errors::serialize::DeError;
+use crate::events::BytesStart;
 use crate::name::QName;
 use crate::utils::CowRef;
 use serde::de::{DeserializeSeed, Deserializer, EnumAccess, Visitor};
@@ -98,17 +99,17 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
     }
 
     /// Creates deserializer from name of an element
-    pub fn from_elem(name: CowRef<'i, 'd, [u8]>, decoder: Decoder) -> Result<Self, DeError> {
-        let local = match name {
-            CowRef::Input(borrowed) => match decode_name(QName(borrowed), decoder)? {
+    pub fn from_elem(start: &'d BytesStart<'i>) -> Result<Self, DeError> {
+        let local = match start.raw_name() {
+            CowRef::Input(borrowed) => match decode_name(QName(borrowed), start.decoder())? {
                 Cow::Borrowed(borrowed) => CowRef::Input(borrowed),
                 Cow::Owned(owned) => CowRef::Owned(owned),
             },
-            CowRef::Slice(borrowed) => match decode_name(QName(borrowed), decoder)? {
+            CowRef::Slice(borrowed) => match decode_name(QName(borrowed), start.decoder())? {
                 Cow::Borrowed(borrowed) => CowRef::Slice(borrowed),
                 Cow::Owned(owned) => CowRef::Owned(owned),
             },
-            CowRef::Owned(owned) => match decode_name(QName(&owned), decoder)? {
+            CowRef::Owned(owned) => match decode_name(QName(&owned), start.decoder())? {
                 // SAFETY: Because result is borrowed, no changes was done
                 // and we can safely unwrap here
                 Cow::Borrowed(_) => CowRef::Owned(String::from_utf8(owned).unwrap()),
