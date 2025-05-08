@@ -256,12 +256,54 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    /// Creates a new attribute iterator from a buffer.
+    /// Creates a new attribute iterator from a buffer, which recognizes only XML-style
+    /// attributes, i. e. those which in the form `name = "value"` or `name = 'value'`.
+    /// HTML style attributes (i. e. without quotes or only name) will return a error.
+    ///
+    /// # Parameters
+    /// - `buf`: a buffer with a tag name and attributes, usually this is the whole
+    ///   string between `<` and `>` (or `/>`) of a tag;
+    /// - `pos`: a position in the `buf` where tag name is finished and attributes
+    ///   is started. It is not necessary to point exactly to the end of a tag name,
+    ///   although that is usually that. If it will be more than the `buf` length,
+    ///   then the iterator will return `None`` immediately.
+    ///
+    /// # Example
+    /// ```
+    /// # use quick_xml::events::attributes::{Attribute, Attributes};
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let mut iter = Attributes::new("tag-name attr1 = 'value1' attr2='value2' ", 9);
+    /// //                              ^0       ^9
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr1", "value1")))));
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr2", "value2")))));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub const fn new(buf: &'a str, pos: usize) -> Self {
         Self::wrap(buf.as_bytes(), pos, false, Decoder::utf8())
     }
 
     /// Creates a new attribute iterator from a buffer, allowing HTML attribute syntax.
+    ///
+    /// # Parameters
+    /// - `buf`: a buffer with a tag name and attributes, usually this is the whole
+    ///   string between `<` and `>` (or `/>`) of a tag;
+    /// - `pos`: a position in the `buf` where tag name is finished and attributes
+    ///   is started. It is not necessary to point exactly to the end of a tag name,
+    ///   although that is usually that. If it will be more than the `buf` length,
+    ///   then the iterator will return `None`` immediately.
+    ///
+    /// # Example
+    /// ```
+    /// # use quick_xml::events::attributes::{Attribute, Attributes};
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let mut iter = Attributes::html("tag-name attr1 = value1 attr2 ", 9);
+    /// //                               ^0       ^9
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr1", "value1")))));
+    /// assert_eq!(iter.next(), Some(Ok(Attribute::from(("attr2", "")))));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub const fn html(buf: &'a str, pos: usize) -> Self {
         Self::wrap(buf.as_bytes(), pos, true, Decoder::utf8())
     }
