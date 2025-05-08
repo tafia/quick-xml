@@ -308,7 +308,7 @@ where
                 DeEvent::Start(e) => {
                     self.source = ValueSource::Nested;
 
-                    let de = QNameDeserializer::from_elem(e.raw_name(), e.decoder())?;
+                    let de = QNameDeserializer::from_elem(e)?;
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
@@ -689,10 +689,7 @@ where
         V: DeserializeSeed<'de>,
     {
         let (name, is_text) = match self.map.de.peek()? {
-            DeEvent::Start(e) => (
-                seed.deserialize(QNameDeserializer::from_elem(e.raw_name(), e.decoder())?)?,
-                false,
-            ),
+            DeEvent::Start(e) => (seed.deserialize(QNameDeserializer::from_elem(e)?)?, false),
             DeEvent::Text(_) => (
                 seed.deserialize(BorrowedStrDeserializer::<DeError>::new(TEXT_KEY))?,
                 true,
@@ -1152,10 +1149,7 @@ where
     where
         V: DeserializeSeed<'de>,
     {
-        let name = seed.deserialize(QNameDeserializer::from_elem(
-            self.start.raw_name(),
-            self.start.decoder(),
-        )?)?;
+        let name = seed.deserialize(QNameDeserializer::from_elem(&self.start)?)?;
         Ok((name, self))
     }
 }
