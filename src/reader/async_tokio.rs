@@ -7,12 +7,14 @@ use std::task::{Context, Poll};
 
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncRead, ReadBuf};
 
-use crate::errors::{Error, Result, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, IllFormedError, Result, SyntaxError};
+use crate::events::{BytesRef, Event};
 use crate::name::{QName, ResolveResult};
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::buffered_reader::impl_buffered_source;
-use crate::reader::{BangType, BinaryStream, NsReader, ParseState, ReadTextResult, Reader, Span};
+use crate::reader::{
+    BangType, BinaryStream, NsReader, ParseState, ReadRefResult, ReadTextResult, Reader, Span,
+};
 use crate::utils::is_whitespace;
 
 /// A struct for read XML asynchronously from an [`AsyncBufRead`].
@@ -101,7 +103,7 @@ impl<R: AsyncBufRead + Unpin> Reader<R> {
     /// loop {
     ///     match reader.read_event_into_async(&mut buf).await {
     ///         Ok(Event::Start(_)) => count += 1,
-    ///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+    ///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
     ///         Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
     ///         Ok(Event::Eof) => break,
     ///         _ => (),
@@ -245,7 +247,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///             }
     ///         }
     ///         Event::Text(e) => {
-    ///             txt.push(e.unescape().unwrap().into_owned())
+    ///             txt.push(e.decode().unwrap().into_owned())
     ///         }
     ///         Event::Eof => break,
     ///         _ => (),
@@ -381,7 +383,7 @@ impl<R: AsyncBufRead + Unpin> NsReader<R> {
     ///         (_, Event::Start(_)) => unreachable!(),
     ///
     ///         (_, Event::Text(e)) => {
-    ///             txt.push(e.unescape().unwrap().into_owned())
+    ///             txt.push(e.decode().unwrap().into_owned())
     ///         }
     ///         (_, Event::Eof) => break,
     ///         _ => (),

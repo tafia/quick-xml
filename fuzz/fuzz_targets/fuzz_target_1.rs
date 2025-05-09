@@ -43,7 +43,7 @@ where
             | Ok(Event::Comment(ref e))
             | Ok(Event::DocType(ref e)) => {
                 debug_format!(e);
-                if let Err(err) = e.unescape() {
+                if let Err(err) = e.decode() {
                     debug_format!(err);
                     break;
                 }
@@ -54,6 +54,11 @@ where
                     debug_format!(err);
                     break;
                 }
+            }
+            Ok(Event::GeneralRef(ref e)) => {
+                debug_format!(e);
+                debug_format!(e.is_char_ref());
+                debug_format!(e.resolve_char_ref());
             }
             Ok(Event::PI(ref e)) => {
                 debug_format!(e);

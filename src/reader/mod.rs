@@ -6,8 +6,8 @@ use std::io;
 use std::ops::Range;
 
 use crate::encoding::Decoder;
-use crate::errors::{Error, SyntaxError};
-use crate::events::Event;
+use crate::errors::{Error, IllFormedError, SyntaxError};
+use crate::events::{BytesRef, Event};
 use crate::parser::{ElementParser, Parser, PiParser};
 use crate::reader::state::ReaderState;
 
@@ -24,6 +24,32 @@ use crate::reader::state::ReaderState;
 #[cfg_attr(feature = "serde-types", derive(serde::Deserialize, serde::Serialize))]
 #[non_exhaustive]
 pub struct Config {
+    /// Whether lone ampersand character (without a paired semicolon) should be
+    /// allowed in textual content. Unless enabled, in case of a dangling ampersand,
+    /// the [`Error::IllFormed(UnclosedReference)`] is returned from read methods.
+    ///
+    /// Default: `false`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::events::{BytesRef, BytesText, Event};
+    /// # use quick_xml::reader::Reader;
+    /// # use pretty_assertions::assert_eq;
+    /// let mut reader = Reader::from_str("text with & &amp; & alone");
+    /// reader.config_mut().allow_dangling_amp = true;
+    ///
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::new("text with ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::from_escaped("& ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::GeneralRef(BytesRef::new("amp")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::new(" ")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Text(BytesText::from_escaped("& alone")));
+    /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
+    /// ```
+    ///
+    /// [`Error::IllFormed(UnclosedReference)`]: crate::errors::IllFormedError::UnclosedReference
+    pub allow_dangling_amp: bool,
+
     /// Whether unmatched closing tag names should be allowed. Unless enabled,
     /// in case of a dangling end tag, the [`Error::IllFormed(UnmatchedEndTag)`]
     /// is returned from read methods.
@@ -210,6 +236,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            allow_dangling_amp: false,
             allow_unmatched_ends: false,
             check_comments: false,
             check_end_names: true,
@@ -232,7 +259,7 @@ macro_rules! read_event_impl {
     ) => {{
         let event = loop {
             break match $self.state.state {
-                ParseState::Init => { // Go to InsideMarkup state
+                ParseState::Init => { // Go to InsideText state
                     // If encoding set explicitly, we not need to detect it. For example,
                     // explicit UTF-8 set automatically if Reader was created using `from_str`.
                     // But we still need to remove BOM for consistency with no encoding
@@ -251,6 +278,46 @@ macro_rules! read_event_impl {
                     $self.state.state = ParseState::InsideText;
                     continue;
                 },
+                ParseState::InsideRef => { // Go to InsideText
+                    let start = $self.state.offset;
+                    match $reader.read_ref($buf, &mut $self.state.offset) $(.$await)? {
+                        // Emit reference, go to InsideText state
+                        ReadRefResult::Ref(bytes) => {
+                            $self.state.state = ParseState::InsideText;
+                            // +1 to skip start `&`
+                            Ok(Event::GeneralRef(BytesRef::wrap(&bytes[1..], $self.decoder())))
+                        }
+                        // Go to Done state
+                        ReadRefResult::UpToEof(bytes) if $self.state.config.allow_dangling_amp => {
+                            $self.state.state = ParseState::Done;
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToEof(_) => {
+                            $self.state.state = ParseState::Done;
+                            $self.state.last_error_offset = start;
+                            Err(Error::IllFormed(IllFormedError::UnclosedReference))
+                        }
+                        // Do not change state, stay in InsideRef
+                        ReadRefResult::UpToRef(bytes) if $self.state.config.allow_dangling_amp => {
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToRef(_) => {
+                            $self.state.last_error_offset = start;
+                            Err(Error::IllFormed(IllFormedError::UnclosedReference))
+                        }
+                        // Go to InsideMarkup state
+                        ReadRefResult::UpToMarkup(bytes) if $self.state.config.allow_dangling_amp => {
+                            $self.state.state = ParseState::InsideMarkup;
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadRefResult::UpToMarkup(_) => {
+                            $self.state.state = ParseState::InsideMarkup;
+                            $self.state.last_error_offset = start;
+                            Err(Error::IllFormed(IllFormedError::UnclosedReference))
+                        }
+                        ReadRefResult::Err(e) => Err(Error::Io(e.into())),
+                    }
+                }
                 ParseState::InsideText => { // Go to InsideMarkup or Done state
                     if $self.state.config.trim_text_start {
                         $reader.skip_whitespace(&mut $self.state.offset) $(.$await)? ?;
@@ -263,12 +330,23 @@ macro_rules! read_event_impl {
                             $buf = buf;
                             continue;
                         }
+                        ReadTextResult::Ref(buf) => {
+                            $self.state.state = ParseState::InsideRef;
+                            // Pass `buf` to the next next iteration of parsing loop
+                            $buf = buf;
+                            continue;
+                        }
                         ReadTextResult::UpToMarkup(bytes) => {
                             $self.state.state = ParseState::InsideMarkup;
                             // FIXME: Can produce an empty event if:
                             // - event contains only spaces
                             // - trim_text_start = false
                             // - trim_text_end = true
+                            Ok(Event::Text($self.state.emit_text(bytes)))
+                        }
+                        ReadTextResult::UpToRef(bytes) => {
+                            $self.state.state = ParseState::InsideRef;
+                            // Return Text event with `bytes` content or Eof if bytes is empty
                             Ok(Event::Text($self.state.emit_text(bytes)))
                         }
                         ReadTextResult::UpToEof(bytes) => {
@@ -484,6 +562,7 @@ pub type Span = Range<u64>;
 ///     Init         -- "(no event)"\n                                       --> InsideMarkup
 ///     InsideMarkup -- Decl, DocType, PI\nComment, CData\nStart, Empty, End --> InsideText
 ///     InsideText   -- "#lt;false#gt;\n(no event)"\nText                    --> InsideMarkup
+///     InsideRef    -- "(no event)"\nGeneralRef                             --> InsideText
 ///   end
 ///   InsideText     -- "#lt;true#gt;"\nStart --> InsideEmpty
 ///   InsideEmpty    -- End                   --> InsideText
@@ -497,6 +576,11 @@ enum ParseState {
     /// event emitted during transition to `InsideMarkup` is a `StartEvent` if the
     /// first symbol not `<`, otherwise no event are emitted.
     Init,
+    /// State after seeing the `&` symbol in textual content. Depending on the next symbol all other
+    /// events could be generated.
+    ///
+    /// After generating one event the reader moves to the `ClosedTag` state.
+    InsideRef,
     /// State after seeing the `<` symbol. Depending on the next symbol all other
     /// events could be generated.
     ///
@@ -672,7 +756,7 @@ where
 ///                 _ => (),
 ///             }
 ///         }
-///         Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+///         Ok(Event::Text(e)) => txt.push(e.decode().unwrap().into_owned()),
 ///
 ///         // There are several other `Event`s we do not consider here
 ///         _ => (),
@@ -788,7 +872,12 @@ impl<R> Reader<R> {
         &mut self.reader
     }
 
-    /// Gets the current byte position in the input data.
+    /// Gets the byte position in the input data just after the last emitted event
+    /// (i.e. this is position where data of last event ends).
+    ///
+    /// Note, that for text events which is originally ended with whitespace characters
+    /// (` `, `\t`, `\r`, and `\n`) if [`Config::trim_text_end`] is set this is position
+    /// before trim, not the position of the last byte of the [`Event::Text`] content.
     pub const fn buffer_position(&self) -> u64 {
         // when internal state is InsideMarkup, we have actually read until '<',
         // which we don't want to show
@@ -913,16 +1002,46 @@ impl<R> Reader<R> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of an attempt to read XML textual data from the reader.
+/// Result of an attempt to read XML textual data from the source.
+#[derive(Debug)]
 enum ReadTextResult<'r, B> {
-    /// Start of markup (`<` character) was found in the first byte.
+    /// Start of markup (`<` character) was found in the first byte. `<` was consumed.
     /// Contains buffer that should be returned back to the next iteration cycle
     /// to satisfy borrow checker requirements.
     Markup(B),
-    /// Contains text block up to start of markup (`<` character).
+    /// Start of reference (`&` character) was found in the first byte.
+    /// `&` was not consumed.
+    /// Contains buffer that should be returned back to the next iteration cycle
+    /// to satisfy borrow checker requirements.
+    Ref(B),
+    /// Contains text block up to start of markup (`<` character). `<` was consumed.
     UpToMarkup(&'r [u8]),
-    /// Contains text block up to EOF, start of markup (`<` character) was not found.
+    /// Contains text block up to start of reference (`&` character).
+    /// `&` was not consumed.
+    UpToRef(&'r [u8]),
+    /// Contains text block up to EOF, neither start of markup (`<` character)
+    /// or start of reference (`&` character) was found.
     UpToEof(&'r [u8]),
+    /// IO error occurred.
+    Err(io::Error),
+}
+
+/// Result of an attempt to read general reference from the reader.
+#[derive(Debug)]
+enum ReadRefResult<'r> {
+    /// Contains text block up to end of reference (`;` character).
+    /// Result includes start `&`, but not end `;`.
+    Ref(&'r [u8]),
+    /// Contains text block up to EOF. Neither end of reference (`;`), start of
+    /// another reference (`&`) or start of markup (`<`) characters was found.
+    /// Result includes start `&`.
+    UpToEof(&'r [u8]),
+    /// Contains text block up to next possible reference (`&` character).
+    /// Result includes start `&`.
+    UpToRef(&'r [u8]),
+    /// Contains text block up to start of markup (`<` character).
+    /// Result includes start `&`.
+    UpToMarkup(&'r [u8]),
     /// IO error occurred.
     Err(io::Error),
 }
@@ -950,7 +1069,8 @@ trait XmlSource<'r, B> {
     #[cfg(feature = "encoding")]
     fn detect_encoding(&mut self) -> io::Result<Option<&'static Encoding>>;
 
-    /// Read input until start of markup (the `<`) is found or end of input is reached.
+    /// Read input until start of markup (the `<`) is found, start of general entity
+    /// reference (the `&`) is found or end of input is reached.
     ///
     /// # Parameters
     /// - `buf`: Buffer that could be filled from an input (`Self`) and
@@ -959,6 +1079,19 @@ trait XmlSource<'r, B> {
     ///
     /// [events]: crate::events::Event
     fn read_text(&mut self, buf: B, position: &mut u64) -> ReadTextResult<'r, B>;
+
+    /// Read input until end of general reference (the `;`) is found, start of
+    /// another general reference (the `&`) is found or end of input is reached.
+    ///
+    /// This method must be called when current character is `&`.
+    ///
+    /// # Parameters
+    /// - `buf`: Buffer that could be filled from an input (`Self`) and
+    ///   from which [events] could borrow their data
+    /// - `position`: Will be increased by amount of bytes consumed
+    ///
+    /// [events]: crate::events::Event
+    fn read_ref(&mut self, buf: B, position: &mut u64) -> ReadRefResult<'r>;
 
     /// Read input until processing instruction is finished.
     ///
@@ -1515,6 +1648,178 @@ mod test {
                             assert_eq!(position, 23);
                         }
                     }
+                }
+            }
+
+            mod read_text {
+                use super::*;
+                use crate::reader::ReadTextResult;
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                #[$test]
+                $($async)? fn empty() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"".as_ref();
+                    //                ^= 1
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 1);
+                }
+
+                #[$test]
+                $($async)? fn markup() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"<".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::Markup(b) => assert_eq!(b, $buf),
+                        x => panic!("Expected `Markup(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+
+                #[$test]
+                $($async)? fn ref_() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&".as_ref();
+                    //                ^= 1
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::Ref(b) => assert_eq!(b, $buf),
+                        x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 1);
+                }
+
+                #[$test]
+                $($async)? fn up_to_markup() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"a<".as_ref();
+                    //                1 ^= 3
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 3);
+                }
+
+                #[$test]
+                $($async)? fn up_to_ref() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"a&".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToRef(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+
+                #[$test]
+                $($async)? fn up_to_eof() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"a".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_text(buf, &mut position) $(.$await)? {
+                        ReadTextResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"a")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+            }
+
+            mod read_ref {
+                use super::*;
+                use crate::reader::ReadRefResult;
+                use crate::utils::Bytes;
+                use pretty_assertions::assert_eq;
+
+                // Empty input is not allowed for `read_ref` so not tested.
+                // Borrowed source triggers debug assertion,
+                // buffered do nothing due to implementation details.
+
+                #[$test]
+                $($async)? fn up_to_eof() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
+                        ReadRefResult::UpToEof(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToEof(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+
+                #[$test]
+                $($async)? fn up_to_ref() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&&".as_ref();
+                    //                 ^= 2
+
+                    match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
+                        ReadRefResult::UpToRef(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToRef(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 2);
+                }
+
+                #[$test]
+                $($async)? fn up_to_markup() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&<".as_ref();
+                    //                  ^= 3
+
+                    match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
+                        ReadRefResult::UpToMarkup(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `UpToMarkup(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 3);
+                }
+
+                #[$test]
+                $($async)? fn empty_ref() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&;".as_ref();
+                    //                  ^= 3
+
+                    match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
+                        ReadRefResult::Ref(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&")),
+                        x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 3);
+                }
+
+                #[$test]
+                $($async)? fn normal() {
+                    let buf = $buf;
+                    let mut position = 1;
+                    let mut input = b"&lt;".as_ref();
+                    //                    ^= 5
+
+                    match $source(&mut input).read_ref(buf, &mut position) $(.$await)? {
+                        ReadRefResult::Ref(bytes) => assert_eq!(Bytes(bytes), Bytes(b"&lt")),
+                        x => panic!("Expected `Ref(_)`, but got `{:?}`", x),
+                    }
+                    assert_eq!(position, 5);
                 }
             }
 

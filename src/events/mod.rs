@@ -48,9 +48,7 @@ use std::str::from_utf8;
 
 use crate::encoding::{Decoder, EncodingError};
 use crate::errors::{Error, IllFormedError};
-use crate::escape::{
-    escape, minimal_escape, partial_escape, resolve_predefined_entity, unescape_with,
-};
+use crate::escape::{escape, minimal_escape, parse_number, partial_escape, EscapeError};
 use crate::name::{LocalName, QName};
 use crate::utils::{name_len, trim_xml_end, trim_xml_start, write_cow_string, Bytes};
 use attributes::{AttrError, Attribute, Attributes};
@@ -577,29 +575,12 @@ impl<'a> BytesText<'a> {
         }
     }
 
-    /// Decodes then unescapes the content of the event.
+    /// Decodes the content of the event.
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
-    pub fn unescape(&self) -> Result<Cow<'a, str>, Error> {
-        self.unescape_with(resolve_predefined_entity)
-    }
-
-    /// Decodes then unescapes the content of the event with custom entities.
-    ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
-    pub fn unescape_with<'entity>(
-        &self,
-        resolve_entity: impl FnMut(&str) -> Option<&'entity str>,
-    ) -> Result<Cow<'a, str>, Error> {
-        let decoded = self.decoder.decode_cow(&self.content)?;
-
-        match unescape_with(&decoded, resolve_entity)? {
-            // Because result is borrowed, no replacements was done and we can use original string
-            Cow::Borrowed(_) => Ok(decoded),
-            Cow::Owned(s) => Ok(s.into()),
-        }
+    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.decode_cow(&self.content)
     }
 
     /// Removes leading XML whitespace bytes from text content.
@@ -1382,6 +1363,154 @@ impl<'a> arbitrary::Arbitrary<'a> for BytesDecl<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Character or general entity reference (`Event::GeneralRef`): `&ref;` or `&#<number>;`.
+///
+/// This event implements `Deref<Target = [u8]>`. The `deref()` implementation
+/// returns the content of this event between `&` and `;`:
+///
+/// ```
+/// # use quick_xml::events::{BytesRef, Event};
+/// # use quick_xml::reader::Reader;
+/// # use pretty_assertions::assert_eq;
+/// let mut reader = Reader::from_str(r#"&entity;"#);
+/// let content = "entity";
+/// let event = BytesRef::new(content);
+///
+/// assert_eq!(reader.read_event().unwrap(), Event::GeneralRef(event.borrow()));
+/// // deref coercion of &BytesRef to &[u8]
+/// assert_eq!(&event as &[u8], content.as_bytes());
+/// // AsRef<[u8]> for &T + deref coercion
+/// assert_eq!(event.as_ref(), content.as_bytes());
+/// ```
+#[derive(Clone, Eq, PartialEq)]
+pub struct BytesRef<'a> {
+    content: Cow<'a, [u8]>,
+    /// Encoding in which the `content` is stored inside the event.
+    decoder: Decoder,
+}
+
+impl<'a> BytesRef<'a> {
+    /// Internal constructor, used by `Reader`. Supplies data in reader's encoding
+    #[inline]
+    pub(crate) const fn wrap(content: &'a [u8], decoder: Decoder) -> Self {
+        Self {
+            content: Cow::Borrowed(content),
+            decoder,
+        }
+    }
+
+    /// Creates a new `BytesRef` borrowing a slice.
+    ///
+    /// # Warning
+    ///
+    /// `name` must be a valid name.
+    #[inline]
+    pub fn new<C: Into<Cow<'a, str>>>(name: C) -> Self {
+        Self {
+            content: str_cow_to_bytes(name),
+            decoder: Decoder::utf8(),
+        }
+    }
+
+    /// Converts the event into an owned event.
+    pub fn into_owned(self) -> BytesRef<'static> {
+        BytesRef {
+            content: Cow::Owned(self.content.into_owned()),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Extracts the inner `Cow` from the `BytesRef` event container.
+    #[inline]
+    pub fn into_inner(self) -> Cow<'a, [u8]> {
+        self.content
+    }
+
+    /// Converts the event into a borrowed event.
+    #[inline]
+    pub fn borrow(&self) -> BytesRef {
+        BytesRef {
+            content: Cow::Borrowed(&self.content),
+            decoder: self.decoder,
+        }
+    }
+
+    /// Decodes the content of the event.
+    ///
+    /// This will allocate if the value contains any escape sequences or in
+    /// non-UTF-8 encoding.
+    pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
+        self.decoder.decode_cow(&self.content)
+    }
+
+    /// Returns `true` if the specified reference represents the character reference
+    /// (`&#<number>;`).
+    ///
+    /// ```
+    /// # use quick_xml::events::BytesRef;
+    /// # use pretty_assertions::assert_eq;
+    /// assert_eq!(BytesRef::new("#x30").is_char_ref(), true);
+    /// assert_eq!(BytesRef::new("#49" ).is_char_ref(), true);
+    /// assert_eq!(BytesRef::new("lt"  ).is_char_ref(), false);
+    /// ```
+    pub fn is_char_ref(&self) -> bool {
+        matches!(self.content.first(), Some(b'#'))
+    }
+
+    /// If this reference represents character reference, then resolves it and
+    /// returns the character, otherwise returns `None`.
+    ///
+    /// This method does not check if character is allowed for XML, in other words,
+    /// well-formedness constraint [WFC: Legal Char] is not enforced.
+    /// The character `0x0`, however, will return `EscapeError::InvalidCharRef`.
+    ///
+    /// ```
+    /// # use quick_xml::events::BytesRef;
+    /// # use pretty_assertions::assert_eq;
+    /// assert_eq!(BytesRef::new("#x30").resolve_char_ref().unwrap(), Some('0'));
+    /// assert_eq!(BytesRef::new("#49" ).resolve_char_ref().unwrap(), Some('1'));
+    /// assert_eq!(BytesRef::new("lt"  ).resolve_char_ref().unwrap(), None);
+    /// ```
+    ///
+    /// [WFC: Legal Char]: https://www.w3.org/TR/xml11/#wf-Legalchar
+    pub fn resolve_char_ref(&self) -> Result<Option<char>, Error> {
+        if let Some(num) = self.decode()?.strip_prefix('#') {
+            let ch = parse_number(num).map_err(EscapeError::InvalidCharRef)?;
+            return Ok(Some(ch));
+        }
+        Ok(None)
+    }
+}
+
+impl<'a> Debug for BytesRef<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BytesRef {{ content: ")?;
+        write_cow_string(f, &self.content)?;
+        write!(f, " }}")
+    }
+}
+
+impl<'a> Deref for BytesRef<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for BytesRef<'a> {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self::new(<&str>::arbitrary(u)?))
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        <&str as arbitrary::Arbitrary>::size_hint(depth)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /// Event emitted by [`Reader::read_event_into`].
 ///
 /// [`Reader::read_event_into`]: crate::reader::Reader::read_event_into
@@ -1406,6 +1535,9 @@ pub enum Event<'a> {
     PI(BytesPI<'a>),
     /// Document type definition data (DTD) stored in `<!DOCTYPE ...>`.
     DocType(BytesText<'a>),
+    /// General reference `&entity;` in the textual data. Can be either an entity
+    /// reference, or a character reference.
+    GeneralRef(BytesRef<'a>),
     /// End of XML document.
     Eof,
 }
@@ -1424,6 +1556,7 @@ impl<'a> Event<'a> {
             Event::Decl(e) => Event::Decl(e.into_owned()),
             Event::PI(e) => Event::PI(e.into_owned()),
             Event::DocType(e) => Event::DocType(e.into_owned()),
+            Event::GeneralRef(e) => Event::GeneralRef(e.into_owned()),
             Event::Eof => Event::Eof,
         }
     }
@@ -1441,6 +1574,7 @@ impl<'a> Event<'a> {
             Event::Decl(e) => Event::Decl(e.borrow()),
             Event::PI(e) => Event::PI(e.borrow()),
             Event::DocType(e) => Event::DocType(e.borrow()),
+            Event::GeneralRef(e) => Event::GeneralRef(e.borrow()),
             Event::Eof => Event::Eof,
         }
     }
@@ -1459,6 +1593,7 @@ impl<'a> Deref for Event<'a> {
             Event::CData(ref e) => e,
             Event::Comment(ref e) => e,
             Event::DocType(ref e) => e,
+            Event::GeneralRef(ref e) => e,
             Event::Eof => &[],
         }
     }
