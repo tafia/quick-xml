@@ -41,9 +41,18 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value_with()`](Self::unescape_value_with)
     ///
-    /// This method is available only if [`encoding`] feature is **not** enabled.
+    /// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+    ///
+    /// NOTE: Because this method is available only if [`encoding`] feature is **not** enabled,
+    /// should only be used by applications.
+    /// Libs should use [`decode_and_unescape_value()`](Self::decode_and_unescape_value)
+    /// instead, because if lib will be used in a project which depends on quick_xml with
+    /// [`encoding`] feature enabled, the lib will fail to compile due to [feature unification].
+    ///
+    /// </div>
     ///
     /// [`encoding`]: ../../index.html#encoding
+    /// [feature unification]: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
     #[cfg(any(doc, not(feature = "encoding")))]
     pub fn unescape_value(&self) -> XmlResult<Cow<'a, str>> {
         self.unescape_value_with(resolve_predefined_entity)
@@ -60,9 +69,18 @@ impl<'a> Attribute<'a> {
     ///
     /// See also [`unescape_value()`](Self::unescape_value)
     ///
-    /// This method is available only if [`encoding`] feature is **not** enabled.
+    /// <div style="background:rgba(120,145,255,0.45);padding:0.75em;">
+    ///
+    /// NOTE: Because this method is available only if [`encoding`] feature is **not** enabled,
+    /// should only be used by applications.
+    /// Libs should use [`decode_and_unescape_value_with()`](Self::decode_and_unescape_value_with)
+    /// instead, because if lib will be used in a project which depends on quick_xml with
+    /// [`encoding`] feature enabled, the lib will fail to compile due to [feature unification].
+    ///
+    /// </div>
     ///
     /// [`encoding`]: ../../index.html#encoding
+    /// [feature unification]: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
     #[cfg(any(doc, not(feature = "encoding")))]
     #[inline]
     pub fn unescape_value_with<'entity>(
