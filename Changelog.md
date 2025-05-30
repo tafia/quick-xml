@@ -20,6 +20,9 @@ Now references to entities (as predefined, such as `&lt;`, as user-defined) repo
 Caller can parse the content of the entity and stream events from it as it is required by the
 XML specification. See the updated `custom_entities` example!
 
+Implement whitespace behavior in the standard in `Deserializer`, which says string primitive
+types should preserve whitespace, while all other primitives have collapse behavior.
+
 ### New Features
 
 - [#863]: Add `Attributes::into_map_access(&str)` and `Attributes::into_deserializer()` when `serialize`
