@@ -2105,12 +2105,18 @@ use std::io::BufRead;
 use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
+
+/// A function to check whether the character is a whitespace (blank, new line, carriage return or tab).
+#[inline]
+const fn is_non_whitespace(ch: char) -> bool {
+    !matches!(ch, ' ' | '\r' | '\n' | '\t')
+}
 
 /// Decoded and concatenated content of consequent [`Text`] and [`CData`]
 /// events. _Consequent_ means that events should follow each other or be
@@ -2125,7 +2131,74 @@ pub(crate) const VALUE_KEY: &str = "$value";
 /// [`PI`]: Event::PI
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Text<'a> {
+    /// Untrimmed text after concatenating content of all
+    /// [`Text`] and [`CData`] events
     text: Cow<'a, str>,
+    /// A range into `text` which contains data after trimming
+    content: Range<usize>,
+}
+
+impl<'a> Text<'a> {
+    fn new(text: Cow<'a, str>) -> Self {
+        let start = text.find(is_non_whitespace).unwrap_or(0);
+        let end = text.rfind(is_non_whitespace).map_or(0, |i| i + 1);
+
+        let content = if start >= end { 0..0 } else { start..end };
+
+        Self { text, content }
+    }
+
+    /// Returns text without leading and trailing whitespaces as [defined] by XML specification.
+    ///
+    /// If you want to only check if text contains only whitespaces, use [`is_blank`](Self::is_blank),
+    /// which will not allocate.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::de::Text;
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let text = Text::from("");
+    /// assert_eq!(text.trimmed(), "");
+    ///
+    /// let text = Text::from(" \r\n\t ");
+    /// assert_eq!(text.trimmed(), "");
+    ///
+    /// let text = Text::from("  some useful text  ");
+    /// assert_eq!(text.trimmed(), "some useful text");
+    /// ```
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-S
+    pub fn trimmed(&self) -> Cow<'a, str> {
+        match self.text {
+            Cow::Borrowed(text) => Cow::Borrowed(&text[self.content.clone()]),
+            Cow::Owned(ref text) => Cow::Owned(text[self.content.clone()].to_string()),
+        }
+    }
+
+    /// Returns `true` if text is empty or contains only whitespaces as [defined] by XML specification.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::de::Text;
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let text = Text::from("");
+    /// assert_eq!(text.is_blank(), true);
+    ///
+    /// let text = Text::from(" \r\n\t ");
+    /// assert_eq!(text.is_blank(), true);
+    ///
+    /// let text = Text::from("  some useful text  ");
+    /// assert_eq!(text.is_blank(), false);
+    /// ```
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-S
+    pub fn is_blank(&self) -> bool {
+        self.content.is_empty()
+    }
 }
 
 impl<'a> Deref for Text<'a> {
@@ -2140,25 +2213,21 @@ impl<'a> Deref for Text<'a> {
 impl<'a> From<&'a str> for Text<'a> {
     #[inline]
     fn from(text: &'a str) -> Self {
-        Self {
-            text: Cow::Borrowed(text),
-        }
+        Self::new(Cow::Borrowed(text))
     }
 }
 
 impl<'a> From<String> for Text<'a> {
     #[inline]
     fn from(text: String) -> Self {
-        Self {
-            text: Cow::Owned(text),
-        }
+        Self::new(Cow::Owned(text))
     }
 }
 
 impl<'a> From<Cow<'a, str>> for Text<'a> {
     #[inline]
     fn from(text: Cow<'a, str>) -> Self {
-        Self { text }
+        Self::new(text)
     }
 }
 
@@ -2311,7 +2380,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 _ => unreachable!("Only `Text`, `CData` or `GeneralRef` events can come here"),
             }
         }
-        Ok(DeEvent::Text(Text { text: result }))
+        Ok(DeEvent::Text(Text::new(result)))
     }
 
     /// Return an input-borrowing event.
