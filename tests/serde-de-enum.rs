@@ -267,7 +267,7 @@ mod externally_tagged {
             #[test]
             fn text() {
                 let data: Text = from_str(" text ").unwrap();
-                assert_eq!(data, Text::Newtype("text".into()));
+                assert_eq!(data, Text::Newtype(" text ".into()));
             }
 
             #[test]
@@ -279,7 +279,7 @@ mod externally_tagged {
             #[test]
             fn mixed() {
                 let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
-                assert_eq!(data, Text::Newtype("te  cdata  xt".into()));
+                assert_eq!(data, Text::Newtype(" te  cdata  xt ".into()));
             }
         }
 
@@ -330,10 +330,10 @@ mod externally_tagged {
                 match from_str::<Text>(" text ") {
                     Err(DeError::Custom(reason)) => assert_eq!(
                         reason,
-                        "invalid type: string \"text\", expected struct variant Text::Struct"
+                        "invalid type: string \" text \", expected struct variant Text::Struct"
                     ),
                     x => panic!(
-                        r#"Expected `Err(Custom("invalid type: string \"text\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Custom("invalid type: string \" text \", expected struct variant Text::Struct"))`, but got `{:?}`"#,
                         x
                     ),
                 }
@@ -358,10 +358,10 @@ mod externally_tagged {
                 match from_str::<Text>(" te <![CDATA[ cdata ]]> xt ") {
                     Err(DeError::Custom(reason)) => assert_eq!(
                         reason,
-                        "invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"
+                        "invalid type: string \" te  cdata  xt \", expected struct variant Text::Struct"
                     ),
                     x => panic!(
-                        r#"Expected `Err(Custom("invalid type: string \"te  cdata  xt\", expected struct variant Text::Struct"))`, but got `{:?}`"#,
+                        r#"Expected `Err(Custom("invalid type: string \" te  cdata  xt \", expected struct variant Text::Struct"))`, but got `{:?}`"#,
                         x
                     ),
                 }

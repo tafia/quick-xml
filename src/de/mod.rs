@@ -3428,16 +3428,16 @@ mod tests {
         #[test]
         fn read_and_peek() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <inner>
-                        text
-                        <inner/>
-                    </inner>
-                    <next/>
-                    <target/>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <inner>\
+                        text\
+                        <inner/>\
+                    </inner>\
+                    <next/>\
+                    <target/>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3559,17 +3559,17 @@ mod tests {
         #[test]
         fn read_to_end() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <skip>
-                        text
-                        <skip/>
-                    </skip>
-                    <target>
-                        <target/>
-                    </target>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <skip>\
+                        text\
+                        <skip/>\
+                    </skip>\
+                    <target>\
+                        <target/>\
+                    </target>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3652,18 +3652,18 @@ mod tests {
         #[test]
         fn partial_replay() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <skipped-1/>
-                    <skipped-2/>
-                    <inner>
-                        <skipped-3/>
-                        <skipped-4/>
-                        <target-2/>
-                    </inner>
-                    <target-1/>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <skipped-1/>\
+                    <skipped-2/>\
+                    <inner>\
+                        <skipped-3/>\
+                        <skipped-4/>\
+                        <target-2/>\
+                    </inner>\
+                    <target-1/>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3858,17 +3858,17 @@ mod tests {
             }
 
             let mut de = make_de(
-                r#"
-                <any-name>
-                    <item/>
-                    <another-item>
-                        <some-element>with text</some-element>
-                        <yet-another-element/>
-                    </another-item>
-                    <item/>
-                    <item/>
-                </any-name>
-                "#,
+                "\
+                <any-name>\
+                    <item/>\
+                    <another-item>\
+                        <some-element>with text</some-element>\
+                        <yet-another-element/>\
+                    </another-item>\
+                    <item/>\
+                    <item/>\
+                </any-name>\
+                ",
             );
             de.event_buffer_size(NonZeroUsize::new(3));
 
@@ -3910,14 +3910,17 @@ mod tests {
                 "#,
             );
 
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="1""#, 3))
             );
             assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="2""#, 3))
@@ -3925,10 +3928,13 @@ mod tests {
             assert_eq!(de.next().unwrap(), Text("cdata content".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
             assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), Eof);
         }
 
@@ -4033,18 +4039,23 @@ mod tests {
         assert_eq!(
             events,
             vec![
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content(
                     r#"item name="hello" source="world.rs""#,
                     4
                 )),
                 Text(BytesText::from_escaped("Some text")),
                 End(BytesEnd::new("item")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content("item2", 5)),
                 End(BytesEnd::new("item2")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content("item3", 5)),
                 End(BytesEnd::new("item3")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content(r#"item4 value="world" "#, 5)),
                 End(BytesEnd::new("item4")),
+                Text(BytesText::from_escaped("\n        ")),
             ]
         )
     }
@@ -4194,7 +4205,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text ".into()));
             }
 
             #[test]
@@ -4206,7 +4217,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
             }
 
             #[test]
@@ -4283,7 +4294,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text ".into()));
             }
 
             #[test]
@@ -4295,7 +4306,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
             }
 
             #[test]
@@ -4352,8 +4363,7 @@ mod tests {
                     let mut de = make_de("<tag1><tag2> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4412,8 +4422,7 @@ mod tests {
                     let mut de = make_de("<tag></tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4445,8 +4454,7 @@ mod tests {
                 fn start() {
                     let mut de = make_de("<tag> text <tag2>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4455,8 +4463,7 @@ mod tests {
                 fn end() {
                     let mut de = make_de("<tag> text </tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4467,8 +4474,7 @@ mod tests {
                 fn cdata() {
                     let mut de = make_de("<tag> text <![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4476,8 +4482,7 @@ mod tests {
                 fn eof() {
                     let mut de = make_de("<tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4510,8 +4515,7 @@ mod tests {
                 fn text() {
                     let mut de = make_de("<tag><![CDATA[ cdata ]]> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4561,8 +4565,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de(" text <tag1><tag2>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4572,8 +4575,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de(" text <tag></tag>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4582,19 +4584,16 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de(" text <tag> text2 ");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text2".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
                 #[test]
                 fn cdata() {
                     let mut de = make_de(" text <tag><![CDATA[ cdata ]]>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4602,9 +4601,8 @@ mod tests {
 
                 #[test]
                 fn eof() {
-                    // Text is trimmed from both sides
                     let mut de = make_de(" text <tag>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4615,8 +4613,7 @@ mod tests {
             #[test]
             fn end() {
                 let mut de = make_de(" text </tag>");
-                // Text is trimmed from both sides
-                assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                 match de.next() {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                         assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4638,8 +4635,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]><tag>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4647,8 +4643,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]></tag>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                             assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4664,10 +4659,9 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]> text2 ");
-                    // Text is trimmed from the start and from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text("text  cdata  text2".into())
+                        DeEvent::Text(" text  cdata  text2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4675,10 +4669,9 @@ mod tests {
                 #[test]
                 fn cdata() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]><![CDATA[ cdata2 ]]>");
-                    // Text is trimmed from the start
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text("text  cdata  cdata2 ".into())
+                        DeEvent::Text(" text  cdata  cdata2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4686,8 +4679,7 @@ mod tests {
                 #[test]
                 fn eof() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4726,8 +4718,7 @@ mod tests {
                     let mut de = make_de("<![CDATA[ cdata ]]><tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4774,8 +4765,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text <tag>");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4783,8 +4773,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text </tag>");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                             assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4812,8 +4801,7 @@ mod tests {
                 #[test]
                 fn eof() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text ");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4850,10 +4838,9 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]> text ");
-                    // Text is trimmed from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(" cdata  cdata2  text".into())
+                        DeEvent::Text(" cdata  cdata2  text ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
