@@ -2988,13 +2988,7 @@ where
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
-        Self::new(
-            SliceReader {
-                reader,
-                start_trimmer: StartTrimmer::default(),
-            },
-            entity_resolver,
-        )
+        Self::new(SliceReader { reader }, entity_resolver)
     }
 }
 
@@ -3034,7 +3028,6 @@ where
         Self::new(
             IoReader {
                 reader,
-                start_trimmer: StartTrimmer::default(),
                 buf: Vec::new(),
             },
             entity_resolver,
@@ -3224,45 +3217,24 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Helper struct that contains a state for an algorithm of converting events
-/// from raw events to semi-trimmed events that is independent from a way of
-/// events reading.
-struct StartTrimmer {
-    /// If `true`, then leading whitespace will be removed from next returned
-    /// [`Event::Text`]. This field is set to `true` after reading each event
-    /// except [`Event::Text`] and [`Event::CData`], so [`Event::Text`] events
-    /// read right after them does not trimmed.
-    trim_start: bool,
-}
+/// Converts raw reader's event into a payload event.
+/// Returns `None`, if event should be skipped.
+#[inline(always)]
+fn skip_uninterested<'a>(event: Event<'a>) -> Option<PayloadEvent<'a>> {
+    let event = match event {
+        Event::DocType(e) => PayloadEvent::DocType(e),
+        Event::Start(e) => PayloadEvent::Start(e),
+        Event::End(e) => PayloadEvent::End(e),
+        Event::Eof => PayloadEvent::Eof,
 
-impl StartTrimmer {
-    /// Converts raw reader's event into a payload event.
-    /// Returns `None`, if event should be skipped.
-    #[inline(always)]
-    fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
-        let (event, trim_next_event) = match event {
-            Event::DocType(e) => (PayloadEvent::DocType(e), true),
-            Event::Start(e) => (PayloadEvent::Start(e), true),
-            Event::End(e) => (PayloadEvent::End(e), true),
-            Event::Eof => (PayloadEvent::Eof, true),
+        // Do not trim next text event after Text, CDATA or reference event
+        Event::CData(e) => PayloadEvent::CData(e),
+        Event::Text(e) => PayloadEvent::Text(e),
+        Event::GeneralRef(e) => PayloadEvent::GeneralRef(e),
 
-            // Do not trim next text event after Text, CDATA or reference event
-            Event::CData(e) => (PayloadEvent::CData(e), false),
-            Event::Text(e) => (PayloadEvent::Text(e), false),
-            Event::GeneralRef(e) => (PayloadEvent::GeneralRef(e), false),
-
-            _ => return None,
-        };
-        self.trim_start = trim_next_event;
-        Some(event)
-    }
-}
-
-impl Default for StartTrimmer {
-    #[inline]
-    fn default() -> Self {
-        Self { trim_start: true }
-    }
+        _ => return None,
+    };
+    Some(event)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3297,7 +3269,6 @@ pub trait XmlRead<'i> {
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
     reader: NsReader<R>,
-    start_trimmer: StartTrimmer,
     buf: Vec<u8>,
 }
 
@@ -3342,7 +3313,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
             self.buf.clear();
 
             let event = self.reader.read_event_into(&mut self.buf)?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = skip_uninterested(event) {
                 return Ok(event.into_owned());
             }
         }
@@ -3370,7 +3341,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
     reader: NsReader<&'de [u8]>,
-    start_trimmer: StartTrimmer,
 }
 
 impl<'de> SliceReader<'de> {
@@ -3411,7 +3381,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
             let event = self.reader.read_event()?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = skip_uninterested(event) {
                 return Ok(event);
             }
         }
@@ -4014,12 +3984,10 @@ mod tests {
 
         let mut reader1 = IoReader {
             reader: NsReader::from_reader(s.as_bytes()),
-            start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
             reader: NsReader::from_str(s),
-            start_trimmer: StartTrimmer::default(),
         };
 
         loop {
@@ -4045,7 +4013,6 @@ mod tests {
 
         let mut reader = SliceReader {
             reader: NsReader::from_str(s),
-            start_trimmer: StartTrimmer::default(),
         };
 
         let config = reader.reader.config_mut();
