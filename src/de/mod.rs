@@ -2498,14 +2498,15 @@ where
     /// Returns `true` if all events was consumed.
     pub fn is_empty(&self) -> bool {
         #[cfg(feature = "overlapped-lists")]
-        if self.read.is_empty() {
-            return self.reader.is_empty();
-        }
+        let event = self.read.front();
+
         #[cfg(not(feature = "overlapped-lists"))]
-        if self.peek.is_none() {
-            return self.reader.is_empty();
+        let event = self.peek.as_ref();
+
+        match event {
+            None | Some(DeEvent::Eof) => self.reader.is_empty(),
+            _ => false,
         }
-        false
     }
 
     /// Returns the underlying XML reader.
@@ -3103,11 +3104,7 @@ where
         T: DeserializeSeed<'de>,
     {
         match self.peek()? {
-            DeEvent::Eof => {
-                // We need to consume event in order to self.is_empty() worked
-                self.next()?;
-                Ok(None)
-            }
+            DeEvent::Eof => Ok(None),
 
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
