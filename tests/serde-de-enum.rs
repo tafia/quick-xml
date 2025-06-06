@@ -248,7 +248,6 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
                 assert_eq!(data, Text::Unit);
@@ -278,7 +277,6 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" te <![CDATA[ cdata ]]> xt ").unwrap();
                 assert_eq!(data, Text::Newtype("te  cdata  xt".into()));
@@ -310,7 +308,6 @@ mod externally_tagged {
             }
 
             #[test]
-            #[ignore = "awaiting fix of https://github.com/tafia/quick-xml/issues/474"]
             fn mixed() {
                 let data: Text = from_str(" 4.2 <![CDATA[ cdata ]]>").unwrap();
                 assert_eq!(data, Text::Tuple(4.2, "cdata".into()));
