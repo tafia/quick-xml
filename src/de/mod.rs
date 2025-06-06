@@ -2713,6 +2713,18 @@ where
         self.reader.next()
     }
 
+    fn skip_whitespaces(&mut self) -> Result<(), DeError> {
+        loop {
+            match self.peek()? {
+                DeEvent::Text(e) if e.is_blank() => {
+                    self.next()?;
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
     /// Returns the mark after which all events, skipped by [`Self::skip()`] call,
     /// should be replayed after calling [`Self::start_replay()`].
     #[cfg(feature = "overlapped-lists")]
@@ -2944,6 +2956,8 @@ where
     #[doc(hidden)]
     #[track_caller]
     pub fn check_eof_reached(&mut self) {
+        // Deserializer may not consume trailing spaces, that is normal
+        self.skip_whitespaces().expect("cannot skip whitespaces");
         let event = self.peek().expect("cannot peek event");
         assert_eq!(
             *event,
@@ -3046,6 +3060,8 @@ where
     where
         V: Visitor<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before the root element
+        self.skip_whitespaces()?;
         match self.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
@@ -3118,6 +3134,10 @@ where
     where
         V: Visitor<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before the root element
+        // which represents the enum variant
+        // Checked by `top_level::list_of_enum` test in serde-de-seq
+        self.skip_whitespaces()?;
         visitor.visit_enum(var::EnumAccess::new(self))
     }
 
@@ -3173,6 +3193,13 @@ where
     where
         T: DeserializeSeed<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before, between
+        // and after root elements. We cannot defer decision if we need to skip spaces
+        // or not: if we have a sequence of type that does not accept blank text, it
+        // will need to return something and it can return only error. For example,
+        // it can be enum without `$text` variant
+        // Checked by `top_level::list_of_enum` test in serde-de-seq
+        self.skip_whitespaces()?;
         match self.peek()? {
             DeEvent::Eof => Ok(None),
 
