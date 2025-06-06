@@ -1,5 +1,5 @@
-//! This example demonstrates how to deserialize enum nodes using an intermediate
-//! custom deserializer.
+//! This example demonstrates how to deserialize and serialize enum nodes using an intermediate
+//! custom deserializer and seralizer.
 //! The `elem` node can either be a `Foo` or a `Bar` node, depending on the `type`.
 //! The `type` attribute is used to determine which variant to deserialize.
 //! This is a workaround for [serde's issue](https://github.com/serde-rs/serde/issues/1905)
@@ -11,11 +11,13 @@
 use std::fmt;
 
 use quick_xml::de::from_str;
+use quick_xml::se::to_string_with_root;
 use serde::de::value::MapAccessDeserializer;
 use serde::de::{Error, MapAccess, Visitor};
-use serde::Deserialize;
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Model {
     elem: Vec<Elem>,
 }
@@ -69,20 +71,43 @@ impl<'de> Deserialize<'de> for Elem {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+impl Serialize for Elem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self {
+            Elem::Foo(f) => {
+                let mut state = serializer.serialize_map(Some(3))?;
+                state.serialize_entry("@type", "foo")?;
+                state.serialize_entry("a", &f.a)?;
+                state.serialize_entry("subfoo", &f.subfoo)?;
+                state.end()
+            }
+            Elem::Bar(b) => {
+                let mut state = serializer.serialize_map(Some(2))?;
+                state.serialize_entry("@type", "bar")?;
+                state.serialize_entry("b", &b.b)?;
+                state.end()
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Foo {
     a: String,
     subfoo: SubFoo,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct SubFoo {
     a1: String,
     a2: String,
     a3: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Bar {
     b: String,
 }
@@ -106,4 +131,9 @@ fn main() {
 
     let model: Model = from_str(&x).unwrap();
     println!("{:?}", model);
+    // Model { elem: [Foo(Foo { a: "1", subfoo: SubFoo { a1: "2", a2: "42", a3: "1337" } }), Bar(Bar { b: "22" })] }
+
+    let x = to_string_with_root("model", &model).unwrap();
+    println!("{}", x);
+    // <model><elem type="foo"><a>1</a><subfoo><a1>2</a1><a2>42</a2><a3>1337</a3></subfoo></elem><elem type="bar"><b>22</b></elem></model>
 }
