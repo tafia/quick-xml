@@ -2881,6 +2881,19 @@ where
         let name = start.name();
         self.read_to_end(name)
     }
+
+    /// Method for testing Deserializer implementation. Checks that all events was consumed during
+    /// deserialization. Panics if the next event will not be [`DeEvent::Eof`].
+    #[doc(hidden)]
+    #[track_caller]
+    pub fn check_eof_reached(&mut self) {
+        let event = self.peek().expect("cannot peek event");
+        assert_eq!(
+            *event,
+            DeEvent::Eof,
+            "the whole XML document should be consumed, expected `Eof`",
+        );
+    }
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {

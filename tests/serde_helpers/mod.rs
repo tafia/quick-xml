@@ -18,7 +18,7 @@ where
 
     // If type was deserialized, the whole XML document should be consumed
     if let Ok(_) = result {
-        assert!(de.is_empty(), "the whole XML document should be consumed");
+        de.check_eof_reached();
     }
 
     result
