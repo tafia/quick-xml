@@ -20,6 +20,9 @@ Now references to entities (as predefined, such as `&lt;`, as user-defined) repo
 Caller can parse the content of the entity and stream events from it as it is required by the
 XML specification. See the updated `custom_entities` example!
 
+Implement whitespace behavior in the standard in `Deserializer`, which says string primitive
+types should preserve whitespace, while all other primitives have collapse behavior.
+
 ### New Features
 
 - [#863]: Add `Attributes::into_map_access(&str)` and `Attributes::into_deserializer()` when `serialize`
@@ -30,6 +33,7 @@ XML specification. See the updated `custom_entities` example!
 - [#766]: Added new configuration option `allow_dangling_amp` which allows to have
   a `&` not followed by `;` in the textual data which is required for some applications
   for compatibility reasons.
+- [#285]: Add ability to `quick_xml::de::Text` to access text with trimmed spaces
 
 ### Bug Fixes
 
@@ -40,6 +44,7 @@ XML specification. See the updated `custom_entities` example!
 - [#766]: `BytesText::unescape` and `BytesText::unescape_with` replaced by `BytesText::decode`.
   Now Text events does not contain escaped parts which are reported as `Event::GeneralRef`.
 
+[#285]: https://github.com/tafia/quick-xml/issues/285
 [#766]: https://github.com/tafia/quick-xml/pull/766
 [#863]: https://github.com/tafia/quick-xml/pull/863
 [general entity]: https://www.w3.org/TR/xml11/#gen-entity

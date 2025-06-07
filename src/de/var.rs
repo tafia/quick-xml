@@ -47,7 +47,7 @@ where
                 true,
             ),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => return Err(DeError::UnexpectedEof),
         };
