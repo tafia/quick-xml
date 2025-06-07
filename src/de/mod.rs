@@ -2786,7 +2786,7 @@ where
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
@@ -2978,7 +2978,7 @@ where
         match self.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             // Deserializer methods are only hints, if deserializer could not satisfy
             // request, it should return the data that it has. It is responsibility
@@ -3019,7 +3019,7 @@ where
             }
             DeEvent::Text(_) => visitor.visit_unit(),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
