@@ -33,6 +33,10 @@ XML specification. See the updated `custom_entities` example!
 
 ### Bug Fixes
 
+- [#843]: `xs:list` deserialization now delimits on whitespaces ` `, `\r`, `\t`, and `\n`.
+
+[#843]: https://github.com/tafia/quick-xml/pull/843
+
 ### Misc Changes
 
 - [#863]: Remove `From<QName<'a>> for BytesStart<'a>` because now `BytesStart` stores the
