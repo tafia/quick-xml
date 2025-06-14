@@ -39,6 +39,7 @@ types should preserve whitespace, while all other primitives have collapse behav
 
 - [#868]: Allow to have both `$text` and `$value` special fields in one struct. Previously
   any text will be recognized as `$value` field even when `$text` field is also presented.
+- [#868]: Skip text events when deserialize a sequence of items overlapped with text (including CDATA).
 
 ### Misc Changes
 
