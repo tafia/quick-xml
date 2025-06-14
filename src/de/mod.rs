@@ -1506,6 +1506,28 @@
 //! The only difference is in how complex types and sequences are serialized.
 //! If you doubt which one you should select, begin with [`$value`](#value).
 //!
+//! If you have both `$text` and `$value` in you struct, then text events will be
+//! mapped to the `$text` field:
+//!
+//! ```
+//! # use serde::Deserialize;
+//! # use quick_xml::de::from_str;
+//! #[derive(Deserialize, PartialEq, Debug)]
+//! struct TextAndValue {
+//!     #[serde(rename = "$text")]
+//!     text: Option<String>,
+//!
+//!     #[serde(rename = "$value")]
+//!     value: Option<String>,
+//! }
+//!
+//! let object: TextAndValue = from_str("<AnyName>text <![CDATA[and CDATA]]></AnyName>").unwrap();
+//! assert_eq!(object, TextAndValue {
+//!     text: Some("text and CDATA".to_string()),
+//!     value: None,
+//! });
+//! ```
+//!
 //! ## `$text`
 //! `$text` is used when you want to write your XML as a text or a CDATA content.
 //! More formally, field with that name represents simple type definition with
@@ -1743,12 +1765,6 @@
 //! let object: AnyName = from_str(&xml).unwrap();
 //! assert_eq!(object, obj);
 //! ```
-//!
-//! ----------------------------------------------------------------------------
-//!
-//! You can have either `$text` or `$value` field in your structs. Unfortunately,
-//! that is not enforced, so you can theoretically have both, but you should
-//! avoid that.
 //!
 //!
 //!
