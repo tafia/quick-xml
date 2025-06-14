@@ -37,6 +37,9 @@ types should preserve whitespace, while all other primitives have collapse behav
 
 ### Bug Fixes
 
+- [#868]: Allow to have both `$text` and `$value` special fields in one struct. Previously
+  any text will be recognized as `$value` field even when `$text` field is also presented.
+
 ### Misc Changes
 
 - [#863]: Remove `From<QName<'a>> for BytesStart<'a>` because now `BytesStart` stores the
@@ -47,6 +50,7 @@ types should preserve whitespace, while all other primitives have collapse behav
 [#285]: https://github.com/tafia/quick-xml/issues/285
 [#766]: https://github.com/tafia/quick-xml/pull/766
 [#863]: https://github.com/tafia/quick-xml/pull/863
+[#868]: https://github.com/tafia/quick-xml/pull/868
 [general entity]: https://www.w3.org/TR/xml11/#gen-entity
 
 
