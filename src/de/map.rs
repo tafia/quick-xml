@@ -192,6 +192,9 @@ where
     /// <tag>value for VALUE_KEY field<tag>
     /// ```
     has_value_field: bool,
+    /// If `true`, then the deserialized struct has a field with a special name:
+    /// [`TEXT_KEY`].
+    has_text_field: bool,
 }
 
 impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
@@ -212,6 +215,7 @@ where
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
+            has_text_field: fields.contains(&TEXT_KEY),
         })
     }
 
@@ -264,10 +268,8 @@ where
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
-                // We shouldn't have both `$value` and `$text` fields in the same
-                // struct, so if we have `$value` field, the we should deserialize
-                // text content to `$value`
-                DeEvent::Text(_) if self.has_value_field => {
+                // If we have dedicated "$text" field, it will not be passed to "$value" field
+                DeEvent::Text(_) if self.has_value_field && !self.has_text_field => {
                     self.source = ValueSource::Content;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
