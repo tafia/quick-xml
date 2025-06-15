@@ -570,3 +570,86 @@ fn issue683() {
         }
     );
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/issues/868.
+#[test]
+fn issue868() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "root")]
+    pub struct Root {
+        #[serde(rename = "key")]
+        pub key: Key,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "key")]
+    pub struct Key {
+        #[serde(rename = "value")]
+        pub values: Option<Vec<Value>>,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    #[serde(rename = "Value")]
+    pub struct Value {
+        #[serde(rename = "@id")]
+        pub id: String,
+
+        #[serde(rename = "$text")]
+        pub text: Option<String>,
+    }
+    let xml = r#"
+        <?xml version="1.0" encoding="utf-8"?>
+        <root>
+            <key>
+                <value id="1">text1</value>
+                <value id="2">text2</value>
+                <value id="3">text3</value>
+                <value id="4">text4</value>d
+                <value id="5">text5</value>
+                <value id="6">text6</value>
+            </key>
+        </root>"#;
+    let data = quick_xml::de::from_str::<Root>(xml);
+    #[cfg(feature = "overlapped-lists")]
+    assert_eq!(
+        data.unwrap(),
+        Root {
+            key: Key {
+                values: Some(vec![
+                    Value {
+                        id: "1".to_string(),
+                        text: Some("text1".to_string())
+                    },
+                    Value {
+                        id: "2".to_string(),
+                        text: Some("text2".to_string())
+                    },
+                    Value {
+                        id: "3".to_string(),
+                        text: Some("text3".to_string())
+                    },
+                    Value {
+                        id: "4".to_string(),
+                        text: Some("text4".to_string())
+                    },
+                    Value {
+                        id: "5".to_string(),
+                        text: Some("text5".to_string())
+                    },
+                    Value {
+                        id: "6".to_string(),
+                        text: Some("text6".to_string())
+                    },
+                ]),
+            },
+        }
+    );
+    #[cfg(not(feature = "overlapped-lists"))]
+    match data {
+        Err(quick_xml::DeError::Custom(e)) => assert_eq!(e, "duplicate field `value`"),
+        e => panic!(
+            r#"Expected `Err(Custom("duplicate field `value`"))`, but got `{:?}`"#,
+            e
+        ),
+    }
+}
