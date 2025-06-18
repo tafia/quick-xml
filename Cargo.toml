@@ -27,7 +27,12 @@ tokio = { version = "1.10", optional = true, default-features = false, features 
 memchr = "2.1"
 
 [dev-dependencies]
-criterion = "0.4"
+# msrv workflow uses `cargo check` which triesto resolvee all dependencies, even
+# not used (for example, when calling `cargo check --lib` only `dependencies` is
+# required, `dev-dependencies` are no used). `criterion` 0.6 has msrv = 1.80, so
+# we cannot check minimal versions with it. We allow to use `criterion` 0.4 for that
+# See https://github.com/rust-lang/cargo/issues/10958
+criterion = ">=0.4,<0.7"
 pretty_assertions = "1.4"
 regex = "1"
 # https://github.com/serde-rs/serde/issues/1904 is fixed since 1.0.206
