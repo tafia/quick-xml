@@ -4,6 +4,7 @@ use quick_xml::escape::{escape, unescape};
 use quick_xml::events::Event;
 use quick_xml::name::QName;
 use quick_xml::reader::{NsReader, Reader};
+use std::hint::black_box;
 
 static SAMPLE: &str = include_str!("../tests/documents/sample_rss.xml");
 static PLAYERS: &str = include_str!("../tests/documents/players.xml");
@@ -31,7 +32,7 @@ fn read_event(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(SAMPLE);
             r.config_mut().check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_event() {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
@@ -52,7 +53,7 @@ fn read_event(c: &mut Criterion) {
             let config = r.config_mut();
             config.trim_text(true);
             config.check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_event() {
                     Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
@@ -77,7 +78,7 @@ fn read_resolved_event_into(c: &mut Criterion) {
         b.iter(|| {
             let mut r = NsReader::from_str(SAMPLE);
             r.config_mut().check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_resolved_event() {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
@@ -98,7 +99,7 @@ fn read_resolved_event_into(c: &mut Criterion) {
             let config = r.config_mut();
             config.trim_text(true);
             config.check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_resolved_event() {
                     Ok((_, Event::Start(_))) | Ok((_, Event::Empty(_))) => count += 1,
@@ -123,7 +124,7 @@ fn one_event(c: &mut Criterion) {
         let src = format!(r#"<hello target="{}">"#, "world".repeat(512 / 5));
         b.iter(|| {
             let mut r = Reader::from_str(&src);
-            let mut nbtxt = criterion::black_box(0);
+            let mut nbtxt = black_box(0);
             let config = r.config_mut();
             config.trim_text(true);
             config.check_end_names = false;
@@ -140,7 +141,7 @@ fn one_event(c: &mut Criterion) {
         let src = format!(r#"<!-- hello "{}" -->"#, "world".repeat(512 / 5));
         b.iter(|| {
             let mut r = Reader::from_str(&src);
-            let mut nbtxt = criterion::black_box(0);
+            let mut nbtxt = black_box(0);
             let config = r.config_mut();
             config.trim_text(true);
             config.check_end_names = false;
@@ -157,7 +158,7 @@ fn one_event(c: &mut Criterion) {
         let src = format!(r#"<![CDATA[hello "{}"]]>"#, "world".repeat(512 / 5));
         b.iter(|| {
             let mut r = Reader::from_str(&src);
-            let mut nbtxt = criterion::black_box(0);
+            let mut nbtxt = black_box(0);
             let config = r.config_mut();
             config.trim_text(true);
             config.check_end_names = false;
@@ -179,7 +180,7 @@ fn attributes(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
             r.config_mut().check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_event() {
                     Ok(Event::Empty(e)) => {
@@ -200,7 +201,7 @@ fn attributes(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
             r.config_mut().check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_event() {
                     Ok(Event::Empty(e)) => {
@@ -221,7 +222,7 @@ fn attributes(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Reader::from_str(PLAYERS);
             r.config_mut().check_end_names = false;
-            let mut count = criterion::black_box(0);
+            let mut count = black_box(0);
             loop {
                 match r.read_event() {
                     Ok(Event::Empty(e)) if e.name() == QName(b"player") => {
@@ -251,20 +252,20 @@ fn escaping(c: &mut Criterion) {
 
     group.bench_function("no_chars_to_escape_long", |b| {
         b.iter(|| {
-            criterion::black_box(escape(LOREM_IPSUM_TEXT));
+            black_box(escape(LOREM_IPSUM_TEXT));
         })
     });
 
     group.bench_function("no_chars_to_escape_short", |b| {
         b.iter(|| {
-            criterion::black_box(escape("just bit of text"));
+            black_box(escape("just bit of text"));
         })
     });
 
     group.bench_function("escaped_chars_short", |b| {
         b.iter(|| {
-            criterion::black_box(escape("age > 72 && age < 21"));
-            criterion::black_box(escape("\"what's that?\""));
+            black_box(escape("age > 72 && age < 21"));
+            black_box(escape("\"what's that?\""));
         })
     });
 
@@ -285,7 +286,7 @@ volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea d
 purus. Consequat id porta nibh venenatis cras sed felis.";
 
         b.iter(|| {
-            criterion::black_box(escape(lorem_ipsum_with_escape_chars));
+            black_box(escape(lorem_ipsum_with_escape_chars));
         })
     });
     group.finish();
@@ -297,31 +298,31 @@ fn unescaping(c: &mut Criterion) {
 
     group.bench_function("no_chars_to_unescape_long", |b| {
         b.iter(|| {
-            criterion::black_box(unescape(LOREM_IPSUM_TEXT)).unwrap();
+            black_box(unescape(LOREM_IPSUM_TEXT)).unwrap();
         })
     });
 
     group.bench_function("no_chars_to_unescape_short", |b| {
         b.iter(|| {
-            criterion::black_box(unescape("just a bit of text")).unwrap();
+            black_box(unescape("just a bit of text")).unwrap();
         })
     });
 
     group.bench_function("char_reference", |b| {
         b.iter(|| {
             let text = "prefix &#34;some stuff&#34;,&#x22;more stuff&#x22;";
-            criterion::black_box(unescape(text)).unwrap();
+            black_box(unescape(text)).unwrap();
             let text = "&#38;&#60;";
-            criterion::black_box(unescape(text)).unwrap();
+            black_box(unescape(text)).unwrap();
         })
     });
 
     group.bench_function("entity_reference", |b| {
         b.iter(|| {
             let text = "age &gt; 72 &amp;&amp; age &lt; 21";
-            criterion::black_box(unescape(text)).unwrap();
+            black_box(unescape(text)).unwrap();
             let text = "&quot;what&apos;s that?&quot;";
-            criterion::black_box(unescape(text)).unwrap();
+            black_box(unescape(text)).unwrap();
         })
     });
 
@@ -342,7 +343,7 @@ volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea d
 purus. Consequat id porta nibh venenatis cras sed felis.";
 
         b.iter(|| {
-            criterion::black_box(unescape(text)).unwrap();
+            black_box(unescape(text)).unwrap();
         })
     });
     group.finish();
