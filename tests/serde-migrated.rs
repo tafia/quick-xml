@@ -100,7 +100,7 @@ fn test_parse_string() {
             "This is a String".to_string(),
         ),
         ("<bla></bla>", "".to_string()),
-        ("<bla>     </bla>", "".to_string()),
+        ("<bla>     </bla>", "     ".to_string()),
         ("<bla>&lt;boom/&gt;</bla>", "<boom/>".to_string()),
         ("<bla>&#9835;</bla>", "♫".to_string()),
         ("<bla>&#x266B;</bla>", "♫".to_string()),
@@ -122,7 +122,7 @@ fn test_option() {
     test_parse_ok(&[
         ("<a/>", Some("".to_string())),
         ("<a></a>", Some("".to_string())),
-        ("<a> </a>", Some("".to_string())),
+        ("<a> </a>", Some(" ".to_string())),
         ("<a>42</a>", Some("42".to_string())),
     ]);
 }

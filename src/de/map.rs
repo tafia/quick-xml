@@ -229,6 +229,13 @@ where
     fn should_skip_subtree(&self, start: &BytesStart) -> bool {
         self.de.reader.reader.has_nil_attr(&self.start) || self.de.reader.reader.has_nil_attr(start)
     }
+
+    /// Skips whitespaces when they are not preserved
+    #[inline]
+    fn skip_whitespaces(&mut self) -> Result<(), DeError> {
+        // TODO: respect the `xml:space` attribute and probably some deserialized type sign
+        self.de.skip_whitespaces()
+    }
 }
 
 impl<'de, 'd, R, E> MapAccess<'de> for ElementMapAccess<'de, 'd, R, E>
@@ -262,6 +269,7 @@ where
                 QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
             seed.deserialize(de).map(Some)
         } else {
+            self.skip_whitespaces()?;
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
                 // We shouldn't have both `$value` and `$text` fields in the same
@@ -935,6 +943,7 @@ where
         T: DeserializeSeed<'de>,
     {
         loop {
+            self.map.skip_whitespaces()?;
             break match self.map.de.peek()? {
                 // If we see a tag that we not interested, skip it
                 #[cfg(feature = "overlapped-lists")]

@@ -967,10 +967,10 @@ mod struct_ {
             ) {
                 Err(DeError::Custom(reason)) => assert_eq!(
                     reason,
-                    "invalid type: string \"excess text\", expected struct Elements",
+                    "invalid type: string \"\\nexcess text\\t\", expected struct Elements",
                 ),
                 x => panic!(
-                    r#"Expected `Err(Custom("invalid type: string \"excess text\", expected struct Elements"))`, but got `{:?}`"#,
+                    r#"Expected `Err(Custom("invalid type: string \"\\nexcess text\\t\", expected struct Elements"))`, but got `{:?}`"#,
                     x
                 ),
             };
@@ -1491,7 +1491,7 @@ mod borrow {
             BTreeMap::from_iter([
                 // Comment to prevent formatting in one line
                 ("element", "element content"),
-                ("$text", "text content"),
+                ("$text", "\n                text content\n            "),
             ])
         );
     }

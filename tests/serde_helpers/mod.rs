@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 /// Deserialize an instance of type T from a string of XML text.
 /// If deserialization was succeeded checks that all XML events was consumed
+#[track_caller]
 pub fn from_str<'de, T>(source: &'de str) -> Result<T, DeError>
 where
     T: Deserialize<'de>,
@@ -17,7 +18,7 @@ where
 
     // If type was deserialized, the whole XML document should be consumed
     if let Ok(_) = result {
-        assert!(de.is_empty(), "the whole XML document should be consumed");
+        de.check_eof_reached();
     }
 
     result
