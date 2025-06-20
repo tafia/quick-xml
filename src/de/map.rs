@@ -192,6 +192,9 @@ where
     /// <tag>value for VALUE_KEY field<tag>
     /// ```
     has_value_field: bool,
+    /// If `true`, then the deserialized struct has a field with a special name:
+    /// [`TEXT_KEY`].
+    has_text_field: bool,
 }
 
 impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
@@ -212,6 +215,7 @@ where
             source: ValueSource::Unknown,
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
+            has_text_field: fields.contains(&TEXT_KEY),
         })
     }
 
@@ -264,10 +268,8 @@ where
         } else {
             // try getting from events (<key>value</key>)
             match self.de.peek()? {
-                // We shouldn't have both `$value` and `$text` fields in the same
-                // struct, so if we have `$value` field, the we should deserialize
-                // text content to `$value`
-                DeEvent::Text(_) if self.has_value_field => {
+                // If we have dedicated "$text" field, it will not be passed to "$value" field
+                DeEvent::Text(_) if self.has_value_field && !self.has_text_field => {
                     self.source = ValueSource::Content;
                     // Deserialize `key` from special attribute name which means
                     // that value should be taken from the text content of the
@@ -609,7 +611,7 @@ where
                 _ => unreachable!(),
             }
         } else {
-            TagFilter::Exclude(self.map.fields)
+            TagFilter::Exclude(self.map.fields, self.map.has_text_field)
         };
         visitor.visit_seq(MapValueSeqAccess {
             #[cfg(feature = "overlapped-lists")]
@@ -850,15 +852,27 @@ enum TagFilter<'de> {
     Include(BytesStart<'de>), //TODO: Need to store only name instead of a whole tag
     /// A `SeqAccess` interested in tags with any name, except explicitly listed.
     /// Excluded tags are used as struct field names and therefore should not
-    /// fall into a `$value` category
-    Exclude(&'static [&'static str]),
+    /// fall into a `$value` category.
+    ///
+    /// The `bool` represents the having of a `$text` special field in fields array.
+    /// It is used to exclude text events when `$text` fields is defined together with
+    /// `$value` fieldб and `$value` accepts sequence.
+    Exclude(&'static [&'static str], bool),
 }
 
 impl<'de> TagFilter<'de> {
     fn is_suitable(&self, start: &BytesStart) -> Result<bool, DeError> {
         match self {
             Self::Include(n) => Ok(n.name() == start.name()),
-            Self::Exclude(fields) => not_in(fields, start),
+            Self::Exclude(fields, _) => not_in(fields, start),
+        }
+    }
+    const fn need_skip_text(&self) -> bool {
+        match self {
+            // If we look only for tags, we should skip any $text keys
+            Self::Include(_) => true,
+            // If we look fo any data, we should exclude $text keys if it in the list
+            Self::Exclude(_, has_text_field) => *has_text_field,
         }
     }
 }
@@ -942,9 +956,17 @@ where
                     self.map.de.skip()?;
                     continue;
                 }
+                // Skip any text events if sequence expects only specific tag names
+                #[cfg(feature = "overlapped-lists")]
+                DeEvent::Text(_) if self.filter.need_skip_text() => {
+                    self.map.de.skip()?;
+                    continue;
+                }
                 // Stop iteration when list elements ends
                 #[cfg(not(feature = "overlapped-lists"))]
                 DeEvent::Start(e) if !self.filter.is_suitable(e)? => Ok(None),
+                #[cfg(not(feature = "overlapped-lists"))]
+                DeEvent::Text(_) if self.filter.need_skip_text() => Ok(None),
 
                 // Stop iteration after reaching a closing tag
                 // The matching tag name is guaranteed by the reader

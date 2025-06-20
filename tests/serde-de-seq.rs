@@ -821,6 +821,28 @@ mod fixed_name {
             );
         }
 
+        #[test]
+        fn text_and_value() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            struct List {
+                #[serde(rename = "$text")]
+                text: (),
+                item: [(); 2],
+            }
+
+            from_str::<List>(
+                r#"
+                <root>
+                    <item/>
+                    <item/>
+                    text
+                    <![CDATA[cdata]]>
+                </root>
+                "#,
+            )
+            .unwrap();
+        }
+
         /// Checks that sequences represented by elements can contain sequences,
         /// represented by [`xs:list`s](https://www.w3schools.com/xml/el_list.asp)
         mod xs_list {
@@ -1652,6 +1674,36 @@ mod fixed_name {
                             element: Some("value".to_string()),
                         },
                     ],
+                }
+            );
+        }
+
+        #[test]
+        fn text_and_value() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            struct List {
+                #[serde(rename = "$text")]
+                text: (),
+                item: Vec<()>,
+            }
+
+            let data: List = from_str(
+                r#"
+                <root>
+                    <item/>
+                    <item/>
+                    text
+                    <![CDATA[cdata]]>
+                </root>
+                "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                List {
+                    text: (),
+                    item: vec![(); 2],
                 }
             );
         }
@@ -2883,6 +2935,29 @@ mod variable_name {
             );
         }
 
+        #[test]
+        fn text_and_value() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            struct List {
+                #[serde(rename = "$text")]
+                text: (),
+                #[serde(rename = "$value")]
+                value: [(); 2],
+            }
+
+            from_str::<List>(
+                r#"
+                <root>
+                    <item/>
+                    <item/>
+                    text
+                    <![CDATA[cdata]]>
+                </root>
+                "#,
+            )
+            .unwrap();
+        }
+
         /// Checks that sequences represented by elements can contain sequences,
         /// represented by `xs:list`s
         mod xs_list {
@@ -3927,6 +4002,37 @@ mod variable_name {
                 "#,
             )
             .unwrap_err();
+        }
+
+        #[test]
+        fn text_and_value() {
+            #[derive(Debug, PartialEq, Deserialize)]
+            struct List {
+                #[serde(rename = "$text")]
+                text: (),
+                #[serde(rename = "$value")]
+                value: Vec<()>,
+            }
+
+            let data: List = from_str(
+                r#"
+                <root>
+                    <item/>
+                    <item/>
+                    text
+                    <![CDATA[cdata]]>
+                </root>
+                "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                data,
+                List {
+                    text: (),
+                    value: vec![(); 2],
+                }
+            );
         }
 
         /// Checks that sequences represented by elements can contain sequences,
