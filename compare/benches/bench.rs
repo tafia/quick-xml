@@ -4,6 +4,7 @@ use quick_xml::events::Event;
 use quick_xml::reader::Reader;
 use serde::Deserialize;
 use serde_xml_rs;
+use std::hint::black_box;
 use xml::reader::{EventReader, XmlEvent};
 
 static RPM_PRIMARY: &str = include_str!("../../tests/documents/rpm_primary.xml");
@@ -60,7 +61,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut reader = Reader::from_str(input);
                     reader.config_mut().check_end_names = false;
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     loop {
                         match reader.read_event() {
                             Ok(Event::Start(_)) | Ok(Event::Empty(_)) => count += 1,
@@ -80,7 +81,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut reader = Reader::from_reader(input.as_bytes());
                     reader.config_mut().check_end_names = false;
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     let mut buf = Vec::new();
                     loop {
                         match reader.read_event_into(&mut buf) {
@@ -105,7 +106,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let reader = Reader::from_str(input);
 
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     for token in reader.into_iter() {
                         match token.ty() {
                             Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
@@ -124,7 +125,7 @@ fn low_level_comparison(c: &mut Criterion) {
         //     b.iter(|| {
         //         let mut r = Parser::new(input.as_bytes());
 
-        //         let mut count = criterion::black_box(0);
+        //         let mut count = black_box(0);
         //         loop {
         //             // Makes no progress if error is returned, so need unwrap()
         //             match r.next().unwrap().code() {
@@ -147,7 +148,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 use xmlparser::{Token, Tokenizer};
 
                 b.iter(|| {
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     for token in Tokenizer::from(input) {
                         match token {
                             Ok(Token::ElementStart { .. }) => count += 1,
@@ -166,7 +167,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 let mut r = Parser::new();
                 r.feed_str(input);
 
-                let mut count = criterion::black_box(0);
+                let mut count = black_box(0);
                 for event in r {
                     match event.unwrap() {
                         Event::ElementStart(_) => count += 1,
@@ -187,7 +188,7 @@ fn low_level_comparison(c: &mut Criterion) {
                 b.iter(|| {
                     let mut r = Parser::from_reader(input.as_bytes());
 
-                    let mut count = criterion::black_box(0);
+                    let mut count = black_box(0);
                     loop {
                         // Makes no progress if error is returned, so need unwrap()
                         match r.read_event().unwrap() {
@@ -219,7 +220,7 @@ fn low_level_comparison(c: &mut Criterion) {
             // Copied from xml5ever benchmarks
             // https://github.com/servo/html5ever/blob/429f23943b24f739b78f4d703620d7b1b526475b/xml5ever/benches/xml5ever.rs
             b.iter(|| {
-                let sink = criterion::black_box(Sink(0));
+                let sink = black_box(Sink(0));
                 let mut tok = XmlTokenizer::new(sink, Default::default());
                 let mut buffer = BufferQueue::new();
                 buffer.push_back(input.into());
@@ -233,7 +234,7 @@ fn low_level_comparison(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("xml_rs", filename), *data, |b, input| {
             b.iter(|| {
                 let r = EventReader::new(input.as_bytes());
-                let mut count = criterion::black_box(0);
+                let mut count = black_box(0);
                 for e in r {
                     if let Ok(XmlEvent::StartElement { .. }) = e {
                         count += 1;
@@ -292,8 +293,7 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> =
-                    criterion::black_box(quick_xml::de::from_str(input).unwrap());
+                let rss: Rss<Enclosure> = black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
@@ -307,7 +307,7 @@ fn serde_comparison(c: &mut Criterion) {
         b.iter(|| {
             let mut r = Parser::new(input.as_bytes());
             let mut de = Deserializer::new(&mut r).unwrap();
-            let rss = criterion::black_box(Rss::deserialize(&mut de).unwrap());
+            let rss = black_box(Rss::deserialize(&mut de).unwrap());
             assert_eq!(rss.channel.items.len(), 99);
         });
     });*/
@@ -328,8 +328,7 @@ fn serde_comparison(c: &mut Criterion) {
             }
 
             b.iter(|| {
-                let rss: Rss<Enclosure> =
-                    criterion::black_box(serde_xml_rs::from_str(input).unwrap());
+                let rss: Rss<Enclosure> = black_box(serde_xml_rs::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
             })
         },
