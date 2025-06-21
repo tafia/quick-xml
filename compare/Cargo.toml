@@ -38,4 +38,6 @@ name = "serde"
 harness = false
 
 [profile.bench]
+# For better information from cargo flamegraph
+debug = true
 lto = true

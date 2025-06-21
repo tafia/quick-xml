@@ -48,6 +48,8 @@ tokio-test = "0.4"
 bench = false
 
 [profile.bench]
+# For better information from cargo flamegraph
+debug = true
 lto = true
 
 [[bench]]
