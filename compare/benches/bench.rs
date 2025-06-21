@@ -203,31 +203,44 @@ fn low_level_comparison(c: &mut Criterion) {
         );
 
         group.bench_with_input(BenchmarkId::new("xml5ever", filename), *data, |b, input| {
-            use xml5ever::buffer_queue::BufferQueue;
-            use xml5ever::tokenizer::{TagKind, Token, TokenSink, XmlTokenizer};
+            use markup5ever::buffer_queue::BufferQueue;
+            use std::cell::Cell;
+            use xml5ever::tokenizer::{ProcessResult, TagKind, Token, TokenSink, XmlTokenizer};
 
-            struct Sink(usize);
+            struct Sink(Cell<usize>);
             impl TokenSink for Sink {
-                fn process_token(&mut self, token: Token) {
+                type Handle = ();
+
+                fn process_token(&self, token: Token) -> ProcessResult<Self::Handle> {
                     match token {
-                        Token::TagToken(tag) if tag.kind == TagKind::StartTag => self.0 += 1,
-                        Token::TagToken(tag) if tag.kind == TagKind::EmptyTag => self.0 += 1,
+                        Token::TagToken(tag) if tag.kind == TagKind::StartTag => {
+                            self.0.set(self.0.get() + 1);
+                        }
+                        Token::TagToken(tag) if tag.kind == TagKind::EmptyTag => {
+                            self.0.set(self.0.get() + 1);
+                        }
                         _ => (),
                     }
+                    ProcessResult::Continue
                 }
             }
 
             // Copied from xml5ever benchmarks
-            // https://github.com/servo/html5ever/blob/429f23943b24f739b78f4d703620d7b1b526475b/xml5ever/benches/xml5ever.rs
+            // https://github.com/servo/html5ever/blob/a7c9d989b9b3426288a4ed362fb4c4671b2dd8c2/xml5ever/benches/xml5ever.rs#L57-L68
             b.iter(|| {
-                let sink = black_box(Sink(0));
-                let mut tok = XmlTokenizer::new(sink, Default::default());
-                let mut buffer = BufferQueue::new();
+                let sink = black_box(Sink(Cell::new(0)));
+                let tok = XmlTokenizer::new(sink, Default::default());
+                let buffer = BufferQueue::default();
                 buffer.push_back(input.into());
-                let _ = tok.feed(&mut buffer);
+                let _ = tok.feed(&buffer);
                 tok.end();
 
-                assert_eq!(tok.sink.0, total_tags, "Overall tag count in {}", filename);
+                assert_eq!(
+                    tok.sink.0.into_inner(),
+                    total_tags,
+                    "Overall tag count in {}",
+                    filename
+                );
             })
         });
 

@@ -9,6 +9,7 @@ edition = "2021"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
+markup5ever = "0.16"
 maybe_xml = "0.10.1"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
@@ -16,7 +17,7 @@ rusty_xml = { version = "0.3", package = "RustyXML" }
 serde-xml-rs = "0.8"
 xml_oxide = "0.3"
 xml-rs = "0.8"
-xml5ever = "0.17"
+xml5ever = "0.22"
 xmlparser = "0.13"
 # Do not use "derive" feature, because it slowdown compilation
 # See https://github.com/serde-rs/serde/pull/2588
