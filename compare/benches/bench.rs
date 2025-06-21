@@ -97,7 +97,29 @@ fn low_level_comparison(c: &mut Criterion) {
         );
 
         group.bench_with_input(
-            BenchmarkId::new("maybe_xml", filename),
+            BenchmarkId::new("maybe_xml:0.10", filename),
+            *data,
+            |b, input| {
+                use maybe_xml_0_10::token::Ty;
+                use maybe_xml_0_10::Reader;
+
+                b.iter(|| {
+                    let reader = Reader::from_str(input);
+
+                    let mut count = black_box(0);
+                    for token in reader.into_iter() {
+                        match token.ty() {
+                            Ty::StartTag(_) | Ty::EmptyElementTag(_) => count += 1,
+                            _ => (),
+                        }
+                    }
+                    assert_eq!(count, total_tags, "Overall tag count in {}", filename);
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new("maybe_xml:0.11", filename),
             *data,
             |b, input| {
                 use maybe_xml::token::Ty;

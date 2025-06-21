@@ -10,7 +10,10 @@ edition = "2021"
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }
 markup5ever = "0.16"
-maybe_xml = "0.10.1"
+# maybe_xml 0.11 regressed perfomance by x2, and because this was the fastest
+# XML parser, we keep benchmarking version 0.10 as well
+maybe_xml_0_10 = { version = "0.10", package = "maybe_xml" }
+maybe_xml = "0.11"
 quick-xml = { path = "..", features = ["serialize"] }
 rapid-xml = "0.2"
 rusty_xml = { version = "0.3", package = "RustyXML" }
