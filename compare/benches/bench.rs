@@ -274,24 +274,24 @@ fn serde_comparison(c: &mut Criterion) {
         enclosure: Option<E>,
     }
 
+    #[derive(Debug, Deserialize)]
+    struct Enclosure {
+        #[serde(rename = "@url")]
+        url: String,
+
+        #[serde(rename = "@length")]
+        length: String,
+
+        #[serde(rename = "@type")]
+        typ: String,
+    }
+
     group.throughput(Throughput::Bytes(SAMPLE_RSS.len() as u64));
 
     group.bench_with_input(
         BenchmarkId::new("quick_xml", "sample_rss.xml"),
         SAMPLE_RSS,
         |b, input| {
-            #[derive(Debug, Deserialize)]
-            struct Enclosure {
-                #[serde(rename = "@url")]
-                url: String,
-
-                #[serde(rename = "@length")]
-                length: String,
-
-                #[serde(rename = "@type")]
-                typ: String,
-            }
-
             b.iter(|| {
                 let rss: Rss<Enclosure> = black_box(quick_xml::de::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
@@ -316,17 +316,6 @@ fn serde_comparison(c: &mut Criterion) {
         BenchmarkId::new("xml_rs", "sample_rss.xml"),
         SAMPLE_RSS,
         |b, input| {
-            // serde_xml_rs supports @-notation for attributes, but applies it only
-            // for serialization
-            #[derive(Debug, Deserialize)]
-            struct Enclosure {
-                url: String,
-                length: String,
-
-                #[serde(rename = "type")]
-                typ: String,
-            }
-
             b.iter(|| {
                 let rss: Rss<Enclosure> = black_box(serde_xml_rs::from_str(input).unwrap());
                 assert_eq!(rss.channel.items.len(), 99);
