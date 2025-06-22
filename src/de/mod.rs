@@ -2105,12 +2105,18 @@ use std::io::BufRead;
 use std::mem::replace;
 #[cfg(feature = "overlapped-lists")]
 use std::num::NonZeroUsize;
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 
 /// Data represented by a text node or a CDATA node. XML markup is not expected
 pub(crate) const TEXT_KEY: &str = "$text";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
+
+/// A function to check whether the character is a whitespace (blank, new line, carriage return or tab).
+#[inline]
+const fn is_non_whitespace(ch: char) -> bool {
+    !matches!(ch, ' ' | '\r' | '\n' | '\t')
+}
 
 /// Decoded and concatenated content of consequent [`Text`] and [`CData`]
 /// events. _Consequent_ means that events should follow each other or be
@@ -2125,7 +2131,74 @@ pub(crate) const VALUE_KEY: &str = "$value";
 /// [`PI`]: Event::PI
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Text<'a> {
+    /// Untrimmed text after concatenating content of all
+    /// [`Text`] and [`CData`] events
     text: Cow<'a, str>,
+    /// A range into `text` which contains data after trimming
+    content: Range<usize>,
+}
+
+impl<'a> Text<'a> {
+    fn new(text: Cow<'a, str>) -> Self {
+        let start = text.find(is_non_whitespace).unwrap_or(0);
+        let end = text.rfind(is_non_whitespace).map_or(0, |i| i + 1);
+
+        let content = if start >= end { 0..0 } else { start..end };
+
+        Self { text, content }
+    }
+
+    /// Returns text without leading and trailing whitespaces as [defined] by XML specification.
+    ///
+    /// If you want to only check if text contains only whitespaces, use [`is_blank`](Self::is_blank),
+    /// which will not allocate.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::de::Text;
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let text = Text::from("");
+    /// assert_eq!(text.trimmed(), "");
+    ///
+    /// let text = Text::from(" \r\n\t ");
+    /// assert_eq!(text.trimmed(), "");
+    ///
+    /// let text = Text::from("  some useful text  ");
+    /// assert_eq!(text.trimmed(), "some useful text");
+    /// ```
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-S
+    pub fn trimmed(&self) -> Cow<'a, str> {
+        match self.text {
+            Cow::Borrowed(text) => Cow::Borrowed(&text[self.content.clone()]),
+            Cow::Owned(ref text) => Cow::Owned(text[self.content.clone()].to_string()),
+        }
+    }
+
+    /// Returns `true` if text is empty or contains only whitespaces as [defined] by XML specification.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use quick_xml::de::Text;
+    /// # use pretty_assertions::assert_eq;
+    /// #
+    /// let text = Text::from("");
+    /// assert_eq!(text.is_blank(), true);
+    ///
+    /// let text = Text::from(" \r\n\t ");
+    /// assert_eq!(text.is_blank(), true);
+    ///
+    /// let text = Text::from("  some useful text  ");
+    /// assert_eq!(text.is_blank(), false);
+    /// ```
+    ///
+    /// [defined]: https://www.w3.org/TR/xml11/#NT-S
+    pub fn is_blank(&self) -> bool {
+        self.content.is_empty()
+    }
 }
 
 impl<'a> Deref for Text<'a> {
@@ -2140,25 +2213,21 @@ impl<'a> Deref for Text<'a> {
 impl<'a> From<&'a str> for Text<'a> {
     #[inline]
     fn from(text: &'a str) -> Self {
-        Self {
-            text: Cow::Borrowed(text),
-        }
+        Self::new(Cow::Borrowed(text))
     }
 }
 
 impl<'a> From<String> for Text<'a> {
     #[inline]
     fn from(text: String) -> Self {
-        Self {
-            text: Cow::Owned(text),
-        }
+        Self::new(Cow::Owned(text))
     }
 }
 
 impl<'a> From<Cow<'a, str>> for Text<'a> {
     #[inline]
     fn from(text: Cow<'a, str>) -> Self {
-        Self { text }
+        Self::new(text)
     }
 }
 
@@ -2297,13 +2366,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             }
 
             match self.next_impl()? {
-                PayloadEvent::Text(mut e) => {
-                    if self.current_event_is_last_text() {
-                        // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        e.inplace_trim_end();
-                    }
-                    result.to_mut().push_str(&e.decode()?);
-                }
+                PayloadEvent::Text(e) => result.to_mut().push_str(&e.decode()?),
                 PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
                 PayloadEvent::GeneralRef(e) => self.resolve_reference(result.to_mut(), e)?,
 
@@ -2311,7 +2374,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
                 _ => unreachable!("Only `Text`, `CData` or `GeneralRef` events can come here"),
             }
         }
-        Ok(DeEvent::Text(Text { text: result }))
+        Ok(DeEvent::Text(Text::new(result)))
     }
 
     /// Return an input-borrowing event.
@@ -2320,13 +2383,7 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             return match self.next_impl()? {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
-                PayloadEvent::Text(mut e) => {
-                    if self.current_event_is_last_text() && e.inplace_trim_end() {
-                        // FIXME: Actually, we should trim after decoding text, but now we trim before
-                        continue;
-                    }
-                    self.drain_text(e.decode()?)
-                }
+                PayloadEvent::Text(e) => self.drain_text(e.decode()?),
                 PayloadEvent::CData(e) => self.drain_text(e.decode()?),
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
@@ -2498,14 +2555,15 @@ where
     /// Returns `true` if all events was consumed.
     pub fn is_empty(&self) -> bool {
         #[cfg(feature = "overlapped-lists")]
-        if self.read.is_empty() {
-            return self.reader.is_empty();
-        }
+        let event = self.read.front();
+
         #[cfg(not(feature = "overlapped-lists"))]
-        if self.peek.is_none() {
-            return self.reader.is_empty();
+        let event = self.peek.as_ref();
+
+        match event {
+            None | Some(DeEvent::Eof) => self.reader.is_empty(),
+            _ => false,
         }
-        false
     }
 
     /// Returns the underlying XML reader.
@@ -2655,6 +2713,18 @@ where
         self.reader.next()
     }
 
+    fn skip_whitespaces(&mut self) -> Result<(), DeError> {
+        loop {
+            match self.peek()? {
+                DeEvent::Text(e) if e.is_blank() => {
+                    self.next()?;
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
     /// Returns the mark after which all events, skipped by [`Self::skip()`] call,
     /// should be replayed after calling [`Self::start_replay()`].
     #[cfg(feature = "overlapped-lists")]
@@ -2786,7 +2856,7 @@ where
             DeEvent::Start(e) if allow_start => self.read_text(e.name()),
             DeEvent::Start(e) => Err(DeError::UnexpectedStart(e.name().as_ref().to_owned())),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
@@ -2880,6 +2950,21 @@ where
         let name = start.name();
         self.read_to_end(name)
     }
+
+    /// Method for testing Deserializer implementation. Checks that all events was consumed during
+    /// deserialization. Panics if the next event will not be [`DeEvent::Eof`].
+    #[doc(hidden)]
+    #[track_caller]
+    pub fn check_eof_reached(&mut self) {
+        // Deserializer may not consume trailing spaces, that is normal
+        self.skip_whitespaces().expect("cannot skip whitespaces");
+        let event = self.peek().expect("cannot peek event");
+        assert_eq!(
+            *event,
+            DeEvent::Eof,
+            "the whole XML document should be consumed, expected `Eof`",
+        );
+    }
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
@@ -2903,13 +2988,7 @@ where
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
-        Self::new(
-            SliceReader {
-                reader,
-                start_trimmer: StartTrimmer::default(),
-            },
-            entity_resolver,
-        )
+        Self::new(SliceReader { reader }, entity_resolver)
     }
 }
 
@@ -2949,7 +3028,6 @@ where
         Self::new(
             IoReader {
                 reader,
-                start_trimmer: StartTrimmer::default(),
                 buf: Vec::new(),
             },
             entity_resolver,
@@ -2975,10 +3053,12 @@ where
     where
         V: Visitor<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before the root element
+        self.skip_whitespaces()?;
         match self.next()? {
             DeEvent::Start(e) => visitor.visit_map(ElementMapAccess::new(self, e, fields)?),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             // Deserializer methods are only hints, if deserializer could not satisfy
             // request, it should return the data that it has. It is responsibility
@@ -3019,7 +3099,7 @@ where
             }
             DeEvent::Text(_) => visitor.visit_unit(),
             // SAFETY: The reader is guaranteed that we don't have unmatched tags
-            // If we here, then out deserializer has a bug
+            // If we here, then our deserializer has a bug
             DeEvent::End(e) => unreachable!("{:?}", e),
             DeEvent::Eof => Err(DeError::UnexpectedEof),
         }
@@ -3047,6 +3127,10 @@ where
     where
         V: Visitor<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before the root element
+        // which represents the enum variant
+        // Checked by `top_level::list_of_enum` test in serde-de-seq
+        self.skip_whitespaces()?;
         visitor.visit_enum(var::EnumAccess::new(self))
     }
 
@@ -3102,12 +3186,15 @@ where
     where
         T: DeserializeSeed<'de>,
     {
+        // When document is pretty-printed there could be whitespaces before, between
+        // and after root elements. We cannot defer decision if we need to skip spaces
+        // or not: if we have a sequence of type that does not accept blank text, it
+        // will need to return something and it can return only error. For example,
+        // it can be enum without `$text` variant
+        // Checked by `top_level::list_of_enum` test in serde-de-seq
+        self.skip_whitespaces()?;
         match self.peek()? {
-            DeEvent::Eof => {
-                // We need to consume event in order to self.is_empty() worked
-                self.next()?;
-                Ok(None)
-            }
+            DeEvent::Eof => Ok(None),
 
             // Start(tag), End(tag), Text
             _ => seed.deserialize(&mut **self).map(Some),
@@ -3130,51 +3217,24 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Helper struct that contains a state for an algorithm of converting events
-/// from raw events to semi-trimmed events that is independent from a way of
-/// events reading.
-struct StartTrimmer {
-    /// If `true`, then leading whitespace will be removed from next returned
-    /// [`Event::Text`]. This field is set to `true` after reading each event
-    /// except [`Event::Text`] and [`Event::CData`], so [`Event::Text`] events
-    /// read right after them does not trimmed.
-    trim_start: bool,
-}
+/// Converts raw reader's event into a payload event.
+/// Returns `None`, if event should be skipped.
+#[inline(always)]
+fn skip_uninterested<'a>(event: Event<'a>) -> Option<PayloadEvent<'a>> {
+    let event = match event {
+        Event::DocType(e) => PayloadEvent::DocType(e),
+        Event::Start(e) => PayloadEvent::Start(e),
+        Event::End(e) => PayloadEvent::End(e),
+        Event::Eof => PayloadEvent::Eof,
 
-impl StartTrimmer {
-    /// Converts raw reader's event into a payload event.
-    /// Returns `None`, if event should be skipped.
-    #[inline(always)]
-    fn trim<'a>(&mut self, event: Event<'a>) -> Option<PayloadEvent<'a>> {
-        let (event, trim_next_event) = match event {
-            Event::DocType(e) => (PayloadEvent::DocType(e), true),
-            Event::Start(e) => (PayloadEvent::Start(e), true),
-            Event::End(e) => (PayloadEvent::End(e), true),
-            Event::Eof => (PayloadEvent::Eof, true),
+        // Do not trim next text event after Text, CDATA or reference event
+        Event::CData(e) => PayloadEvent::CData(e),
+        Event::Text(e) => PayloadEvent::Text(e),
+        Event::GeneralRef(e) => PayloadEvent::GeneralRef(e),
 
-            // Do not trim next text event after Text, CDATA or reference event
-            Event::CData(e) => (PayloadEvent::CData(e), false),
-            Event::Text(mut e) => {
-                // If event is empty after trimming, skip it
-                if self.trim_start && e.inplace_trim_start() {
-                    return None;
-                }
-                (PayloadEvent::Text(e), false)
-            }
-            Event::GeneralRef(e) => (PayloadEvent::GeneralRef(e), false),
-
-            _ => return None,
-        };
-        self.trim_start = trim_next_event;
-        Some(event)
-    }
-}
-
-impl Default for StartTrimmer {
-    #[inline]
-    fn default() -> Self {
-        Self { trim_start: true }
-    }
+        _ => return None,
+    };
+    Some(event)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3209,7 +3269,6 @@ pub trait XmlRead<'i> {
 /// [`Deserializer::from_reader`]
 pub struct IoReader<R: BufRead> {
     reader: NsReader<R>,
-    start_trimmer: StartTrimmer,
     buf: Vec<u8>,
 }
 
@@ -3254,7 +3313,7 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
             self.buf.clear();
 
             let event = self.reader.read_event_into(&mut self.buf)?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = skip_uninterested(event) {
                 return Ok(event.into_owned());
             }
         }
@@ -3282,7 +3341,6 @@ impl<'i, R: BufRead> XmlRead<'i> for IoReader<R> {
 /// [`Deserializer::from_str`].
 pub struct SliceReader<'de> {
     reader: NsReader<&'de [u8]>,
-    start_trimmer: StartTrimmer,
 }
 
 impl<'de> SliceReader<'de> {
@@ -3323,7 +3381,7 @@ impl<'de> XmlRead<'de> for SliceReader<'de> {
     fn next(&mut self) -> Result<PayloadEvent<'de>, DeError> {
         loop {
             let event = self.reader.read_event()?;
-            if let Some(event) = self.start_trimmer.trim(event) {
+            if let Some(event) = skip_uninterested(event) {
                 return Ok(event);
             }
         }
@@ -3367,16 +3425,16 @@ mod tests {
         #[test]
         fn read_and_peek() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <inner>
-                        text
-                        <inner/>
-                    </inner>
-                    <next/>
-                    <target/>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <inner>\
+                        text\
+                        <inner/>\
+                    </inner>\
+                    <next/>\
+                    <target/>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3498,17 +3556,17 @@ mod tests {
         #[test]
         fn read_to_end() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <skip>
-                        text
-                        <skip/>
-                    </skip>
-                    <target>
-                        <target/>
-                    </target>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <skip>\
+                        text\
+                        <skip/>\
+                    </skip>\
+                    <target>\
+                        <target/>\
+                    </target>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3591,18 +3649,18 @@ mod tests {
         #[test]
         fn partial_replay() {
             let mut de = make_de(
-                r#"
-                <root>
-                    <skipped-1/>
-                    <skipped-2/>
-                    <inner>
-                        <skipped-3/>
-                        <skipped-4/>
-                        <target-2/>
-                    </inner>
-                    <target-1/>
-                </root>
-                "#,
+                "\
+                <root>\
+                    <skipped-1/>\
+                    <skipped-2/>\
+                    <inner>\
+                        <skipped-3/>\
+                        <skipped-4/>\
+                        <target-2/>\
+                    </inner>\
+                    <target-1/>\
+                </root>\
+                ",
             );
 
             // Initial conditions - both are empty
@@ -3797,17 +3855,17 @@ mod tests {
             }
 
             let mut de = make_de(
-                r#"
-                <any-name>
-                    <item/>
-                    <another-item>
-                        <some-element>with text</some-element>
-                        <yet-another-element/>
-                    </another-item>
-                    <item/>
-                    <item/>
-                </any-name>
-                "#,
+                "\
+                <any-name>\
+                    <item/>\
+                    <another-item>\
+                        <some-element>with text</some-element>\
+                        <yet-another-element/>\
+                    </another-item>\
+                    <item/>\
+                    <item/>\
+                </any-name>\
+                ",
             );
             de.event_buffer_size(NonZeroUsize::new(3));
 
@@ -3849,14 +3907,17 @@ mod tests {
                 "#,
             );
 
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("root")));
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="1""#, 3))
             );
             assert_eq!(de.read_to_end(QName(b"tag")).unwrap(), ());
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(
                 de.next().unwrap(),
                 Start(BytesStart::from_content(r#"tag a="2""#, 3))
@@ -3864,10 +3925,13 @@ mod tests {
             assert_eq!(de.next().unwrap(), Text("cdata content".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("tag")));
 
+            assert_eq!(de.next().unwrap(), Text("\n                    ".into()));
             assert_eq!(de.next().unwrap(), Start(BytesStart::new("self-closed")));
             assert_eq!(de.read_to_end(QName(b"self-closed")).unwrap(), ());
 
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), End(BytesEnd::new("root")));
+            assert_eq!(de.next().unwrap(), Text("\n                ".into()));
             assert_eq!(de.next().unwrap(), Eof);
         }
 
@@ -3920,12 +3984,10 @@ mod tests {
 
         let mut reader1 = IoReader {
             reader: NsReader::from_reader(s.as_bytes()),
-            start_trimmer: StartTrimmer::default(),
             buf: Vec::new(),
         };
         let mut reader2 = SliceReader {
             reader: NsReader::from_str(s),
-            start_trimmer: StartTrimmer::default(),
         };
 
         loop {
@@ -3951,7 +4013,6 @@ mod tests {
 
         let mut reader = SliceReader {
             reader: NsReader::from_str(s),
-            start_trimmer: StartTrimmer::default(),
         };
 
         let config = reader.reader.config_mut();
@@ -3972,18 +4033,23 @@ mod tests {
         assert_eq!(
             events,
             vec![
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content(
                     r#"item name="hello" source="world.rs""#,
                     4
                 )),
                 Text(BytesText::from_escaped("Some text")),
                 End(BytesEnd::new("item")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content("item2", 5)),
                 End(BytesEnd::new("item2")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content("item3", 5)),
                 End(BytesEnd::new("item3")),
+                Text(BytesText::from_escaped("\n            ")),
                 Start(BytesStart::from_content(r#"item4 value="world" "#, 5)),
                 End(BytesEnd::new("item4")),
+                Text(BytesText::from_escaped("\n        ")),
             ]
         )
     }
@@ -4133,7 +4199,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text ".into()));
             }
 
             #[test]
@@ -4145,7 +4211,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
             }
 
             #[test]
@@ -4222,7 +4288,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text("cdata  text ".into()));
             }
 
             #[test]
@@ -4234,7 +4300,7 @@ mod tests {
                         text \
                     ",
                 );
-                assert_eq!(de.next().unwrap(), DeEvent::Text(" text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
             }
 
             #[test]
@@ -4291,8 +4357,7 @@ mod tests {
                     let mut de = make_de("<tag1><tag2> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4351,8 +4416,7 @@ mod tests {
                     let mut de = make_de("<tag></tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4384,8 +4448,7 @@ mod tests {
                 fn start() {
                     let mut de = make_de("<tag> text <tag2>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4394,8 +4457,7 @@ mod tests {
                 fn end() {
                     let mut de = make_de("<tag> text </tag>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4406,8 +4468,7 @@ mod tests {
                 fn cdata() {
                     let mut de = make_de("<tag> text <![CDATA[ cdata ]]>");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4415,8 +4476,7 @@ mod tests {
                 fn eof() {
                     let mut de = make_de("<tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4449,8 +4509,7 @@ mod tests {
                 fn text() {
                     let mut de = make_de("<tag><![CDATA[ cdata ]]> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4500,8 +4559,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de(" text <tag1><tag2>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag1")));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag2")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4511,8 +4569,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de(" text <tag></tag>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::End(BytesEnd::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4521,19 +4578,16 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de(" text <tag> text2 ");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text2".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text2 ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
                 #[test]
                 fn cdata() {
                     let mut de = make_de(" text <tag><![CDATA[ cdata ]]>");
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4541,9 +4595,8 @@ mod tests {
 
                 #[test]
                 fn eof() {
-                    // Text is trimmed from both sides
                     let mut de = make_de(" text <tag>");
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
@@ -4554,8 +4607,7 @@ mod tests {
             #[test]
             fn end() {
                 let mut de = make_de(" text </tag>");
-                // Text is trimmed from both sides
-                assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                 match de.next() {
                     Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                         assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4577,8 +4629,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]><tag>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4586,8 +4637,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]></tag>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                             assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4603,10 +4653,9 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]> text2 ");
-                    // Text is trimmed from the start and from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text("text  cdata  text2".into())
+                        DeEvent::Text(" text  cdata  text2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4614,10 +4663,9 @@ mod tests {
                 #[test]
                 fn cdata() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]><![CDATA[ cdata2 ]]>");
-                    // Text is trimmed from the start
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text("text  cdata  cdata2 ".into())
+                        DeEvent::Text(" text  cdata  cdata2 ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4625,8 +4673,7 @@ mod tests {
                 #[test]
                 fn eof() {
                     let mut de = make_de(" text <![CDATA[ cdata ]]>");
-                    // Text is trimmed from the start
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text  cdata ".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text  cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4665,8 +4712,7 @@ mod tests {
                     let mut de = make_de("<![CDATA[ cdata ]]><tag> text ");
                     assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
-                    // Text is trimmed from both sides
-                    assert_eq!(de.next().unwrap(), DeEvent::Text("text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
 
@@ -4713,8 +4759,7 @@ mod tests {
                 #[test]
                 fn start() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text <tag>");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Start(BytesStart::new("tag")));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4722,8 +4767,7 @@ mod tests {
                 #[test]
                 fn end() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text </tag>");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     match de.next() {
                         Err(DeError::InvalidXml(Error::IllFormed(cause))) => {
                             assert_eq!(cause, IllFormedError::UnmatchedEndTag("tag".into()));
@@ -4751,8 +4795,7 @@ mod tests {
                 #[test]
                 fn eof() {
                     let mut de = make_de("<![CDATA[ cdata ]]> text ");
-                    // Text is trimmed from the end
-                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text".into()));
+                    assert_eq!(de.next().unwrap(), DeEvent::Text(" cdata  text ".into()));
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
@@ -4789,10 +4832,9 @@ mod tests {
                 #[test]
                 fn text() {
                     let mut de = make_de("<![CDATA[ cdata ]]><![CDATA[ cdata2 ]]> text ");
-                    // Text is trimmed from the end
                     assert_eq!(
                         de.next().unwrap(),
-                        DeEvent::Text(" cdata  cdata2  text".into())
+                        DeEvent::Text(" cdata  cdata2  text ".into())
                     );
                     assert_eq!(de.next().unwrap(), DeEvent::Eof);
                 }
