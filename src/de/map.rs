@@ -220,8 +220,8 @@ where
     /// Used to map elements with `xsi:nil` attribute set to true to `None` in optional contexts.
     ///
     /// We need to handle two attributes:
-    /// - on parent element: <map xsi:nil="true"><foo/></map>
-    /// - on this element:   <map><foo xsi:nil="true"/></map>
+    /// - on parent element: `<map xsi:nil="true"><foo/></map>`
+    /// - on this element:   `<map><foo xsi:nil="true"/></map>`
     ///
     /// We check parent element too because `xsi:nil` affects only nested elements of the
     /// tag where it is defined. We can map structure with fields mapped to attributes to
