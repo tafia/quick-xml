@@ -42,10 +42,12 @@ fn decode_name<'n>(name: QName<'n>, decoder: Decoder) -> Result<Cow<'n, str>, De
 /// - if it is an [`attribute`] name, put `@` in front of the identifier
 /// - if it is a namespace binding (`xmlns` or `xmlns:xxx`) put the decoded name
 ///   to the identifier
+/// - if it is an attribute in the `xml` namespace, put the decoded name
+///   to the identifier
 /// - put the decoded [`local_name()`] of a name to the identifier
 ///
-/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding`
-/// (where `[]` means optional element).
+/// The final identifier looks like `[@]local_name`, or `@xmlns`, or `@xmlns:binding` or
+/// `xml:attribute` (where `[]` means optional element).
 ///
 /// The deserializer also supports deserializing names as other primitive types:
 /// - numbers
@@ -89,8 +91,15 @@ impl<'i, 'd> QNameDeserializer<'i, 'd> {
         if name.as_namespace_binding().is_some() {
             decoder.decode_into(name.into_inner(), key_buf)?;
         } else {
-            let local = name.local_name();
-            decoder.decode_into(local.into_inner(), key_buf)?;
+            // https://github.com/tafia/quick-xml/issues/841
+            // we also want to map to the full name for `xml:xxx`, because `xml:xxx` attributes
+            // can apper only in this literal form, as `xml` prefix cannot be redeclared or unbound
+            let (local, prefix_opt) = name.decompose();
+            if prefix_opt.map_or(false, |prefix| prefix.is_xml()) {
+                decoder.decode_into(&name.into_inner(), key_buf)?;
+            } else {
+                decoder.decode_into(local.into_inner(), key_buf)?;
+            }
         };
 
         Ok(Self {
