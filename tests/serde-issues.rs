@@ -571,6 +571,27 @@ fn issue683() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/841.
+/// `xml:`-attributes should be able to roundtrip serialization - deserialization
+#[test]
+fn issue841() {
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
+    struct ElementWithXmlLang {
+        #[serde(rename = "$text")]
+        content: String,
+        #[serde(rename = "@xml:lang")]
+        language: String,
+    }
+
+    let value = ElementWithXmlLang {
+        content: "content".to_string(),
+        language: "en-US".to_string(),
+    };
+    let sr = to_string(&value).unwrap();
+    let ds: ElementWithXmlLang = from_str(&sr).unwrap();
+    assert_eq!(ds, value);
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/868.
 #[test]
 fn issue868() {

@@ -257,6 +257,18 @@ impl<'a> Prefix<'a> {
     pub const fn into_inner(self) -> &'a [u8] {
         self.0
     }
+
+    /// Checks if this prefix is a special prefix `xml`.
+    #[inline(always)]
+    pub const fn is_xml(&self) -> bool {
+        matches!(self.0, b"xml")
+    }
+
+    /// Checks if this prefix is a special prefix `xmlns`.
+    #[inline(always)]
+    pub const fn is_xmlns(&self) -> bool {
+        matches!(self.0, b"xmlns")
+    }
 }
 impl<'a> Debug for Prefix<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
