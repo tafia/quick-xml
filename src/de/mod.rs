@@ -2149,6 +2149,9 @@ const fn is_non_whitespace(ch: char) -> bool {
 pub struct Text<'a> {
     /// Untrimmed text after concatenating content of all
     /// [`Text`] and [`CData`] events
+    ///
+    /// [`Text`]: Event::Text
+    /// [`CData`]: Event::CData
     text: Cow<'a, str>,
     /// A range into `text` which contains data after trimming
     content: Range<usize>,
