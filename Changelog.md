@@ -13,6 +13,15 @@
 
 ## Unreleased
 
+### New Features
+
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.38.0 -- 2025-06-28
+
 ### Significant changes
 
 Now references to entities (as predefined, such as `&lt;`, as user-defined) reported as a new
