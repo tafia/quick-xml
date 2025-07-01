@@ -328,18 +328,18 @@ fn unescaping(c: &mut Criterion) {
 
     group.bench_function("mixed", |b| {
         let text =
-"Lorem ipsum dolor sit amet, &amp;consectetur adipiscing elit, sed do eiusmod tempor incididunt
-ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.
-Risus ultricies &quot;tristique nulla aliquet enim tortor&quot; at. Fermentum odio eu feugiat pretium
-nibh ipsum. Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu
-cursus euismod quis &#60;viverra nibh cras pulvinar mattis. Sed viverra tellus in hac habitasse platea.
+"Lorem ipsum dolor sit amet, &amp;consectetur adipiscing elit, sed do eiusmod tempor incididunt\r
+ut labore et dolore magna aliqua. Hac habitasse platea dictumst vestibulum rhoncus est pellentesque.\r
+Risus ultricies &quot;tristique nulla aliquet enim tortor&quot; at. Fermentum odio eu feugiat pretium\r
+nibh ipsum. Volutpat sed cras ornare arcu dui. Scelerisque fermentum dui faucibus in ornare quam. Arcu\r
+cursus euismod quis &#60;viverra nibh cras pulvinar mattis. Sed viverra tellus in hac habitasse platea.\r
 Quis commodo odio aenean sed. Cursus in hac habitasse platea dictumst quisque sagittis purus.
 
-Neque convallis a cras semper auctor. Sit amet mauris commodo quis imperdiet massa. Ac ut consequat
-semper viverra nam libero justo &#35; laoreet sit. Adipiscing commodo elit at imperdiet dui accumsan.
-Enim lobortis scelerisque fermentum dui faucibus in ornare. Natoque penatibus et magnis dis parturient
-montes nascetur ridiculus mus. At lectus urna &#33;duis convallis convallis tellus id interdum. Libero
-volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea dictumst quisque sagittis
+Neque convallis a cras semper auctor. Sit amet mauris commodo quis imperdiet massa. Ac ut consequat\r
+semper viverra nam libero justo &#35; laoreet sit. Adipiscing commodo elit at imperdiet dui accumsan.\r
+Enim lobortis scelerisque fermentum dui faucibus in ornare. Natoque penatibus et magnis dis parturient\r
+montes nascetur ridiculus mus. At lectus urna &#33;duis convallis convallis tellus id interdum. Libero\r
+volutpat sed cras ornare arcu dui vivamus arcu. Cursus in hac habitasse platea dictumst quisque sagittis\r
 purus. Consequat id porta nibh venenatis cras sed felis.";
 
         b.iter(|| {

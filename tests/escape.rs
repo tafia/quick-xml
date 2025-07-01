@@ -75,6 +75,45 @@ fn unescape() {
     );
 }
 
+#[test]
+fn unescape_line_end() {
+    let unchanged = escape::unescape("test\n");
+    // assert_eq does not check that Cow is borrowed, but we explicitly use Cow
+    // because it influences diff
+    // TODO: use assert_matches! when stabilized and other features will bump MSRV
+    assert_eq!(unchanged, Ok(Cow::Borrowed("test\n")));
+    assert!(matches!(unchanged, Ok(Cow::Borrowed(_))));
+
+    assert_eq!(
+        escape::unescape("&lt;&amp;test&apos;\r&quot;\r\n&gt;\r\n\r"),
+        Ok("<&test'\n\"\n>\n\n".into())
+    );
+    assert_eq!(escape::unescape("&#x30;\r\r\n"), Ok("0\n\n".into()));
+    assert_eq!(escape::unescape("\r&#48;\n\r\r"), Ok("\n0\n\n\n".into()));
+    assert_eq!(
+        escape::unescape("\r\n&foo;\n"),
+        Err(EscapeError::UnrecognizedEntity(3..6, "foo".into()))
+    );
+
+    assert_eq!(
+        escape::unescape("&lt;&amp;test&apos;\u{0085}\r\r\u{0085}\u{2028}&quot;\r\n&gt;\r\n\r"),
+        Ok("<&test'\n\n\n\n\"\n>\n\n".into())
+    );
+    assert_eq!(
+        escape::unescape("&#x30;\r\r\n\u{0085}"),
+        Ok("0\n\n\n".into())
+    );
+    assert_eq!(
+        escape::unescape("\r&#48;\n\r\r\u{2028}"),
+        Ok("\n0\n\n\n\n".into())
+    );
+    assert_eq!(escape::unescape("\r\r\u{0085}\n\n"), Ok("\n\n\n\n".into()));
+    assert_eq!(
+        escape::unescape("\r\n&foo;\n\u{2028}"),
+        Err(EscapeError::UnrecognizedEntity(3..6, "foo".into()))
+    );
+}
+
 /// XML allows any number of leading zeroes. That is not explicitly mentioned
 /// in the specification, but enforced by the conformance test suite
 /// (https://www.w3.org/XML/Test/)
