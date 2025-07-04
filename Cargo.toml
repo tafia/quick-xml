@@ -25,6 +25,9 @@ encoding_rs = { version = "0.8", optional = true }
 serde = { version = ">=1.0.139", optional = true }
 tokio = { version = "1.10", optional = true, default-features = false, features = ["io-util"] }
 memchr = "2.1"
+base64 = { version = "0.22", optional = true }
+sha2 = { version = "0.10", optional = true }
+signature = { version = "2", optional = true }
 
 [dev-dependencies]
 # msrv workflow uses `cargo check` which triesto resolvee all dependencies, even
@@ -41,6 +44,7 @@ serde_derive = { version = "1.0.206" }
 serde-value = "0.7"
 tokio = { version = "1.21", default-features = false, features = ["macros", "rt"] }
 tokio-test = "0.4"
+rsa = { version = "0.9", default-features = false, features = ["sha2"] }
 
 [lib]
 bench = false
@@ -63,6 +67,7 @@ default = []
 ##
 ## [reading events]: crate::reader::Reader::read_event_into_async
 async-tokio = ["tokio"]
+crypto = ["base64", "sha2", "signature"]
 
 ## Enables support of non-UTF-8 encoded documents. Encoding will be inferred from
 ## the XML declaration if it is found, otherwise UTF-8 is assumed.
@@ -255,6 +260,11 @@ path = "tests/serde-migrated.rs"
 name = "serde-issues"
 required-features = ["serialize"]
 path = "tests/serde-issues.rs"
+
+[[test]]
+name = "crypto"
+required-features = ["crypto"]
+path = "tests/crypto.rs"
 
 [[example]]
 name = "read_nodes_serde"

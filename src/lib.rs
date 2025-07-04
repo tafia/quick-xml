@@ -52,6 +52,8 @@
 // docs.rs defines `docsrs` when building documentation
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
+#[cfg(feature = "crypto")]
+pub mod crypto;
 #[cfg(feature = "serialize")]
 pub mod de;
 pub mod encoding;
@@ -71,9 +73,13 @@ pub mod utils;
 pub mod writer;
 
 // reexports
+#[cfg(feature = "crypto")]
+pub use crate::crypto::{sign_document, Digest, DigestMethod};
 pub use crate::encoding::Decoder;
 #[cfg(feature = "serialize")]
 pub use crate::errors::serialize::{DeError, SeError};
 pub use crate::errors::{Error, Result};
 pub use crate::reader::{NsReader, Reader};
 pub use crate::writer::{ElementWriter, Writer};
+#[cfg(feature = "crypto")]
+pub use signature::Signer;
