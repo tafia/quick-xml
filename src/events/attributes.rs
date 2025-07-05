@@ -4,7 +4,9 @@
 
 use crate::encoding::Decoder;
 use crate::errors::Result as XmlResult;
-use crate::escape::{escape, resolve_predefined_entity, unescape_with};
+#[cfg(any(doc, not(feature = "encoding")))]
+use crate::escape::EscapeError;
+use crate::escape::{escape, normalize_attribute_value, resolve_predefined_entity, unescape_with};
 use crate::name::{LocalName, Namespace, QName};
 use crate::reader::NsReader;
 use crate::utils::{is_whitespace, Bytes};
@@ -32,7 +34,119 @@ pub struct Attribute<'a> {
 }
 
 impl<'a> Attribute<'a> {
-    /// Decodes using UTF-8 then unescapes the value.
+    /// Returns the attribute value normalized as per [the XML specification].
+    ///
+    /// Do not use this method with HTML attributes.
+    ///
+    /// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+    /// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters.
+    ///
+    /// This will allocate unless the raw attribute value does not require normalization.
+    ///
+    /// See also [`normalized_value_with()`](#method.normalized_value_with)
+    ///
+    /// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+    #[cfg(any(doc, not(feature = "encoding")))]
+    pub fn normalized_value(&self, depth: usize) -> Result<Cow<'a, str>, EscapeError> {
+        self.normalized_value_with(depth, |_| None)
+    }
+
+    /// Returns the attribute value normalized as per [the XML specification],
+    /// using a custom entity resolver.
+    ///
+    /// Do not use this method with HTML attributes.
+    ///
+    /// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+    /// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters. A function
+    /// for resolving entities can be provided as `resolve_entity`. Builtin entities will still
+    /// take precedence.
+    ///
+    /// This will allocate unless the raw attribute value does not require normalization.
+    ///
+    /// See also [`normalized_value()`](#method.normalized_value)
+    ///
+    /// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+    #[cfg(any(doc, not(feature = "encoding")))]
+    pub fn normalized_value_with<'entity>(
+        &self,
+        depth: usize,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+    ) -> Result<Cow<'a, str>, EscapeError> {
+        let decoded = match &self.value {
+            Cow::Borrowed(bytes) => {
+                Cow::Borrowed(std::str::from_utf8(bytes).expect("unable to decode as utf-8"))
+            }
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => Cow::Owned(
+                std::str::from_utf8(bytes)
+                    .expect("unable to decode as utf-8")
+                    .to_owned(),
+            ),
+        };
+
+        match normalize_attribute_value(&decoded, depth, resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            Cow::Owned(s) => Ok(s.into()),
+        }
+    }
+
+    /// Decodes using a provided reader and returns the attribute value normalized
+    /// as per [the XML specification].
+    ///
+    /// Do not use this method with HTML attributes.
+    ///
+    /// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+    /// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters.
+    ///
+    /// This will allocate unless the raw attribute value does not require normalization.
+    ///
+    /// See also [`decode_and_normalize_value_with()`](#method.decode_and_normalize_value_with)
+    ///
+    /// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+    pub fn decode_and_normalize_value(
+        &self,
+        decoder: Decoder,
+        depth: usize,
+    ) -> XmlResult<Cow<'a, str>> {
+        self.decode_and_normalize_value_with(decoder, depth, |_| None)
+    }
+
+    /// Decodes using a provided reader and returns the attribute value normalized
+    /// as per [the XML specification], using a custom entity resolver.
+    ///
+    /// Do not use this method with HTML attributes.
+    ///
+    /// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+    /// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters. A function
+    /// for resolving entities can be provided as `resolve_entity`. Builtin entities will still
+    /// take precedence.
+    ///
+    /// This will allocate unless the raw attribute value does not require normalization.
+    ///
+    /// See also [`decode_and_normalize_value()`](#method.decode_and_normalize_value)
+    ///
+    /// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+    pub fn decode_and_normalize_value_with<'entity>(
+        &self,
+        decoder: Decoder,
+        depth: usize,
+        resolve_entity: impl Fn(&str) -> Option<&'entity str>,
+    ) -> XmlResult<Cow<'a, str>> {
+        let decoded = match &self.value {
+            Cow::Borrowed(bytes) => decoder.decode(bytes)?,
+            // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+            Cow::Owned(bytes) => decoder.decode(bytes)?.into_owned().into(),
+        };
+
+        match normalize_attribute_value(&decoded, depth, resolve_entity)? {
+            // Because result is borrowed, no replacements was done and we can use original string
+            Cow::Borrowed(_) => Ok(decoded),
+            Cow::Owned(s) => Ok(s.into()),
+        }
+    }
+
+    /// Returns the unescaped value.
     ///
     /// This is normally the value you are interested in. Escape sequences such as `&gt;` are
     /// replaced with their unescaped equivalents such as `>`.
@@ -1010,6 +1124,91 @@ impl IterState {
 mod xml {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[cfg(any(doc, not(feature = "encoding")))]
+    mod attribute_value_normalization {
+
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        /// Empty values returned are unchanged
+        #[test]
+        fn test_empty() {
+            let raw_value = "".as_bytes();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(attr.normalized_value(5), Ok(Cow::Borrowed("")));
+        }
+
+        /// Already normalized values are returned unchanged
+        #[test]
+        fn test_already_normalized() {
+            let raw_value = "foobar123".as_bytes();
+            let output = "foobar123";
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(attr.normalized_value(5), Ok(Cow::Borrowed(output)));
+        }
+
+        /// Return, tab, and newline characters (0xD, 0x9, 0xA) must be substituted with
+        /// a space character
+        #[test]
+        fn test_space_replacement() {
+            let raw_value = "\r\nfoo\rbar\tbaz\n\ndelta\n".as_bytes();
+            let output = "  foo bar baz  delta ".to_owned();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(attr.normalized_value(5), Ok(Cow::Owned(output)));
+        }
+
+        /// Entities must be terminated
+        #[test]
+        fn test_unterminated_entity() {
+            let raw_value = "abc&quotdef".as_bytes();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(
+                attr.normalized_value(5),
+                Err(EscapeError::UnterminatedEntity(3..11))
+            );
+        }
+
+        /// Unknown entities raise error
+        #[test]
+        fn test_unrecognized_entity() {
+            let raw_value = "abc&unkn;def".as_bytes();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(
+                attr.normalized_value(5),
+                Err(EscapeError::UnrecognizedEntity(4..8, "unkn".to_owned())) // TODO: is this divergence between range behavior of UnterminatedEntity and UnrecognizedEntity appropriate? existing unescape code behaves the same.  (see: start index)
+            );
+        }
+
+        /// custom entity replacement works, entity replacement text processed recursively
+        #[test]
+        fn test_entity_replacement() {
+            let raw_value = "&d;&d;A&a;&#x20;&a;B&da;".as_bytes();
+            let output = "\r\rA\n \nB\r\n".to_owned();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            fn custom_resolver(ent: &str) -> Option<&'static str> {
+                match ent {
+                    "d" => Some("&#xD;"),
+                    "a" => Some("&#xA;"),
+                    "da" => Some("&#xD;&#xA;"),
+                    _ => None,
+                }
+            }
+            assert_eq!(
+                attr.normalized_value_with(5, &custom_resolver),
+                Ok(Cow::Owned(output))
+            );
+        }
+
+        #[test]
+        fn test_char_references() {
+            // character literal references are substituted without being replaced by spaces
+            let raw_value = "&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;".as_bytes();
+            let output = "\r\rA\n\nB\r\n".to_owned();
+            let attr = Attribute::from(("foo".as_bytes(), raw_value));
+            assert_eq!(attr.normalized_value(5), Ok(Cow::Owned(output)));
+        }
+    }
 
     /// Checked attribute is the single attribute
     mod single {

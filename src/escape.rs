@@ -4,6 +4,7 @@ use memchr::memchr2_iter;
 use std::borrow::Cow;
 use std::num::ParseIntError;
 use std::ops::Range;
+use std::slice::Iter;
 
 /// Error of parsing character reference (`&#<dec-number>;` or `&#x<hex-number>;`).
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +51,12 @@ pub enum EscapeError {
     /// Attempt to parse character reference (`&#<dec-number>;` or `&#x<hex-number>;`)
     /// was unsuccessful, not all characters are decimal or hexadecimal numbers.
     InvalidCharRef(ParseCharRefError),
+    /// Expanded more than maximum possible entities during attribute normalization.
+    ///
+    /// Attribute normalization includes expanding of general entities (`&entity;`)
+    /// which replacement text also could contain entities, which is also must be expanded.
+    /// If more than 128 entities would be expanded, this error is returned.
+    TooManyNestedEntities,
 }
 
 impl std::fmt::Display for EscapeError {
@@ -65,6 +72,9 @@ impl std::fmt::Display for EscapeError {
             ),
             Self::InvalidCharRef(e) => {
                 write!(f, "invalid character reference: {}", e)
+            }
+            Self::TooManyNestedEntities => {
+                f.write_str("too many nested entities in an attribute value")
             }
         }
     }
@@ -299,6 +309,182 @@ where
         Ok(Cow::Owned(unescaped))
     } else {
         Ok(Cow::Borrowed(raw))
+    }
+}
+
+const fn is_normalization_char(b: &u8) -> bool {
+    matches!(*b, b'\t' | b'\r' | b'\n' | b' ' | b'&')
+}
+
+/// Returns the attribute value normalized as per [the XML specification],
+/// using a custom entity resolver.
+///
+/// Do not use this method with HTML attributes.
+///
+/// Escape sequences such as `&gt;` are replaced with their unescaped equivalents such as `>`
+/// and the characters `\t`, `\r`, `\n` are replaced with whitespace characters. A function
+/// for resolving entities can be provided as `resolve_entity`. Builtin entities will still
+/// take precedence.
+///
+/// This will allocate unless the raw attribute value does not require normalization.
+///
+/// # Parameters
+///
+/// - `value`: unnormalized attribute value
+/// - `depth`: maximum number of nested entities that can be expanded. If expansion
+///   chain will be more that this value, the function will return [`EscapeError::TooManyNestedEntities`]
+/// - `resolve_entity`: a function to resolve entity. This function could be called
+///   multiple times on the same input and can return different values in each case
+///   for the same input, although it is not recommended
+///
+/// # Lifetimes
+///
+/// - `'input`: lifetime of the unnormalized attribute. If normalization is not requred,
+///   the input returned unchanged with the same lifetime
+/// - `'entity`: lifetime of all entities that is returned by the entity resolution routine
+///
+/// [the XML specification]: https://www.w3.org/TR/xml11/#AVNormalize
+pub(crate) fn normalize_attribute_value<'input, 'entity, F>(
+    value: &'input str,
+    depth: usize,
+    resolve_entity: F,
+) -> Result<Cow<'input, str>, EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: Fn(&str) -> Option<&'entity str>,
+{
+    let mut iter = value.as_bytes().iter();
+
+    // If we found the charater that requires normalization, create a normalized
+    // version of the attribute, otherwise return the value unchanged
+    if let Some(i) = iter.position(is_normalization_char) {
+        let mut normalized = String::with_capacity(value.len());
+        let pos = normalize_step(
+            &mut normalized,
+            &mut iter,
+            value,
+            0,
+            i,
+            depth,
+            &resolve_entity,
+        )?;
+
+        normalize_steps(
+            &mut normalized,
+            &mut iter,
+            value,
+            pos,
+            depth,
+            &resolve_entity,
+        )?;
+        return Ok(normalized.into());
+    }
+    Ok(Cow::Borrowed(value))
+}
+
+fn normalize_steps<'entity, F>(
+    normalized: &mut String,
+    iter: &mut Iter<u8>,
+    input: &str,
+    mut pos: usize,
+    depth: usize,
+    resolve_entity: &F,
+) -> Result<(), EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: Fn(&str) -> Option<&'entity str>,
+{
+    while let Some(i) = iter.position(is_normalization_char) {
+        pos = normalize_step(normalized, iter, input, pos, pos + i, depth, resolve_entity)?;
+    }
+    if let Some(rest) = input.get(pos..) {
+        normalized.push_str(rest);
+    }
+    Ok(())
+}
+
+/// Performs one step of the [normalization algorithm] (but with recursive part):
+///
+/// 1. For a character reference, append the referenced character
+///    to the normalized value.
+/// 2. For an entity reference, recursively apply this algorithm
+///    to the replacement text of the entity.
+/// 3. For a white space character (#x20, #xD, #xA, #x9), append
+///    a space character (#x20) to the normalized value.
+/// 4. For another character, append the character to the normalized value.
+///
+/// # Parameters
+///
+/// - `normalized`: Output of the algorithm. Normalized value will be placed here
+/// - `iter`: Iterator over bytes of `input`
+/// - `input`: Original non-normalized value
+/// - `last_pos`: Index of the last byte in `input` that was processed
+/// - `index`: Index of the byte in `input` that should be processed now
+/// - `depth`: Current recursion depth. Too deep recursion will interrupt the algorithm
+/// - `resolve_entity`: Resolver of entities. Returns `None` for unknown entities
+///
+/// [normalization algorithm]: https://www.w3.org/TR/xml11/#AVNormalize
+fn normalize_step<'entity, F>(
+    normalized: &mut String,
+    iter: &mut Iter<u8>,
+    input: &str,
+    last_pos: usize,
+    index: usize,
+    depth: usize,
+    resolve_entity: &F,
+) -> Result<usize, EscapeError>
+where
+    // the lifetime of the output comes from a capture or is `'static`
+    F: Fn(&str) -> Option<&'entity str>,
+{
+    if depth == 0 {
+        return Err(EscapeError::TooManyNestedEntities);
+    }
+    // 4. For another character, append the character to the normalized value.
+    normalized.push_str(&input[last_pos..index]);
+
+    match input.as_bytes()[index] {
+        b'&' => {
+            let start = index + 1; // +1 - skip `&`
+            let end = start
+                + match iter.position(|&b| b == b';') {
+                    Some(end) => end,
+                    None => return Err(EscapeError::UnterminatedEntity(index..input.len())),
+                };
+
+            // Content between & and ; - &pat;
+            let pat = &input[start..end];
+            // 1. For a character reference, append the referenced character
+            //    to the normalized value.
+            if pat.starts_with('#') {
+                let entity = &pat[1..]; // starts after the #
+                let codepoint = parse_number(entity).map_err(EscapeError::InvalidCharRef)?;
+                normalized.push_str(codepoint.encode_utf8(&mut [0u8; 4]));
+            } else
+            // 2. For an entity reference, recursively apply this algorithm
+            //    to the replacement text of the entity.
+            if let Some(value) = resolve_entity(pat) {
+                normalize_steps(
+                    normalized,
+                    &mut value.as_bytes().iter(),
+                    value,
+                    0,
+                    depth.saturating_sub(1),
+                    resolve_entity,
+                )?;
+            } else {
+                return Err(EscapeError::UnrecognizedEntity(start..end, pat.to_string()));
+            }
+            Ok(end + 1) // +1 - skip `;`
+        }
+        // 3. For a white space character (#x20, #xD, #xA, #x9), append
+        //    a space character (#x20) to the normalized value.
+        b'\t' | b'\n' | b'\r' | b' ' => {
+            normalized.push(' ');
+            Ok(index + 1) // +1 - skip character
+        }
+
+        _ => unreachable!("Only '\\t', '\\n', '\\r', ' ', and '&' are possible here"),
     }
 }
 
@@ -1842,5 +2028,117 @@ fn from_str_radix(src: &str, radix: u32) -> Result<u32, ParseCharRefError> {
         // We also handle `-` to be consistent in returned errors
         Some(b'+') | Some(b'-') => Err(ParseCharRefError::UnexpectedSign),
         _ => u32::from_str_radix(src, radix).map_err(ParseCharRefError::InvalidNumber),
+    }
+}
+
+#[cfg(test)]
+mod normalization {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn empty() {
+        assert_eq!(
+            normalize_attribute_value("", 5, |_| { None }),
+            Ok("".into())
+        );
+    }
+
+    #[test]
+    fn only_spaces() {
+        assert_eq!(
+            normalize_attribute_value("   ", 5, |_| { None }),
+            Ok("   ".into())
+        );
+        assert_eq!(
+            normalize_attribute_value("\t\t\t", 5, |_| { None }),
+            Ok("   ".into())
+        );
+        assert_eq!(
+            normalize_attribute_value("\r\r\r", 5, |_| { None }),
+            Ok("   ".into())
+        );
+        assert_eq!(
+            normalize_attribute_value("\n\n\n", 5, |_| { None }),
+            Ok("   ".into())
+        );
+    }
+
+    #[test]
+    fn already_normalized() {
+        assert_eq!(
+            normalize_attribute_value("already normalized", 5, |_| { None }),
+            Ok("already normalized".into())
+        );
+    }
+
+    #[test]
+    fn characters() {
+        assert_eq!(
+            normalize_attribute_value("string with &#32; character", 5, |_| { None }),
+            Ok("string with   character".into())
+        );
+        assert_eq!(
+            normalize_attribute_value("string with &#x20; character", 5, |_| { None }),
+            Ok("string with   character".into())
+        );
+    }
+
+    #[test]
+    fn entities() {
+        assert_eq!(
+            normalize_attribute_value("string with &entity; reference", 5, |_| {
+                Some("replacement")
+            }),
+            Ok("string with replacement reference".into())
+        );
+        assert_eq!(
+            normalize_attribute_value("string with &entity-1; reference", 5, |entity| {
+                match entity {
+                    "entity-1" => Some("recursive &entity-2;"),
+                    "entity-2" => Some("entity&#32;2"),
+                    _ => None,
+                }
+            }),
+            Ok("string with recursive entity 2 reference".into())
+        );
+    }
+
+    #[test]
+    fn unclosed_entity() {
+        assert_eq!(
+            normalize_attribute_value("string with unclosed &entity reference", 5, |_| {
+                //                     0                    ^ = 21           ^ = 38
+                Some("replacement")
+            }),
+            Err(EscapeError::UnterminatedEntity(21..38))
+        );
+        assert_eq!(
+            normalize_attribute_value("string with unclosed &#32 (character) reference", 5, |_| {
+                //                     0                    ^ = 21                    ^ = 47
+                None
+            }),
+            Err(EscapeError::UnterminatedEntity(21..47))
+        );
+    }
+
+    #[test]
+    fn unknown_entity() {
+        assert_eq!(
+            normalize_attribute_value("string with unknown &entity; reference", 5, |_| { None }),
+            //                         0                    ^     ^ = 21..27
+            Err(EscapeError::UnrecognizedEntity(
+                21..27,
+                "entity".to_string(),
+            ))
+        );
+    }
+
+    #[test]
+    fn recursive_entity() {
+        assert_eq!(
+            normalize_attribute_value("&entity; reference", 5, |_| Some("recursive &entity;")),
+            Err(EscapeError::TooManyNestedEntities),
+        );
     }
 }
