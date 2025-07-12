@@ -25,8 +25,12 @@
 
 ### Bug Fixes
 
+- [#806]: Properly normalize EOL characters in `BytesText::decode`, `BytesCData::decode`
+  and `BytesRef::decode` methods.
+
 ### Misc Changes
 
+[#806]: https://github.com/tafia/quick-xml/issues/806
 [#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
 

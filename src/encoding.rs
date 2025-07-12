@@ -6,6 +6,8 @@ use std::str::Utf8Error;
 #[cfg(feature = "encoding")]
 use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
+use crate::escape::normalize_eols;
+
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-8.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 pub(crate) const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
@@ -145,9 +147,20 @@ impl Decoder {
         bytes: &Cow<'b, [u8]>,
     ) -> Result<Cow<'b, str>, EncodingError> {
         match bytes {
-            Cow::Borrowed(bytes) => self.decode(bytes),
+            Cow::Borrowed(bytes) => {
+                let text = self.decode(bytes)?;
+                match normalize_eols(&text) {
+                    // If text borrowed after normalization that means that it's not changed
+                    Cow::Borrowed(_) => Ok(text),
+                    Cow::Owned(s) => Ok(Cow::Owned(s)),
+                }
+            }
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
-            Cow::Owned(bytes) => Ok(self.decode(bytes)?.into_owned().into()),
+            Cow::Owned(bytes) => {
+                let text = self.decode(bytes)?;
+                let text = normalize_eols(&text);
+                Ok(text.into_owned().into())
+            }
         }
     }
 }
