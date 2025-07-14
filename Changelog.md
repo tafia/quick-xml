@@ -20,11 +20,14 @@
   - `Deserializer::borrowing_with_resolver`
   - `Deserializer::buffering`
   - `Deserializer::buffering_with_resolver`
+- [#878]: Add ability to serialize structs in `$value` fields. The struct name will
+  be used as a tag name. Previously only enums was allowed there.
 
 ### Bug Fixes
 
 ### Misc Changes
 
+[#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
 
 
