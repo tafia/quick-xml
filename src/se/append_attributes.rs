@@ -201,7 +201,12 @@ impl<'w, W: Write> SerializeStruct for StructAttrsOnly<'w, W> {
     {
         //TODO: Customization point: each attribute on new line
         self.writer.write_char(' ')?;
-        self.writer.write_str(key)?;
+
+        match key.strip_prefix('@') {
+            Some(stripped) => self.writer.write_str(stripped),
+            None => self.writer.write_str(key),
+        }?;
+
         self.writer.write_char('=')?;
 
         //TODO: Customization point: preferred quote style

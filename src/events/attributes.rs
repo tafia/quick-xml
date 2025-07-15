@@ -654,6 +654,19 @@ impl<'a> Attr<&'a [u8]> {
     }
 }
 
+impl Attr<Range<usize>> {
+    /// Returns the key value, which is a range
+    #[inline]
+    pub const fn key_range(&self) -> &Range<usize> {
+        match self {
+            Attr::DoubleQ(key, _) => key,
+            Attr::SingleQ(key, _) => key,
+            Attr::Empty(key) => key,
+            Attr::Unquoted(key, _) => key,
+        }
+    }
+}
+
 impl<T: AsRef<[u8]>> Debug for Attr<T> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {

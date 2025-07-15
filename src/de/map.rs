@@ -1,15 +1,15 @@
 //! Serde `Deserializer` module
 
 use crate::{
-    de::key::QNameDeserializer,
-    de::resolver::EntityResolver,
-    de::simple_type::SimpleTypeDeserializer,
-    de::text::TextDeserializer,
-    de::{DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY},
-    errors::serialize::DeError,
-    errors::Error,
-    events::attributes::IterState,
-    events::BytesStart,
+    de::{
+        key::QNameDeserializer, resolver::EntityResolver, simple_type::SimpleTypeDeserializer,
+        text::TextDeserializer, DeEvent, Deserializer, XmlRead, TEXT_KEY, VALUE_KEY,
+    },
+    errors::{serialize::DeError, Error},
+    events::{
+        attributes::{Attr, IterState},
+        BytesStart,
+    },
     name::QName,
     utils::CowRef,
 };
@@ -18,6 +18,8 @@ use serde::de::{self, DeserializeSeed, Deserializer as _, MapAccess, SeqAccess, 
 use serde::serde_if_integer128;
 use std::borrow::Cow;
 use std::ops::Range;
+
+use super::FLATTEN_ATTRIBUTES_KEY;
 
 /// Defines a source that should be used to deserialize a value in the next call
 /// to [`next_value_seed()`](MapAccess::next_value_seed)
@@ -146,6 +148,12 @@ enum ValueSource {
     /// [`name()`]: BytesStart::name()
     /// [`Content`]: Self::Content
     Nested,
+    /// During deserialization, attributes which do not belong to a struct being actively
+    /// deserialized may be collected into a list. When the element is done deserializing and this
+    /// list is non-empty, this state is used to communicate that this list should be deserialized
+    /// into a nested structure. This is currently only used when a field of a struct is renamed to
+    /// [`FLATTEN_ATTRIBUTES_KEY`]
+    FlattenAttributes,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,6 +203,14 @@ where
     /// If `true`, then the deserialized struct has a field with a special name:
     /// [`TEXT_KEY`].
     has_text_field: bool,
+    /// If `true`, the deserialized struct has as field with the special name
+    /// [`FLATTEN_ATTRBIBUTES_KEY`]
+    has_flatten_attributes_field: bool,
+    /// If [`has_flatten_attributes_field`], then this field is used for storing
+    /// attributes that do not belong to the current struct (a.k.a not in [`fields`]).
+    /// When the element is closed, this list is used to deserialize the child struct
+    /// whose fields have been flattened into the current struct.
+    unmapped_attributes: Vec<Attr<Range<usize>>>,
 }
 
 impl<'de, 'd, R, E> ElementMapAccess<'de, 'd, R, E>
@@ -216,6 +232,8 @@ where
             fields,
             has_value_field: fields.contains(&VALUE_KEY),
             has_text_field: fields.contains(&TEXT_KEY),
+            has_flatten_attributes_field: fields.contains(&FLATTEN_ATTRIBUTES_KEY),
+            unmapped_attributes: Vec::new(),
         })
     }
 
@@ -259,8 +277,27 @@ where
         let slice = &self.start.buf;
         let decoder = self.start.decoder();
 
-        if let Some(a) = self.iter.next(slice).transpose()? {
-            // try getting map from attributes (key= "value")
+        let mut attr = None;
+        while let Some(a) = self.iter.next(slice).transpose()? {
+            if self.has_flatten_attributes_field {
+                let key = &slice[a.key_range().clone()];
+                if let Ok(key) = std::str::from_utf8(key) {
+                    self.de.key_buf.clear();
+                    self.de.key_buf.push('@');
+                    self.de.key_buf.push_str(key);
+
+                    if !self.fields.contains(&self.de.key_buf.as_str()) {
+                        self.unmapped_attributes.push(a);
+                        continue;
+                    }
+                }
+            }
+
+            attr = Some(a);
+            break;
+        }
+
+        if let Some(a) = attr {
             let (key, value) = a.into();
             self.source = ValueSource::Attribute(value.unwrap_or_default());
 
@@ -319,6 +356,14 @@ where
                     self.source = ValueSource::Nested;
 
                     let de = QNameDeserializer::from_elem(e)?;
+                    seed.deserialize(de).map(Some)
+                }
+                DeEvent::End(_)
+                    if self.has_flatten_attributes_field
+                        && !self.unmapped_attributes.is_empty() =>
+                {
+                    self.source = ValueSource::FlattenAttributes;
+                    let de = BorrowedStrDeserializer::<DeError>::new(FLATTEN_ATTRIBUTES_KEY);
                     seed.deserialize(de).map(Some)
                 }
                 // Stop iteration after reaching a closing tag
@@ -383,6 +428,14 @@ where
             ValueSource::Nested => seed.deserialize(MapValueDeserializer {
                 map: self,
                 fixed_name: true,
+            }),
+            // This arm processes remaining attributes that do not belong to the current struct
+            // when said struct contains a field renamed to [`FLATTEN_ATTRIBUTES_KEY`]
+            ValueSource::FlattenAttributes => seed.deserialize(FlattenAttributesDeserializer {
+                start: &self.start,
+                de: self.de,
+                unmapped_attributes: std::mem::take(&mut self.unmapped_attributes),
+                value: None,
             }),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
@@ -1227,6 +1280,294 @@ where
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+struct FlattenAttributesDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    start: &'d BytesStart<'de>,
+    de: &'d mut Deserializer<'de, R, E>,
+    unmapped_attributes: Vec<Attr<Range<usize>>>,
+    value: Option<Range<usize>>,
+}
+
+impl<'de, 'd, R, E> MapAccess<'de> for FlattenAttributesDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn next_key_seed<K: DeserializeSeed<'de>>(
+        &mut self,
+        seed: K,
+    ) -> Result<Option<K::Value>, Self::Error> {
+        let slice = &self.start.buf;
+        let decoder = self.start.decoder();
+
+        if let Some(a) = self.unmapped_attributes.pop() {
+            let (key, value) = a.into();
+            self.value = value;
+
+            // Attributes in mapping starts from @ prefix
+            // TODO: Customization point - may customize prefix
+            self.de.key_buf.clear();
+            self.de.key_buf.push('@');
+
+            let de =
+                QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
+            seed.deserialize(de).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn next_value_seed<V: DeserializeSeed<'de>>(
+        &mut self,
+        seed: V,
+    ) -> Result<V::Value, Self::Error> {
+        seed.deserialize(SimpleTypeDeserializer::from_part(
+            &self.start.buf,
+            self.value.take().unwrap_or_default(),
+            self.start.decoder(),
+        ))
+    }
+}
+
+impl<'de, 'd, R, E> de::Deserializer<'de> for FlattenAttributesDeserializer<'de, 'd, R, E>
+where
+    R: XmlRead<'de>,
+    E: EntityResolver,
+{
+    type Error = DeError;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_unit_struct<V>(
+        self,
+        name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_newtype_struct<V>(
+        self,
+        name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_tuple_struct<V>(
+        self,
+        name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_map(self)
+    }
+
+    fn deserialize_struct<V>(
+        self,
+        name: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_map(self)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        todo!()
+    }
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 #[test]
 fn test_not_in() {
     use pretty_assertions::assert_eq;
