@@ -1,6 +1,6 @@
 //! Contains serializer for an XML element
 
-use crate::de::{TEXT_KEY, VALUE_KEY};
+use crate::de::{FLATTEN_ATTRIBUTES_KEY, TEXT_KEY, VALUE_KEY};
 use crate::se::content::ContentSerializer;
 use crate::se::key::QNameSerializer;
 use crate::se::simple_type::{QuoteTarget, SimpleSeq, SimpleTypeSerializer};
@@ -12,6 +12,8 @@ use serde::ser::{
 };
 use serde::serde_if_integer128;
 use std::fmt::Write;
+
+use super::append_attributes::AppendAttributesSerializer;
 
 /// Writes simple type content between [`ElementSerializer::key`] tags.
 macro_rules! write_primitive {
@@ -394,6 +396,12 @@ impl<'w, 'k, W: Write> Struct<'w, 'k, W> {
         if let Some(key) = key.strip_prefix('@') {
             let key = XmlName::try_from(key)?;
             self.write_attribute(key, value)
+        } else if key == FLATTEN_ATTRIBUTES_KEY {
+            value.serialize(AppendAttributesSerializer {
+                writer: &mut self.ser.ser.writer,
+                level: self.ser.ser.level,
+            })?;
+            Ok(())
         } else {
             self.write_element(key, value)
         }

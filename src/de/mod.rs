@@ -2128,6 +2128,8 @@ pub(crate) const TEXT_KEY: &str = "$text";
 /// Data represented by any XML markup inside
 pub(crate) const VALUE_KEY: &str = "$value";
 
+pub(crate) const FLATTEN_ATTRIBUTES_KEY: &str = "$attributes";
+
 /// A function to check whether the character is a whitespace (blank, new line, carriage return or tab).
 #[inline]
 const fn is_non_whitespace(ch: char) -> bool {
