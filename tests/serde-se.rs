@@ -39,6 +39,24 @@ struct Nested {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
+struct FlattenedAttributesStruct {
+    #[serde(rename = "@before")]
+    before: &'static str,
+    #[serde(rename = "$attributes")]
+    flatten_attrs: FlattenAttrs,
+    #[serde(rename = "@after")]
+    after: &'static str,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+struct FlattenAttrs {
+    #[serde(rename = "@inner_integer")]
+    inner_integer: i32,
+    #[serde(rename = "@inner_string")]
+    inner_string: &'static str,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 struct Empty {}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
@@ -1372,6 +1390,17 @@ mod without_root {
                 string: "answer",
             }
             => Unsupported("cannot serialize map without defined root tag"));
+        serialize_as!(flattened_attributes_struct:
+            FlattenedAttributesStruct {
+                before: "before",
+                flatten_attrs: FlattenAttrs {
+                    inner_integer: 42,
+                    inner_string: "answer"
+                },
+                after: "after",
+            }
+            => r#"<FlattenedAttributesStruct before="before" inner_integer="42" inner_string="answer" after="after"/>"#
+        );
         serialize_as!(empty_struct:
             Empty {}
             => "<Empty/>");
@@ -1943,6 +1972,17 @@ mod with_root {
                 <float>42</float>\
                 <string>answer</string>\
             </root>");
+    serialize_as!(flattened_attributes_struct:
+        FlattenedAttributesStruct {
+            before: "before",
+            flatten_attrs: FlattenAttrs {
+                inner_integer: 42,
+                inner_string: "answer"
+            },
+            after: "after",
+        }
+        => r#"<root before="before" inner_integer="42" inner_string="answer" after="after"/>"#
+    );
     serialize_as!(empty_struct:
         Empty {}
         => "<root/>");

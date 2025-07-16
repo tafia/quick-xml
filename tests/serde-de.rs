@@ -1158,6 +1158,111 @@ mod flatten_struct {
     }
 }
 
+mod flatten_attributes_struct {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn simple() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct OuterStruct {
+            #[serde(rename = "$attributes")]
+            flattened_attributes: FlattenedAttributes,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct FlattenedAttributes {
+            #[serde(rename = "@string")]
+            string: String,
+            #[serde(rename = "@integer")]
+            integer: i32,
+            #[serde(rename = "@float")]
+            float: f32,
+        }
+
+        let data: OuterStruct =
+            from_str(r#"<OuterStruct string="a string" integer="32" float="1.5"/>"#).unwrap();
+        assert_eq!(
+            data,
+            OuterStruct {
+                flattened_attributes: FlattenedAttributes {
+                    string: "a string".to_string(),
+                    integer: 32,
+                    float: 1.5
+                }
+            }
+        )
+    }
+
+    #[test]
+    fn attributes_around_flattened_struct() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct OuterStruct {
+            #[serde(rename = "@outer_a")]
+            outer_a: String,
+            #[serde(rename = "$attributes")]
+            flattened_attributes: FlattenedAttributes,
+            #[serde(rename = "@outer_b")]
+            outer_b: String,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct FlattenedAttributes {
+            #[serde(rename = "@string")]
+            string: String,
+            #[serde(rename = "@integer")]
+            integer: i32,
+            #[serde(rename = "@float")]
+            float: f32,
+        }
+
+        let data: OuterStruct = from_str(
+            r#"<OuterStruct outer_a="a" string="a string" integer="32" float="1.5" outer_b="b"/>"#,
+        )
+        .unwrap();
+        assert_eq!(
+            data,
+            OuterStruct {
+                flattened_attributes: FlattenedAttributes {
+                    string: "a string".to_string(),
+                    integer: 32,
+                    float: 1.5
+                },
+                outer_a: "a".to_string(),
+                outer_b: "b".to_string(),
+            }
+        )
+    }
+
+    // We do not carry the missing attributes down as context, therefore the
+    // first struct will fail to deserialize
+    #[test]
+    fn multiple_levels_are_not_supported() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct A {
+            #[serde(rename = "$attributes")]
+            b: B,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct B {
+            #[serde(rename = "$attributes")]
+            c: C,
+        }
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct C {
+            #[serde(rename = "@attr")]
+            attr: String,
+        }
+
+        match from_str::<A>(r#"<A attr="hello there"/>"#) {
+            Err(DeError::Custom(err)) => assert_eq!(err, "missing field `$attributes`"),
+            _ => panic!(r#"Expected `Err(Custom("missing field `$attributes`"))"#),
+        }
+    }
+}
+
 // enum tests are so big, so it in the separate file serde-de-seq.rs to speed-up compilation
 
 /// https://www.w3schools.com/xml/el_list.asp
