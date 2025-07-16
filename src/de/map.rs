@@ -436,6 +436,7 @@ where
                 de: self.de,
                 unmapped_attributes: std::mem::take(&mut self.unmapped_attributes),
                 value: None,
+                is_map: false,
             }),
             ValueSource::Unknown => Err(DeError::KeyNotRead),
         }
@@ -1289,6 +1290,9 @@ where
     de: &'d mut Deserializer<'de, R, E>,
     unmapped_attributes: Vec<Attr<Range<usize>>>,
     value: Option<Range<usize>>,
+    /// This flag can be toggled to avoid concatenating the '@' symbol for attribute names when the
+    /// target of the deserialization is a map rather than a struct
+    is_map: bool,
 }
 
 impl<'de, 'd, R, E> FlattenAttributesDeserializer<'de, 'd, R, E>
@@ -1321,10 +1325,10 @@ where
             let (key, value) = a.into();
             self.value = value;
 
-            // Attributes in mapping starts from @ prefix
-            // TODO: Customization point - may customize prefix
             self.de.key_buf.clear();
-            self.de.key_buf.push('@');
+            if !self.is_map {
+                self.de.key_buf.push('@');
+            }
 
             let de =
                 QNameDeserializer::from_attr(QName(&slice[key]), decoder, &mut self.de.key_buf)?;
@@ -1538,7 +1542,10 @@ where
     where
         V: Visitor<'de>,
     {
-        visitor.visit_map(self)
+        visitor.visit_map(Self {
+            is_map: true,
+            ..self
+        })
     }
 
     fn deserialize_struct<V>(
