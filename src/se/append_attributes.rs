@@ -14,6 +14,15 @@ pub struct AppendAttributesSerializer<'w, W: Write> {
     pub level: QuoteLevel,
 }
 
+impl<'w, W: Write> AppendAttributesSerializer<'w, W> {
+    #[inline]
+    fn unsupported<T>(&self, typ: &'static str) -> Result<T, SeError> {
+        Err(SeError::Unsupported(format!(
+            "cannot serialize {typ} as a mapping of XML attributes. Only structs are supported for $attributes fields"
+        ).into()))
+    }
+}
+
 impl<'w, W: Write> Serializer for AppendAttributesSerializer<'w, W> {
     type Ok = WriteResult;
     type Error = SeError;
@@ -26,94 +35,96 @@ impl<'w, W: Write> Serializer for AppendAttributesSerializer<'w, W> {
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
     type SerializeTupleStruct = Impossible<Self::Ok, Self::Error>;
 
-    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_str(self, _v: &str) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("string")
     }
 
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("bytes")
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        self.unsupported("none")
     }
 
-    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        todo!()
+        self.unsupported("some")
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        self.unsupported("unit")
     }
 
-    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("unit struct")
     }
 
     fn serialize_unit_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        self.unsupported("unit variant")
     }
 
     fn serialize_newtype_struct<T>(
         self,
-        name: &'static str,
-        value: &T,
+        _name: &'static str,
+        _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        todo!()
+        self.unsupported("newtype struct")
     }
 
     fn serialize_newtype_variant<T>(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &T,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
     ) -> Result<Self::Ok, Self::Error>
     where
         T: ?Sized + serde::Serialize,
     {
-        todo!()
+        self.unsupported("newtype variant")
     }
 
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        todo!()
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        self.unsupported("sequence")
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        todo!()
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        self.unsupported("tuple")
     }
 
     fn serialize_tuple_struct(
         self,
-        name: &'static str,
-        len: usize,
+        _name: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        todo!()
+        self.unsupported("tuple struct")
     }
 
     fn serialize_tuple_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        todo!()
+        self.unsupported("tuple variant")
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        todo!()
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        Err(SeError::Unsupported(
+            "maps are not yet supported by $attributes fields".into(),
+        ))
     }
 
     fn serialize_struct(
@@ -129,60 +140,60 @@ impl<'w, W: Write> Serializer for AppendAttributesSerializer<'w, W> {
 
     fn serialize_struct_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        todo!()
+        self.unsupported("struct variant")
     }
 
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("bool")
     }
 
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("i8")
     }
 
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("i16")
     }
 
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("i32")
     }
 
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("i64")
     }
 
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("u8")
     }
 
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_u16(self, _v: u16) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("u16")
     }
 
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_u32(self, _v: u32) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("u32")
     }
 
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("u64")
     }
 
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("f32")
     }
 
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("f64")
     }
 
-    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        todo!()
+    fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
+        self.unsupported("char")
     }
 }
 
