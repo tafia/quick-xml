@@ -1459,7 +1459,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.unsupported("string")
+        self.unsupported("String")
     }
 
     fn deserialize_bytes<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -1473,7 +1473,7 @@ where
     where
         V: Visitor<'de>,
     {
-        self.unsupported("byte_buf")
+        self.unsupported("ByteBuf")
     }
 
     fn deserialize_option<V>(self, _visitor: V) -> Result<V::Value, Self::Error>

@@ -1234,6 +1234,105 @@ mod flatten_attributes_struct {
         )
     }
 
+    #[test]
+    fn flattened_attributes_deserialized_into_map() {
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct Struct {
+            #[serde(rename = "$attributes")]
+            attrs: std::collections::HashMap<String, String>,
+        }
+
+        let data: Struct = from_str(r#"<Struct a="1" b="2" c="3" />"#).unwrap();
+        assert_eq!(
+            data,
+            Struct {
+                attrs: [("a", "1"), ("b", "2"), ("c", "3")]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect()
+            }
+        )
+    }
+
+    mod non_struct {
+        use super::*;
+        use pretty_assertions::assert_eq;
+
+        macro_rules! err {
+            ($name:ident: $type:ty = $xml:literal => $kind:ident($err:expr)) => {
+                #[test]
+                fn $name() {
+                    #[allow(dead_code)]
+                    #[derive(Deserialize, Debug)]
+                    struct T {
+                        #[serde(rename = "$attributes")]
+                        attrs: $type,
+                    }
+
+                    match from_str::<T>($xml) {
+                        Err(DeError::$kind(e)) => assert_eq!(e, $err),
+                        other => panic!(
+                            "Expected `Err({}({}))`, but got `{:?}`",
+                            stringify!($kind),
+                            $err,
+                            other,
+                        ),
+                    }
+                }
+            };
+            ($name:ident: $type:ty = $xml:literal => default_err) => {
+                err!($name: $type = $xml => Custom(concat!("cannot deserialize ", stringify!($type), " as a mapping of XML attributes. Only structs are supported for $attributes fields")));
+            };
+        }
+
+        err!(i8_: i8 = r#"<T attrs="13"/>"# => default_err);
+        err!(i16_: i16 = r#"<T attrs="13"/>"# => default_err);
+        err!(i32_: i32 = r#"<T attrs="13"/>"# => default_err);
+        err!(i64_: i64 = r#"<T attrs="13"/>"# => default_err);
+
+        err!(u8_: u8 = r#"<T attrs="13"/>"# => default_err);
+        err!(u16_: u16 = r#"<T attrs="13"/>"# => default_err);
+        err!(u32_: u32 = r#"<T attrs="13"/>"# => default_err);
+        err!(u64_: u64 = r#"<T attrs="13"/>"# => default_err);
+
+        err!(f32_: f32 = r#"<T attrs="13"/>"# => default_err);
+        err!(f64_: f64 = r#"<T attrs="13"/>"# => default_err);
+
+        err!(bool_: bool = r#"<T attrs="true"/>"# => default_err);
+        err!(char_: char = r#"<T attrs="a"/>"# => default_err);
+
+        err!(string: String = r#"<T attrs="a string"/>"# => default_err);
+        err!(byte_buf: ByteBuf = r#"<T attrs="a string"/>"# => default_err);
+        err!(unit: () = r#"<T attrs=""/>"#
+            => Custom("cannot deserialize unit as a mapping of XML attributes. Only structs are supported for $attributes fields"));
+
+        #[derive(Deserialize, Debug)]
+        enum CStyle {
+            A,
+        }
+
+        err!(c_style_enum: CStyle = r#"<T attrs="A"/>"#
+            => Custom("cannot deserialize enum as a mapping of XML attributes. Only structs are supported for $attributes fields"));
+
+        #[allow(dead_code)]
+        #[derive(Deserialize, Debug)]
+        enum StructVariant {
+            A { b: String },
+        }
+
+        err!(struct_variant_enum: StructVariant = r#"<T b="string"/>"#
+            => Custom("cannot deserialize enum as a mapping of XML attributes. Only structs are supported for $attributes fields"));
+
+        #[allow(dead_code)]
+        #[derive(Deserialize, Debug)]
+        enum NewtypeVariant {
+            A(String),
+        }
+
+        err!(newtype_variant_enum: NewtypeVariant = r#"<T a="string"/>"#
+            => Custom("cannot deserialize enum as a mapping of XML attributes. Only structs are supported for $attributes fields"));
+    }
+
     // We do not carry the missing attributes down as context, therefore the
     // first struct will fail to deserialize
     #[test]
