@@ -110,6 +110,12 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install 32-bit target
       run: rustup target add i686-unknown-linux-gnu
+    - name: Update install sources (for next step)
+      # To avoid problem
+      # E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?
+      # See also this thread:
+      # https://github.com/actions/runner-images/issues/12599
+      run: sudo apt-get -y update
     - name: Install 32-bit libs (for criterion)
       # Criterion wants to compile something.
       # Cargo builds criterion even when it is not required for those tests.
