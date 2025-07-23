@@ -15,9 +15,17 @@
 
 ### New Features
 
+- [#882]: Add new methods to create `Deserializer` from existing `NsReader`:
+  - `Deserializer::borrowing`
+  - `Deserializer::borrowing_with_resolver`
+  - `Deserializer::buffering`
+  - `Deserializer::buffering_with_resolver`
+
 ### Bug Fixes
 
 ### Misc Changes
+
+[#882]: https://github.com/tafia/quick-xml/pull/882
 
 
 ## 0.38.0 -- 2025-06-28

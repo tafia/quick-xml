@@ -2987,12 +2987,51 @@ where
 }
 
 impl<'de> Deserializer<'de, SliceReader<'de>> {
-    /// Create new deserializer that will borrow data from the specified string.
+    /// Create a new deserializer that will borrow data from the specified string.
     ///
     /// Deserializer created with this method will not resolve custom entities.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(source: &'de str) -> Self {
         Self::from_str_with_resolver(source, PredefinedEntityResolver)
+    }
+
+    /// Create a new deserializer that will borrow data from the specified preconfigured
+    /// reader.
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
+    ///
+    /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use quick_xml::de::Deserializer;
+    /// # use quick_xml::NsReader;
+    /// # use serde::Deserialize;
+    /// #
+    /// #[derive(Deserialize, PartialEq, Debug)]
+    /// struct Object<'a> {
+    ///     tag: &'a str,
+    /// }
+    ///
+    /// let mut reader = NsReader::from_str("<xml><tag>    test    </tag></xml>");
+    ///
+    /// let mut de = Deserializer::borrowing(reader.clone());
+    /// let obj = Object::deserialize(&mut de).unwrap();
+    /// assert_eq!(obj, Object { tag: "    test    " });
+    ///
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// let mut de = Deserializer::borrowing(reader);
+    /// let obj = Object::deserialize(&mut de).unwrap();
+    /// assert_eq!(obj, Object { tag: "test" });
+    /// ```
+    ///
+    /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    #[inline]
+    pub fn borrowing(reader: NsReader<&'de [u8]>) -> Self {
+        Self::borrowing_with_resolver(reader, PredefinedEntityResolver)
     }
 }
 
@@ -3000,10 +3039,19 @@ impl<'de, E> Deserializer<'de, SliceReader<'de>, E>
 where
     E: EntityResolver,
 {
-    /// Create new deserializer that will borrow data from the specified string
-    /// and use specified entity resolver.
+    /// Create a new deserializer that will borrow data from the specified string
+    /// and use the specified entity resolver.
     pub fn from_str_with_resolver(source: &'de str, entity_resolver: E) -> Self {
-        let mut reader = NsReader::from_str(source);
+        Self::borrowing_with_resolver(NsReader::from_str(source), entity_resolver)
+    }
+
+    /// Create a new deserializer that will borrow data from the specified preconfigured
+    /// reader and use the specified entity resolver.
+    ///
+    /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
+    ///
+    /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    pub fn borrowing_with_resolver(mut reader: NsReader<&'de [u8]>, entity_resolver: E) -> Self {
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
@@ -3015,7 +3063,7 @@ impl<'de, R> Deserializer<'de, IoReader<R>>
 where
     R: BufRead,
 {
-    /// Create new deserializer that will copy data from the specified reader
+    /// Create a new deserializer that will copy data from the specified reader
     /// into internal buffer.
     ///
     /// If you already have a string use [`Self::from_str`] instead, because it
@@ -3026,6 +3074,45 @@ where
     pub fn from_reader(reader: R) -> Self {
         Self::with_resolver(reader, PredefinedEntityResolver)
     }
+
+    /// Create a new deserializer that will copy data from the specified preconfigured
+    /// reader into internal buffer.
+    ///
+    /// Deserializer created with this method will not resolve custom entities.
+    ///
+    /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// # use quick_xml::de::Deserializer;
+    /// # use quick_xml::NsReader;
+    /// # use serde::Deserialize;
+    /// #
+    /// #[derive(Deserialize, PartialEq, Debug)]
+    /// struct Object {
+    ///     tag: String,
+    /// }
+    ///
+    /// let mut reader = NsReader::from_str("<xml><tag>    test    </tag></xml>");
+    ///
+    /// let mut de = Deserializer::buffering(reader.clone());
+    /// let obj = Object::deserialize(&mut de).unwrap();
+    /// assert_eq!(obj, Object { tag: "    test    ".to_string() });
+    ///
+    /// reader.config_mut().trim_text(true);
+    ///
+    /// let mut de = Deserializer::buffering(reader);
+    /// let obj = Object::deserialize(&mut de).unwrap();
+    /// assert_eq!(obj, Object { tag: "test".to_string() });
+    /// ```
+    ///
+    /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    #[inline]
+    pub fn buffering(reader: NsReader<R>) -> Self {
+        Self::buffering_with_resolver(reader, PredefinedEntityResolver)
+    }
 }
 
 impl<'de, R, E> Deserializer<'de, IoReader<R>, E>
@@ -3033,14 +3120,33 @@ where
     R: BufRead,
     E: EntityResolver,
 {
-    /// Create new deserializer that will copy data from the specified reader
-    /// into internal buffer and use specified entity resolver.
+    /// Create a new deserializer that will copy data from the specified reader
+    /// into internal buffer and use the specified entity resolver.
     ///
     /// If you already have a string use [`Self::from_str`] instead, because it
     /// will borrow instead of copy. If you have `&[u8]` which is known to represent
     /// UTF-8, you can decode it first before using [`from_str`].
     pub fn with_resolver(reader: R, entity_resolver: E) -> Self {
         let mut reader = NsReader::from_reader(reader);
+        let config = reader.config_mut();
+        config.expand_empty_elements = true;
+
+        Self::new(
+            IoReader {
+                reader,
+                buf: Vec::new(),
+            },
+            entity_resolver,
+        )
+    }
+
+    /// Create new deserializer that will copy data from the specified preconfigured reader
+    /// into internal buffer and use the specified entity resolver.
+    ///
+    /// Note, that config option [`Config::expand_empty_elements`] will be set to `true`.
+    ///
+    /// [`Config::expand_empty_elements`]: crate::reader::Config::expand_empty_elements
+    pub fn buffering_with_resolver(mut reader: NsReader<R>, entity_resolver: E) -> Self {
         let config = reader.config_mut();
         config.expand_empty_elements = true;
 
