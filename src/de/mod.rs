@@ -1577,15 +1577,24 @@
 //! uses that name. This will allow you to switch XML crates more smoothly if required.
 //! </div>
 //!
-//! Representation of primitive types in `$value` does not differ from their
-//! representation in `$text` field. The difference is how sequences are serialized.
-//! `$value` serializes each sequence item as a separate XML element. The name
-//! of that element is taken from serialized type, and because only `enum`s provide
-//! such name (their variant name), only they should be used for such fields.
+//! The representation of primitive types in `$value` does not differ from their
+//! representation in `$text` fields. The difference is how sequences are serialized
+//! and deserialized. `$value` serializes each sequence item as a separate XML element.
+//! How the name of the XML element is chosen depends on the field's type. For
+//! `enum`s, the variant name is used. For `struct`s, the name of the `struct`
+//! is used.
 //!
-//! `$value` fields does not support `struct` types with fields, the serialization
-//! of such types would end with an `Err(Unsupported)`. Unit structs and unit
-//! type `()` serializing to nothing and can be deserialized from any content.
+//! During deserialization, if the `$value` field is an enum, then the variant's
+//! name is matched against. That's **not** the case with structs, however, since
+//! `serde` does not expose type names of nested fields. This does mean that **any**
+//! type could be deserialized into a `$value` struct-type field, so long as the
+//! struct's fields have compatible types (or are captured as text by `String`
+//! or similar-behaving types). This can be handy when using generic types in fields
+//! where one knows in advance what to expect. If you do not know what to expect,
+//! however, prefer an enum with all possible variants.
+//!
+//! Unit structs and unit type `()` serialize to nothing and can be deserialized
+//! from any content.
 //!
 //! Serialization and deserialization of `$value` field performed as usual, except
 //! that name for an XML element will be given by the serialized type, instead of
@@ -1644,6 +1653,51 @@
 //! #     AnyName { field: Enum::B },
 //! #     quick_xml::de::from_str("<root><B/></root>").unwrap(),
 //! # );
+//! ```
+//!
+//! The next example demonstrates how generic types can be used in conjunction
+//! with `$value`-named fields to allow the reuse of wrapping structs. A common
+//! example use case for this feature is SOAP messages, which can be commmonly
+//! found wrapped around `<soapenv:Envelope> ... </soapenv:Envelope>`.
+//!
+//! ```rust
+//! # use pretty_assertions::assert_eq;
+//! # use quick_xml::de::from_str;
+//! # use quick_xml::se::to_string;
+//! # use serde::{Deserialize, Serialize};
+//! #
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct Envelope<T> {
+//!     body: Body<T>,
+//! }
+//!
+//! #[derive(Deserialize, Serialize, PartialEq, Debug)]
+//! struct Body<T> {
+//!     #[serde(rename = "$value")]
+//!     inner: T,
+//! }
+//!
+//! #[derive(Serialize, PartialEq, Debug)]
+//! struct Example {
+//!     a: i32,
+//! }
+//!
+//! assert_eq!(
+//!     to_string(&Envelope { body: Body { inner: Example { a: 42 } } }).unwrap(),
+//!     // Notice how `inner` is not present in the XML
+//!     "<Envelope><body><Example><a>42</a></Example></body></Envelope>",
+//! );
+//!
+//! #[derive(Deserialize, PartialEq, Debug)]
+//! struct AnotherExample {
+//!     a: i32,
+//! }
+//!
+//! assert_eq!(
+//!     // Notice that tag the name does nothing for struct in `$value` field
+//!     Envelope { body: Body { inner: AnotherExample { a: 42 } } },
+//!     from_str("<Envelope><body><Example><a>42</a></Example></body></Envelope>").unwrap(),
+//! );
 //! ```
 //!
 //! ### Primitives and sequences of primitives
