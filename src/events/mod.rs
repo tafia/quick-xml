@@ -577,8 +577,24 @@ impl<'a> BytesText<'a> {
 
     /// Decodes the content of the event.
     ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
+    /// This will allocate if the value contains any escape sequences or in non-UTF-8
+    /// encoding, or [EOL normalization] is required.
+    ///
+    /// Note, althougth you may use this library to parse HTML, you cannot use this
+    /// method to get HTML content, because its returns normalized value: the following
+    /// sequences are translated into a single `\n` (U+000a) character:
+    ///
+    /// - `\r\n`
+    /// - `\r\x85`
+    /// - `\r`
+    /// - `\x85`
+    /// - `\x2028`
+    ///
+    /// The text in HTML normally is not normalized in any way; normalization is
+    /// performed only in limited contexts and [only for] `\r\n` and `\r`.
+    ///
+    /// [EOL normalization]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         self.decoder.decode_cow(&self.content)
     }
@@ -827,6 +843,25 @@ impl<'a> BytesCData<'a> {
     /// When this event produced by the XML reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within this
     /// CDATA event.
+    ///
+    /// This will allocate if the value in non-UTF-8 encoding, or [EOL normalization]
+    /// is required.
+    ///
+    /// Note, althougth you may use this library to parse HTML, you cannot use this
+    /// method to get HTML content, because its returns normalized value: the following
+    /// sequences are translated into a single `\n` (U+000a) character:
+    ///
+    /// - `\r\n`
+    /// - `\r\x85`
+    /// - `\r`
+    /// - `\x85`
+    /// - `\x2028`
+    ///
+    /// The text in HTML normally is not normalized in any way; normalization is
+    /// performed only in limited contexts and [only for] `\r\n` and `\r`.
+    ///
+    /// [EOL normalization]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         Ok(self.decoder.decode_cow(&self.content)?)
     }
@@ -1437,8 +1472,24 @@ impl<'a> BytesRef<'a> {
 
     /// Decodes the content of the event.
     ///
-    /// This will allocate if the value contains any escape sequences or in
-    /// non-UTF-8 encoding.
+    /// This will allocate if the value in non-UTF-8 encoding, or [EOL normalization]
+    /// is required.
+    ///
+    /// Note, althougth you may use this library to parse HTML, you cannot use this
+    /// method to get HTML content, because its returns normalized value: the following
+    /// sequences are translated into a single `\n` (U+000a) character:
+    ///
+    /// - `\r\n`
+    /// - `\r\x85`
+    /// - `\r`
+    /// - `\x85`
+    /// - `\x2028`
+    ///
+    /// The text in HTML normally is not normalized in any way; normalization is
+    /// performed only in limited contexts and [only for] `\r\n` and `\r`.
+    ///
+    /// [EOL normalization]: https://www.w3.org/TR/xml11/#sec-line-ends
+    /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         self.decoder.decode_cow(&self.content)
     }

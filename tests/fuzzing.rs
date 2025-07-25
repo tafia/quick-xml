@@ -31,7 +31,7 @@ fn fuzz_101() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 for a in e.attributes() {
                     if a.ok().map_or(true, |a| {
-                        a.decode_and_unescape_value(reader.decoder()).is_err()
+                        a.decoded_and_normalized_value(reader.decoder()).is_err()
                     }) {
                         break;
                     }

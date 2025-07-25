@@ -34,7 +34,7 @@ where
                 debug_format!(e.name());
                 for a in e.attributes() {
                     debug_format!(a);
-                    if a.ok().map_or(false, |a| a.unescape_value().is_err()) {
+                    if a.ok().map_or(false, |a| a.normalized_value().is_err()) {
                         break;
                     }
                 }

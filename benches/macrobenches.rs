@@ -44,14 +44,13 @@ static INPUTS: &[(&str, &str)] = &[
     ("players.xml", PLAYERS),
 ];
 
-// TODO: use fully normalized attribute values
 fn parse_document_from_str(doc: &str) -> XmlResult<()> {
     let mut r = Reader::from_str(doc);
     loop {
         match black_box(r.read_event()?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decoded_and_normalized_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
@@ -68,7 +67,6 @@ fn parse_document_from_str(doc: &str) -> XmlResult<()> {
     Ok(())
 }
 
-// TODO: use fully normalized attribute values
 fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
     let mut r = Reader::from_reader(doc);
     let mut buf = Vec::new();
@@ -76,7 +74,7 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
         match black_box(r.read_event_into(&mut buf)?) {
             Event::Start(e) | Event::Empty(e) => {
                 for attr in e.attributes() {
-                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decoded_and_normalized_value(r.decoder())?);
                 }
             }
             Event::Text(e) => {
@@ -94,7 +92,6 @@ fn parse_document_from_bytes(doc: &[u8]) -> XmlResult<()> {
     Ok(())
 }
 
-// TODO: use fully normalized attribute values
 fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
     let mut r = NsReader::from_str(doc);
     loop {
@@ -102,7 +99,7 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 black_box(resolved_ns);
                 for attr in e.attributes() {
-                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decoded_and_normalized_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
@@ -121,7 +118,6 @@ fn parse_document_from_str_with_namespaces(doc: &str) -> XmlResult<()> {
     Ok(())
 }
 
-// TODO: use fully normalized attribute values
 fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
     let mut r = NsReader::from_reader(doc);
     let mut buf = Vec::new();
@@ -130,7 +126,7 @@ fn parse_document_from_bytes_with_namespaces(doc: &[u8]) -> XmlResult<()> {
             (resolved_ns, Event::Start(e) | Event::Empty(e)) => {
                 black_box(resolved_ns);
                 for attr in e.attributes() {
-                    black_box(attr?.decode_and_unescape_value(r.decoder())?);
+                    black_box(attr?.decoded_and_normalized_value(r.decoder())?);
                 }
             }
             (resolved_ns, Event::Text(e)) => {
