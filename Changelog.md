@@ -29,6 +29,8 @@
 
 ### Bug Fixes
 
+- [#806]: Properly normalize EOL characters in `Deserializer`.
+
 ### Misc Changes
 
 [#806]: https://github.com/tafia/quick-xml/issues/806

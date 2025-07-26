@@ -2439,8 +2439,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             }
 
             match self.next_impl()? {
-                PayloadEvent::Text(e) => result.to_mut().push_str(&e.decode()?),
-                PayloadEvent::CData(e) => result.to_mut().push_str(&e.decode()?),
+                PayloadEvent::Text(e) => result.to_mut().push_str(&e.xml_content()?),
+                PayloadEvent::CData(e) => result.to_mut().push_str(&e.xml_content()?),
                 PayloadEvent::GeneralRef(e) => self.resolve_reference(result.to_mut(), e)?,
 
                 // SAFETY: current_event_is_last_text checks that event is Text, CData or GeneralRef
@@ -2456,8 +2456,8 @@ impl<'i, R: XmlRead<'i>, E: EntityResolver> XmlReader<'i, R, E> {
             return match self.next_impl()? {
                 PayloadEvent::Start(e) => Ok(DeEvent::Start(e)),
                 PayloadEvent::End(e) => Ok(DeEvent::End(e)),
-                PayloadEvent::Text(e) => self.drain_text(e.decode()?),
-                PayloadEvent::CData(e) => self.drain_text(e.decode()?),
+                PayloadEvent::Text(e) => self.drain_text(e.xml_content()?),
+                PayloadEvent::CData(e) => self.drain_text(e.xml_content()?),
                 PayloadEvent::DocType(e) => {
                     self.entity_resolver
                         .capture(e)
