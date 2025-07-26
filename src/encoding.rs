@@ -6,6 +6,8 @@ use std::str::Utf8Error;
 #[cfg(feature = "encoding")]
 use encoding_rs::{DecoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
 
+use crate::escape::{normalize_html_eols, normalize_xml_eols};
+
 /// Unicode "byte order mark" (\u{FEFF}) encoded as UTF-8.
 /// See <https://unicode.org/faq/utf_bom.html#bom1>
 pub(crate) const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
@@ -148,6 +150,52 @@ impl Decoder {
             Cow::Borrowed(bytes) => self.decode(bytes),
             // Convert to owned, because otherwise Cow will be bound with wrong lifetime
             Cow::Owned(bytes) => Ok(self.decode(bytes)?.into_owned().into()),
+        }
+    }
+
+    /// Decodes the `Cow` buffer, normalizes XML EOLs, preserves the lifetime
+    pub(crate) fn xml_content<'b>(
+        &self,
+        bytes: &Cow<'b, [u8]>,
+    ) -> Result<Cow<'b, str>, EncodingError> {
+        match bytes {
+            Cow::Borrowed(bytes) => {
+                let text = self.decode(bytes)?;
+                match normalize_xml_eols(&text) {
+                    // If text borrowed after normalization that means that it's not changed
+                    Cow::Borrowed(_) => Ok(text),
+                    Cow::Owned(s) => Ok(Cow::Owned(s)),
+                }
+            }
+            Cow::Owned(bytes) => {
+                let text = self.decode(bytes)?;
+                let text = normalize_xml_eols(&text);
+                // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+                Ok(text.into_owned().into())
+            }
+        }
+    }
+
+    /// Decodes the `Cow` buffer, normalizes HTML5 EOLs, preserves the lifetime
+    pub(crate) fn html_content<'b>(
+        &self,
+        bytes: &Cow<'b, [u8]>,
+    ) -> Result<Cow<'b, str>, EncodingError> {
+        match bytes {
+            Cow::Borrowed(bytes) => {
+                let text = self.decode(bytes)?;
+                match normalize_html_eols(&text) {
+                    // If text borrowed after normalization that means that it's not changed
+                    Cow::Borrowed(_) => Ok(text),
+                    Cow::Owned(s) => Ok(Cow::Owned(s)),
+                }
+            }
+            Cow::Owned(bytes) => {
+                let text = self.decode(bytes)?;
+                let text = normalize_html_eols(&text);
+                // Convert to owned, because otherwise Cow will be bound with wrong lifetime
+                Ok(text.into_owned().into())
+            }
         }
     }
 }
