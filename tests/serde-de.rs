@@ -1979,6 +1979,9 @@ mod xml_version {
 
     #[derive(Debug, Deserialize, PartialEq)]
     struct Root {
+        #[serde(rename = "@attribute")]
+        attribute: String,
+
         #[serde(rename = "$text")]
         text: String,
     }
@@ -1988,11 +1991,12 @@ mod xml_version {
         assert_eq!(
             from_str::<Root>(
                 "\
-                <root>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
+                <root attribute='\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}'>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
                 "
             )
             .unwrap(),
             Root {
+                attribute: " , , , \u{0085},\u{0085},\u{2028}".to_string(),
                 text: "\n,\n,\n,\n\u{0085},\u{0085},\u{2028}".to_string(),
             }
         );
@@ -2004,11 +2008,12 @@ mod xml_version {
             from_str::<Root>(
                 "\
                 <?xml version='1.0'?>\
-                <root>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
+                <root attribute='\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}'>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
                 "
             )
             .unwrap(),
             Root {
+                attribute: " , , , \u{0085},\u{0085},\u{2028}".to_string(),
                 text: "\n,\n,\n,\n\u{0085},\u{0085},\u{2028}".to_string(),
             }
         );
@@ -2020,11 +2025,12 @@ mod xml_version {
             from_str::<Root>(
                 "\
                 <?xml version='1.1'?>\
-                <root>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
+                <root attribute='\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}'>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
                 "
             )
             .unwrap(),
             Root {
+                attribute: " , , , , , ".to_string(),
                 text: "\n,\n,\n,\n,\n,\n".to_string(),
             }
         );
@@ -2035,7 +2041,7 @@ mod xml_version {
         match from_str::<Root>(
             "\
                 <?xml version='1.2'?>\
-                <root>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
+                <root attribute='\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}'>\r\n,\n,\r,\r\u{0085},\u{0085},\u{2028}</root>\
                 ",
         ) {
             Err(DeError::InvalidXml(Error::IllFormed(cause))) => {

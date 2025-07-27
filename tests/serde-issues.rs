@@ -539,6 +539,25 @@ fn issue655() {
     );
 }
 
+/// Regression test for https://github.com/tafia/quick-xml/issues/674
+#[test]
+fn issue674() {
+    #[derive(Debug, Deserialize)]
+    struct Any {
+        #[serde(rename = "@list")]
+        list: Vec<Item>,
+    }
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    enum Item {
+        Foo,
+        Bar,
+    }
+
+    let any: Any = from_str("<any list='Foo\tBar' />").unwrap();
+    assert_eq!(any.list, [Item::Foo, Item::Bar]);
+}
+
 /// Regression test for https://github.com/tafia/quick-xml/issues/683.
 #[test]
 fn issue683() {
