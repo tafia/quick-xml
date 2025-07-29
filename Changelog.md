@@ -22,11 +22,18 @@
   - `Deserializer::buffering_with_resolver`
 - [#878]: Add ability to serialize structs in `$value` fields. The struct name will
   be used as a tag name. Previously only enums was allowed there.
+- [#806]: Add `BytesText::xml_content`, `BytesCData::xml_content` and `BytesRef::xml_content`
+  methods which returns XML EOL normalized strings.
+- [#806]: Add `BytesText::html_content`, `BytesCData::html_content` and `BytesRef::html_content`
+  methods which returns HTML EOL normalized strings.
 
 ### Bug Fixes
 
+- [#806]: Properly normalize EOL characters in `Deserializer`.
+
 ### Misc Changes
 
+[#806]: https://github.com/tafia/quick-xml/issues/806
 [#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
 
