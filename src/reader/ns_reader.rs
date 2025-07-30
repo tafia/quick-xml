@@ -214,6 +214,12 @@ impl<R> NsReader<R> {
         self.reader.get_mut()
     }
 
+    /// Returns a storage of namespace bindings associated with this reader.
+    #[inline]
+    pub const fn resolver(&self) -> &NamespaceResolver {
+        &self.ns_resolver
+    }
+
     /// Resolves a potentially qualified **element name** or **attribute name**
     /// into _(namespace name, local name)_.
     ///

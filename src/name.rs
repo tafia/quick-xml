@@ -353,7 +353,7 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`NsReader::resolve_attribute`],
+/// Result of [prefix] resolution which creates by [`NamespaceResolver::resolve`], [`NsReader::resolve_attribute`],
 /// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
 /// [`NsReader::read_resolved_event_into`] methods.
 ///
@@ -466,11 +466,12 @@ impl NamespaceBinding {
     }
 }
 
-/// A namespace management buffer.
+/// A storage for currently defined namespace bindings, which is used to resolve
+/// prefixes into namespaces.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Clone)]
-pub(crate) struct NamespaceResolver {
+pub struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
     buffer: Vec<u8>,
@@ -535,7 +536,7 @@ impl NamespaceResolver {
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level += 1;
         let level = self.nesting_level;
@@ -595,10 +596,10 @@ impl NamespaceResolver {
         Ok(())
     }
 
-    /// Ends a top-most scope by popping all [namespace binding], that was added by
+    /// Ends a top-most scope by popping all [namespace bindings], that was added by
     /// last call to [`Self::push()`].
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn pop(&mut self) {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
@@ -704,6 +705,85 @@ impl NamespaceResolver {
         }
     }
 
+    /// Returns all the bindings currently in effect except the default `xml` and `xmlns` bindings.
+    ///
+    /// # Examples
+    ///
+    /// This example shows what results the returned iterator would return after
+    /// reading each event of a simple XML.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::name::{Namespace, PrefixDeclaration};
+    /// use quick_xml::NsReader;
+    ///
+    /// let src = "<root>
+    ///   <a xmlns=\"a1\" xmlns:a=\"a2\">
+    ///     <b xmlns=\"b1\" xmlns:b=\"b2\">
+    ///       <c/>
+    ///     </b>
+    ///     <d/>
+    ///   </a>
+    /// </root>";
+    /// let mut reader = NsReader::from_str(src);
+    /// reader.config_mut().trim_text(true);
+    /// // No bindings at the beginning
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <root>
+    /// // No bindings declared on root
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <a>
+    /// // Two bindings declared on "a"
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <b>
+    /// // The default prefix got overridden and new "b" prefix
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <c/>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </b>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <d/>
+    /// // </b> got closed so back to the bindings declared on <a>
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </a>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </root>
+    /// // <a> got closed
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    /// # quick_xml::Result::Ok(())
+    /// ```
     #[inline]
     pub const fn bindings(&self) -> NamespaceBindingsIter<'_> {
         NamespaceBindingsIter {
@@ -718,7 +798,7 @@ impl NamespaceResolver {
 
 /// Iterator on the current declared namespace bindings. Returns pairs of the _(prefix, namespace)_.
 ///
-/// See [`NsReader::prefixes`](crate::NsReader::prefixes) for documentation.
+/// See [`NamespaceResolver::bindings`] for documentation.
 #[derive(Debug, Clone)]
 pub struct NamespaceBindingsIter<'a> {
     resolver: &'a NamespaceResolver,

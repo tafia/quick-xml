@@ -17,6 +17,8 @@
 ### New Features
 
 - [#893]: Implement `FusedIterator` for `NamespaceBindingsIter`.
+- [#893]: Make `NamespaceResolver` public.
+- [#893]: Add `NsReader::resolver()` for access to namespace resolver.
 
 ### Bug Fixes
 
