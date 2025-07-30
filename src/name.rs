@@ -365,7 +365,7 @@ impl<'a> AsRef<[u8]> for Namespace<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Result of [prefix] resolution which creates by [`NsReader::resolve_attribute`],
+/// Result of [prefix] resolution which creates by [`NamespaceResolver::resolve`], [`NsReader::resolve_attribute`],
 /// [`NsReader::resolve_element`], [`NsReader::read_resolved_event`] and
 /// [`NsReader::read_resolved_event_into`] methods.
 ///
@@ -478,11 +478,12 @@ impl NamespaceBinding {
     }
 }
 
-/// A namespace management buffer.
+/// A storage for currently defined namespace bindings, which is used to resolve
+/// prefixes into namespaces.
 ///
 /// Holds all internal logic to push/pop namespaces with their levels.
 #[derive(Debug, Clone)]
-pub(crate) struct NamespaceResolver {
+pub struct NamespaceResolver {
     /// Buffer that contains names of namespace prefixes (the part between `xmlns:`
     /// and an `=`) and namespace values.
     buffer: Vec<u8>,
@@ -510,7 +511,7 @@ const RESERVED_NAMESPACE_XML: (Prefix, Namespace) = (
 /// The prefix `xmlns` is used only to declare namespace bindings and is by definition bound
 /// to the namespace name `http://www.w3.org/2000/xmlns/`. It must not be declared or
 /// undeclared. Other prefixes must not be bound to this namespace name, and it must not be
-///  declared as the default namespace. Element names must not have the prefix `xmlns`.
+/// declared as the default namespace. Element names must not have the prefix `xmlns`.
 ///
 /// [reserved namespaces]: https://www.w3.org/TR/xml-names11/#xmlReserved
 const RESERVED_NAMESPACE_XMLNS: (Prefix, Namespace) = (
@@ -547,7 +548,7 @@ impl NamespaceResolver {
     /// Begins a new scope and add to it all [namespace bindings] that found in
     /// the specified start element.
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn push(&mut self, start: &BytesStart) -> Result<(), NamespaceError> {
         self.nesting_level += 1;
         let level = self.nesting_level;
@@ -607,10 +608,10 @@ impl NamespaceResolver {
         Ok(())
     }
 
-    /// Ends a top-most scope by popping all [namespace binding], that was added by
+    /// Ends a top-most scope by popping all [namespace bindings], that was added by
     /// last call to [`Self::push()`].
     ///
-    /// [namespace binding]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
+    /// [namespace bindings]: https://www.w3.org/TR/xml-names11/#dt-NSDecl
     pub fn pop(&mut self) {
         self.nesting_level -= 1;
         let current_level = self.nesting_level;
@@ -632,18 +633,38 @@ impl NamespaceResolver {
     }
 
     /// Resolves a potentially qualified **element name** or **attribute name**
-    /// into (namespace name, local name).
+    /// into _(namespace name, local name)_.
     ///
-    /// *Qualified* names have the form `prefix:local-name` where the `prefix` is
-    /// defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
-    /// The namespace prefix can be defined on the same element as the element or
-    /// attribute in question.
+    /// _Qualified_ names have the form `local-name` or `prefix:local-name` where the `prefix`
+    /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
+    /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// *Unqualified* attribute names do *not* inherit the current *default namespace*.
+    /// The method returns following results depending on the `name` shape, `attribute` flag
+    /// and the presence of the default namespace on element or any of its parents:
+    ///
+    /// |use_default|`xmlns="..."`|QName              |ResolveResult          |LocalName
+    /// |-----------|-------------|-------------------|-----------------------|------------
+    /// |`false`    |_(any)_      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`false`    |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`true`     |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`     |Defined      |`local-name`       |[`Bound`] (to `xmlns`) |`local-name`
+    /// |`true`     |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    ///
+    /// # Parameters
+    /// - `name`: probably qualified name to resolve;
+    /// - `use_default`: whether to try to translate `None` prefix to the currently default namespace
+    ///   (bound using `xmlns="default namespace"`) or return [`ResolveResult::Unbound`].
+    ///   For attribute names this should be set to `false` and for element names to `true`.
     ///
     /// # Lifetimes
     ///
-    /// - `'n`: lifetime of an attribute or an element name
+    /// - `'n`: lifetime of a name. Returned local name will be bound to the same
+    ///   lifetime as the name in question.
+    /// - returned namespace name will be bound to the resolver itself
+    ///
+    /// [`Bound`]: ResolveResult::Bound
+    /// [`Unbound`]: ResolveResult::Unbound
+    /// [`Unknown`]: ResolveResult::Unknown
     #[inline]
     pub fn resolve<'n>(
         &self,
@@ -669,7 +690,14 @@ impl NamespaceResolver {
         self.resolve_prefix(element_name.prefix(), true)
     }
 
-    fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
+    /// Resolves given optional prefix (usually got from [`QName`]) into a corresponding namespace.
+    ///
+    /// # Parameters
+    /// - `prefix`: prefix to resolve, usually result of [`QName::prefix()`];
+    /// - `use_default`: whether to try to translate `None` prefix to the currently default namespace
+    ///   (bound using `xmlns="default namespace"`) or return [`ResolveResult::Unbound`].
+    ///   For attribute names this should be set to `false` and for element names to `true`.
+    pub fn resolve_prefix(&self, prefix: Option<Prefix>, use_default: bool) -> ResolveResult<'_> {
         // Find the last defined binding that corresponds to the given prefix
         let mut iter = self.bindings.iter().rev();
         match (prefix, use_default) {
@@ -689,6 +717,85 @@ impl NamespaceResolver {
         }
     }
 
+    /// Returns all the bindings currently in effect except the default `xml` and `xmlns` bindings.
+    ///
+    /// # Examples
+    ///
+    /// This example shows what results the returned iterator would return after
+    /// reading each event of a simple XML.
+    ///
+    /// ```
+    /// # use pretty_assertions::assert_eq;
+    /// use quick_xml::name::{Namespace, PrefixDeclaration};
+    /// use quick_xml::NsReader;
+    ///
+    /// let src = "<root>
+    ///   <a xmlns=\"a1\" xmlns:a=\"a2\">
+    ///     <b xmlns=\"b1\" xmlns:b=\"b2\">
+    ///       <c/>
+    ///     </b>
+    ///     <d/>
+    ///   </a>
+    /// </root>";
+    /// let mut reader = NsReader::from_str(src);
+    /// reader.config_mut().trim_text(true);
+    /// // No bindings at the beginning
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <root>
+    /// // No bindings declared on root
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    ///
+    /// reader.read_resolved_event()?; // <a>
+    /// // Two bindings declared on "a"
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <b>
+    /// // The default prefix got overridden and new "b" prefix
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <c/>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </b>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2")),
+    ///     (PrefixDeclaration::Default, Namespace(b"b1")),
+    ///     (PrefixDeclaration::Named(b"b"), Namespace(b"b2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // <d/>
+    /// // </b> got closed so back to the bindings declared on <a>
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </a>
+    /// // Still the same
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![
+    ///     (PrefixDeclaration::Default, Namespace(b"a1")),
+    ///     (PrefixDeclaration::Named(b"a"), Namespace(b"a2"))
+    /// ]);
+    ///
+    /// reader.read_resolved_event()?; // </root>
+    /// // <a> got closed
+    /// assert_eq!(reader.resolver().bindings().collect::<Vec<_>>(), vec![]);
+    /// # quick_xml::Result::Ok(())
+    /// ```
     #[inline]
     pub const fn bindings(&self) -> NamespaceBindingsIter<'_> {
         NamespaceBindingsIter {
@@ -703,7 +810,7 @@ impl NamespaceResolver {
 
 /// Iterator on the current declared namespace bindings. Returns pairs of the _(prefix, namespace)_.
 ///
-/// See [`NsReader::prefixes`](crate::NsReader::prefixes) for documentation.
+/// See [`NamespaceResolver::bindings`] for documentation.
 #[derive(Debug, Clone)]
 pub struct NamespaceBindingsIter<'a> {
     resolver: &'a NamespaceResolver,

@@ -214,24 +214,29 @@ impl<R> NsReader<R> {
         self.reader.get_mut()
     }
 
+    /// Returns a storage of namespace bindings associated with this reader.
+    #[inline]
+    pub const fn resolver(&self) -> &NamespaceResolver {
+        &self.ns_resolver
+    }
+
     /// Resolves a potentially qualified **element name** or **attribute name**
     /// into _(namespace name, local name)_.
     ///
-    /// _Qualified_ names have the form `prefix:local-name` where the `prefix`
+    /// _Qualified_ names have the form `local-name` or `prefix:local-name` where the `prefix`
     /// is defined on any containing XML element via `xmlns:prefix="the:namespace:uri"`.
     /// The namespace prefix can be defined on the same element as the name in question.
     ///
-    /// The method returns following results depending on the `name` shape,
-    /// `attribute` flag and the presence of the default namespace:
+    /// The method returns following results depending on the `name` shape, `attribute` flag
+    /// and the presence of the default namespace on element or any of its parents:
     ///
     /// |attribute|`xmlns="..."`|QName              |ResolveResult          |LocalName
     /// |---------|-------------|-------------------|-----------------------|------------
-    /// |`true`   |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`true`   |Defined      |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`true`   |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`true`   |_(any)_      |`local-name`       |[`Unbound`]            |`local-name`
+    /// |`true`   |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     /// |`false`  |Not defined  |`local-name`       |[`Unbound`]            |`local-name`
-    /// |`false`  |Defined      |`local-name`       |[`Bound`] (default)    |`local-name`
-    /// |`false`  |_any_        |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
+    /// |`false`  |Defined      |`local-name`       |[`Bound`] (to `xmlns`) |`local-name`
+    /// |`false`  |_(any)_      |`prefix:local-name`|[`Bound`] / [`Unknown`]|`local-name`
     ///
     /// If you want to clearly indicate that name that you resolve is an element
     /// or an attribute name, you could use [`resolve_attribute()`] or [`resolve_element()`]
