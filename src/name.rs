@@ -414,7 +414,7 @@ impl<'ns> TryFrom<ResolveResult<'ns>> for Option<Namespace<'ns>> {
 /// [namespace prefix]: https://www.w3.org/TR/xml-names11/#dt-prefix
 /// [namespace name]: https://www.w3.org/TR/xml-names11/#dt-NSName
 #[derive(Debug, Clone)]
-struct NamespaceEntry {
+struct NamespaceBinding {
     /// Index of the namespace in the buffer
     start: usize,
     /// Length of the prefix
@@ -438,7 +438,7 @@ struct NamespaceEntry {
     level: i32,
 }
 
-impl NamespaceEntry {
+impl NamespaceBinding {
     /// Get the namespace prefix, bound to this namespace declaration, or `None`,
     /// if this declaration is for default namespace (`xmlns="..."`).
     #[inline]
@@ -474,7 +474,7 @@ pub(crate) struct NamespaceResolver {
     /// and an `=`) and namespace values.
     buffer: Vec<u8>,
     /// A stack of namespace bindings to prefixes that currently in scope
-    bindings: Vec<NamespaceEntry>,
+    bindings: Vec<NamespaceBinding>,
     /// The number of open tags at the moment. We need to keep track of this to know which namespace
     /// declarations to remove when we encounter an `End` event.
     nesting_level: i32,
@@ -512,7 +512,7 @@ impl Default for NamespaceResolver {
         for ent in &[RESERVED_NAMESPACE_XML, RESERVED_NAMESPACE_XMLNS] {
             let prefix = ent.0.into_inner();
             let uri = ent.1.into_inner();
-            bindings.push(NamespaceEntry {
+            bindings.push(NamespaceBinding {
                 start: buffer.len(),
                 prefix_len: prefix.len(),
                 value_len: uri.len(),
@@ -546,7 +546,7 @@ impl NamespaceResolver {
                     Some(PrefixDeclaration::Default) => {
                         let start = self.buffer.len();
                         self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceEntry {
+                        self.bindings.push(NamespaceBinding {
                             start,
                             prefix_len: 0,
                             value_len: v.len(),
@@ -578,7 +578,7 @@ impl NamespaceResolver {
                         let start = self.buffer.len();
                         self.buffer.extend_from_slice(prefix);
                         self.buffer.extend_from_slice(&v);
-                        self.bindings.push(NamespaceEntry {
+                        self.bindings.push(NamespaceBinding {
                             start,
                             prefix_len: prefix.len(),
                             value_len: v.len(),
