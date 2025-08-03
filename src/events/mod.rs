@@ -582,6 +582,11 @@ impl<'a> BytesText<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
+    ///
+    /// This method does not normalizes end-of-line characters as required by [specification].
+    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         self.decoder.decode_cow(&self.content)
     }
@@ -870,6 +875,11 @@ impl<'a> BytesCData<'a> {
     /// When this event produced by the XML reader, it uses the encoding information
     /// associated with that reader to interpret the raw bytes contained within this
     /// CDATA event.
+    ///
+    /// This method does not normalizes end-of-line characters as required by [specification].
+    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         self.decoder.decode_cow(&self.content)
     }
@@ -1524,6 +1534,11 @@ impl<'a> BytesRef<'a> {
     ///
     /// This will allocate if the value contains any escape sequences or in
     /// non-UTF-8 encoding.
+    ///
+    /// This method does not normalizes end-of-line characters as required by [specification].
+    /// Usually you need [`xml_content()`](Self::xml_content) instead of this method.
+    ///
+    /// [specification]: https://www.w3.org/TR/xml11/#sec-line-ends
     pub fn decode(&self) -> Result<Cow<'a, str>, EncodingError> {
         self.decoder.decode_cow(&self.content)
     }
