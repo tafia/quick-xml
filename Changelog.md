@@ -1,4 +1,5 @@
 > Release checklist (minimal list of actions for cutting a release):
+> 0. Check if dependencies in child projects (mostly `compare`) need to be updated and update them
 > 1. `$env:RUSTDOCFLAGS="--cfg docsrs"; cargo +nightly doc --all-features` and check generated documentation for missing / unclear things
 > 2. Update version in `Cargo.toml`
 > 3. Update `Changelog.md` with date of release, add new empty Unreleased headings
