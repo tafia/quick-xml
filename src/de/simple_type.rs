@@ -40,7 +40,7 @@ macro_rules! deserialize_primitive {
         {
             let de = AtomicDeserializer {
                 content: self.decode()?,
-                escaped: self.escaped,
+                is_attr: self.is_attr,
             };
             de.$method(visitor)
         }
@@ -124,7 +124,7 @@ struct AtomicDeserializer<'de, 'a> {
     /// Content of the attribute value, text content or CDATA content
     content: CowRef<'de, 'a, str>,
     /// If `true`, `content` in an escaped form and should be unescaped before use
-    escaped: bool,
+    is_attr: bool,
 }
 
 impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
@@ -146,7 +146,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         let text = self.content.as_ref();
-        let text = if self.escaped {
+        let text = if self.is_attr {
             unescape(text)?
         } else {
             Cow::Borrowed(text)
@@ -183,7 +183,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
         V: Visitor<'de>,
     {
         let text: &str = self.content.as_ref();
-        let text = if self.escaped {
+        let text = if self.is_attr {
             unescape(text)?
         } else {
             Cow::Borrowed(text)
@@ -216,7 +216,7 @@ impl<'de, 'a> Deserializer<'de> for AtomicDeserializer<'de, 'a> {
     where
         V: Visitor<'de>,
     {
-        if self.escaped {
+        if self.is_attr {
             match unescape(self.content.as_ref())? {
                 Cow::Borrowed(_) => self.content.deserialize_str(visitor),
                 Cow::Owned(s) => visitor.visit_string(s),
@@ -378,7 +378,7 @@ struct ListIter<'de, 'a> {
     /// If `Some`, contains unconsumed data of the list
     content: Option<Content<'de, 'a>>,
     /// If `true`, `content` in escaped form and should be unescaped before use
-    escaped: bool,
+    is_attr: bool,
 }
 impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
     type Error = DeError;
@@ -400,19 +400,19 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                     None => match content {
                         Content::Input(s) => seed.deserialize(AtomicDeserializer {
                             content: CowRef::Input(s),
-                            escaped: self.escaped,
+                            is_attr: self.is_attr,
                         }),
                         Content::Slice(s) => seed.deserialize(AtomicDeserializer {
                             content: CowRef::Slice(s),
-                            escaped: self.escaped,
+                            is_attr: self.is_attr,
                         }),
                         Content::Owned(s, 0) => seed.deserialize(AtomicDeserializer {
                             content: CowRef::Owned(s),
-                            escaped: self.escaped,
+                            is_attr: self.is_attr,
                         }),
                         Content::Owned(s, offset) => seed.deserialize(AtomicDeserializer {
                             content: CowRef::Slice(s.split_at(offset).1),
-                            escaped: self.escaped,
+                            is_attr: self.is_attr,
                         }),
                     },
                     // `content` started with a space, skip them all
@@ -442,7 +442,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 
                             seed.deserialize(AtomicDeserializer {
                                 content: CowRef::Input(item),
-                                escaped: self.escaped,
+                                is_attr: self.is_attr,
                             })
                         }
                         Content::Slice(s) => {
@@ -451,7 +451,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
 
                             seed.deserialize(AtomicDeserializer {
                                 content: CowRef::Slice(item),
-                                escaped: self.escaped,
+                                is_attr: self.is_attr,
                             })
                         }
                         // Skip additional bytes if we own data for next iteration, but deserialize from
@@ -461,7 +461,7 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                             let item = rest.split_at(end).0;
                             let result = seed.deserialize(AtomicDeserializer {
                                 content: CowRef::Slice(item),
-                                escaped: self.escaped,
+                                is_attr: self.is_attr,
                             });
 
                             self.content = Some(Content::Owned(s, skip + end));
@@ -534,7 +534,7 @@ pub struct SimpleTypeDeserializer<'de, 'a> {
     /// - In case of text contains unescaped text value
     content: CowRef<'de, 'a, [u8]>,
     /// If `true`, `content` in escaped form and should be unescaped before use
-    escaped: bool,
+    is_attr: bool,
     /// Decoder used to deserialize string data, numeric and boolean data.
     /// Not used for deserializing raw byte buffers
     decoder: Decoder,
@@ -564,7 +564,7 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
     ///
     /// This constructor used internally to deserialize from attribute values.
     #[allow(clippy::ptr_arg)]
-    pub(crate) fn from_part(
+    pub(crate) fn from_attr(
         value: &'a Cow<'de, [u8]>,
         range: Range<usize>,
         decoder: Decoder,
@@ -578,10 +578,10 @@ impl<'de, 'a> SimpleTypeDeserializer<'de, 'a> {
 
     /// Constructor for tests
     #[inline]
-    const fn new(content: CowRef<'de, 'a, [u8]>, escaped: bool, decoder: Decoder) -> Self {
+    const fn new(content: CowRef<'de, 'a, [u8]>, is_attr: bool, decoder: Decoder) -> Self {
         Self {
             content,
-            escaped,
+            is_attr,
             decoder,
         }
     }
@@ -692,7 +692,7 @@ impl<'de, 'a> Deserializer<'de> for SimpleTypeDeserializer<'de, 'a> {
         };
         visitor.visit_seq(ListIter {
             content: Some(content),
-            escaped: self.escaped,
+            is_attr: self.is_attr,
         })
     }
 
@@ -902,7 +902,7 @@ mod tests {
                 fn $name() {
                     let de = AtomicDeserializer {
                         content: CowRef::Input($input),
-                        escaped: true,
+                        is_attr: true,
                     };
                     let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -919,7 +919,7 @@ mod tests {
                 fn $name() {
                     let de = AtomicDeserializer {
                         content: CowRef::Input($input),
-                        escaped: true,
+                        is_attr: true,
                     };
                     let data: $type = Deserialize::deserialize(de).unwrap();
 
@@ -949,7 +949,7 @@ mod tests {
                 fn $name() {
                     let de = AtomicDeserializer {
                         content: CowRef::Input($input),
-                        escaped: true,
+                        is_attr: true,
                     };
                     let err = <$type as Deserialize>::deserialize(de).unwrap_err();
 
@@ -1043,7 +1043,7 @@ mod tests {
         fn owned_data() {
             let de = AtomicDeserializer {
                 content: CowRef::Owned("string slice".into()),
-                escaped: true,
+                is_attr: true,
             };
             assert_eq!(de.content.deref(), "string slice");
 
@@ -1057,7 +1057,7 @@ mod tests {
         fn borrowed_from_deserializer() {
             let de = AtomicDeserializer {
                 content: CowRef::Slice("string slice"),
-                escaped: true,
+                is_attr: true,
             };
             assert_eq!(de.content.deref(), "string slice");
 
@@ -1075,7 +1075,7 @@ mod tests {
         fn empty() {
             let mut seq = ListIter {
                 content: Some(Content::Input("")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), None);
@@ -1086,7 +1086,7 @@ mod tests {
         fn only_spaces() {
             let mut seq = ListIter {
                 content: Some(Content::Input("  ")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), None);
@@ -1097,7 +1097,7 @@ mod tests {
         fn one_item() {
             let mut seq = ListIter {
                 content: Some(Content::Input("abc")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
@@ -1109,7 +1109,7 @@ mod tests {
         fn two_items() {
             let mut seq = ListIter {
                 content: Some(Content::Input("abc def")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
@@ -1122,7 +1122,7 @@ mod tests {
         fn leading_spaces() {
             let mut seq = ListIter {
                 content: Some(Content::Input("  def")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), Some("def"));
@@ -1134,7 +1134,7 @@ mod tests {
         fn trailing_spaces() {
             let mut seq = ListIter {
                 content: Some(Content::Input("abc  ")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), Some("abc"));
@@ -1146,7 +1146,7 @@ mod tests {
         fn mixed_types() {
             let mut seq = ListIter {
                 content: Some(Content::Input("string 1.23 42 true false h Unit")),
-                escaped: true,
+                is_attr: true,
             };
 
             assert_eq!(seq.next_element::<&str>().unwrap(), Some("string"));

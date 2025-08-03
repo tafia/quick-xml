@@ -342,7 +342,7 @@ where
         seed: K,
     ) -> Result<K::Value, Self::Error> {
         match std::mem::replace(&mut self.source, ValueSource::Unknown) {
-            ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_part(
+            ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_attr(
                 &self.start.buf,
                 value,
                 self.start.decoder(),

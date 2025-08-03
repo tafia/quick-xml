@@ -158,7 +158,7 @@ impl<'de> MapAccess<'de> for AttributesDeserializer<'de> {
         match self.value.take() {
             Some(value) => {
                 let de =
-                    SimpleTypeDeserializer::from_part(&value, 0..value.len(), self.iter.decoder());
+                    SimpleTypeDeserializer::from_attr(&value, 0..value.len(), self.iter.decoder());
                 seed.deserialize(de)
             }
             None => Err(DeError::KeyNotRead),
