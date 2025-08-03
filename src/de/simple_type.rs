@@ -430,7 +430,8 @@ impl<'de, 'a> SeqAccess<'de> for ListIter<'de, 'a> {
                         // Skip additional bytes if we own data for next iteration, but deserialize from
                         // the borrowed data from our buffer
                         Content::Owned(s, skip) => {
-                            let item = s.split_at(skip + end).0;
+                            let rest = s.split_at(skip).1;
+                            let item = rest.split_at(end).0;
                             let result = seed.deserialize(AtomicDeserializer {
                                 content: CowRef::Slice(item),
                                 escaped: self.escaped,
