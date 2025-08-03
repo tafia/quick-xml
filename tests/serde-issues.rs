@@ -674,3 +674,38 @@ fn issue868() {
         ),
     }
 }
+
+/// Regression test for https://github.com/tafia/quick-xml/pull/888.
+#[cfg(feature = "encoding")]
+#[test]
+fn issue888() {
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct Root {
+        #[serde(rename = "@list")]
+        list: Vec<String>,
+    }
+
+    let xml = r#"
+        <?xml version="1.0" encoding="windows-1251"?>
+        <root list="текст требующий декодирования"/>"#;
+
+    let (xml, enc, _) = dbg!(encoding_rs::WINDOWS_1251.encode(xml));
+    assert_eq!(
+        enc,
+        encoding_rs::WINDOWS_1251,
+        "windows-1251 should be used for the test"
+    );
+
+    let data: Root = quick_xml::de::from_reader(xml.as_ref()).unwrap();
+    assert_eq!(
+        data,
+        Root {
+            list: vec![
+                // Translation from Russian:
+                "текст".to_string(),         // text
+                "требующий".to_string(),     // that-requires
+                "декодирования".to_string(), // decoding
+            ],
+        }
+    );
+}
