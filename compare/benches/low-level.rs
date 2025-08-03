@@ -233,10 +233,10 @@ fn low_level_comparison(c: &mut Criterion) {
 
                 fn process_token(&self, token: Token) -> ProcessResult<Self::Handle> {
                     match token {
-                        Token::TagToken(tag) if tag.kind == TagKind::StartTag => {
+                        Token::Tag(tag) if tag.kind == TagKind::StartTag => {
                             self.0.set(self.0.get() + 1);
                         }
-                        Token::TagToken(tag) if tag.kind == TagKind::EmptyTag => {
+                        Token::Tag(tag) if tag.kind == TagKind::EmptyTag => {
                             self.0.set(self.0.get() + 1);
                         }
                         _ => (),
