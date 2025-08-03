@@ -57,8 +57,6 @@ automatically.
 - [#888]: Properly split attribute values by items when deserialize attribute into
   list of values and attribute requires decoding.
 
-### Misc Changes
-
 [#806]: https://github.com/tafia/quick-xml/issues/806
 [#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
