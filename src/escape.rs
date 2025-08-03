@@ -326,13 +326,13 @@ pub(crate) fn normalize_xml_eols<'input>(text: &'input str) -> Cow<'input, str> 
         // we are sure that index within string
         normalized.push_str(&text[0..i]);
 
-        let mut pos = normalize_xml_eol_step(&mut normalized, bytes, i, '\n');
+        let mut pos = normalize_xml_eol_step(&mut normalized, text, i, '\n');
         while let Some(i) = memchr3(b'\r', 0xC2, 0xE2, &bytes[pos..]) {
             let index = pos + i;
             // NOTE: unsafe { text.get_unchecked(pos..index) } could be used because
             // we are sure that index within string
             normalized.push_str(&text[pos..index]);
-            pos = normalize_xml_eol_step(&mut normalized, bytes, index, '\n');
+            pos = normalize_xml_eol_step(&mut normalized, text, index, '\n');
         }
         if let Some(rest) = text.get(pos..) {
             normalized.push_str(rest);
@@ -378,21 +378,30 @@ pub(crate) fn normalize_xml_eols<'input>(text: &'input str) -> Cow<'input, str> 
 ///
 /// [eof]: https://www.w3.org/TR/xml11/#sec-line-ends
 /// [only for]: https://html.spec.whatwg.org/#normalize-newlines
-fn normalize_xml_eol_step(normalized: &mut String, input: &[u8], index: usize, ch: char) -> usize {
+fn normalize_xml_eol_step(normalized: &mut String, text: &str, index: usize, ch: char) -> usize {
+    let input = text.as_bytes();
     match input[index] {
         b'\r' => {
-            normalized.push(ch);
             if index + 1 < input.len() {
                 let next = input[index + 1];
                 if next == b'\n' {
+                    normalized.push(ch);
                     return index + 2; // skip \r\n
                 }
                 // Because input is correct UTF-8 and in UTF-8 every character has
                 // an unique prefix, byte C2 means only start of #x85 character
                 if next == 0xC2 {
-                    return index + 3; // skip UTF-8 encoding of #xD #x85 characters (0d c2 85)
+                    if index + 2 < input.len() && input[index + 2] == 0x85 {
+                        normalized.push(ch);
+                    } else {
+                        // NOTE: unsafe { text.get_unchecked(index..index + 3) } could be used because
+                        // we are sure that index within string
+                        normalized.push_str(&text[index..index + 3]);
+                    }
+                    return index + 3; // skip \r + UTF-8 encoding of character (c2 xx)
                 }
             }
+            normalized.push(ch);
             index + 1 // skip \r
         }
         b'\n' => {
@@ -401,13 +410,25 @@ fn normalize_xml_eol_step(normalized: &mut String, input: &[u8], index: usize, c
         }
         // Start of UTF-8 encoding of #x85 character (c2 85)
         0xC2 => {
-            normalized.push(ch);
-            index + 2 // skip UTF-8 encoding of #x85 character (c2 85)
+            if index + 1 < input.len() && input[index + 1] == 0x85 {
+                normalized.push(ch);
+            } else {
+                // NOTE: unsafe { text.get_unchecked(index..index + 2) } could be used because
+                // we are sure that index within string
+                normalized.push_str(&text[index..index + 2]);
+            }
+            index + 2 // skip UTF-8 encoding of character (c2 xx)
         }
         // Start of UTF-8 encoding of #x2028 character (e2 80 a8)
         0xE2 => {
-            normalized.push(ch);
-            index + 3 // skip UTF-8 encoding of #x2028 character (e2 80 a8)
+            if index + 2 < input.len() && input[index + 1] == 0x80 && input[index + 2] == 0xA8 {
+                normalized.push(ch);
+            } else {
+                // NOTE: unsafe { text.get_unchecked(index..index + 3) } could be used because
+                // we are sure that index within string
+                normalized.push_str(&text[index..index + 3]);
+            }
+            index + 3 // skip UTF-8 encoding of character (e2 xx xx)
         }
 
         x => unreachable!(
@@ -2093,6 +2114,102 @@ mod normalization {
                     normalize_xml_eols("\r\r\r\u{2028}\n\r\nsome\n\u{0085}\r\u{0085}text"),
                     "\n\n\n\n\n\nsome\n\n\ntext",
                 );
+            }
+
+            #[test]
+            fn utf8_0xc2() {
+                // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
+                // Second byte follows the pattern 10xxxxxx
+                let first = str::from_utf8(&[0b11000010, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = str::from_utf8(&[0b11000010, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut utf8 = [0; 2];
+                for ch in first..=last {
+                    ch.encode_utf8(&mut utf8);
+                    let description = format!("UTF-8 [{:02x} {:02x}] = `{}`", utf8[0], utf8[1], ch);
+                    let input = str::from_utf8(&utf8).expect(&description);
+
+                    dbg!((input, &description));
+                    if ch == '\u{0085}' {
+                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                    } else {
+                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 64);
+            }
+
+            #[test]
+            fn utf8_0x0d_0xc2() {
+                // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
+                // Second byte follows the pattern 10xxxxxx
+                let first = str::from_utf8(&[0b11000010, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = str::from_utf8(&[0b11000010, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut utf8 = [b'\r', 0, 0];
+                for ch in first..=last {
+                    ch.encode_utf8(&mut utf8[1..]);
+                    let description = format!(
+                        "UTF-8 [{:02x} {:02x} {:02x}] = `{}`",
+                        utf8[0], utf8[1], utf8[2], ch
+                    );
+                    let input = str::from_utf8(&utf8).expect(&description);
+
+                    dbg!((input, &description));
+                    if ch == '\u{0085}' {
+                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                    } else {
+                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 64);
+            }
+
+            #[test]
+            fn utf8_0xe2() {
+                // All possible characters encoded in 3 bytes in UTF-8 which first byte is 0xE2 (0b11100010)
+                // Second and third bytes follows the pattern 10xxxxxx
+                let first = str::from_utf8(&[0b11100010, 0b10000000, 0b10000000])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let last = str::from_utf8(&[0b11100010, 0b10111111, 0b10111111])
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap();
+                let mut buf = [0; 3];
+                for ch in first..=last {
+                    let input = &*ch.encode_utf8(&mut buf);
+                    let buf = input.as_bytes();
+                    let description = format!(
+                        "UTF-8 [{:02x} {:02x} {:02x}] = `{}`",
+                        buf[0], buf[1], buf[2], ch
+                    );
+
+                    dbg!((input, &description));
+                    if ch == '\u{2028}' {
+                        assert_eq!(normalize_xml_eols(input), "\n", "{}", description);
+                    } else {
+                        assert_eq!(normalize_xml_eols(input), input, "{}", description);
+                    }
+                }
+                assert_eq!((first..=last).count(), 4096);
             }
         }
 
