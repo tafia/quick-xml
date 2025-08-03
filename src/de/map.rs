@@ -345,6 +345,7 @@ where
             ValueSource::Attribute(value) => seed.deserialize(SimpleTypeDeserializer::from_attr(
                 &self.start.buf,
                 value,
+                self.de.reader.reader.xml_version(),
                 self.start.decoder(),
             )),
             // This arm processes the following XML shape:

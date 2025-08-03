@@ -1563,7 +1563,8 @@ mod xml_schema_lists {
         list!(string: String = r#"<root list="first second  third&#x20;3"/>"# => vec![
             "first".to_string(),
             "second".to_string(),
-            "third 3".to_string(),
+            "third".to_string(),
+            "3".to_string(),
         ]);
         err!(byte_buf: ByteBuf = r#"<root list="first second  third&#x20;3"/>"#
             => Custom("invalid type: string \"first\", expected byte data"));
