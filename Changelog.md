@@ -15,6 +15,21 @@
 
 ### New Features
 
+### Bug Fixes
+
+### Misc Changes
+
+
+## 0.38.1 -- 2025-08-03
+
+### Important changes
+
+To get text in events according to the XML specification (normalized EOLs) use the
+new methods `xml_content()` instead of `decode()`. `Deserializer` uses new method
+automatically.
+
+### New Features
+
 - [#882]: Add new methods to create `Deserializer` from existing `NsReader`:
   - `Deserializer::borrowing`
   - `Deserializer::borrowing_with_resolver`
