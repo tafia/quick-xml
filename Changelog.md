@@ -30,12 +30,15 @@
 ### Bug Fixes
 
 - [#806]: Properly normalize EOL characters in `Deserializer`.
+- [#888]: Properly split attribute values by items when deserialize attribute into
+  list of values and attribute requires decoding.
 
 ### Misc Changes
 
 [#806]: https://github.com/tafia/quick-xml/issues/806
 [#878]: https://github.com/tafia/quick-xml/pull/878
 [#882]: https://github.com/tafia/quick-xml/pull/882
+[#888]: https://github.com/tafia/quick-xml/pull/888
 
 
 ## 0.38.0 -- 2025-06-28
