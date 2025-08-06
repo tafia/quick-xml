@@ -2120,12 +2120,12 @@ mod normalization {
             fn utf8_0xc2() {
                 // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
                 // Second byte follows the pattern 10xxxxxx
-                let first = str::from_utf8(&[0b11000010, 0b10000000])
+                let first = std::str::from_utf8(&[0b11000010, 0b10000000])
                     .unwrap()
                     .chars()
                     .next()
                     .unwrap();
-                let last = str::from_utf8(&[0b11000010, 0b10111111])
+                let last = std::str::from_utf8(&[0b11000010, 0b10111111])
                     .unwrap()
                     .chars()
                     .next()
@@ -2134,7 +2134,7 @@ mod normalization {
                 for ch in first..=last {
                     ch.encode_utf8(&mut utf8);
                     let description = format!("UTF-8 [{:02x} {:02x}] = `{}`", utf8[0], utf8[1], ch);
-                    let input = str::from_utf8(&utf8).expect(&description);
+                    let input = std::str::from_utf8(&utf8).expect(&description);
 
                     dbg!((input, &description));
                     if ch == '\u{0085}' {
@@ -2150,12 +2150,12 @@ mod normalization {
             fn utf8_0x0d_0xc2() {
                 // All possible characters encoded in 2 bytes in UTF-8 which first byte is 0xC2 (0b11000010)
                 // Second byte follows the pattern 10xxxxxx
-                let first = str::from_utf8(&[0b11000010, 0b10000000])
+                let first = std::str::from_utf8(&[0b11000010, 0b10000000])
                     .unwrap()
                     .chars()
                     .next()
                     .unwrap();
-                let last = str::from_utf8(&[0b11000010, 0b10111111])
+                let last = std::str::from_utf8(&[0b11000010, 0b10111111])
                     .unwrap()
                     .chars()
                     .next()
@@ -2167,7 +2167,7 @@ mod normalization {
                         "UTF-8 [{:02x} {:02x} {:02x}] = `{}`",
                         utf8[0], utf8[1], utf8[2], ch
                     );
-                    let input = str::from_utf8(&utf8).expect(&description);
+                    let input = std::str::from_utf8(&utf8).expect(&description);
 
                     dbg!((input, &description));
                     if ch == '\u{0085}' {
@@ -2183,12 +2183,12 @@ mod normalization {
             fn utf8_0xe2() {
                 // All possible characters encoded in 3 bytes in UTF-8 which first byte is 0xE2 (0b11100010)
                 // Second and third bytes follows the pattern 10xxxxxx
-                let first = str::from_utf8(&[0b11100010, 0b10000000, 0b10000000])
+                let first = std::str::from_utf8(&[0b11100010, 0b10000000, 0b10000000])
                     .unwrap()
                     .chars()
                     .next()
                     .unwrap();
-                let last = str::from_utf8(&[0b11100010, 0b10111111, 0b10111111])
+                let last = std::str::from_utf8(&[0b11100010, 0b10111111, 0b10111111])
                     .unwrap()
                     .chars()
                     .next()
