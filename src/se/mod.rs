@@ -147,7 +147,6 @@ where
 /// # use serde::Serialize;
 /// # use pretty_assertions::assert_eq;
 /// # use std::io::BufWriter;
-/// # use std::str;
 /// #[derive(Serialize)]
 /// struct Root<'a> {
 ///     #[serde(rename = "@attribute")]
@@ -167,7 +166,7 @@ where
 /// to_utf8_io_writer(&mut BufWriter::new(&mut buffer), &data).unwrap();
 ///
 /// assert_eq!(
-///     str::from_utf8(&buffer).unwrap(),
+///     std::str::from_utf8(&buffer).unwrap(),
 ///     // The root tag name is automatically deduced from the struct name
 ///     // This will not work for other types or struct with #[serde(flatten)] fields
 ///     "<Root attribute=\"attribute content\">\
