@@ -183,7 +183,7 @@ impl<'a> BytesStart<'a> {
     /// ```
     ///
     /// [`to_end`]: Self::to_end
-    pub fn borrow(&self) -> BytesStart {
+    pub fn borrow(&self) -> BytesStart<'_> {
         BytesStart {
             buf: Cow::Borrowed(&self.buf),
             name_len: self.name_len,
@@ -193,7 +193,7 @@ impl<'a> BytesStart<'a> {
 
     /// Creates new paired close tag
     #[inline]
-    pub fn to_end(&self) -> BytesEnd {
+    pub fn to_end(&self) -> BytesEnd<'_> {
         BytesEnd::from(self.name())
     }
 
@@ -213,7 +213,7 @@ impl<'a> BytesStart<'a> {
 
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
-    pub fn name(&self) -> QName {
+    pub fn name(&self) -> QName<'_> {
         QName(&self.buf[..self.name_len])
     }
 
@@ -222,7 +222,7 @@ impl<'a> BytesStart<'a> {
     ///
     /// All content up to and including the first `:` character is removed from the tag name.
     #[inline]
-    pub fn local_name(&self) -> LocalName {
+    pub fn local_name(&self) -> LocalName<'_> {
         self.name().into()
     }
 
@@ -283,12 +283,12 @@ impl<'a> BytesStart<'a> {
     }
 
     /// Returns an iterator over the attributes of this tag.
-    pub fn attributes(&self) -> Attributes {
+    pub fn attributes(&self) -> Attributes<'_> {
         Attributes::wrap(&self.buf, self.name_len, false, self.decoder)
     }
 
     /// Returns an iterator over the HTML-like attributes of this tag (no mandatory quotes or `=`).
-    pub fn html_attributes(&self) -> Attributes {
+    pub fn html_attributes(&self) -> Attributes<'_> {
         Attributes::wrap(&self.buf, self.name_len, true, self.decoder)
     }
 
@@ -432,7 +432,7 @@ impl<'a> BytesEnd<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesEnd {
+    pub fn borrow(&self) -> BytesEnd<'_> {
         BytesEnd {
             name: Cow::Borrowed(&self.name),
         }
@@ -440,7 +440,7 @@ impl<'a> BytesEnd<'a> {
 
     /// Gets the undecoded raw tag name, as present in the input stream.
     #[inline]
-    pub fn name(&self) -> QName {
+    pub fn name(&self) -> QName<'_> {
         QName(&self.name)
     }
 
@@ -449,7 +449,7 @@ impl<'a> BytesEnd<'a> {
     ///
     /// All content up to and including the first `:` character is removed from the tag name.
     #[inline]
-    pub fn local_name(&self) -> LocalName {
+    pub fn local_name(&self) -> LocalName<'_> {
         self.name().into()
     }
 }
@@ -571,7 +571,7 @@ impl<'a> BytesText<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesText {
+    pub fn borrow(&self) -> BytesText<'_> {
         BytesText {
             content: Cow::Borrowed(&self.content),
             decoder: self.decoder,
@@ -792,7 +792,7 @@ impl<'a> BytesCData<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesCData {
+    pub fn borrow(&self) -> BytesCData<'_> {
         BytesCData {
             content: Cow::Borrowed(&self.content),
             decoder: self.decoder,
@@ -1070,7 +1070,7 @@ impl<'a> BytesPI<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesPI {
+    pub fn borrow(&self) -> BytesPI<'_> {
         BytesPI {
             content: self.content.borrow(),
         }
@@ -1140,7 +1140,7 @@ impl<'a> BytesPI<'a> {
     /// }
     /// ```
     #[inline]
-    pub fn attributes(&self) -> Attributes {
+    pub fn attributes(&self) -> Attributes<'_> {
         self.content.attributes()
     }
 }
@@ -1300,7 +1300,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn version(&self) -> Result<Cow<[u8]>, Error> {
+    pub fn version(&self) -> Result<Cow<'_, [u8]>, Error> {
         // The version *must* be the first thing in the declaration.
         match self.content.attributes().with_checks(false).next() {
             Some(Ok(a)) if a.key.as_ref() == b"version" => Ok(a.value),
@@ -1355,7 +1355,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn encoding(&self) -> Option<Result<Cow<[u8]>, AttrError>> {
+    pub fn encoding(&self) -> Option<Result<Cow<'_, [u8]>, AttrError>> {
         self.content
             .try_get_attribute("encoding")
             .map(|a| a.map(|a| a.value))
@@ -1397,7 +1397,7 @@ impl<'a> BytesDecl<'a> {
     /// ```
     ///
     /// [grammar]: https://www.w3.org/TR/xml11/#NT-XMLDecl
-    pub fn standalone(&self) -> Option<Result<Cow<[u8]>, AttrError>> {
+    pub fn standalone(&self) -> Option<Result<Cow<'_, [u8]>, AttrError>> {
         self.content
             .try_get_attribute("standalone")
             .map(|a| a.map(|a| a.value))
@@ -1426,7 +1426,7 @@ impl<'a> BytesDecl<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesDecl {
+    pub fn borrow(&self) -> BytesDecl<'_> {
         BytesDecl {
             content: self.content.borrow(),
         }
@@ -1523,7 +1523,7 @@ impl<'a> BytesRef<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> BytesRef {
+    pub fn borrow(&self) -> BytesRef<'_> {
         BytesRef {
             content: Cow::Borrowed(&self.content),
             decoder: self.decoder,
@@ -1703,7 +1703,7 @@ impl<'a> Event<'a> {
 
     /// Converts the event into a borrowed event.
     #[inline]
-    pub fn borrow(&self) -> Event {
+    pub fn borrow(&self) -> Event<'_> {
         match self {
             Event::Start(e) => Event::Start(e.borrow()),
             Event::End(e) => Event::End(e.borrow()),

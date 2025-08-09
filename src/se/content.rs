@@ -110,7 +110,10 @@ impl<'w, 'i, W: Write> ContentSerializer<'w, 'i, W> {
     /// Creates new serializer that shares state with this serializer and
     /// writes to the same underlying writer
     #[inline]
-    pub fn new_seq_element_serializer(&mut self, allow_primitive: bool) -> ContentSerializer<W> {
+    pub fn new_seq_element_serializer(
+        &mut self,
+        allow_primitive: bool,
+    ) -> ContentSerializer<'_, '_, W> {
         ContentSerializer {
             writer: self.writer,
             level: self.level,

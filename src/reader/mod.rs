@@ -970,7 +970,7 @@ impl<R> Reader<R> {
     /// assert_eq!(reader.read_event().unwrap(), Event::Eof);
     /// ```
     #[inline]
-    pub fn stream(&mut self) -> BinaryStream<R> {
+    pub fn stream(&mut self) -> BinaryStream<'_, R> {
         BinaryStream {
             inner: &mut self.reader,
             offset: &mut self.state.offset,

@@ -207,7 +207,7 @@ pub(crate) fn _escape<'a, F: Fn(u8) -> bool>(
 ///
 /// [`escape-html`]: ../index.html#escape-html
 /// [HTML5 escapes]: https://dev.w3.org/html5/html-author/charref
-pub fn unescape(raw: &str) -> Result<Cow<str>, EscapeError> {
+pub fn unescape(raw: &str) -> Result<Cow<'_, str>, EscapeError> {
     unescape_with(raw, resolve_predefined_entity)
 }
 
